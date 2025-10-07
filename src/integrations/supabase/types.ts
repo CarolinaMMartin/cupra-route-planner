@@ -14,6 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
+      clientes_unificados: {
+        Row: {
+          avg_ticket: number | null
+          ciudades: string[] | null
+          created_at: string | null
+          cuit_dni: string | null
+          days_since_last_purchase: number | null
+          etiquetas: string[] | null
+          first_purchase_at: string | null
+          id: string
+          last_purchase_at: string | null
+          monto_total_vendido: number | null
+          orders_count: number | null
+          participacion: number | null
+          priority_score: number | null
+          provincias: string[] | null
+          razon_social: string
+          score_comercial: string | null
+          score_recencia: string | null
+          score_recencia_num: number | null
+          score_volumen: string | null
+          score_volumen_num: number | null
+          telefonos: string[] | null
+          vendedores: string[] | null
+        }
+        Insert: {
+          avg_ticket?: number | null
+          ciudades?: string[] | null
+          created_at?: string | null
+          cuit_dni?: string | null
+          days_since_last_purchase?: number | null
+          etiquetas?: string[] | null
+          first_purchase_at?: string | null
+          id?: string
+          last_purchase_at?: string | null
+          monto_total_vendido?: number | null
+          orders_count?: number | null
+          participacion?: number | null
+          priority_score?: number | null
+          provincias?: string[] | null
+          razon_social: string
+          score_comercial?: string | null
+          score_recencia?: string | null
+          score_recencia_num?: number | null
+          score_volumen?: string | null
+          score_volumen_num?: number | null
+          telefonos?: string[] | null
+          vendedores?: string[] | null
+        }
+        Update: {
+          avg_ticket?: number | null
+          ciudades?: string[] | null
+          created_at?: string | null
+          cuit_dni?: string | null
+          days_since_last_purchase?: number | null
+          etiquetas?: string[] | null
+          first_purchase_at?: string | null
+          id?: string
+          last_purchase_at?: string | null
+          monto_total_vendido?: number | null
+          orders_count?: number | null
+          participacion?: number | null
+          priority_score?: number | null
+          provincias?: string[] | null
+          razon_social?: string
+          score_comercial?: string | null
+          score_recencia?: string | null
+          score_recencia_num?: number | null
+          score_volumen?: string | null
+          score_volumen_num?: number | null
+          telefonos?: string[] | null
+          vendedores?: string[] | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -43,42 +118,62 @@ export type Database = {
       }
       sucursales: {
         Row: {
-          created_at: string | null
-          dias_sin_visita: number | null
+          barrio: string | null
+          ciudad: string
+          created_at: string
           direccion: string
-          id: string
-          latitud: number | null
-          longitud: number | null
-          nombre: string
-          score: number | null
-          tipo_cliente: string
-          zona: string
+          estado: string
+          google_place_id: string | null
+          id_cliente: string | null
+          id_sucursal: string
+          lat: number | null
+          lng: number | null
+          nombre_maps: string
+          provincia: string
+          telefono_local: string | null
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
-          dias_sin_visita?: number | null
+          barrio?: string | null
+          ciudad: string
+          created_at?: string
           direccion: string
-          id?: string
-          latitud?: number | null
-          longitud?: number | null
-          nombre: string
-          score?: number | null
-          tipo_cliente: string
-          zona: string
+          estado?: string
+          google_place_id?: string | null
+          id_cliente?: string | null
+          id_sucursal?: string
+          lat?: number | null
+          lng?: number | null
+          nombre_maps: string
+          provincia: string
+          telefono_local?: string | null
+          updated_at?: string
         }
         Update: {
-          created_at?: string | null
-          dias_sin_visita?: number | null
+          barrio?: string | null
+          ciudad?: string
+          created_at?: string
           direccion?: string
-          id?: string
-          latitud?: number | null
-          longitud?: number | null
-          nombre?: string
-          score?: number | null
-          tipo_cliente?: string
-          zona?: string
+          estado?: string
+          google_place_id?: string | null
+          id_cliente?: string | null
+          id_sucursal?: string
+          lat?: number | null
+          lng?: number | null
+          nombre_maps?: string
+          provincia?: string
+          telefono_local?: string | null
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "sucursales_id_cliente_fkey"
+            columns: ["id_cliente"]
+            isOneToOne: false
+            referencedRelation: "clientes_unificados"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vendedores: {
         Row: {
@@ -104,6 +199,198 @@ export type Database = {
           id?: string
           nombre?: string
           zona?: string
+        }
+        Relationships: []
+      }
+      ventas_cupra: {
+        Row: {
+          alto: number | null
+          ancho: number | null
+          bonificacion: number | null
+          calle: string | null
+          cantidad: number | null
+          categorias_cliente: string | null
+          categorias_productos: string | null
+          categorias_proveedor: string | null
+          ciudad: string | null
+          codigo_oem: string | null
+          codigo_postal: string | null
+          codigo_producto: string | null
+          codigo_proveedor: string | null
+          codigo_variante: string | null
+          condicion_pago: string | null
+          costo_financiero_unit_bruto: number | null
+          costo_unit_bruto: number | null
+          costo_unit_neto: number | null
+          created_at: string | null
+          cuit_dni: string | null
+          cupon_descuento: string | null
+          departamento: string | null
+          entrecalles: string | null
+          envio: string | null
+          envio_gratis_me: boolean | null
+          envio_observacion: string | null
+          etiqueta: string | null
+          fantasia: string | null
+          fecha_emision: string | null
+          financiacion: string | null
+          financiacion_aplicacion: string | null
+          forma_envio: string | null
+          id: number
+          impuesto_interno: number | null
+          iva: number | null
+          kilogramos: number | null
+          largo: number | null
+          latitud: number | null
+          letra: string | null
+          longitud: number | null
+          marca: string | null
+          medio_pago_tienda: string | null
+          numero: string | null
+          numero_externo: string | null
+          operador: string | null
+          origen: string | null
+          pais: string | null
+          piso: string | null
+          precio_total_final: number | null
+          precio_total_neto: number | null
+          precio_unit_final: number | null
+          precio_unit_neto: number | null
+          proveedor: string | null
+          provincia: string | null
+          razon_social: string | null
+          recibo: string | null
+          sucursal: string | null
+          telefono: string | null
+          ticket: string | null
+          variante: string | null
+          vendedor: string | null
+        }
+        Insert: {
+          alto?: number | null
+          ancho?: number | null
+          bonificacion?: number | null
+          calle?: string | null
+          cantidad?: number | null
+          categorias_cliente?: string | null
+          categorias_productos?: string | null
+          categorias_proveedor?: string | null
+          ciudad?: string | null
+          codigo_oem?: string | null
+          codigo_postal?: string | null
+          codigo_producto?: string | null
+          codigo_proveedor?: string | null
+          codigo_variante?: string | null
+          condicion_pago?: string | null
+          costo_financiero_unit_bruto?: number | null
+          costo_unit_bruto?: number | null
+          costo_unit_neto?: number | null
+          created_at?: string | null
+          cuit_dni?: string | null
+          cupon_descuento?: string | null
+          departamento?: string | null
+          entrecalles?: string | null
+          envio?: string | null
+          envio_gratis_me?: boolean | null
+          envio_observacion?: string | null
+          etiqueta?: string | null
+          fantasia?: string | null
+          fecha_emision?: string | null
+          financiacion?: string | null
+          financiacion_aplicacion?: string | null
+          forma_envio?: string | null
+          id?: never
+          impuesto_interno?: number | null
+          iva?: number | null
+          kilogramos?: number | null
+          largo?: number | null
+          latitud?: number | null
+          letra?: string | null
+          longitud?: number | null
+          marca?: string | null
+          medio_pago_tienda?: string | null
+          numero?: string | null
+          numero_externo?: string | null
+          operador?: string | null
+          origen?: string | null
+          pais?: string | null
+          piso?: string | null
+          precio_total_final?: number | null
+          precio_total_neto?: number | null
+          precio_unit_final?: number | null
+          precio_unit_neto?: number | null
+          proveedor?: string | null
+          provincia?: string | null
+          razon_social?: string | null
+          recibo?: string | null
+          sucursal?: string | null
+          telefono?: string | null
+          ticket?: string | null
+          variante?: string | null
+          vendedor?: string | null
+        }
+        Update: {
+          alto?: number | null
+          ancho?: number | null
+          bonificacion?: number | null
+          calle?: string | null
+          cantidad?: number | null
+          categorias_cliente?: string | null
+          categorias_productos?: string | null
+          categorias_proveedor?: string | null
+          ciudad?: string | null
+          codigo_oem?: string | null
+          codigo_postal?: string | null
+          codigo_producto?: string | null
+          codigo_proveedor?: string | null
+          codigo_variante?: string | null
+          condicion_pago?: string | null
+          costo_financiero_unit_bruto?: number | null
+          costo_unit_bruto?: number | null
+          costo_unit_neto?: number | null
+          created_at?: string | null
+          cuit_dni?: string | null
+          cupon_descuento?: string | null
+          departamento?: string | null
+          entrecalles?: string | null
+          envio?: string | null
+          envio_gratis_me?: boolean | null
+          envio_observacion?: string | null
+          etiqueta?: string | null
+          fantasia?: string | null
+          fecha_emision?: string | null
+          financiacion?: string | null
+          financiacion_aplicacion?: string | null
+          forma_envio?: string | null
+          id?: never
+          impuesto_interno?: number | null
+          iva?: number | null
+          kilogramos?: number | null
+          largo?: number | null
+          latitud?: number | null
+          letra?: string | null
+          longitud?: number | null
+          marca?: string | null
+          medio_pago_tienda?: string | null
+          numero?: string | null
+          numero_externo?: string | null
+          operador?: string | null
+          origen?: string | null
+          pais?: string | null
+          piso?: string | null
+          precio_total_final?: number | null
+          precio_total_neto?: number | null
+          precio_unit_final?: number | null
+          precio_unit_neto?: number | null
+          proveedor?: string | null
+          provincia?: string | null
+          razon_social?: string | null
+          recibo?: string | null
+          sucursal?: string | null
+          telefono?: string | null
+          ticket?: string | null
+          variante?: string | null
+          vendedor?: string | null
         }
         Relationships: []
       }
@@ -145,13 +432,6 @@ export type Database = {
           vendedor_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "visitas_sucursal_id_fkey"
-            columns: ["sucursal_id"]
-            isOneToOne: false
-            referencedRelation: "sucursales"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "visitas_vendedor_id_fkey"
             columns: ["vendedor_id"]
