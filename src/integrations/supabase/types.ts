@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      clientes: {
+        Row: {
+          created_at: string | null
+          cuit_dni: string
+          id: string
+          last_recommendation_at: string | null
+          razon_social: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          cuit_dni: string
+          id?: string
+          last_recommendation_at?: string | null
+          razon_social: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          cuit_dni?: string
+          id?: string
+          last_recommendation_at?: string | null
+          razon_social?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       clientes_unificados: {
         Row: {
           avg_ticket: number | null
@@ -121,10 +148,10 @@ export type Database = {
           barrio: string | null
           ciudad: string
           created_at: string
+          cuit_dni_cliente: string | null
           direccion: string
           estado: string
           google_place_id: string | null
-          id_cliente: string | null
           id_sucursal: string
           lat: number | null
           lng: number | null
@@ -137,10 +164,10 @@ export type Database = {
           barrio?: string | null
           ciudad: string
           created_at?: string
+          cuit_dni_cliente?: string | null
           direccion: string
           estado?: string
           google_place_id?: string | null
-          id_cliente?: string | null
           id_sucursal?: string
           lat?: number | null
           lng?: number | null
@@ -153,10 +180,10 @@ export type Database = {
           barrio?: string | null
           ciudad?: string
           created_at?: string
+          cuit_dni_cliente?: string | null
           direccion?: string
           estado?: string
           google_place_id?: string | null
-          id_cliente?: string | null
           id_sucursal?: string
           lat?: number | null
           lng?: number | null
@@ -167,11 +194,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "sucursales_id_cliente_fkey"
-            columns: ["id_cliente"]
+            foreignKeyName: "sucursales_cuit_dni_cliente_fkey"
+            columns: ["cuit_dni_cliente"]
             isOneToOne: false
-            referencedRelation: "clientes_unificados"
-            referencedColumns: ["id"]
+            referencedRelation: "clientes"
+            referencedColumns: ["cuit_dni"]
           },
         ]
       }
