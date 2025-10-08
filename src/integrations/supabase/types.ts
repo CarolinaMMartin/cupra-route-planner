@@ -41,7 +41,7 @@ export type Database = {
         }
         Relationships: []
       }
-      clientes_unificados: {
+      clientes_recomendaciones_temporal: {
         Row: {
           avg_ticket: number | null
           ciudades: string[] | null
@@ -147,8 +147,8 @@ export type Database = {
         Row: {
           barrio: string | null
           ciudad: string
+          cliente_id: string | null
           created_at: string
-          cuit_dni_cliente: string | null
           direccion: string
           estado: string
           google_place_id: string | null
@@ -163,8 +163,8 @@ export type Database = {
         Insert: {
           barrio?: string | null
           ciudad: string
+          cliente_id?: string | null
           created_at?: string
-          cuit_dni_cliente?: string | null
           direccion: string
           estado?: string
           google_place_id?: string | null
@@ -179,8 +179,8 @@ export type Database = {
         Update: {
           barrio?: string | null
           ciudad?: string
+          cliente_id?: string | null
           created_at?: string
-          cuit_dni_cliente?: string | null
           direccion?: string
           estado?: string
           google_place_id?: string | null
@@ -194,11 +194,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "sucursales_cuit_dni_cliente_fkey"
-            columns: ["cuit_dni_cliente"]
+            foreignKeyName: "sucursales_cliente_id_fkey"
+            columns: ["cliente_id"]
             isOneToOne: false
             referencedRelation: "clientes"
-            referencedColumns: ["cuit_dni"]
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -240,6 +240,7 @@ export type Database = {
           categorias_productos: string | null
           categorias_proveedor: string | null
           ciudad: string | null
+          cliente_id: string | null
           codigo_oem: string | null
           codigo_postal: string | null
           codigo_producto: string | null
@@ -303,6 +304,7 @@ export type Database = {
           categorias_productos?: string | null
           categorias_proveedor?: string | null
           ciudad?: string | null
+          cliente_id?: string | null
           codigo_oem?: string | null
           codigo_postal?: string | null
           codigo_producto?: string | null
@@ -366,6 +368,7 @@ export type Database = {
           categorias_productos?: string | null
           categorias_proveedor?: string | null
           ciudad?: string | null
+          cliente_id?: string | null
           codigo_oem?: string | null
           codigo_postal?: string | null
           codigo_producto?: string | null
@@ -419,7 +422,15 @@ export type Database = {
           variante?: string | null
           vendedor?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ventas_cupra_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       visitas: {
         Row: {
