@@ -45,6 +45,7 @@ export type Database = {
         Row: {
           avg_ticket: number | null
           ciudades: string[] | null
+          cliente_id: string | null
           created_at: string | null
           cuit_dni: string | null
           days_since_last_purchase: number | null
@@ -69,6 +70,7 @@ export type Database = {
         Insert: {
           avg_ticket?: number | null
           ciudades?: string[] | null
+          cliente_id?: string | null
           created_at?: string | null
           cuit_dni?: string | null
           days_since_last_purchase?: number | null
@@ -93,6 +95,7 @@ export type Database = {
         Update: {
           avg_ticket?: number | null
           ciudades?: string[] | null
+          cliente_id?: string | null
           created_at?: string | null
           cuit_dni?: string | null
           days_since_last_purchase?: number | null
@@ -114,7 +117,15 @@ export type Database = {
           telefonos?: string[] | null
           vendedores?: string[] | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clientes_recomendaciones_temporal_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
