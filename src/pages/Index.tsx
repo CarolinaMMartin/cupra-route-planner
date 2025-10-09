@@ -102,7 +102,7 @@ const Index = () => {
                   className="flex items-center gap-2"
                 >
                   <UserCog className="w-4 h-4" />
-                  Gestión de Usuarios
+                  Perfiles
                 </Button>
               )}
               <div className="text-right">

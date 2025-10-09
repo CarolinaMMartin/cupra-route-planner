@@ -35,10 +35,10 @@ const Profiles = () => {
   const [profile, setProfile] = useState<any>(null);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [filteredProfiles, setFilteredProfiles] = useState<any[]>([]);
+  const [filterRole, setFilterRole] = useState<"todos" | "vendedor" | "asignador">("todos");
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<any>(null);
-  const [filterRole, setFilterRole] = useState<"todos" | "vendedor" | "asignador">("todos");
   const [formData, setFormData] = useState<{
     nombre: string;
     email: string;
@@ -168,7 +168,7 @@ const Profiles = () => {
       if (error) throw error;
 
       toast({
-        title: profileData.activo ? "Usuario desactivado" : "Usuario activado",
+        title: profileData.activo ? "Perfil desactivado" : "Perfil activado",
         description: `${profileData.nombre} ahora está ${!profileData.activo ? 'activo' : 'inactivo'}`,
       });
 
@@ -178,7 +178,7 @@ const Profiles = () => {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Error al cambiar estado del usuario",
+        description: "Error al cambiar estado del perfil",
       });
     }
   };
@@ -278,7 +278,7 @@ const Profiles = () => {
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={filterRole} onValueChange={(value: any) => setFilterRole(value)}>
               <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filtrar por rol" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
@@ -312,10 +312,12 @@ const Profiles = () => {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {profileItem.rol === 'vendedor' && (
+                    {profileItem.rol === 'vendedor' ? (
                       <Badge variant={profileItem.activo ? "default" : "secondary"}>
                         {profileItem.activo ? "Activo" : "Inactivo"}
                       </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">N/A</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -332,7 +334,7 @@ const Profiles = () => {
                       </Button>
                       {profileItem.rol === 'vendedor' && (
                         <Switch
-                          checked={profileItem.activo ?? true}
+                          checked={profileItem.activo}
                           onCheckedChange={() => toggleActivo(profileItem)}
                         />
                       )}
