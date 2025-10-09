@@ -9,6 +9,7 @@ export interface Sucursal {
   latitud?: number;
   longitud?: number;
   justificacion?: string;
+  cuit_dni?: string;
 }
 
 export interface Vendedor {

@@ -126,22 +126,62 @@ const KanbanAssignment = ({ selectedRecommendations, onBack }: KanbanAssignmentP
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      // Eliminar asignaciones anteriores de estos clientes
-      const clienteIds = selectedRecommendations.map(r => r.id);
-      await supabase
-        .from('asignaciones_vendedores_clientes')
-        .delete()
-        .in('cliente_id', clienteIds);
+      // Mapear recomendaciones a cliente_id usando cuit_dni
+      const cuitDniMap = new Map<string, string>();
+      selectedRecommendations.forEach(rec => {
+        if (rec.cuit_dni) {
+          cuitDniMap.set(rec.id, rec.cuit_dni);
+        }
+      });
+
+      // Buscar los cliente_id correspondientes en la tabla clientes
+      const cuitDnis = Array.from(cuitDniMap.values());
+      const { data: clientes, error: clientesError } = await supabase
+        .from('clientes')
+        .select('id, cuit_dni')
+        .in('cuit_dni', cuitDnis);
+
+      if (clientesError) throw clientesError;
+
+      // Crear mapa de cuit_dni a cliente_id
+      const clienteIdMap = new Map<string, string>();
+      (clientes || []).forEach(cliente => {
+        clienteIdMap.set(cliente.cuit_dni, cliente.id);
+      });
+
+      // Mapear recomendacion_id a cliente_id
+      const recomendacionToClienteMap = new Map<string, string>();
+      selectedRecommendations.forEach(rec => {
+        if (rec.cuit_dni) {
+          const clienteId = clienteIdMap.get(rec.cuit_dni);
+          if (clienteId) {
+            recomendacionToClienteMap.set(rec.id, clienteId);
+          }
+        }
+      });
+
+      // Obtener todos los cliente_ids válidos para eliminar asignaciones anteriores
+      const validClienteIds = Array.from(recomendacionToClienteMap.values());
+      
+      if (validClienteIds.length > 0) {
+        await supabase
+          .from('asignaciones_vendedores_clientes')
+          .delete()
+          .in('cliente_id', validClienteIds);
+      }
 
       // Crear nuevas asignaciones
       const newAssignments = [];
-      for (const [vendedorId, clienteIds] of Object.entries(assignments)) {
+      for (const [vendedorId, recomendacionIds] of Object.entries(assignments)) {
         if (vendedorId !== 'unassigned') {
-          for (const clienteId of clienteIds) {
-            newAssignments.push({
-              vendedor_id: vendedorId,
-              cliente_id: clienteId,
-            });
+          for (const recomendacionId of recomendacionIds) {
+            const clienteId = recomendacionToClienteMap.get(recomendacionId);
+            if (clienteId) {
+              newAssignments.push({
+                vendedor_id: vendedorId,
+                cliente_id: clienteId,
+              });
+            }
           }
         }
       }

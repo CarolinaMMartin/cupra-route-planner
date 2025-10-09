@@ -63,6 +63,7 @@ const AssignorDashboard = () => {
         latitud: 0,
         longitud: 0,
         justificacion: rec.justificacion,
+        cuit_dni: rec.cuit_dni,
       }));
 
       setRecommendations(mappedRecommendations);
