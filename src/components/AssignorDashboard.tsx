@@ -7,6 +7,7 @@ import FilterPanel from "./assignor/FilterPanel";
 import ResultsList from "./assignor/ResultsList";
 import ResultsMap from "./assignor/ResultsMap";
 import { Sucursal } from "@/types/sales";
+import { supabase } from "@/integrations/supabase/client";
 
 const AssignorDashboard = () => {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
@@ -18,40 +19,54 @@ const AssignorDashboard = () => {
   const handleRequestRecommendations = async (filters: any) => {
     setIsLoading(true);
     try {
-      // TODO: Conectar con endpoint n8n /recomendaciones
-      const mockRecommendations: Sucursal[] = [
-        {
-          id: '1',
-          nombre: 'Vinoteca El Parral',
-          direccion: 'Av. Corrientes 1234, CABA',
-          zona: 'Capital Federal',
-          tipo_cliente: 'Premium',
-          score: 85,
-          dias_sin_visita: 45,
-          latitud: -34.603722,
-          longitud: -58.381592,
-          justificacion: 'Cliente premium sin visita en 45 días, alta probabilidad de pedido',
+      // Llamar al webhook de n8n
+      const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        {
-          id: '2',
-          nombre: 'Bodegón San Telmo',
-          direccion: 'Defensa 890, CABA',
-          zona: 'Capital Federal',
-          tipo_cliente: 'Estándar',
-          score: 72,
-          dias_sin_visita: 30,
-          latitud: -34.621850,
-          longitud: -58.373450,
-          justificacion: 'Zona estratégica, rotación media de productos',
-        },
-      ];
+        body: JSON.stringify({
+          cantidad_vendedores: filters.cantidad_vendedores
+        }),
+      });
 
-      setRecommendations(mockRecommendations);
+      if (!response.ok) {
+        throw new Error('Error al llamar al webhook');
+      }
+
+      // Esperar un momento para que n8n procese y guarde en la tabla
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Obtener las recomendaciones de la tabla recomendaciones_ia
+      const { data, error } = await supabase
+        .from('recomendaciones_ia')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Mapear los datos al formato Sucursal
+      const mappedRecommendations: Sucursal[] = (data || []).map((rec: any) => ({
+        id: rec.id,
+        nombre: rec.razon_social,
+        direccion: rec.ciudades?.[0] || 'Sin dirección',
+        zona: rec.provincias?.[0] || 'Sin zona',
+        tipo_cliente: rec.score_comercial || 'Estándar',
+        score: rec.priority_score || 0,
+        dias_sin_visita: rec.days_since_last_purchase || 0,
+        latitud: 0,
+        longitud: 0,
+        justificacion: rec.justificacion,
+      }));
+
+      setRecommendations(mappedRecommendations);
       toast({
         title: "Recomendaciones generadas",
-        description: `Se encontraron ${mockRecommendations.length} sucursales`,
+        description: `Se encontraron ${mappedRecommendations.length} recomendaciones`,
       });
     } catch (error) {
+      console.error('Error:', error);
       toast({
         variant: "destructive",
         title: "Error",
