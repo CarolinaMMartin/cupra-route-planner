@@ -46,6 +46,30 @@ export type Database = {
           },
         ]
       }
+      cliente_feedbacks: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          feedback: string
+          id: string
+          vendedor_id: string
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          feedback: string
+          id?: string
+          vendedor_id: string
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          feedback?: string
+          id?: string
+          vendedor_id?: string
+        }
+        Relationships: []
+      }
       clientes: {
         Row: {
           created_at: string | null
