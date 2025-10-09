@@ -6,10 +6,15 @@ import { useToast } from "@/hooks/use-toast";
 import FilterPanel from "./assignor/FilterPanel";
 import ResultsList from "./assignor/ResultsList";
 import ResultsMap from "./assignor/ResultsMap";
+import PreselectionStep from "./assignor/PreselectionStep";
+import KanbanAssignment from "./assignor/KanbanAssignment";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 
+type FlowStep = 'recommendations' | 'preselection' | 'assignment';
+
 const AssignorDashboard = () => {
+  const [flowStep, setFlowStep] = useState<FlowStep>('recommendations');
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [recommendations, setRecommendations] = useState<Sucursal[]>([]);
   const [selectedSucursales, setSelectedSucursales] = useState<string[]>([]);
@@ -61,6 +66,8 @@ const AssignorDashboard = () => {
       }));
 
       setRecommendations(mappedRecommendations);
+      setFlowStep('preselection');
+      setSelectedSucursales([]);
       toast({
         title: "Recomendaciones generadas",
         description: `Se encontraron ${mappedRecommendations.length} recomendaciones`,
@@ -83,29 +90,66 @@ const AssignorDashboard = () => {
     );
   };
 
+  const toggleAllSucursales = () => {
+    if (selectedSucursales.length === recommendations.length) {
+      setSelectedSucursales([]);
+    } else {
+      setSelectedSucursales(recommendations.map(r => r.id));
+    }
+  };
+
+  const handleContinueToAssignment = () => {
+    setFlowStep('assignment');
+  };
+
+  const handleBackToPreselection = () => {
+    setFlowStep('preselection');
+  };
+
+  const handleBackToRecommendations = () => {
+    setFlowStep('recommendations');
+    setRecommendations([]);
+    setSelectedSucursales([]);
+  };
+
+  const selectedRecommendations = recommendations.filter(r => 
+    selectedSucursales.includes(r.id)
+  );
+
   return (
     <div className="space-y-6">
-      <Card className="shadow-medium">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sparkles className="w-6 h-6 text-accent" />
-            Panel de Asignación
-          </CardTitle>
-          <CardDescription>
-            Filtra sucursales y solicita recomendaciones inteligentes
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <FilterPanel onRequestRecommendations={handleRequestRecommendations} isLoading={isLoading} />
-        </CardContent>
-      </Card>
+      {flowStep === 'recommendations' && (
+        <Card className="shadow-medium">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-accent" />
+              Panel de Asignación
+            </CardTitle>
+            <CardDescription>
+              Filtra sucursales y solicita recomendaciones inteligentes
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FilterPanel onRequestRecommendations={handleRequestRecommendations} isLoading={isLoading} />
+          </CardContent>
+        </Card>
+      )}
 
-      {recommendations.length > 0 && (
+      {flowStep === 'preselection' && recommendations.length > 0 && (
         <Card className="shadow-medium">
           <CardHeader>
             <div className="flex justify-between items-center">
-              <CardTitle>Resultados ({recommendations.length})</CardTitle>
+              <div>
+                <CardTitle>Paso 1: Preselección de Recomendaciones</CardTitle>
+                <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
+              </div>
               <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleBackToRecommendations}
+                >
+                  Nueva búsqueda
+                </Button>
                 <Button
                   variant={viewMode === 'list' ? 'default' : 'outline'}
                   size="sm"
@@ -127,10 +171,12 @@ const AssignorDashboard = () => {
           </CardHeader>
           <CardContent>
             {viewMode === 'list' ? (
-              <ResultsList
-                sucursales={recommendations}
+              <PreselectionStep
+                recommendations={recommendations}
                 selectedIds={selectedSucursales}
                 onToggle={toggleSucursal}
+                onToggleAll={toggleAllSucursales}
+                onContinue={handleContinueToAssignment}
               />
             ) : (
               <ResultsMap
@@ -139,6 +185,23 @@ const AssignorDashboard = () => {
                 onToggle={toggleSucursal}
               />
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {flowStep === 'assignment' && (
+        <Card className="shadow-medium">
+          <CardHeader>
+            <CardTitle>Paso 2: Asignación Visual</CardTitle>
+            <CardDescription>
+              Arrastra los clientes desde "Sin asignar" hacia el vendedor correspondiente
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <KanbanAssignment
+              selectedRecommendations={selectedRecommendations}
+              onBack={handleBackToPreselection}
+            />
           </CardContent>
         </Card>
       )}
