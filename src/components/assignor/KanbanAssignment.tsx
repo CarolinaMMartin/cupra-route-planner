@@ -160,27 +160,36 @@ const KanbanAssignment = ({ selectedRecommendations, onBack }: KanbanAssignmentP
         }
       });
 
-      // Obtener todos los cliente_ids válidos para eliminar asignaciones anteriores
+      // Obtener cliente_ids válidos
       const validClienteIds = Array.from(recomendacionToClienteMap.values());
       
+      // Primero eliminamos TODAS las asignaciones de estos clientes
       if (validClienteIds.length > 0) {
-        await supabase
+        const { error: deleteError } = await supabase
           .from('asignaciones_vendedores_clientes')
           .delete()
           .in('cliente_id', validClienteIds);
+        
+        if (deleteError) throw deleteError;
       }
 
-      // Crear nuevas asignaciones
+      // Crear nuevas asignaciones únicas
       const newAssignments = [];
+      const assignedPairs = new Set<string>();
+      
       for (const [vendedorId, recomendacionIds] of Object.entries(assignments)) {
         if (vendedorId !== 'unassigned') {
           for (const recomendacionId of recomendacionIds) {
             const clienteId = recomendacionToClienteMap.get(recomendacionId);
             if (clienteId) {
-              newAssignments.push({
-                vendedor_id: vendedorId,
-                cliente_id: clienteId,
-              });
+              const pairKey = `${vendedorId}-${clienteId}`;
+              if (!assignedPairs.has(pairKey)) {
+                assignedPairs.add(pairKey);
+                newAssignments.push({
+                  vendedor_id: vendedorId,
+                  cliente_id: clienteId,
+                });
+              }
             }
           }
         }
