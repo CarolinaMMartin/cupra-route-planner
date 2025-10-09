@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Wine, LogOut, User, ArrowLeft, Pencil } from "lucide-react";
+import { Wine, LogOut, User, ArrowLeft, Pencil, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Table,
@@ -28,22 +28,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 
 const Profiles = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [profiles, setProfiles] = useState<any[]>([]);
+  const [filteredProfiles, setFilteredProfiles] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<any>(null);
+  const [filterRole, setFilterRole] = useState<"todos" | "vendedor" | "asignador">("todos");
   const [formData, setFormData] = useState<{
     nombre: string;
     email: string;
     rol: "asignador" | "vendedor";
+    activo: boolean;
   }>({
     nombre: "",
     email: "",
     rol: "vendedor",
+    activo: true,
   });
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -79,6 +84,14 @@ const Profiles = () => {
       fetchProfiles();
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (filterRole === "todos") {
+      setFilteredProfiles(profiles);
+    } else {
+      setFilteredProfiles(profiles.filter(p => p.rol === filterRole));
+    }
+  }, [profiles, filterRole]);
 
   const fetchProfile = async () => {
     try {
@@ -140,8 +153,34 @@ const Profiles = () => {
       nombre: profileData.nombre,
       email: profileData.email,
       rol: profileData.rol,
+      activo: profileData.activo ?? true,
     });
     setIsDialogOpen(true);
+  };
+
+  const toggleActivo = async (profileData: any) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ activo: !profileData.activo })
+        .eq('id', profileData.id);
+
+      if (error) throw error;
+
+      toast({
+        title: profileData.activo ? "Usuario desactivado" : "Usuario activado",
+        description: `${profileData.nombre} ahora está ${!profileData.activo ? 'activo' : 'inactivo'}`,
+      });
+
+      fetchProfiles();
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al cambiar estado del usuario",
+      });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -153,6 +192,7 @@ const Profiles = () => {
         .update({
           nombre: formData.nombre,
           rol: formData.rol,
+          activo: formData.activo,
         })
         .eq('id', editingProfile.id);
 
@@ -224,7 +264,7 @@ const Profiles = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between">
           <Button
             variant="outline"
             onClick={() => navigate("/")}
@@ -233,6 +273,20 @@ const Profiles = () => {
             <ArrowLeft className="w-4 h-4" />
             Volver
           </Button>
+
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <Select value={filterRole} onValueChange={(value: any) => setFilterRole(value)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Filtrar por rol" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="vendedor">Vendedores</SelectItem>
+                <SelectItem value="asignador">Asignadores</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="bg-card rounded-lg shadow-soft border">
@@ -242,12 +296,13 @@ const Profiles = () => {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Rol</TableHead>
+                <TableHead>Estado</TableHead>
                 <TableHead>Fecha de Registro</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {profiles.map((profileItem) => (
+              {filteredProfiles.map((profileItem) => (
                 <TableRow key={profileItem.id}>
                   <TableCell className="font-medium">{profileItem.nombre}</TableCell>
                   <TableCell>{profileItem.email}</TableCell>
@@ -257,16 +312,31 @@ const Profiles = () => {
                     </Badge>
                   </TableCell>
                   <TableCell>
+                    {profileItem.rol === 'vendedor' && (
+                      <Badge variant={profileItem.activo ? "default" : "secondary"}>
+                        {profileItem.activo ? "Activo" : "Inactivo"}
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {new Date(profileItem.created_at).toLocaleDateString('es-ES')}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleOpenDialog(profileItem)}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenDialog(profileItem)}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      {profileItem.rol === 'vendedor' && (
+                        <Switch
+                          checked={profileItem.activo ?? true}
+                          onCheckedChange={() => toggleActivo(profileItem)}
+                        />
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -316,6 +386,16 @@ const Profiles = () => {
                   </SelectContent>
                 </Select>
               </div>
+              {formData.rol === 'vendedor' && (
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="activo">Activo</Label>
+                  <Switch
+                    id="activo"
+                    checked={formData.activo}
+                    onCheckedChange={(checked) => setFormData({ ...formData, activo: checked })}
+                  />
+                </div>
+              )}
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar

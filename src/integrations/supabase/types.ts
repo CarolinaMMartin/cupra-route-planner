@@ -41,13 +41,6 @@ export type Database = {
             referencedRelation: "clientes"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "asignaciones_vendedores_clientes_vendedor_id_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "vendedores"
-            referencedColumns: ["id"]
-          },
         ]
       }
       clientes: {
@@ -165,6 +158,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          activo: boolean | null
           created_at: string | null
           email: string
           id: string
@@ -173,6 +167,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          activo?: boolean | null
           created_at?: string | null
           email: string
           id?: string
@@ -181,6 +176,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          activo?: boolean | null
           created_at?: string | null
           email?: string
           id?: string
@@ -338,33 +334,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      vendedores: {
-        Row: {
-          activo: boolean | null
-          created_at: string | null
-          email: string
-          id: string
-          nombre: string
-          zona: string
-        }
-        Insert: {
-          activo?: boolean | null
-          created_at?: string | null
-          email: string
-          id?: string
-          nombre: string
-          zona: string
-        }
-        Update: {
-          activo?: boolean | null
-          created_at?: string | null
-          email?: string
-          id?: string
-          nombre?: string
-          zona?: string
-        }
-        Relationships: []
       }
       ventas_cupra: {
         Row: {
@@ -606,15 +575,7 @@ export type Database = {
           sucursal_id?: string
           vendedor_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "visitas_vendedor_id_fkey"
-            columns: ["vendedor_id"]
-            isOneToOne: false
-            referencedRelation: "vendedores"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
