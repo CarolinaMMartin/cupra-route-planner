@@ -18,18 +18,21 @@ export type Database = {
         Row: {
           cliente_id: string
           created_at: string
+          estado: Database["public"]["Enums"]["estado_asignacion"]
           id: string
           vendedor_id: string
         }
         Insert: {
           cliente_id: string
           created_at?: string
+          estado?: Database["public"]["Enums"]["estado_asignacion"]
           id?: string
           vendedor_id: string
         }
         Update: {
           cliente_id?: string
           created_at?: string
+          estado?: Database["public"]["Enums"]["estado_asignacion"]
           id?: string
           vendedor_id?: string
         }
@@ -589,6 +592,7 @@ export type Database = {
     }
     Enums: {
       app_role: "asignador" | "vendedor"
+      estado_asignacion: "Asignado" | "Por visitar" | "Visitado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -717,6 +721,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["asignador", "vendedor"],
+      estado_asignacion: ["Asignado", "Por visitar", "Visitado"],
     },
   },
 } as const

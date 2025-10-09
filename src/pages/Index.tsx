@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Wine, LogOut, User, UserCog } from "lucide-react";
 import AssignorDashboard from "@/components/AssignorDashboard";
+import VendedorKanban from "@/components/vendedor/VendedorKanban";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
@@ -130,10 +131,7 @@ const Index = () => {
         {profile.rol === 'asignador' ? (
           <AssignorDashboard />
         ) : (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-serif mb-4">Panel de Vendedor</h2>
-            <p className="text-muted-foreground">En desarrollo</p>
-          </div>
+          <VendedorKanban />
         )}
       </main>
     </div>
