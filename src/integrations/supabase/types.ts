@@ -192,64 +192,91 @@ export type Database = {
       }
       recomendaciones_ia: {
         Row: {
-          barrio: string | null
-          comuna: string | null
-          contacto: string | null
+          avg_ticket: number | null
+          ciudades: string[] | null
           created_at: string
-          direccion: string | null
+          cuit_dni: string | null
+          days_since_last_purchase: number | null
           estado: string | null
+          etiquetas: string[] | null
+          first_purchase_at: string | null
           id: string
           justificacion: string
-          latitud: string | null
-          longitud: string | null
-          mapa: string | null
-          name: string
+          last_purchase_at: string | null
+          monto_total_vendido: number | null
           notas: string | null
-          provincia: string | null
-          subzona: string | null
+          orders_count: number | null
+          participacion: number | null
+          priority_score: number | null
+          provincias: string[] | null
+          razon_social: string
+          score_comercial: string | null
+          score_recencia: string | null
+          score_recencia_num: number | null
+          score_volumen: string | null
+          score_volumen_num: number | null
+          telefonos: string[] | null
           ultima_sugerencia: string | null
           ultima_visita: string | null
-          vendedor_asignado: string | null
+          vendedores: string[] | null
         }
         Insert: {
-          barrio?: string | null
-          comuna?: string | null
-          contacto?: string | null
+          avg_ticket?: number | null
+          ciudades?: string[] | null
           created_at?: string
-          direccion?: string | null
+          cuit_dni?: string | null
+          days_since_last_purchase?: number | null
           estado?: string | null
+          etiquetas?: string[] | null
+          first_purchase_at?: string | null
           id?: string
           justificacion: string
-          latitud?: string | null
-          longitud?: string | null
-          mapa?: string | null
-          name: string
+          last_purchase_at?: string | null
+          monto_total_vendido?: number | null
           notas?: string | null
-          provincia?: string | null
-          subzona?: string | null
+          orders_count?: number | null
+          participacion?: number | null
+          priority_score?: number | null
+          provincias?: string[] | null
+          razon_social: string
+          score_comercial?: string | null
+          score_recencia?: string | null
+          score_recencia_num?: number | null
+          score_volumen?: string | null
+          score_volumen_num?: number | null
+          telefonos?: string[] | null
           ultima_sugerencia?: string | null
           ultima_visita?: string | null
-          vendedor_asignado?: string | null
+          vendedores?: string[] | null
         }
         Update: {
-          barrio?: string | null
-          comuna?: string | null
-          contacto?: string | null
+          avg_ticket?: number | null
+          ciudades?: string[] | null
           created_at?: string
-          direccion?: string | null
+          cuit_dni?: string | null
+          days_since_last_purchase?: number | null
           estado?: string | null
+          etiquetas?: string[] | null
+          first_purchase_at?: string | null
           id?: string
           justificacion?: string
-          latitud?: string | null
-          longitud?: string | null
-          mapa?: string | null
-          name?: string
+          last_purchase_at?: string | null
+          monto_total_vendido?: number | null
           notas?: string | null
-          provincia?: string | null
-          subzona?: string | null
+          orders_count?: number | null
+          participacion?: number | null
+          priority_score?: number | null
+          provincias?: string[] | null
+          razon_social?: string
+          score_comercial?: string | null
+          score_recencia?: string | null
+          score_recencia_num?: number | null
+          score_volumen?: string | null
+          score_volumen_num?: number | null
+          telefonos?: string[] | null
           ultima_sugerencia?: string | null
           ultima_visita?: string | null
-          vendedor_asignado?: string | null
+          vendedores?: string[] | null
         }
         Relationships: []
       }
