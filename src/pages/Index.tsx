@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Wine, LogOut, User } from "lucide-react";
+import { Wine, LogOut, User, Users, UserCog } from "lucide-react";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import { useToast } from "@/hooks/use-toast";
 
@@ -94,6 +94,28 @@ const Index = () => {
             </div>
 
             <div className="flex items-center gap-4">
+              {profile.rol === 'asignador' && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate("/vendedores")}
+                    className="flex items-center gap-2"
+                  >
+                    <Users className="w-4 h-4" />
+                    Vendedores
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate("/profiles")}
+                    className="flex items-center gap-2"
+                  >
+                    <UserCog className="w-4 h-4" />
+                    Perfiles
+                  </Button>
+                </>
+              )}
               <div className="text-right">
                 <p className="font-medium flex items-center gap-2">
                   <User className="w-4 h-4" />

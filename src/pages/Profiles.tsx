@@ -1,0 +1,335 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Wine, LogOut, User, ArrowLeft, Pencil } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+
+const Profiles = () => {
+  const [session, setSession] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<any>(null);
+  const [formData, setFormData] = useState<{
+    nombre: string;
+    email: string;
+    rol: "asignador" | "vendedor";
+  }>({
+    nombre: "",
+    email: "",
+    rol: "vendedor",
+  });
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        setSession(session);
+        if (!session) {
+          navigate("/auth");
+        }
+      }
+    );
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (!session) {
+        navigate("/auth");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  useEffect(() => {
+    if (session?.user) {
+      fetchProfile();
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (profile?.rol === 'asignador') {
+      fetchProfiles();
+    }
+  }, [profile]);
+
+  const fetchProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (error) throw error;
+      setProfile(data);
+      
+      if (data.rol !== 'asignador') {
+        toast({
+          variant: "destructive",
+          title: "Acceso denegado",
+          description: "No tienes permisos para acceder a esta página",
+        });
+        navigate("/");
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchProfiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('nombre');
+
+      if (error) throw error;
+      setProfiles(data || []);
+    } catch (error) {
+      console.error('Error fetching profiles:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al cargar perfiles",
+      });
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    toast({
+      title: "Sesión cerrada",
+      description: "Hasta pronto",
+    });
+    navigate("/auth");
+  };
+
+  const handleOpenDialog = (profileData: any) => {
+    setEditingProfile(profileData);
+    setFormData({
+      nombre: profileData.nombre,
+      email: profileData.email,
+      rol: profileData.rol,
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          nombre: formData.nombre,
+          rol: formData.rol,
+        })
+        .eq('id', editingProfile.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Perfil actualizado",
+        description: "Los cambios se guardaron correctamente",
+      });
+
+      setIsDialogOpen(false);
+      fetchProfiles();
+    } catch (error) {
+      console.error('Error:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al guardar perfil",
+      });
+    }
+  };
+
+  if (isLoading || !session || !profile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-subtle">
+        <div className="text-center">
+          <Wine className="w-16 h-16 text-primary mx-auto animate-pulse" />
+          <p className="mt-4 text-muted-foreground">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-subtle">
+      <header className="bg-card shadow-soft border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-primary rounded-full">
+                <Wine className="w-6 h-6 text-primary-foreground" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-serif font-bold">Cupra Wines</h1>
+                <p className="text-sm text-muted-foreground">Gestión de Perfiles</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="font-medium flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  {profile.nombre}
+                </p>
+                <p className="text-sm text-muted-foreground capitalize">{profile.rol}</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Salir
+              </Button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6">
+          <Button
+            variant="outline"
+            onClick={() => navigate("/")}
+            className="flex items-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Volver
+          </Button>
+        </div>
+
+        <div className="bg-card rounded-lg shadow-soft border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nombre</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Rol</TableHead>
+                <TableHead>Fecha de Registro</TableHead>
+                <TableHead className="text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {profiles.map((profileItem) => (
+                <TableRow key={profileItem.id}>
+                  <TableCell className="font-medium">{profileItem.nombre}</TableCell>
+                  <TableCell>{profileItem.email}</TableCell>
+                  <TableCell>
+                    <Badge variant={profileItem.rol === 'asignador' ? "default" : "secondary"}>
+                      {profileItem.rol}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {new Date(profileItem.created_at).toLocaleDateString('es-ES')}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleOpenDialog(profileItem)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Perfil</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="nombre">Nombre</Label>
+                <Input
+                  id="nombre"
+                  value={formData.nombre}
+                  onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  disabled
+                />
+                <p className="text-sm text-muted-foreground">
+                  El email no se puede modificar
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="rol">Rol</Label>
+                <Select
+                  value={formData.rol}
+                  onValueChange={(value) => setFormData({ ...formData, rol: value as "asignador" | "vendedor" })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vendedor">Vendedor</SelectItem>
+                    <SelectItem value="asignador">Asignador</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" className="wine-button">
+                  Actualizar
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </main>
+    </div>
+  );
+};
+
+export default Profiles;
