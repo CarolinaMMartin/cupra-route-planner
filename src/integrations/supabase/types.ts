@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      asignaciones_vendedores_clientes: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          id: string
+          vendedor_id: string
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          id?: string
+          vendedor_id: string
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asignaciones_vendedores_clientes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asignaciones_vendedores_clientes_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vendedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes: {
         Row: {
           created_at: string | null
@@ -151,6 +187,69 @@ export type Database = {
           nombre?: string
           rol?: Database["public"]["Enums"]["app_role"]
           user_id?: string
+        }
+        Relationships: []
+      }
+      recomendaciones_ia: {
+        Row: {
+          barrio: string | null
+          comuna: string | null
+          contacto: string | null
+          created_at: string
+          direccion: string | null
+          estado: string | null
+          id: string
+          justificacion: string
+          latitud: string | null
+          longitud: string | null
+          mapa: string | null
+          name: string
+          notas: string | null
+          provincia: string | null
+          subzona: string | null
+          ultima_sugerencia: string | null
+          ultima_visita: string | null
+          vendedor_asignado: string | null
+        }
+        Insert: {
+          barrio?: string | null
+          comuna?: string | null
+          contacto?: string | null
+          created_at?: string
+          direccion?: string | null
+          estado?: string | null
+          id?: string
+          justificacion: string
+          latitud?: string | null
+          longitud?: string | null
+          mapa?: string | null
+          name: string
+          notas?: string | null
+          provincia?: string | null
+          subzona?: string | null
+          ultima_sugerencia?: string | null
+          ultima_visita?: string | null
+          vendedor_asignado?: string | null
+        }
+        Update: {
+          barrio?: string | null
+          comuna?: string | null
+          contacto?: string | null
+          created_at?: string
+          direccion?: string | null
+          estado?: string | null
+          id?: string
+          justificacion?: string
+          latitud?: string | null
+          longitud?: string | null
+          mapa?: string | null
+          name?: string
+          notas?: string | null
+          provincia?: string | null
+          subzona?: string | null
+          ultima_sugerencia?: string | null
+          ultima_visita?: string | null
+          vendedor_asignado?: string | null
         }
         Relationships: []
       }
