@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkles, MapPin, List } from "lucide-react";
@@ -8,6 +8,7 @@ import ResultsList from "./assignor/ResultsList";
 import ResultsMap from "./assignor/ResultsMap";
 import PreselectionStep from "./assignor/PreselectionStep";
 import KanbanAssignment from "./assignor/KanbanAssignment";
+import RecommendationFilters from "./assignor/RecommendationFilters";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,6 +20,9 @@ const AssignorDashboard = () => {
   const [recommendations, setRecommendations] = useState<Sucursal[]>([]);
   const [selectedSucursales, setSelectedSucursales] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedCiudad, setSelectedCiudad] = useState<string>('all');
+  const [selectedProvincia, setSelectedProvincia] = useState<string>('all');
+  const [selectedVendedor, setSelectedVendedor] = useState<string>('all');
   const { toast } = useToast();
 
   const handleRequestRecommendations = async (filters: any) => {
@@ -111,9 +115,59 @@ const AssignorDashboard = () => {
     setFlowStep('recommendations');
     setRecommendations([]);
     setSelectedSucursales([]);
+    setSelectedCiudad('all');
+    setSelectedProvincia('all');
+    setSelectedVendedor('all');
   };
 
-  const selectedRecommendations = recommendations.filter(r => 
+  const handleClearFilters = () => {
+    setSelectedCiudad('all');
+    setSelectedProvincia('all');
+    setSelectedVendedor('all');
+  };
+
+  // Obtener opciones únicas para los filtros
+  const { ciudades, provincias, vendedores } = useMemo(() => {
+    const ciudadesSet = new Set<string>();
+    const provinciasSet = new Set<string>();
+    const vendedoresSet = new Set<string>();
+
+    recommendations.forEach((rec: any) => {
+      if (rec.direccion && rec.direccion !== 'Sin dirección') {
+        ciudadesSet.add(rec.direccion);
+      }
+      if (rec.zona && rec.zona !== 'Sin zona') {
+        provinciasSet.add(rec.zona);
+      }
+      // Los vendedores vienen del array vendedores en la data original
+      // Necesitamos mapearlos desde los datos originales si están disponibles
+    });
+
+    return {
+      ciudades: Array.from(ciudadesSet).sort(),
+      provincias: Array.from(provinciasSet).sort(),
+      vendedores: Array.from(vendedoresSet).sort(),
+    };
+  }, [recommendations]);
+
+  // Aplicar filtros a las recomendaciones
+  const filteredRecommendations = useMemo(() => {
+    return recommendations.filter((rec) => {
+      if (selectedCiudad !== 'all' && rec.direccion !== selectedCiudad) {
+        return false;
+      }
+      if (selectedProvincia !== 'all' && rec.zona !== selectedProvincia) {
+        return false;
+      }
+      if (selectedVendedor !== 'all') {
+        // Aquí necesitaríamos filtrar por vendedor si tuviéramos esa info
+        return true;
+      }
+      return true;
+    });
+  }, [recommendations, selectedCiudad, selectedProvincia, selectedVendedor]);
+
+  const selectedRecommendations = filteredRecommendations.filter(r => 
     selectedSucursales.includes(r.id)
   );
 
@@ -170,10 +224,23 @@ const AssignorDashboard = () => {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            <RecommendationFilters
+              ciudades={ciudades}
+              provincias={provincias}
+              vendedores={vendedores}
+              selectedCiudad={selectedCiudad}
+              selectedProvincia={selectedProvincia}
+              selectedVendedor={selectedVendedor}
+              onCiudadChange={setSelectedCiudad}
+              onProvinciaChange={setSelectedProvincia}
+              onVendedorChange={setSelectedVendedor}
+              onClearFilters={handleClearFilters}
+            />
+            
             {viewMode === 'list' ? (
               <PreselectionStep
-                recommendations={recommendations}
+                recommendations={filteredRecommendations}
                 selectedIds={selectedSucursales}
                 onToggle={toggleSucursal}
                 onToggleAll={toggleAllSucursales}
@@ -181,7 +248,7 @@ const AssignorDashboard = () => {
               />
             ) : (
               <ResultsMap
-                sucursales={recommendations}
+                sucursales={filteredRecommendations}
                 selectedIds={selectedSucursales}
                 onToggle={toggleSucursal}
               />
