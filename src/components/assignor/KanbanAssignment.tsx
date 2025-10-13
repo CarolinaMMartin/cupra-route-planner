@@ -26,10 +26,11 @@ interface Vendedor {
 
 interface KanbanAssignmentProps {
   selectedRecommendations: Sucursal[];
+  selectedVendedoresIds: string[];
   onBack: () => void;
 }
 
-const KanbanAssignment = ({ selectedRecommendations, onBack }: KanbanAssignmentProps) => {
+const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBack }: KanbanAssignmentProps) => {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({
     unassigned: selectedRecommendations.map(r => r.id),
@@ -52,11 +53,13 @@ const KanbanAssignment = ({ selectedRecommendations, onBack }: KanbanAssignmentP
 
   const fetchVendedores = async () => {
     try {
+      // Obtener solo los vendedores seleccionados por el asignador
       const { data, error } = await supabase
         .from('profiles')
         .select('user_id, nombre, email')
         .eq('rol', 'vendedor')
-        .eq('activo', true);
+        .eq('activo', true)
+        .in('user_id', selectedVendedoresIds);
 
       if (error) throw error;
 
@@ -83,7 +86,7 @@ const KanbanAssignment = ({ selectedRecommendations, onBack }: KanbanAssignmentP
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Error al cargar vendedores activos",
+        description: "Error al cargar vendedores seleccionados",
       });
     }
   };

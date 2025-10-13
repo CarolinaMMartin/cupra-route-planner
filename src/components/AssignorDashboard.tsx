@@ -23,10 +23,13 @@ const AssignorDashboard = () => {
   const [selectedCiudad, setSelectedCiudad] = useState<string>('all');
   const [selectedProvincia, setSelectedProvincia] = useState<string>('all');
   const [selectedVendedor, setSelectedVendedor] = useState<string>('all');
+  const [selectedVendedoresIds, setSelectedVendedoresIds] = useState<string[]>([]);
   const { toast } = useToast();
 
-  const handleRequestRecommendations = async (filters: any) => {
+  const handleRequestRecommendations = async (filters: any, selectedVendedoresIds: string[]) => {
     setIsLoading(true);
+    setSelectedVendedoresIds(selectedVendedoresIds);
+    
     try {
       // Llamar al webhook de n8n
       const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
@@ -75,7 +78,7 @@ const AssignorDashboard = () => {
       setSelectedSucursales([]);
       toast({
         title: "Recomendaciones generadas",
-        description: `Se encontraron ${mappedRecommendations.length} recomendaciones`,
+        description: `Se encontraron ${mappedRecommendations.length} recomendaciones para ${selectedVendedoresIds.length} vendedores`,
       });
     } catch (error) {
       console.error('Error:', error);
@@ -118,6 +121,7 @@ const AssignorDashboard = () => {
     setSelectedCiudad('all');
     setSelectedProvincia('all');
     setSelectedVendedor('all');
+    setSelectedVendedoresIds([]);
   };
 
   const handleClearFilters = () => {
@@ -268,6 +272,7 @@ const AssignorDashboard = () => {
           <CardContent>
             <KanbanAssignment
               selectedRecommendations={selectedRecommendations}
+              selectedVendedoresIds={selectedVendedoresIds}
               onBack={handleBackToPreselection}
             />
           </CardContent>
