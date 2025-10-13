@@ -125,10 +125,9 @@ const FilterPanel = ({ onRequestRecommendations, isLoading }: FilterPanelProps) 
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {vendedores.map((vendedor) => (
-                <div
+                <label
                   key={vendedor.id}
                   className="flex items-start gap-3 p-3 rounded-lg border bg-background cursor-pointer hover:bg-accent/5 transition-colors"
-                  onClick={() => toggleVendedor(vendedor.id)}
                 >
                   <Checkbox
                     checked={selectedVendedores.includes(vendedor.id)}
@@ -139,7 +138,7 @@ const FilterPanel = ({ onRequestRecommendations, isLoading }: FilterPanelProps) 
                     <p className="font-medium text-sm truncate">{vendedor.nombre}</p>
                     <p className="text-xs text-muted-foreground truncate">{vendedor.email}</p>
                   </div>
-                </div>
+                </label>
               ))}
             </div>
           )}
