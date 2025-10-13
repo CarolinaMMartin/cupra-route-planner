@@ -17,13 +17,25 @@ interface Assignment {
   };
   created_at: string;
   cliente_info?: {
-    ciudades?: string[];
+    etiquetas?: string[];
+    score_volumen_num?: number;
+    score_recencia_num?: number;
+    razon_social?: string;
+    priority_score?: number;
     provincias?: string[];
+    ciudades?: string[];
+    score_comercial?: string;
+    score_volumen?: string;
+    score_recencia?: string;
+    vendedores?: string[];
     telefonos?: string[];
     monto_total_vendido?: number;
     orders_count?: number;
+    avg_ticket?: number;
+    first_purchase_at?: string;
     last_purchase_at?: string;
     days_since_last_purchase?: number;
+    participacion?: number;
   };
 }
 
@@ -61,7 +73,7 @@ const TodayAssignments = () => {
           try {
             const { data: clienteInfo, error: infoError } = await supabase
               .from('clientes_recomendaciones_temporal')
-              .select('ciudades, provincias, telefonos, monto_total_vendido, orders_count, last_purchase_at, days_since_last_purchase')
+              .select('*')
               .eq('cuit_dni', assignment.cliente?.cuit_dni)
               .limit(1)
               .single();
@@ -182,19 +194,25 @@ const TodayAssignments = () => {
                       {assignment.cliente_info.ciudades && assignment.cliente_info.ciudades.length > 0 && (
                         <div>
                           <span className="font-medium">Ciudad:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.ciudades[0]}</span>
+                          <span className="text-muted-foreground">{assignment.cliente_info.ciudades.join(', ')}</span>
                         </div>
                       )}
                       {assignment.cliente_info.provincias && assignment.cliente_info.provincias.length > 0 && (
                         <div>
                           <span className="font-medium">Provincia:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.provincias[0]}</span>
+                          <span className="text-muted-foreground">{assignment.cliente_info.provincias.join(', ')}</span>
                         </div>
                       )}
                       {assignment.cliente_info.telefonos && assignment.cliente_info.telefonos.length > 0 && (
                         <div>
                           <span className="font-medium">Teléfono:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.telefonos[0]}</span>
+                          <span className="text-muted-foreground">{assignment.cliente_info.telefonos.join(', ')}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.score_comercial && (
+                        <div>
+                          <span className="font-medium">Score:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.score_comercial}</span>
                         </div>
                       )}
                       {assignment.cliente_info.monto_total_vendido && (
@@ -211,11 +229,48 @@ const TodayAssignments = () => {
                           <span className="text-muted-foreground">{assignment.cliente_info.orders_count}</span>
                         </div>
                       )}
+                      {assignment.cliente_info.avg_ticket && (
+                        <div>
+                          <span className="font-medium">Ticket promedio:</span>{' '}
+                          <span className="text-muted-foreground">
+                            ${assignment.cliente_info.avg_ticket.toLocaleString('es-AR')}
+                          </span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.participacion !== null && (
+                        <div>
+                          <span className="font-medium">Participación:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.participacion}%</span>
+                        </div>
+                      )}
                       {assignment.cliente_info.days_since_last_purchase !== null && (
                         <div>
                           <span className="font-medium">Última compra:</span>{' '}
                           <span className="text-muted-foreground">
                             hace {assignment.cliente_info.days_since_last_purchase} días
+                          </span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.first_purchase_at && (
+                        <div>
+                          <span className="font-medium">Primera compra:</span>{' '}
+                          <span className="text-muted-foreground">
+                            {new Date(assignment.cliente_info.first_purchase_at).toLocaleDateString('es-AR')}
+                          </span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.vendedores && assignment.cliente_info.vendedores.length > 0 && (
+                        <div className="md:col-span-2">
+                          <span className="font-medium">Vendedores previos:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.vendedores.join(', ')}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.etiquetas && assignment.cliente_info.etiquetas.length > 0 && (
+                        <div className="md:col-span-2">
+                          <span className="font-medium">Productos:</span>{' '}
+                          <span className="text-muted-foreground text-xs">
+                            {assignment.cliente_info.etiquetas.slice(0, 3).join(', ')}
+                            {assignment.cliente_info.etiquetas.length > 3 && ` +${assignment.cliente_info.etiquetas.length - 3} más`}
                           </span>
                         </div>
                       )}
