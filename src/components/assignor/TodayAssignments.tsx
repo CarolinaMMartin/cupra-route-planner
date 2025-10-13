@@ -16,6 +16,15 @@ interface Assignment {
     cuit_dni: string;
   };
   created_at: string;
+  cliente_info?: {
+    ciudades?: string[];
+    provincias?: string[];
+    telefonos?: string[];
+    monto_total_vendido?: number;
+    orders_count?: number;
+    last_purchase_at?: string;
+    days_since_last_purchase?: number;
+  };
 }
 
 const TodayAssignments = () => {
@@ -46,7 +55,23 @@ const TodayAssignments = () => {
 
       if (error) throw error;
 
-      setAssignments(data as any || []);
+      // Enriquecer con información adicional de clientes_recomendaciones_temporal
+      const assignmentsWithInfo = await Promise.all(
+        (data || []).map(async (assignment: any) => {
+          const { data: clienteInfo } = await supabase
+            .from('clientes_recomendaciones_temporal')
+            .select('ciudades, provincias, telefonos, monto_total_vendido, orders_count, last_purchase_at, days_since_last_purchase')
+            .eq('cuit_dni', assignment.cliente?.cuit_dni)
+            .maybeSingle();
+
+          return {
+            ...assignment,
+            cliente_info: clienteInfo,
+          };
+        })
+      );
+
+      setAssignments(assignmentsWithInfo as any);
     } catch (error) {
       console.error('Error fetching assignments:', error);
       toast({
@@ -126,18 +151,65 @@ const TodayAssignments = () => {
               {data.clientes.map((assignment) => (
                 <div
                   key={assignment.id}
-                  className="flex items-center justify-between p-2 rounded bg-background text-sm"
+                  className="p-3 rounded-lg bg-background border space-y-2"
                 >
-                  <div>
-                    <p className="font-medium">{assignment.cliente?.razon_social || 'Cliente desconocido'}</p>
-                    <p className="text-xs text-muted-foreground">{assignment.cliente?.cuit_dni}</p>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="font-semibold text-base">{assignment.cliente?.razon_social || 'Cliente desconocido'}</p>
+                      <p className="text-xs text-muted-foreground mt-1">CUIT: {assignment.cliente?.cuit_dni}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(assignment.created_at).toLocaleTimeString('es-AR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(assignment.created_at).toLocaleTimeString('es-AR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
+
+                  {assignment.cliente_info && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                      {assignment.cliente_info.ciudades && assignment.cliente_info.ciudades.length > 0 && (
+                        <div>
+                          <span className="font-medium">Ciudad:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.ciudades[0]}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.provincias && assignment.cliente_info.provincias.length > 0 && (
+                        <div>
+                          <span className="font-medium">Provincia:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.provincias[0]}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.telefonos && assignment.cliente_info.telefonos.length > 0 && (
+                        <div>
+                          <span className="font-medium">Teléfono:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.telefonos[0]}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.monto_total_vendido && (
+                        <div>
+                          <span className="font-medium">Total vendido:</span>{' '}
+                          <span className="text-muted-foreground">
+                            ${assignment.cliente_info.monto_total_vendido.toLocaleString('es-AR')}
+                          </span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.orders_count && (
+                        <div>
+                          <span className="font-medium">Órdenes:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.orders_count}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.days_since_last_purchase !== null && (
+                        <div>
+                          <span className="font-medium">Última compra:</span>{' '}
+                          <span className="text-muted-foreground">
+                            hace {assignment.cliente_info.days_since_last_purchase} días
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
