@@ -9,6 +9,7 @@ import ResultsMap from "./assignor/ResultsMap";
 import PreselectionStep from "./assignor/PreselectionStep";
 import KanbanAssignment from "./assignor/KanbanAssignment";
 import RecommendationFilters from "./assignor/RecommendationFilters";
+import TodayAssignments from "./assignor/TodayAssignments";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -71,6 +72,7 @@ const AssignorDashboard = () => {
         longitud: 0,
         justificacion: rec.justificacion,
         cuit_dni: rec.cuit_dni,
+        vendedores: rec.vendedores || [],
       }));
 
       setRecommendations(mappedRecommendations);
@@ -124,6 +126,10 @@ const AssignorDashboard = () => {
     setSelectedVendedoresIds([]);
   };
 
+  const handleAssignmentComplete = () => {
+    handleBackToRecommendations();
+  };
+
   const handleClearFilters = () => {
     setSelectedCiudad('all');
     setSelectedProvincia('all');
@@ -143,8 +149,11 @@ const AssignorDashboard = () => {
       if (rec.zona && rec.zona !== 'Sin zona') {
         provinciasSet.add(rec.zona);
       }
-      // Los vendedores vienen del array vendedores en la data original
-      // Necesitamos mapearlos desde los datos originales si están disponibles
+      if (rec.vendedores && Array.isArray(rec.vendedores)) {
+        rec.vendedores.forEach((v: string) => {
+          if (v) vendedoresSet.add(v);
+        });
+      }
     });
 
     return {
@@ -156,7 +165,7 @@ const AssignorDashboard = () => {
 
   // Aplicar filtros a las recomendaciones
   const filteredRecommendations = useMemo(() => {
-    return recommendations.filter((rec) => {
+    return recommendations.filter((rec: any) => {
       if (selectedCiudad !== 'all' && rec.direccion !== selectedCiudad) {
         return false;
       }
@@ -164,8 +173,10 @@ const AssignorDashboard = () => {
         return false;
       }
       if (selectedVendedor !== 'all') {
-        // Aquí necesitaríamos filtrar por vendedor si tuviéramos esa info
-        return true;
+        if (!rec.vendedores || !Array.isArray(rec.vendedores)) {
+          return false;
+        }
+        return rec.vendedores.includes(selectedVendedor);
       }
       return true;
     });
@@ -178,20 +189,24 @@ const AssignorDashboard = () => {
   return (
     <div className="space-y-6">
       {flowStep === 'recommendations' && (
-        <Card className="shadow-medium">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="w-6 h-6 text-accent" />
-              Panel de Asignación
-            </CardTitle>
-            <CardDescription>
-              Filtra sucursales y solicita recomendaciones inteligentes
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <FilterPanel onRequestRecommendations={handleRequestRecommendations} isLoading={isLoading} />
-          </CardContent>
-        </Card>
+        <>
+          <Card className="shadow-medium">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="w-6 h-6 text-accent" />
+                Panel de Asignación
+              </CardTitle>
+              <CardDescription>
+                Filtra sucursales y solicita recomendaciones inteligentes
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <FilterPanel onRequestRecommendations={handleRequestRecommendations} isLoading={isLoading} />
+            </CardContent>
+          </Card>
+          
+          <TodayAssignments />
+        </>
       )}
 
       {flowStep === 'preselection' && recommendations.length > 0 && (
@@ -274,6 +289,7 @@ const AssignorDashboard = () => {
               selectedRecommendations={selectedRecommendations}
               selectedVendedoresIds={selectedVendedoresIds}
               onBack={handleBackToPreselection}
+              onComplete={handleAssignmentComplete}
             />
           </CardContent>
         </Card>

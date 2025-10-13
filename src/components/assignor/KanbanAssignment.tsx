@@ -28,9 +28,10 @@ interface KanbanAssignmentProps {
   selectedRecommendations: Sucursal[];
   selectedVendedoresIds: string[];
   onBack: () => void;
+  onComplete?: () => void;
 }
 
-const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBack }: KanbanAssignmentProps) => {
+const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBack, onComplete }: KanbanAssignmentProps) => {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({
     unassigned: selectedRecommendations.map(r => r.id),
@@ -211,7 +212,11 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
         description: `Se asignaron ${newAssignments.length} clientes exitosamente`,
       });
       
-      onBack();
+      if (onComplete) {
+        onComplete();
+      } else {
+        onBack();
+      }
     } catch (error) {
       console.error('Error saving assignments:', error);
       toast({
