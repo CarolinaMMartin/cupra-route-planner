@@ -58,16 +58,27 @@ const TodayAssignments = () => {
       // Enriquecer con información adicional de clientes_recomendaciones_temporal
       const assignmentsWithInfo = await Promise.all(
         (data || []).map(async (assignment: any) => {
-          const { data: clienteInfo } = await supabase
-            .from('clientes_recomendaciones_temporal')
-            .select('ciudades, provincias, telefonos, monto_total_vendido, orders_count, last_purchase_at, days_since_last_purchase')
-            .eq('cuit_dni', assignment.cliente?.cuit_dni)
-            .maybeSingle();
+          try {
+            const { data: clienteInfo, error: infoError } = await supabase
+              .from('clientes_recomendaciones_temporal')
+              .select('ciudades, provincias, telefonos, monto_total_vendido, orders_count, last_purchase_at, days_since_last_purchase')
+              .eq('cuit_dni', assignment.cliente?.cuit_dni)
+              .limit(1)
+              .single();
 
-          return {
-            ...assignment,
-            cliente_info: clienteInfo,
-          };
+            if (infoError) {
+              console.error('Error fetching cliente info:', infoError);
+              return assignment;
+            }
+
+            return {
+              ...assignment,
+              cliente_info: clienteInfo,
+            };
+          } catch (err) {
+            console.error('Error processing cliente:', err);
+            return assignment;
+          }
         })
       );
 
