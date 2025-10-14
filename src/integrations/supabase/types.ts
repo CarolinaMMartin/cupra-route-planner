@@ -381,6 +381,84 @@ export type Database = {
           },
         ]
       }
+      ventas_cupra: {
+        Row: {
+          cajas: number | null
+          categorias: string | null
+          celular: string | null
+          ciudad: string | null
+          client_id: string | null
+          codigo_producto: string | null
+          correo: string | null
+          created_at: string | null
+          cuit_dni: string | null
+          direccion: string | null
+          facturacion_ars: number | null
+          fantasia: string | null
+          fecha_emision: string | null
+          id: number
+          letra: string | null
+          marca: string | null
+          nombre: string | null
+          pais: string | null
+          provincia: string | null
+          razon_social: string | null
+          telefono: string | null
+          ticket: string | null
+          vendedor: string | null
+        }
+        Insert: {
+          cajas?: number | null
+          categorias?: string | null
+          celular?: string | null
+          ciudad?: string | null
+          client_id?: string | null
+          codigo_producto?: string | null
+          correo?: string | null
+          created_at?: string | null
+          cuit_dni?: string | null
+          direccion?: string | null
+          facturacion_ars?: number | null
+          fantasia?: string | null
+          fecha_emision?: string | null
+          id?: number
+          letra?: string | null
+          marca?: string | null
+          nombre?: string | null
+          pais?: string | null
+          provincia?: string | null
+          razon_social?: string | null
+          telefono?: string | null
+          ticket?: string | null
+          vendedor?: string | null
+        }
+        Update: {
+          cajas?: number | null
+          categorias?: string | null
+          celular?: string | null
+          ciudad?: string | null
+          client_id?: string | null
+          codigo_producto?: string | null
+          correo?: string | null
+          created_at?: string | null
+          cuit_dni?: string | null
+          direccion?: string | null
+          facturacion_ars?: number | null
+          fantasia?: string | null
+          fecha_emision?: string | null
+          id?: number
+          letra?: string | null
+          marca?: string | null
+          nombre?: string | null
+          pais?: string | null
+          provincia?: string | null
+          razon_social?: string | null
+          telefono?: string | null
+          ticket?: string | null
+          vendedor?: string | null
+        }
+        Relationships: []
+      }
       visitas: {
         Row: {
           created_at: string | null
