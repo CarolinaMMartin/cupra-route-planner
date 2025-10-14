@@ -82,30 +82,30 @@ export type Database = {
       }
       clientes: {
         Row: {
-          client_id: string | null
+          client_id: string
           created_at: string | null
-          cuit_dni: string
+          cuit_dni: string | null
           id: string
           last_recommendation_at: string | null
-          razon_social: string
+          razon_social: string | null
           updated_at: string | null
         }
         Insert: {
-          client_id?: string | null
+          client_id: string
           created_at?: string | null
-          cuit_dni: string
+          cuit_dni?: string | null
           id?: string
           last_recommendation_at?: string | null
-          razon_social: string
+          razon_social?: string | null
           updated_at?: string | null
         }
         Update: {
-          client_id?: string | null
+          client_id?: string
           created_at?: string | null
-          cuit_dni?: string
+          cuit_dni?: string | null
           id?: string
           last_recommendation_at?: string | null
-          razon_social?: string
+          razon_social?: string | null
           updated_at?: string | null
         }
         Relationships: []
