@@ -390,7 +390,6 @@ export type Database = {
           client_id: string | null
           codigo_producto: string | null
           correo: string | null
-          created_at: string | null
           cuit_dni: string | null
           direccion: string | null
           facturacion_ars: number | null
@@ -415,13 +414,12 @@ export type Database = {
           client_id?: string | null
           codigo_producto?: string | null
           correo?: string | null
-          created_at?: string | null
           cuit_dni?: string | null
           direccion?: string | null
           facturacion_ars?: number | null
           fantasia?: string | null
           fecha_emision?: string | null
-          id?: number
+          id?: never
           letra?: string | null
           marca?: string | null
           nombre?: string | null
@@ -440,13 +438,12 @@ export type Database = {
           client_id?: string | null
           codigo_producto?: string | null
           correo?: string | null
-          created_at?: string | null
           cuit_dni?: string | null
           direccion?: string | null
           facturacion_ars?: number | null
           fantasia?: string | null
           fecha_emision?: string | null
-          id?: number
+          id?: never
           letra?: string | null
           marca?: string | null
           nombre?: string | null
