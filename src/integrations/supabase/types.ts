@@ -55,6 +55,7 @@ export type Database = {
       }
       cliente_feedbacks: {
         Row: {
+          client_id: string | null
           cliente_id: string
           created_at: string
           feedback: string
@@ -62,6 +63,7 @@ export type Database = {
           vendedor_id: string
         }
         Insert: {
+          client_id?: string | null
           cliente_id: string
           created_at?: string
           feedback: string
@@ -69,6 +71,7 @@ export type Database = {
           vendedor_id: string
         }
         Update: {
+          client_id?: string | null
           cliente_id?: string
           created_at?: string
           feedback?: string
@@ -79,6 +82,7 @@ export type Database = {
       }
       clientes: {
         Row: {
+          client_id: string | null
           created_at: string | null
           cuit_dni: string
           id: string
@@ -87,6 +91,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          client_id?: string | null
           created_at?: string | null
           cuit_dni: string
           id?: string
@@ -95,6 +100,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          client_id?: string | null
           created_at?: string | null
           cuit_dni?: string
           id?: string
@@ -224,6 +230,7 @@ export type Database = {
         Row: {
           avg_ticket: number | null
           ciudades: string[] | null
+          client_id: string | null
           created_at: string
           cuit_dni: string | null
           days_since_last_purchase: number | null
@@ -253,6 +260,7 @@ export type Database = {
         Insert: {
           avg_ticket?: number | null
           ciudades?: string[] | null
+          client_id?: string | null
           created_at?: string
           cuit_dni?: string | null
           days_since_last_purchase?: number | null
@@ -282,6 +290,7 @@ export type Database = {
         Update: {
           avg_ticket?: number | null
           ciudades?: string[] | null
+          client_id?: string | null
           created_at?: string
           cuit_dni?: string | null
           days_since_last_purchase?: number | null
@@ -314,6 +323,7 @@ export type Database = {
         Row: {
           barrio: string | null
           ciudad: string
+          client_id: string | null
           cliente_id: string | null
           created_at: string
           direccion: string
@@ -330,6 +340,7 @@ export type Database = {
         Insert: {
           barrio?: string | null
           ciudad: string
+          client_id?: string | null
           cliente_id?: string | null
           created_at?: string
           direccion: string
@@ -346,6 +357,7 @@ export type Database = {
         Update: {
           barrio?: string | null
           ciudad?: string
+          client_id?: string | null
           cliente_id?: string | null
           created_at?: string
           direccion?: string
@@ -380,6 +392,7 @@ export type Database = {
           categorias_productos: string | null
           categorias_proveedor: string | null
           ciudad: string | null
+          client_id: string | null
           cliente_id: string | null
           codigo_oem: string | null
           codigo_postal: string | null
@@ -444,6 +457,7 @@ export type Database = {
           categorias_productos?: string | null
           categorias_proveedor?: string | null
           ciudad?: string | null
+          client_id?: string | null
           cliente_id?: string | null
           codigo_oem?: string | null
           codigo_postal?: string | null
@@ -508,6 +522,7 @@ export type Database = {
           categorias_productos?: string | null
           categorias_proveedor?: string | null
           ciudad?: string | null
+          client_id?: string | null
           cliente_id?: string | null
           codigo_oem?: string | null
           codigo_postal?: string | null
