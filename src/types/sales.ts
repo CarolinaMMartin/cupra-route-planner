@@ -10,7 +10,6 @@ export interface Sucursal {
   longitud?: number;
   justificacion?: string;
   cuit_dni?: string;
-  client_id?: string;
   vendedores?: string[];
 }
 

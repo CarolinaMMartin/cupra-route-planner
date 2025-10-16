@@ -138,19 +138,19 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
         }
       });
 
-      // Buscar los client_id correspondientes en la tabla clientes
+      // Buscar los cliente_id correspondientes en la tabla clientes
       const cuitDnis = Array.from(cuitDniMap.values());
       const { data: clientes, error: clientesError } = await supabase
         .from('clientes')
-        .select('client_id, cuit_dni')
+        .select('id, cuit_dni')
         .in('cuit_dni', cuitDnis);
 
       if (clientesError) throw clientesError;
 
-      // Crear mapa de cuit_dni a client_id
+      // Crear mapa de cuit_dni a cliente_id
       const clienteIdMap = new Map<string, string>();
       (clientes || []).forEach(cliente => {
-        clienteIdMap.set(cliente.cuit_dni, cliente.client_id);
+        clienteIdMap.set(cliente.cuit_dni, cliente.id);
       });
 
       // Mapear recomendacion_id a cliente_id
@@ -172,7 +172,7 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
         const { error: deleteError } = await supabase
           .from('asignaciones_vendedores_clientes')
           .delete()
-          .in('client_id', validClienteIds);
+          .in('cliente_id', validClienteIds);
         
         if (deleteError) throw deleteError;
       }
@@ -191,7 +191,7 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
                 assignedPairs.add(pairKey);
                 newAssignments.push({
                   vendedor_id: vendedorId,
-                  client_id: clienteId,
+                  cliente_id: clienteId,
                 });
               }
             }
