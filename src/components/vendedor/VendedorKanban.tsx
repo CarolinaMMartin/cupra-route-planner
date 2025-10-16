@@ -36,16 +36,30 @@ interface ClienteAsignado {
 interface ClienteInfo {
   razon_social: string;
   cuit_dni: string;
+  // Scores
   score_comercial?: string;
   score_recencia?: string;
   score_volumen?: string;
-  orders_count?: number;
-  monto_total_vendido?: number;
-  avg_ticket?: number;
-  days_since_last_purchase?: number;
+  score_volumen_num?: number;
+  score_recencia_num?: number;
+  priority_score?: number;
+  // Ubicación
   provincias?: string[];
   ciudades?: string[];
   telefonos?: string[];
+  // Ventas
+  orders_count?: number;
+  monto_total_vendido?: number;
+  avg_ticket?: number;
+  participacion?: number;
+  // Fechas
+  first_purchase_at?: string;
+  last_purchase_at?: string;
+  days_since_last_purchase?: number;
+  // Productos y vendedores
+  etiquetas?: string[];
+  vendedores?: string[];
+  // Feedback
   ultimo_feedback?: string;
 }
 
@@ -208,14 +222,17 @@ const VendedorKanban = () => {
     setShowInfoDialog(true);
     
     try {
-      // Obtener información completa del cliente desde recomendaciones_ia
-      const { data: recomendacion, error: recError } = await supabase
-        .from('recomendaciones_ia')
+      // Obtener información completa del cliente desde clientes_recomendaciones_temporal
+      const { data: clienteData, error: clienteError } = await supabase
+        .from('clientes_recomendaciones_temporal')
         .select('*')
         .eq('cuit_dni', cliente.cuit_dni)
-        .maybeSingle();
+        .limit(1)
+        .single();
 
-      if (recError) throw recError;
+      if (clienteError) {
+        console.error('Error fetching cliente info:', clienteError);
+      }
 
       // Obtener el último feedback del cliente
       const { data: feedbackData, error: feedbackError } = await supabase
@@ -226,21 +243,31 @@ const VendedorKanban = () => {
         .limit(1)
         .maybeSingle();
 
-      if (feedbackError) throw feedbackError;
+      if (feedbackError) {
+        console.error('Error fetching feedback:', feedbackError);
+      }
 
       const info: ClienteInfo = {
         razon_social: cliente.razon_social,
         cuit_dni: cliente.cuit_dni,
-        score_comercial: recomendacion?.score_comercial,
-        score_recencia: recomendacion?.score_recencia,
-        score_volumen: recomendacion?.score_volumen,
-        orders_count: recomendacion?.orders_count,
-        monto_total_vendido: recomendacion?.monto_total_vendido,
-        avg_ticket: recomendacion?.avg_ticket,
-        days_since_last_purchase: recomendacion?.days_since_last_purchase,
-        provincias: recomendacion?.provincias,
-        ciudades: recomendacion?.ciudades,
-        telefonos: recomendacion?.telefonos,
+        score_comercial: clienteData?.score_comercial,
+        score_recencia: clienteData?.score_recencia,
+        score_volumen: clienteData?.score_volumen,
+        score_volumen_num: clienteData?.score_volumen_num,
+        score_recencia_num: clienteData?.score_recencia_num,
+        priority_score: clienteData?.priority_score,
+        orders_count: clienteData?.orders_count,
+        monto_total_vendido: clienteData?.monto_total_vendido,
+        avg_ticket: clienteData?.avg_ticket,
+        participacion: clienteData?.participacion,
+        first_purchase_at: clienteData?.first_purchase_at,
+        last_purchase_at: clienteData?.last_purchase_at,
+        days_since_last_purchase: clienteData?.days_since_last_purchase,
+        provincias: clienteData?.provincias,
+        ciudades: clienteData?.ciudades,
+        telefonos: clienteData?.telefonos,
+        etiquetas: clienteData?.etiquetas,
+        vendedores: clienteData?.vendedores,
         ultimo_feedback: feedbackData?.feedback,
       };
 
@@ -467,24 +494,21 @@ const VendedorKanban = () => {
           </DialogHeader>
           
           {clienteInfo && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               {/* Información básica */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">CUIT/DNI</p>
-                  <p className="text-sm">{clienteInfo.cuit_dni}</p>
-                </div>
-                {clienteInfo.telefonos && clienteInfo.telefonos.length > 0 && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Teléfonos</p>
-                    <p className="text-sm">{clienteInfo.telefonos.join(', ')}</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Ubicación */}
-              {(clienteInfo.provincias || clienteInfo.ciudades) && (
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Información de Contacto</h3>
                 <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">CUIT/DNI</p>
+                    <p className="text-sm">{clienteInfo.cuit_dni}</p>
+                  </div>
+                  {clienteInfo.telefonos && clienteInfo.telefonos.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Teléfonos</p>
+                      <p className="text-sm">{clienteInfo.telefonos.join(', ')}</p>
+                    </div>
+                  )}
                   {clienteInfo.provincias && clienteInfo.provincias.length > 0 && (
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Provincia</p>
@@ -498,76 +522,130 @@ const VendedorKanban = () => {
                     </div>
                   )}
                 </div>
-              )}
+              </div>
 
               {/* Scores */}
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-2">Scores</p>
-                <div className="grid grid-cols-3 gap-2">
+                <h3 className="text-sm font-semibold mb-2">Scores</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {clienteInfo.score_comercial && (
-                    <Badge variant="outline">
+                    <Badge variant="outline" className="justify-center py-2">
                       Comercial: {clienteInfo.score_comercial}
                     </Badge>
                   )}
                   {clienteInfo.score_recencia && (
-                    <Badge variant="outline">
+                    <Badge variant="outline" className="justify-center py-2">
                       Recencia: {clienteInfo.score_recencia}
                     </Badge>
                   )}
                   {clienteInfo.score_volumen && (
-                    <Badge variant="outline">
+                    <Badge variant="outline" className="justify-center py-2">
                       Volumen: {clienteInfo.score_volumen}
+                    </Badge>
+                  )}
+                  {clienteInfo.priority_score !== undefined && (
+                    <Badge variant="secondary" className="justify-center py-2">
+                      Prioridad: {clienteInfo.priority_score}
                     </Badge>
                   )}
                 </div>
               </div>
 
               {/* Métricas de ventas */}
-              <div className="grid grid-cols-2 gap-4">
-                {clienteInfo.orders_count !== undefined && (
-                  <div className="flex items-center gap-2">
-                    <Package className="w-4 h-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Cantidad de órdenes</p>
-                      <p className="text-lg font-bold">{clienteInfo.orders_count}</p>
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Historial de Ventas</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  {clienteInfo.orders_count !== undefined && (
+                    <div className="flex items-start gap-2">
+                      <Package className="w-4 h-4 text-muted-foreground mt-1" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Órdenes</p>
+                        <p className="text-lg font-bold">{clienteInfo.orders_count}</p>
+                      </div>
                     </div>
-                  </div>
-                )}
-                {clienteInfo.monto_total_vendido !== undefined && (
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-muted-foreground" />
+                  )}
+                  {clienteInfo.monto_total_vendido !== undefined && (
+                    <div className="flex items-start gap-2">
+                      <TrendingUp className="w-4 h-4 text-muted-foreground mt-1" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Total vendido</p>
+                        <p className="text-lg font-bold">
+                          ${clienteInfo.monto_total_vendido.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {clienteInfo.avg_ticket !== undefined && (
+                    <div className="flex items-start gap-2">
+                      <TrendingDown className="w-4 h-4 text-muted-foreground mt-1" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Ticket promedio</p>
+                        <p className="text-lg font-bold">
+                          ${clienteInfo.avg_ticket.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {clienteInfo.participacion !== undefined && (
                     <div>
-                      <p className="text-sm font-medium text-muted-foreground">Monto total vendido</p>
-                      <p className="text-lg font-bold">
-                        ${clienteInfo.monto_total_vendido.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                      <p className="text-xs text-muted-foreground">Participación</p>
+                      <p className="text-lg font-bold">{clienteInfo.participacion}%</p>
+                    </div>
+                  )}
+                  {clienteInfo.days_since_last_purchase !== undefined && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Última compra</p>
+                      <p className="text-lg font-bold">hace {clienteInfo.days_since_last_purchase} días</p>
+                    </div>
+                  )}
+                  {clienteInfo.first_purchase_at && (
+                    <div>
+                      <p className="text-xs text-muted-foreground">Primera compra</p>
+                      <p className="text-sm font-semibold">
+                        {new Date(clienteInfo.first_purchase_at).toLocaleDateString('es-AR')}
                       </p>
                     </div>
-                  </div>
-                )}
-                {clienteInfo.avg_ticket !== undefined && (
-                  <div className="flex items-center gap-2">
-                    <TrendingDown className="w-4 h-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Ticket promedio</p>
-                      <p className="text-lg font-bold">
-                        ${clienteInfo.avg_ticket.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
-                      </p>
-                    </div>
-                  </div>
-                )}
-                {clienteInfo.days_since_last_purchase !== undefined && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Días desde última compra</p>
-                    <p className="text-lg font-bold">{clienteInfo.days_since_last_purchase}</p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
+
+              {/* Vendedores previos */}
+              {clienteInfo.vendedores && clienteInfo.vendedores.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">Vendedores Previos</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {clienteInfo.vendedores.map((vendedor, idx) => (
+                      <Badge key={idx} variant="secondary">
+                        {vendedor}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Productos (Etiquetas) */}
+              {clienteInfo.etiquetas && clienteInfo.etiquetas.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">Productos Comprados</h3>
+                  <div className="max-h-32 overflow-y-auto bg-muted/50 rounded-lg p-3">
+                    <div className="flex flex-wrap gap-1">
+                      {clienteInfo.etiquetas.map((etiqueta, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          {etiqueta}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Último feedback */}
               {clienteInfo.ultimo_feedback && (
-                <div className="mt-4 p-4 bg-muted rounded-lg">
-                  <p className="text-sm font-medium text-muted-foreground mb-2">Último feedback</p>
-                  <p className="text-sm">{clienteInfo.ultimo_feedback}</p>
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">Último Feedback</h3>
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm">{clienteInfo.ultimo_feedback}</p>
+                  </div>
                 </div>
               )}
             </div>

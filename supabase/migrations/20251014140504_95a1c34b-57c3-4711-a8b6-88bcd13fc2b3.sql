@@ -1,0 +1,22 @@
+-- Hacer que todas las columnas de ventas_cupra acepten valores nulos
+ALTER TABLE public.ventas_cupra ALTER COLUMN celular DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN correo DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN direccion DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN categorias DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN pais DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN fantasia DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN fecha_emision DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN facturacion_ars DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN cajas DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN razon_social DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN codigo_producto DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN provincia DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN ciudad DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN telefono DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN vendedor DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN client_id DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN nombre DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN ticket DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN letra DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN cuit_dni DROP NOT NULL;
+ALTER TABLE public.ventas_cupra ALTER COLUMN marca DROP NOT NULL;

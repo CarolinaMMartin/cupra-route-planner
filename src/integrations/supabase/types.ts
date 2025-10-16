@@ -44,10 +44,18 @@ export type Database = {
             referencedRelation: "clientes"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "asignaciones_vendedores_clientes_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       cliente_feedbacks: {
         Row: {
+          client_id: string | null
           cliente_id: string
           created_at: string
           feedback: string
@@ -55,6 +63,7 @@ export type Database = {
           vendedor_id: string
         }
         Insert: {
+          client_id?: string | null
           cliente_id: string
           created_at?: string
           feedback: string
@@ -62,6 +71,7 @@ export type Database = {
           vendedor_id: string
         }
         Update: {
+          client_id?: string | null
           cliente_id?: string
           created_at?: string
           feedback?: string
@@ -72,27 +82,30 @@ export type Database = {
       }
       clientes: {
         Row: {
+          client_id: string
           created_at: string | null
-          cuit_dni: string
+          cuit_dni: string | null
           id: string
           last_recommendation_at: string | null
-          razon_social: string
+          razon_social: string | null
           updated_at: string | null
         }
         Insert: {
+          client_id: string
           created_at?: string | null
-          cuit_dni: string
+          cuit_dni?: string | null
           id?: string
           last_recommendation_at?: string | null
-          razon_social: string
+          razon_social?: string | null
           updated_at?: string | null
         }
         Update: {
+          client_id?: string
           created_at?: string | null
-          cuit_dni?: string
+          cuit_dni?: string | null
           id?: string
           last_recommendation_at?: string | null
-          razon_social?: string
+          razon_social?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -217,6 +230,7 @@ export type Database = {
         Row: {
           avg_ticket: number | null
           ciudades: string[] | null
+          client_id: string | null
           created_at: string
           cuit_dni: string | null
           days_since_last_purchase: number | null
@@ -246,6 +260,7 @@ export type Database = {
         Insert: {
           avg_ticket?: number | null
           ciudades?: string[] | null
+          client_id?: string | null
           created_at?: string
           cuit_dni?: string | null
           days_since_last_purchase?: number | null
@@ -275,6 +290,7 @@ export type Database = {
         Update: {
           avg_ticket?: number | null
           ciudades?: string[] | null
+          client_id?: string | null
           created_at?: string
           cuit_dni?: string | null
           days_since_last_purchase?: number | null
@@ -307,6 +323,7 @@ export type Database = {
         Row: {
           barrio: string | null
           ciudad: string
+          client_id: string | null
           cliente_id: string | null
           created_at: string
           direccion: string
@@ -323,6 +340,7 @@ export type Database = {
         Insert: {
           barrio?: string | null
           ciudad: string
+          client_id?: string | null
           cliente_id?: string | null
           created_at?: string
           direccion: string
@@ -339,6 +357,7 @@ export type Database = {
         Update: {
           barrio?: string | null
           ciudad?: string
+          client_id?: string | null
           cliente_id?: string | null
           created_at?: string
           direccion?: string
@@ -364,206 +383,81 @@ export type Database = {
       }
       ventas_cupra: {
         Row: {
-          alto: number | null
-          ancho: number | null
-          bonificacion: number | null
-          calle: string | null
-          cantidad: number | null
-          categorias_cliente: string | null
-          categorias_productos: string | null
-          categorias_proveedor: string | null
+          cajas: number | null
+          categorias: string | null
+          celular: string | null
           ciudad: string | null
-          cliente_id: string | null
-          codigo_oem: string | null
-          codigo_postal: string | null
+          client_id: string | null
           codigo_producto: string | null
-          codigo_proveedor: string | null
-          codigo_variante: string | null
-          condicion_pago: string | null
-          costo_financiero_unit_bruto: number | null
-          costo_unit_bruto: number | null
-          costo_unit_neto: number | null
+          correo: string | null
           created_at: string | null
           cuit_dni: string | null
-          cupon_descuento: string | null
-          departamento: string | null
-          entrecalles: string | null
-          envio: string | null
-          envio_gratis_me: boolean | null
-          envio_observacion: string | null
-          etiqueta: string | null
+          direccion: string | null
+          facturacion_ars: number | null
           fantasia: string | null
           fecha_emision: string | null
-          financiacion: string | null
-          financiacion_aplicacion: string | null
-          forma_envio: string | null
           id: number
-          impuesto_interno: number | null
-          iva: number | null
-          kilogramos: number | null
-          largo: number | null
-          latitud: number | null
           letra: string | null
-          longitud: number | null
           marca: string | null
-          medio_pago_tienda: string | null
-          numero: string | null
-          numero_externo: string | null
-          operador: string | null
-          origen: string | null
+          nombre: string | null
           pais: string | null
-          piso: string | null
-          precio_total_final: number | null
-          precio_total_neto: number | null
-          precio_unit_final: number | null
-          precio_unit_neto: number | null
-          proveedor: string | null
           provincia: string | null
           razon_social: string | null
-          recibo: string | null
-          sucursal: string | null
           telefono: string | null
           ticket: string | null
-          variante: string | null
           vendedor: string | null
         }
         Insert: {
-          alto?: number | null
-          ancho?: number | null
-          bonificacion?: number | null
-          calle?: string | null
-          cantidad?: number | null
-          categorias_cliente?: string | null
-          categorias_productos?: string | null
-          categorias_proveedor?: string | null
+          cajas?: number | null
+          categorias?: string | null
+          celular?: string | null
           ciudad?: string | null
-          cliente_id?: string | null
-          codigo_oem?: string | null
-          codigo_postal?: string | null
+          client_id?: string | null
           codigo_producto?: string | null
-          codigo_proveedor?: string | null
-          codigo_variante?: string | null
-          condicion_pago?: string | null
-          costo_financiero_unit_bruto?: number | null
-          costo_unit_bruto?: number | null
-          costo_unit_neto?: number | null
+          correo?: string | null
           created_at?: string | null
           cuit_dni?: string | null
-          cupon_descuento?: string | null
-          departamento?: string | null
-          entrecalles?: string | null
-          envio?: string | null
-          envio_gratis_me?: boolean | null
-          envio_observacion?: string | null
-          etiqueta?: string | null
+          direccion?: string | null
+          facturacion_ars?: number | null
           fantasia?: string | null
           fecha_emision?: string | null
-          financiacion?: string | null
-          financiacion_aplicacion?: string | null
-          forma_envio?: string | null
-          id?: never
-          impuesto_interno?: number | null
-          iva?: number | null
-          kilogramos?: number | null
-          largo?: number | null
-          latitud?: number | null
+          id?: number
           letra?: string | null
-          longitud?: number | null
           marca?: string | null
-          medio_pago_tienda?: string | null
-          numero?: string | null
-          numero_externo?: string | null
-          operador?: string | null
-          origen?: string | null
+          nombre?: string | null
           pais?: string | null
-          piso?: string | null
-          precio_total_final?: number | null
-          precio_total_neto?: number | null
-          precio_unit_final?: number | null
-          precio_unit_neto?: number | null
-          proveedor?: string | null
           provincia?: string | null
           razon_social?: string | null
-          recibo?: string | null
-          sucursal?: string | null
           telefono?: string | null
           ticket?: string | null
-          variante?: string | null
           vendedor?: string | null
         }
         Update: {
-          alto?: number | null
-          ancho?: number | null
-          bonificacion?: number | null
-          calle?: string | null
-          cantidad?: number | null
-          categorias_cliente?: string | null
-          categorias_productos?: string | null
-          categorias_proveedor?: string | null
+          cajas?: number | null
+          categorias?: string | null
+          celular?: string | null
           ciudad?: string | null
-          cliente_id?: string | null
-          codigo_oem?: string | null
-          codigo_postal?: string | null
+          client_id?: string | null
           codigo_producto?: string | null
-          codigo_proveedor?: string | null
-          codigo_variante?: string | null
-          condicion_pago?: string | null
-          costo_financiero_unit_bruto?: number | null
-          costo_unit_bruto?: number | null
-          costo_unit_neto?: number | null
+          correo?: string | null
           created_at?: string | null
           cuit_dni?: string | null
-          cupon_descuento?: string | null
-          departamento?: string | null
-          entrecalles?: string | null
-          envio?: string | null
-          envio_gratis_me?: boolean | null
-          envio_observacion?: string | null
-          etiqueta?: string | null
+          direccion?: string | null
+          facturacion_ars?: number | null
           fantasia?: string | null
           fecha_emision?: string | null
-          financiacion?: string | null
-          financiacion_aplicacion?: string | null
-          forma_envio?: string | null
-          id?: never
-          impuesto_interno?: number | null
-          iva?: number | null
-          kilogramos?: number | null
-          largo?: number | null
-          latitud?: number | null
+          id?: number
           letra?: string | null
-          longitud?: number | null
           marca?: string | null
-          medio_pago_tienda?: string | null
-          numero?: string | null
-          numero_externo?: string | null
-          operador?: string | null
-          origen?: string | null
+          nombre?: string | null
           pais?: string | null
-          piso?: string | null
-          precio_total_final?: number | null
-          precio_total_neto?: number | null
-          precio_unit_final?: number | null
-          precio_unit_neto?: number | null
-          proveedor?: string | null
           provincia?: string | null
           razon_social?: string | null
-          recibo?: string | null
-          sucursal?: string | null
           telefono?: string | null
           ticket?: string | null
-          variante?: string | null
           vendedor?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "ventas_cupra_cliente_id_fkey"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       visitas: {
         Row: {
