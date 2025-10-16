@@ -32,30 +32,48 @@ const AssignorDashboard = () => {
     setSelectedVendedoresIds(selectedVendedoresIds);
     
     try {
-      // Llamar al webhook de n8n
-      const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          cantidad_vendedores: filters.cantidad_vendedores
-        }),
-      });
+      let webhookSuccess = false;
+      
+      // Intentar llamar al webhook de n8n
+      try {
+        const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cantidad_vendedores: filters.cantidad_vendedores
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error('Error al llamar al webhook');
+        if (response.ok) {
+          webhookSuccess = true;
+          toast({
+            title: "Procesando con IA",
+            description: "El agente de IA está generando recomendaciones...",
+          });
+          // Esperar un momento para que n8n procese y guarde en la tabla
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      } catch (webhookError) {
+        console.log('Webhook falló, usando datos de simulación:', webhookError);
       }
 
-      // Esperar un momento para que n8n procese y guarde en la tabla
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Si el webhook falló, mostrar mensaje de simulación
+      if (!webhookSuccess) {
+        toast({
+          title: "Modo simulación",
+          description: "Cargando datos de ejemplo para demostración",
+        });
+      }
 
-      // Obtener las recomendaciones de la tabla recomendaciones_ia
+      // Obtener las recomendaciones de la tabla clientes_recomendaciones_temporal
       const { data, error } = await supabase
-        .from('recomendaciones_ia')
+        .from('clientes_recomendaciones_temporal')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
 
@@ -70,7 +88,7 @@ const AssignorDashboard = () => {
         dias_sin_visita: rec.days_since_last_purchase || 0,
         latitud: 0,
         longitud: 0,
-        justificacion: rec.justificacion,
+        justificacion: `Cliente ${rec.score_comercial} con ${rec.days_since_last_purchase} días desde última compra. Score de prioridad: ${rec.priority_score}`,
         cuit_dni: rec.cuit_dni,
         vendedores: rec.vendedores || [],
       }));
@@ -79,15 +97,15 @@ const AssignorDashboard = () => {
       setFlowStep('preselection');
       setSelectedSucursales([]);
       toast({
-        title: "Recomendaciones generadas",
-        description: `Se encontraron ${mappedRecommendations.length} recomendaciones para ${selectedVendedoresIds.length} vendedores`,
+        title: "Recomendaciones cargadas",
+        description: `Se encontraron ${mappedRecommendations.length} recomendaciones`,
       });
     } catch (error) {
       console.error('Error:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Error al solicitar recomendaciones",
+        description: "Error al cargar recomendaciones",
       });
     } finally {
       setIsLoading(false);
