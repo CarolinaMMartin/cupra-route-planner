@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 
 interface ClienteAsignado {
   id: string;
-  client_id: string;
+  cliente_id: string;
   estado: 'Asignado' | 'Por visitar' | 'Visitado';
   razon_social: string;
   cuit_dni: string;
@@ -102,7 +102,7 @@ const VendedorKanban = () => {
         .from('asignaciones_vendedores_clientes')
         .select(`
           id,
-          client_id,
+          cliente_id,
           estado,
           clientes (
             razon_social,
@@ -123,7 +123,7 @@ const VendedorKanban = () => {
       (asignaciones || []).forEach((asig: any) => {
         const cliente: ClienteAsignado = {
           id: asig.id,
-          client_id: asig.client_id,
+          cliente_id: asig.cliente_id,
           estado: asig.estado,
           razon_social: asig.clientes?.razon_social || 'Sin nombre',
           cuit_dni: asig.clientes?.cuit_dni || '',
@@ -238,7 +238,7 @@ const VendedorKanban = () => {
       const { data: feedbackData, error: feedbackError } = await supabase
         .from('cliente_feedbacks')
         .select('feedback')
-        .eq('client_id', cliente.client_id)
+        .eq('cliente_id', cliente.cliente_id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -303,7 +303,7 @@ const VendedorKanban = () => {
       const { error: feedbackError } = await supabase
         .from('cliente_feedbacks')
         .insert({
-          client_id: selectedCliente.client_id,
+          cliente_id: selectedCliente.cliente_id,
           vendedor_id: user.id,
           feedback: feedback.trim(),
         });
