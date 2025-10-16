@@ -26,12 +26,10 @@ interface Vendedor {
 
 interface KanbanAssignmentProps {
   selectedRecommendations: Sucursal[];
-  selectedVendedoresIds: string[];
   onBack: () => void;
-  onComplete?: () => void;
 }
 
-const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBack, onComplete }: KanbanAssignmentProps) => {
+const KanbanAssignment = ({ selectedRecommendations, onBack }: KanbanAssignmentProps) => {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({
     unassigned: selectedRecommendations.map(r => r.id),
@@ -54,13 +52,11 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
 
   const fetchVendedores = async () => {
     try {
-      // Obtener solo los vendedores seleccionados por el asignador
       const { data, error } = await supabase
         .from('profiles')
         .select('user_id, nombre, email')
         .eq('rol', 'vendedor')
-        .eq('activo', true)
-        .in('user_id', selectedVendedoresIds);
+        .eq('activo', true);
 
       if (error) throw error;
 
@@ -87,7 +83,7 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Error al cargar vendedores seleccionados",
+        description: "Error al cargar vendedores activos",
       });
     }
   };
@@ -212,11 +208,7 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
         description: `Se asignaron ${newAssignments.length} clientes exitosamente`,
       });
       
-      if (onComplete) {
-        onComplete();
-      } else {
-        onBack();
-      }
+      onBack();
     } catch (error) {
       console.error('Error saving assignments:', error);
       toast({

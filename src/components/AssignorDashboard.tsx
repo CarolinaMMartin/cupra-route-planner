@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkles, MapPin, List } from "lucide-react";
@@ -8,8 +8,6 @@ import ResultsList from "./assignor/ResultsList";
 import ResultsMap from "./assignor/ResultsMap";
 import PreselectionStep from "./assignor/PreselectionStep";
 import KanbanAssignment from "./assignor/KanbanAssignment";
-import RecommendationFilters from "./assignor/RecommendationFilters";
-import TodayAssignments from "./assignor/TodayAssignments";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -21,59 +19,35 @@ const AssignorDashboard = () => {
   const [recommendations, setRecommendations] = useState<Sucursal[]>([]);
   const [selectedSucursales, setSelectedSucursales] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedCiudad, setSelectedCiudad] = useState<string>('all');
-  const [selectedProvincia, setSelectedProvincia] = useState<string>('all');
-  const [selectedVendedor, setSelectedVendedor] = useState<string>('all');
-  const [selectedVendedoresIds, setSelectedVendedoresIds] = useState<string[]>([]);
   const { toast } = useToast();
 
-  const handleRequestRecommendations = async (filters: any, selectedVendedoresIds: string[]) => {
+  const handleRequestRecommendations = async (filters: any) => {
     setIsLoading(true);
-    setSelectedVendedoresIds(selectedVendedoresIds);
-    
     try {
-      let webhookSuccess = false;
-      
-      // Intentar llamar al webhook de n8n
-      try {
-        const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
-        const response = await fetch(webhookUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            cantidad_vendedores: filters.cantidad_vendedores
-          }),
-        });
+      // Llamar al webhook de n8n
+      const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          cantidad_vendedores: filters.cantidad_vendedores
+        }),
+      });
 
-        if (response.ok) {
-          webhookSuccess = true;
-          toast({
-            title: "Procesando con IA",
-            description: "El agente de IA está generando recomendaciones...",
-          });
-          // Esperar un momento para que n8n procese y guarde en la tabla
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-      } catch (webhookError) {
-        console.log('Webhook falló, usando datos de simulación:', webhookError);
+      if (!response.ok) {
+        throw new Error('Error al llamar al webhook');
       }
 
-      // Si el webhook falló, mostrar mensaje de simulación
-      if (!webhookSuccess) {
-        toast({
-          title: "Modo simulación",
-          description: "Cargando datos de ejemplo para demostración",
-        });
-      }
+      // Esperar un momento para que n8n procese y guarde en la tabla
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Obtener las recomendaciones de la tabla clientes_recomendaciones_temporal
+      // Obtener las recomendaciones de la tabla recomendaciones_ia
       const { data, error } = await supabase
-        .from('clientes_recomendaciones_temporal')
+        .from('recomendaciones_ia')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
@@ -88,16 +62,15 @@ const AssignorDashboard = () => {
         dias_sin_visita: rec.days_since_last_purchase || 0,
         latitud: 0,
         longitud: 0,
-        justificacion: `Cliente ${rec.score_comercial} con ${rec.days_since_last_purchase} días desde última compra. Score de prioridad: ${rec.priority_score}`,
+        justificacion: rec.justificacion,
         cuit_dni: rec.cuit_dni,
-        vendedores: rec.vendedores || [],
       }));
 
       setRecommendations(mappedRecommendations);
       setFlowStep('preselection');
       setSelectedSucursales([]);
       toast({
-        title: "Recomendaciones cargadas",
+        title: "Recomendaciones generadas",
         description: `Se encontraron ${mappedRecommendations.length} recomendaciones`,
       });
     } catch (error) {
@@ -105,7 +78,7 @@ const AssignorDashboard = () => {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Error al cargar recomendaciones",
+        description: "Error al solicitar recomendaciones",
       });
     } finally {
       setIsLoading(false);
@@ -138,93 +111,29 @@ const AssignorDashboard = () => {
     setFlowStep('recommendations');
     setRecommendations([]);
     setSelectedSucursales([]);
-    setSelectedCiudad('all');
-    setSelectedProvincia('all');
-    setSelectedVendedor('all');
-    setSelectedVendedoresIds([]);
   };
 
-  const handleAssignmentComplete = () => {
-    handleBackToRecommendations();
-  };
-
-  const handleClearFilters = () => {
-    setSelectedCiudad('all');
-    setSelectedProvincia('all');
-    setSelectedVendedor('all');
-  };
-
-  // Obtener opciones únicas para los filtros
-  const { ciudades, provincias, vendedores } = useMemo(() => {
-    const ciudadesSet = new Set<string>();
-    const provinciasSet = new Set<string>();
-    const vendedoresSet = new Set<string>();
-
-    recommendations.forEach((rec: any) => {
-      if (rec.direccion && rec.direccion !== 'Sin dirección') {
-        ciudadesSet.add(rec.direccion);
-      }
-      if (rec.zona && rec.zona !== 'Sin zona') {
-        provinciasSet.add(rec.zona);
-      }
-      if (rec.vendedores && Array.isArray(rec.vendedores)) {
-        rec.vendedores.forEach((v: string) => {
-          if (v) vendedoresSet.add(v);
-        });
-      }
-    });
-
-    return {
-      ciudades: Array.from(ciudadesSet).sort(),
-      provincias: Array.from(provinciasSet).sort(),
-      vendedores: Array.from(vendedoresSet).sort(),
-    };
-  }, [recommendations]);
-
-  // Aplicar filtros a las recomendaciones
-  const filteredRecommendations = useMemo(() => {
-    return recommendations.filter((rec: any) => {
-      if (selectedCiudad !== 'all' && rec.direccion !== selectedCiudad) {
-        return false;
-      }
-      if (selectedProvincia !== 'all' && rec.zona !== selectedProvincia) {
-        return false;
-      }
-      if (selectedVendedor !== 'all') {
-        if (!rec.vendedores || !Array.isArray(rec.vendedores)) {
-          return false;
-        }
-        return rec.vendedores.includes(selectedVendedor);
-      }
-      return true;
-    });
-  }, [recommendations, selectedCiudad, selectedProvincia, selectedVendedor]);
-
-  const selectedRecommendations = filteredRecommendations.filter(r => 
+  const selectedRecommendations = recommendations.filter(r => 
     selectedSucursales.includes(r.id)
   );
 
   return (
     <div className="space-y-6">
       {flowStep === 'recommendations' && (
-        <>
-          <Card className="shadow-medium">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="w-6 h-6 text-accent" />
-                Panel de Asignación
-              </CardTitle>
-              <CardDescription>
-                Filtra sucursales y solicita recomendaciones inteligentes
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FilterPanel onRequestRecommendations={handleRequestRecommendations} isLoading={isLoading} />
-            </CardContent>
-          </Card>
-          
-          <TodayAssignments />
-        </>
+        <Card className="shadow-medium">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="w-6 h-6 text-accent" />
+              Panel de Asignación
+            </CardTitle>
+            <CardDescription>
+              Filtra sucursales y solicita recomendaciones inteligentes
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FilterPanel onRequestRecommendations={handleRequestRecommendations} isLoading={isLoading} />
+          </CardContent>
+        </Card>
       )}
 
       {flowStep === 'preselection' && recommendations.length > 0 && (
@@ -261,23 +170,10 @@ const AssignorDashboard = () => {
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <RecommendationFilters
-              ciudades={ciudades}
-              provincias={provincias}
-              vendedores={vendedores}
-              selectedCiudad={selectedCiudad}
-              selectedProvincia={selectedProvincia}
-              selectedVendedor={selectedVendedor}
-              onCiudadChange={setSelectedCiudad}
-              onProvinciaChange={setSelectedProvincia}
-              onVendedorChange={setSelectedVendedor}
-              onClearFilters={handleClearFilters}
-            />
-            
+          <CardContent>
             {viewMode === 'list' ? (
               <PreselectionStep
-                recommendations={filteredRecommendations}
+                recommendations={recommendations}
                 selectedIds={selectedSucursales}
                 onToggle={toggleSucursal}
                 onToggleAll={toggleAllSucursales}
@@ -285,7 +181,7 @@ const AssignorDashboard = () => {
               />
             ) : (
               <ResultsMap
-                sucursales={filteredRecommendations}
+                sucursales={recommendations}
                 selectedIds={selectedSucursales}
                 onToggle={toggleSucursal}
               />
@@ -305,9 +201,7 @@ const AssignorDashboard = () => {
           <CardContent>
             <KanbanAssignment
               selectedRecommendations={selectedRecommendations}
-              selectedVendedoresIds={selectedVendedoresIds}
               onBack={handleBackToPreselection}
-              onComplete={handleAssignmentComplete}
             />
           </CardContent>
         </Card>
