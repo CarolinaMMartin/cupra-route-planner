@@ -60,7 +60,7 @@ const TodayAssignments = () => {
           id,
           created_at,
           vendedor:profiles!asignaciones_vendedores_clientes_vendedor_id_fkey(nombre, email),
-          cliente:clientes!asignaciones_vendedores_clientes_cliente_id_fkey(razon_social, cuit_dni)
+          cliente:clientes!asignaciones_vendedores_clientes_client_id_fkey(razon_social, cuit_dni)
         `)
         .gte('created_at', today.toISOString())
         .order('created_at', { ascending: false });
