@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Wine, LogOut, User, UserCog } from "lucide-react";
+import { LogOut, User, UserCog } from "lucide-react";
+import cupraLogo from "@/assets/cupra-logo.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import VendedorKanban from "@/components/vendedor/VendedorKanban";
 import { useToast } from "@/hooks/use-toast";
@@ -70,64 +71,63 @@ const Index = () => {
 
   if (isLoading || !session || !profile) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-subtle">
-        <div className="text-center">
-          <Wine className="w-16 h-16 text-primary mx-auto animate-pulse" />
-          <p className="mt-4 text-muted-foreground">Cargando...</p>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center space-y-6">
+          <img src={cupraLogo} alt="Cupra Wines" className="w-32 h-auto mx-auto opacity-50 animate-pulse" />
+          <p className="text-muted-foreground tracking-wide">Cargando...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
-      <header className="bg-card shadow-soft border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-primary rounded-full">
-                <Wine className="w-6 h-6 text-primary-foreground" />
-              </div>
+    <div className="min-h-screen">
+      <header className="matte-card border-b border-border/40 backdrop-blur-xl sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
+          <div className="flex justify-between items-center py-5">
+            <div className="flex items-center gap-4">
+              <img src={cupraLogo} alt="Cupra Wines" className="h-10 w-auto" />
+              <div className="h-8 w-px bg-border/50" />
               <div>
-                <h1 className="text-2xl font-serif font-bold">Cupra Wines</h1>
-                <p className="text-sm text-muted-foreground">Sales Planner</p>
+                <p className="text-xs tracking-widest uppercase text-muted-foreground font-light">Sales Planner</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-5">
               {profile.rol === 'asignador' && (
                 <Button
-                  variant="outline"
+                  variant="ghost"
                   size="sm"
                   onClick={() => navigate("/profiles")}
-                  className="flex items-center gap-2"
+                  className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
                 >
                   <UserCog className="w-4 h-4" />
-                  Perfiles
+                  <span className="text-sm tracking-wide">Perfiles</span>
                 </Button>
               )}
               <div className="text-right">
-                <p className="font-medium flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  {profile.nombre}
+                <p className="font-medium flex items-center gap-2 text-sm">
+                  <User className="w-4 h-4 text-accent" />
+                  <span className="tracking-wide">{profile.nombre}</span>
                 </p>
-                <p className="text-sm text-muted-foreground capitalize">{profile.rol}</p>
+                <p className="text-xs text-muted-foreground capitalize tracking-wider">{profile.rol}</p>
               </div>
+              <div className="h-8 w-px bg-border/50" />
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={handleLogout}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 text-muted-foreground hover:text-destructive transition-colors"
               >
                 <LogOut className="w-4 h-4" />
-                Salir
+                <span className="text-sm tracking-wide">Salir</span>
               </Button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12">
         {profile.rol === 'asignador' ? (
           <AssignorDashboard />
         ) : (

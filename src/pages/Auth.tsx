@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Wine } from "lucide-react";
+import cupraLogo from "@/assets/cupra-logo.png";
+import angelLogo from "@/assets/angel-blanco.png";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -86,16 +87,27 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-subtle p-4">
-      <Card className="w-full max-w-md shadow-large">
-        <CardHeader className="text-center space-y-4">
+    <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
+      {/* Marca de agua del ángel */}
+      <div 
+        className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none"
+        style={{
+          backgroundImage: `url(${angelLogo})`,
+          backgroundSize: '50%',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+        }}
+      />
+      
+      <Card className="w-full max-w-md matte-card shadow-large relative z-10">
+        <CardHeader className="text-center space-y-6 pt-8">
           <div className="flex justify-center">
-            <div className="p-3 bg-gradient-primary rounded-full">
-              <Wine className="w-8 h-8 text-primary-foreground" />
-            </div>
+            <img src={cupraLogo} alt="Cupra Wines" className="h-16 w-auto" />
           </div>
-          <CardTitle className="text-3xl font-serif">Cupra Wines</CardTitle>
-          <CardDescription>Sistema de Planificación de Ventas</CardDescription>
+          <div className="space-y-2">
+            <CardTitle className="text-2xl font-serif tracking-wide">Sistema de Planificación</CardTitle>
+            <CardDescription className="text-sm tracking-wider">Gestión de Ventas</CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="login" className="w-full">

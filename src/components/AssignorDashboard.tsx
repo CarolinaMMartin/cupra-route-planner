@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sparkles, MapPin, List } from "lucide-react";
+import { MapPin, List } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FilterPanel from "./assignor/FilterPanel";
 import ResultsList from "./assignor/ResultsList";
@@ -192,8 +192,7 @@ const AssignorDashboard = () => {
         <>
           <Card className="shadow-medium">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="w-6 h-6 text-accent" />
+              <CardTitle className="font-serif tracking-wide">
                 Panel de Asignación
               </CardTitle>
               <CardDescription>
