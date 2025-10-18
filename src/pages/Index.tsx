@@ -86,7 +86,7 @@ const Index = () => {
         <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
           <div className="flex justify-between items-center py-5">
             <div className="flex items-center gap-4">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-16 w-auto" />
+              <img src={cupraLogo} alt="Cupra Wines" className="h-[90px] w-auto" />
               <div className="h-8 w-px bg-border/50" />
               <div>
                 <p className="text-xs tracking-widest uppercase text-muted-foreground font-light">Sales Planner</p>
