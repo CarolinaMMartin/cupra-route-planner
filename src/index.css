@@ -8,46 +8,48 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Cupra Wines Premium Palette */
-    --background: 40 33% 96%; /* Beige Arena */
-    --foreground: 0 0% 29%; /* Gris Oscuro */
+    /* Cupra Wines Premium Matte Black Palette */
+    --background: 0 0% 6%; /* Negro profundo mate */
+    --foreground: 45 20% 92%; /* Beige claro */
 
-    --card: 0 0% 100%; /* Blanco Puro */
-    --card-foreground: 0 0% 29%;
+    --card: 0 0% 10%; /* Negro mate para tarjetas */
+    --card-foreground: 45 20% 92%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 29%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 45 20% 92%;
 
-    --primary: 0 100% 27%; /* Borgoña Profundo */
-    --primary-foreground: 0 0% 100%;
+    --primary: 0 0% 8%; /* Negro principal */
+    --primary-foreground: 45 20% 92%;
 
-    --secondary: 82 24% 31%; /* Verde Oliva */
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 45 35% 75%; /* Beige dorado */
+    --secondary-foreground: 0 0% 10%;
 
-    --muted: 40 33% 90%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
 
-    --accent: 43 89% 48%; /* Dorado Sutil */
-    --accent-foreground: 0 0% 29%;
+    --accent: 38 45% 60%; /* Dorado elegante */
+    --accent-foreground: 0 0% 10%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 45 20% 95%;
 
-    --border: 40 20% 85%;
-    --input: 40 20% 85%;
-    --ring: 0 100% 27%;
+    --border: 0 0% 18%;
+    --input: 0 0% 12%;
+    --ring: 38 45% 60%;
 
     --radius: 0.5rem;
     
-    /* Custom gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(0 100% 27%), hsl(0 90% 35%));
-    --gradient-accent: linear-gradient(135deg, hsl(43 89% 48%), hsl(43 85% 55%));
-    --gradient-subtle: linear-gradient(180deg, hsl(40 33% 96%), hsl(40 30% 93%));
+    /* Custom gradients - Matte black with gold accents */
+    --gradient-primary: linear-gradient(135deg, hsl(0 0% 8%), hsl(0 0% 12%));
+    --gradient-accent: linear-gradient(135deg, hsl(38 45% 60%), hsl(40 50% 70%));
+    --gradient-subtle: linear-gradient(180deg, hsl(0 0% 6%), hsl(0 0% 10%));
+    --gradient-overlay: linear-gradient(180deg, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.4));
     
-    /* Shadows */
-    --shadow-soft: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.06);
-    --shadow-medium: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -2px hsl(0 0% 0% / 0.05);
-    --shadow-large: 0 20px 25px -5px hsl(0 0% 0% / 0.1), 0 10px 10px -5px hsl(0 0% 0% / 0.04);
+    /* Shadows - Subtle for matte aesthetic */
+    --shadow-soft: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-medium: 0 4px 16px rgba(0, 0, 0, 0.4);
+    --shadow-large: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 20px rgba(215, 180, 130, 0.15);
     
     /* Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -70,33 +72,33 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 0 0% 12%;
-    --foreground: 40 33% 96%;
+    --background: 0 0% 6%;
+    --foreground: 45 20% 92%;
 
-    --card: 0 0% 16%;
-    --card-foreground: 40 33% 96%;
+    --card: 0 0% 10%;
+    --card-foreground: 45 20% 92%;
 
-    --popover: 0 0% 16%;
-    --popover-foreground: 40 33% 96%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 45 20% 92%;
 
-    --primary: 0 100% 40%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 0 0% 8%;
+    --primary-foreground: 45 20% 92%;
 
-    --secondary: 82 24% 35%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 45 35% 75%;
+    --secondary-foreground: 0 0% 10%;
 
-    --muted: 0 0% 20%;
-    --muted-foreground: 0 0% 65%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
 
-    --accent: 43 89% 55%;
-    --accent-foreground: 0 0% 12%;
+    --accent: 38 45% 60%;
+    --accent-foreground: 0 0% 10%;
 
-    --destructive: 0 62% 45%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 45 20% 95%;
 
-    --border: 0 0% 24%;
-    --input: 0 0% 24%;
-    --ring: 0 100% 40%;
+    --border: 0 0% 18%;
+    --input: 0 0% 12%;
+    --ring: 38 45% 60%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -116,6 +118,14 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
     font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background-image: 
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(255, 255, 255, 0.01) 2px,
+        rgba(255, 255, 255, 0.01) 4px
+      );
   }
   
   h1, h2, h3, h4, h5, h6 {
@@ -124,30 +134,62 @@ All colors MUST be HSL.
 }
 
 @layer components {
-  .wine-gradient {
-    background: var(--gradient-primary);
+  .matte-black-gradient {
+    background: linear-gradient(135deg, hsl(0 0% 8%), hsl(0 0% 12%));
   }
   
-  .accent-gradient {
-    background: var(--gradient-accent);
+  .gold-accent-gradient {
+    background: linear-gradient(135deg, hsl(38 45% 60%), hsl(40 50% 70%));
+  }
+  
+  .textured-background {
+    background-image: 
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(255, 255, 255, 0.02) 2px,
+        rgba(255, 255, 255, 0.02) 4px
+      ),
+      radial-gradient(circle at 20% 50%, rgba(215, 180, 130, 0.03) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(215, 180, 130, 0.02) 0%, transparent 50%);
   }
   
   .hover-lift {
-    transition: var(--transition-smooth);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
   }
   
   .hover-lift:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-medium);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 20px rgba(215, 180, 130, 0.1);
   }
   
-  .wine-button {
-    @apply bg-primary text-primary-foreground hover:opacity-90 rounded-lg px-6 py-3 font-medium;
-    transition: var(--transition-smooth);
+  .elegant-button {
+    background: linear-gradient(135deg, hsl(38 45% 60%), hsl(40 50% 70%));
+    color: hsl(0 0% 10%);
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
   
-  .wine-button:hover {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-soft);
+  .elegant-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 0 0 20px rgba(215, 180, 130, 0.3);
+  }
+  
+  .matte-card {
+    background: hsl(0 0% 10%);
+    border: 1px solid hsl(0 0% 18%);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+  }
+  
+  .gold-accent-text {
+    color: hsl(38 45% 60%);
+    font-weight: 600;
+    letter-spacing: 0.5px;
   }
 }
