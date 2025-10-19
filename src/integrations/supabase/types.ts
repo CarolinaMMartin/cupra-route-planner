@@ -333,92 +333,131 @@ export type Database = {
       recomendaciones_ia: {
         Row: {
           avg_ticket: number | null
+          barrio_principal: string | null
+          canal: string | null
+          ciudad_principa: string | null
           ciudades: string[] | null
           client_id: string | null
           created_at: string
           cuit_dni: string | null
           days_since_last_purchase: number | null
+          direccion_principal: string | null
           estado: string | null
           etiquetas: string[] | null
           first_purchase_at: string | null
           id: string
           justificacion: string
           last_purchase_at: string | null
+          last_recomendation: string | null
           monto_total_vendido: number | null
           notas: string | null
           orders_count: number | null
           participacion: number | null
           priority_score: number | null
+          productos_comprados: string[] | null
+          provincia_principal: string | null
           provincias: string[] | null
           razon_social: string
+          requiere_visita: string | null
           score_comercial: string | null
           score_recencia: string | null
           score_recencia_num: number | null
           score_volumen: string | null
           score_volumen_num: number | null
           telefonos: string[] | null
+          todas_ciudades: string[] | null
+          todas_direcciones: string[] | null
+          todos_barrios: string[] | null
+          todos_vendedores: string[] | null
           ultima_sugerencia: string | null
           ultima_visita: string | null
+          vendedor_principal: string | null
           vendedores: string[] | null
         }
         Insert: {
           avg_ticket?: number | null
+          barrio_principal?: string | null
+          canal?: string | null
+          ciudad_principa?: string | null
           ciudades?: string[] | null
           client_id?: string | null
           created_at?: string
           cuit_dni?: string | null
           days_since_last_purchase?: number | null
+          direccion_principal?: string | null
           estado?: string | null
           etiquetas?: string[] | null
           first_purchase_at?: string | null
           id?: string
           justificacion: string
           last_purchase_at?: string | null
+          last_recomendation?: string | null
           monto_total_vendido?: number | null
           notas?: string | null
           orders_count?: number | null
           participacion?: number | null
           priority_score?: number | null
+          productos_comprados?: string[] | null
+          provincia_principal?: string | null
           provincias?: string[] | null
           razon_social: string
+          requiere_visita?: string | null
           score_comercial?: string | null
           score_recencia?: string | null
           score_recencia_num?: number | null
           score_volumen?: string | null
           score_volumen_num?: number | null
           telefonos?: string[] | null
+          todas_ciudades?: string[] | null
+          todas_direcciones?: string[] | null
+          todos_barrios?: string[] | null
+          todos_vendedores?: string[] | null
           ultima_sugerencia?: string | null
           ultima_visita?: string | null
+          vendedor_principal?: string | null
           vendedores?: string[] | null
         }
         Update: {
           avg_ticket?: number | null
+          barrio_principal?: string | null
+          canal?: string | null
+          ciudad_principa?: string | null
           ciudades?: string[] | null
           client_id?: string | null
           created_at?: string
           cuit_dni?: string | null
           days_since_last_purchase?: number | null
+          direccion_principal?: string | null
           estado?: string | null
           etiquetas?: string[] | null
           first_purchase_at?: string | null
           id?: string
           justificacion?: string
           last_purchase_at?: string | null
+          last_recomendation?: string | null
           monto_total_vendido?: number | null
           notas?: string | null
           orders_count?: number | null
           participacion?: number | null
           priority_score?: number | null
+          productos_comprados?: string[] | null
+          provincia_principal?: string | null
           provincias?: string[] | null
           razon_social?: string
+          requiere_visita?: string | null
           score_comercial?: string | null
           score_recencia?: string | null
           score_recencia_num?: number | null
           score_volumen?: string | null
           score_volumen_num?: number | null
           telefonos?: string[] | null
+          todas_ciudades?: string[] | null
+          todas_direcciones?: string[] | null
+          todos_barrios?: string[] | null
+          todos_vendedores?: string[] | null
           ultima_sugerencia?: string | null
           ultima_visita?: string | null
+          vendedor_principal?: string | null
           vendedores?: string[] | null
         }
         Relationships: [
