@@ -87,49 +87,109 @@ export type Database = {
       }
       clientes: {
         Row: {
+          barrio_principal: string | null
           canal: string | null
+          cantidad_ordenes: number | null
+          categoria_recencia: string | null
+          categoria_volumen: string | null
+          ciudad_principa: string | null
           client_id: string
           created_at: string | null
           cuit_dni: string | null
+          dias_desde_ultima_compra: number | null
+          direccion_principal: string | null
           etiquetas: string[] | null
+          fantasia: string | null
           id: string
           last_recommendation_at: string | null
+          monto_total_historico: number | null
+          participacion_mercado: number | null
+          primera_compra: string | null
+          productos_comprados: string[] | null
+          provincia_principal: string | null
           razon_social: string | null
           requiere_visita: string | null
+          score_comercial: number | null
+          score_recencia: number | null
+          score_volumen: number | null
+          ticket_promedio: number | null
+          todas_ciudades: string[] | null
           todas_direcciones: string[] | null
           todos_barrios: string[] | null
           todos_vendedores: string[] | null
+          ultima_compra: string | null
           updated_at: string | null
+          vendedor_principal: string | null
         }
         Insert: {
+          barrio_principal?: string | null
           canal?: string | null
+          cantidad_ordenes?: number | null
+          categoria_recencia?: string | null
+          categoria_volumen?: string | null
+          ciudad_principa?: string | null
           client_id: string
           created_at?: string | null
           cuit_dni?: string | null
+          dias_desde_ultima_compra?: number | null
+          direccion_principal?: string | null
           etiquetas?: string[] | null
+          fantasia?: string | null
           id?: string
           last_recommendation_at?: string | null
+          monto_total_historico?: number | null
+          participacion_mercado?: number | null
+          primera_compra?: string | null
+          productos_comprados?: string[] | null
+          provincia_principal?: string | null
           razon_social?: string | null
           requiere_visita?: string | null
+          score_comercial?: number | null
+          score_recencia?: number | null
+          score_volumen?: number | null
+          ticket_promedio?: number | null
+          todas_ciudades?: string[] | null
           todas_direcciones?: string[] | null
           todos_barrios?: string[] | null
           todos_vendedores?: string[] | null
+          ultima_compra?: string | null
           updated_at?: string | null
+          vendedor_principal?: string | null
         }
         Update: {
+          barrio_principal?: string | null
           canal?: string | null
+          cantidad_ordenes?: number | null
+          categoria_recencia?: string | null
+          categoria_volumen?: string | null
+          ciudad_principa?: string | null
           client_id?: string
           created_at?: string | null
           cuit_dni?: string | null
+          dias_desde_ultima_compra?: number | null
+          direccion_principal?: string | null
           etiquetas?: string[] | null
+          fantasia?: string | null
           id?: string
           last_recommendation_at?: string | null
+          monto_total_historico?: number | null
+          participacion_mercado?: number | null
+          primera_compra?: string | null
+          productos_comprados?: string[] | null
+          provincia_principal?: string | null
           razon_social?: string | null
           requiere_visita?: string | null
+          score_comercial?: number | null
+          score_recencia?: number | null
+          score_volumen?: number | null
+          ticket_promedio?: number | null
+          todas_ciudades?: string[] | null
           todas_direcciones?: string[] | null
           todos_barrios?: string[] | null
           todos_vendedores?: string[] | null
+          ultima_compra?: string | null
           updated_at?: string | null
+          vendedor_principal?: string | null
         }
         Relationships: []
       }

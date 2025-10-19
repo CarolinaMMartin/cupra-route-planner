@@ -1,0 +1,22 @@
+-- Add missing columns to clientes table
+ALTER TABLE public.clientes
+ADD COLUMN IF NOT EXISTS fantasia text,
+ADD COLUMN IF NOT EXISTS primera_compra date,
+ADD COLUMN IF NOT EXISTS ultima_compra date,
+ADD COLUMN IF NOT EXISTS dias_desde_ultima_compra integer,
+ADD COLUMN IF NOT EXISTS cantidad_ordenes integer DEFAULT 0,
+ADD COLUMN IF NOT EXISTS monto_total_historico numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS ticket_promedio numeric DEFAULT 0,
+ADD COLUMN IF NOT EXISTS categoria_recencia text,
+ADD COLUMN IF NOT EXISTS categoria_volumen text,
+ADD COLUMN IF NOT EXISTS score_recencia integer,
+ADD COLUMN IF NOT EXISTS score_volumen integer,
+ADD COLUMN IF NOT EXISTS score_comercial integer,
+ADD COLUMN IF NOT EXISTS participacion_mercado numeric,
+ADD COLUMN IF NOT EXISTS ciudad_principa text,
+ADD COLUMN IF NOT EXISTS barrio_principal text,
+ADD COLUMN IF NOT EXISTS direccion_principal text,
+ADD COLUMN IF NOT EXISTS provincia_principal text,
+ADD COLUMN IF NOT EXISTS vendedor_principal text,
+ADD COLUMN IF NOT EXISTS productos_comprados text[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS todas_ciudades text[] DEFAULT '{}';
