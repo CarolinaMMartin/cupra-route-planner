@@ -26,13 +26,15 @@ interface ClientDetailCardProps {
   isSelected: boolean;
   onToggle: (id: string) => void;
   showCheckbox?: boolean;
+  compact?: boolean;
 }
 
 const ClientDetailCard = ({ 
   cliente, 
   isSelected, 
   onToggle,
-  showCheckbox = true 
+  showCheckbox = true,
+  compact = false
 }: ClientDetailCardProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -49,6 +51,46 @@ const ClientDetailCard = ({
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('es-AR');
   };
+
+  // Versión compacta para Kanban
+  if (compact) {
+    return (
+      <Card className="p-3 hover:shadow-md transition-shadow">
+        <div className="space-y-2">
+          <h3 className="font-semibold text-sm truncate">
+            {cliente.fantasia || cliente.nombre || 'Sin nombre'}
+          </h3>
+          <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+            <MapPin className="w-3 h-3 flex-shrink-0" />
+            {cliente.direccion_principal || cliente.direccion || 'Sin dirección'}
+          </p>
+          <div className="flex items-center justify-between gap-2">
+            <Badge variant="outline" className="text-xs whitespace-nowrap">
+              <Calendar className="w-3 h-3 mr-1" />
+              {cliente.dias_desde_ultima_compra || cliente.dias_sin_visita || 0} días
+            </Badge>
+          </div>
+          {cliente.todos_vendedores && cliente.todos_vendedores.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              <p className="font-medium mb-1">Vendedores:</p>
+              <div className="flex flex-wrap gap-1">
+                {cliente.todos_vendedores.slice(0, 2).map((v, idx) => (
+                  <Badge key={idx} variant="secondary" className="text-xs">
+                    {v}
+                  </Badge>
+                ))}
+                {cliente.todos_vendedores.length > 2 && (
+                  <Badge variant="secondary" className="text-xs">
+                    +{cliente.todos_vendedores.length - 2}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card

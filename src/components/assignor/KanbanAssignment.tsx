@@ -254,6 +254,7 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
             isSelected={false}
             onToggle={() => {}}
             showCheckbox={false}
+            compact={true}
           />
         </div>
       </div>
@@ -270,6 +271,7 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
         isSelected={false}
         onToggle={() => {}}
         showCheckbox={false}
+        compact={true}
       />
     );
   };
