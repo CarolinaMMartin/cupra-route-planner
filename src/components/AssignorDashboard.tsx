@@ -67,21 +67,28 @@ const AssignorDashboard = () => {
     loadPlacesOptions();
   }, []);
 
-  const handleRequestRecommendations = async (filters: any, selectedVendedoresIds: string[]) => {
+  const handleRequestRecommendations = async (filters: any, selectedVendedoresIds: string[], placesFilters: any) => {
     setIsLoading(true);
     setSelectedVendedoresIds(selectedVendedoresIds);
     
     try {
       // Llamar al webhook de n8n
       const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
+      const payload = {
+        cantidad_vendedores: filters.cantidad_vendedores,
+        provincia: placesFilters.provincia,
+        comuna: placesFilters.comuna,
+        barrio: placesFilters.barrio
+      };
+      
+      console.log('Enviando al webhook:', payload);
+      
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          cantidad_vendedores: filters.cantidad_vendedores
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -258,7 +265,11 @@ const AssignorDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <FilterPanel onRequestRecommendations={handleRequestRecommendations} isLoading={isLoading} />
+              <FilterPanel 
+                onRequestRecommendations={handleRequestRecommendations} 
+                isLoading={isLoading}
+                placesOptions={placesOptions}
+              />
             </CardContent>
           </Card>
           

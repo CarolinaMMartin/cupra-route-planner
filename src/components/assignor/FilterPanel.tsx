@@ -4,26 +4,32 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Users } from "lucide-react";
+import { Sparkles, Users, MapPin } from "lucide-react";
 interface Vendedor {
   id: string;
   nombre: string;
   email: string;
 }
 interface FilterPanelProps {
-  onRequestRecommendations: (filters: any, selectedVendedores: string[]) => void;
+  onRequestRecommendations: (filters: any, selectedVendedores: string[], placesFilters: any) => void;
   isLoading: boolean;
+  placesOptions: { comunas: string[], barrios: string[], provincias: string[] };
 }
 const FilterPanel = ({
   onRequestRecommendations,
-  isLoading
+  isLoading,
+  placesOptions
 }: FilterPanelProps) => {
   const [cantidadVendedores, setCantidadVendedores] = useState('');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [selectedVendedores, setSelectedVendedores] = useState<string[]>([]);
   const [isLoadingVendedores, setIsLoadingVendedores] = useState(true);
+  const [selectedComuna, setSelectedComuna] = useState<string>('all');
+  const [selectedBarrio, setSelectedBarrio] = useState<string>('all');
+  const [selectedProvincia, setSelectedProvincia] = useState<string>('all');
   const {
     toast
   } = useToast();
@@ -79,7 +85,11 @@ const FilterPanel = ({
     }
     onRequestRecommendations({
       cantidad_vendedores: parseInt(cantidadVendedores) || selectedVendedores.length
-    }, selectedVendedores);
+    }, selectedVendedores, {
+      comuna: selectedComuna !== 'all' ? selectedComuna : null,
+      barrio: selectedBarrio !== 'all' ? selectedBarrio : null,
+      provincia: selectedProvincia !== 'all' ? selectedProvincia : null
+    });
   };
   return <form onSubmit={handleSubmit} className="space-y-6">
       <Card className="p-4 bg-muted/50">
@@ -105,6 +115,68 @@ const FilterPanel = ({
                   </div>
                 </label>)}
             </div>}
+        </div>
+      </Card>
+
+      <Card className="p-4 bg-muted/50">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-accent" />
+            <h3 className="font-semibold">Filtros de Ubicación</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="provincia-filter">Provincia</Label>
+              <Select value={selectedProvincia} onValueChange={setSelectedProvincia}>
+                <SelectTrigger id="provincia-filter" className="bg-background">
+                  <SelectValue placeholder="Todas las provincias" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="all">Todas las provincias</SelectItem>
+                  {placesOptions.provincias.map((provincia) => (
+                    <SelectItem key={provincia} value={provincia}>
+                      {provincia}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="comuna-filter">Comuna</Label>
+              <Select value={selectedComuna} onValueChange={setSelectedComuna}>
+                <SelectTrigger id="comuna-filter" className="bg-background">
+                  <SelectValue placeholder="Todas las comunas" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="all">Todas las comunas</SelectItem>
+                  {placesOptions.comunas.map((comuna) => (
+                    <SelectItem key={comuna} value={comuna}>
+                      {comuna}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="barrio-filter">Barrio</Label>
+              <Select value={selectedBarrio} onValueChange={setSelectedBarrio}>
+                <SelectTrigger id="barrio-filter" className="bg-background">
+                  <SelectValue placeholder="Todos los barrios" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="all">Todos los barrios</SelectItem>
+                  {placesOptions.barrios.map((barrio) => (
+                    <SelectItem key={barrio} value={barrio}>
+                      {barrio}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </div>
       </Card>
 
