@@ -31,6 +31,8 @@ interface ClienteAsignado {
   estado: 'Asignado' | 'Por visitar' | 'Visitado';
   razon_social: string;
   cuit_dni: string;
+  barrio_principal?: string;
+  dias_desde_ultima_compra?: number;
 }
 
 interface ClienteInfo {
@@ -106,7 +108,9 @@ const VendedorKanban = () => {
           estado,
           clientes (
             razon_social,
-            cuit_dni
+            cuit_dni,
+            barrio_principal,
+            dias_desde_ultima_compra
           )
         `)
         .eq('vendedor_id', user.id);
@@ -127,6 +131,8 @@ const VendedorKanban = () => {
           estado: asig.estado,
           razon_social: asig.clientes?.razon_social || 'Sin nombre',
           cuit_dni: asig.clientes?.cuit_dni || '',
+          barrio_principal: asig.clientes?.barrio_principal,
+          dias_desde_ultima_compra: asig.clientes?.dias_desde_ultima_compra,
         };
         grouped[asig.estado].push(cliente);
       });
@@ -376,6 +382,19 @@ const VendedorKanban = () => {
                 {cliente.cuit_dni}
               </p>
             </div>
+            <div className="flex items-center justify-between pt-1">
+              {cliente.barrio_principal && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {cliente.barrio_principal}
+                </p>
+              )}
+              {cliente.dias_desde_ultima_compra !== undefined && (
+                <Badge variant="outline" className="text-xs">
+                  {cliente.dias_desde_ultima_compra} días sin compra
+                </Badge>
+              )}
+            </div>
           </div>
         </Card>
       </div>
@@ -392,6 +411,19 @@ const VendedorKanban = () => {
               <Building className="w-3 h-3" />
               {cliente.cuit_dni}
             </p>
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            {cliente.barrio_principal && (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {cliente.barrio_principal}
+              </p>
+            )}
+            {cliente.dias_desde_ultima_compra !== undefined && (
+              <Badge variant="outline" className="text-xs">
+                {cliente.dias_desde_ultima_compra} días sin compra
+              </Badge>
+            )}
           </div>
         </div>
       </Card>
