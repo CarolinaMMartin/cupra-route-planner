@@ -294,26 +294,6 @@ const AssignorDashboard = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <RecommendationFilters
-              ciudades={ciudades}
-              provincias={provincias}
-              vendedores={vendedores}
-              selectedCiudad={selectedCiudad}
-              selectedProvincia={selectedProvincia}
-              selectedVendedor={selectedVendedor}
-              onCiudadChange={setSelectedCiudad}
-              onProvinciaChange={setSelectedProvincia}
-              onVendedorChange={setSelectedVendedor}
-              placesData={placesData}
-              selectedPlacesComuna={selectedPlacesComuna}
-              selectedPlacesBarrio={selectedPlacesBarrio}
-              selectedPlacesProvincia={selectedPlacesProvincia}
-              onPlacesComunaChange={setSelectedPlacesComuna}
-              onPlacesBarrioChange={setSelectedPlacesBarrio}
-              onPlacesProvinciaChange={setSelectedPlacesProvincia}
-              onClearFilters={handleClearFilters}
-            />
-            
             {viewMode === 'list' ? (
               <PreselectionStep
                 recommendations={filteredRecommendations}
