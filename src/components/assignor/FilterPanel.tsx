@@ -14,7 +14,7 @@ interface Vendedor {
   email: string;
 }
 interface FilterPanelProps {
-  onRequestRecommendations: (filters: any, selectedVendedores: string[], placesFilters: any) => void;
+  onRequestRecommendations: (filters: any, selectedVendedoresData: { ids: string[], nombres: string[] }, placesFilters: any) => void;
   isLoading: boolean;
   placesData: Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>;
 }
@@ -130,9 +130,18 @@ const FilterPanel = ({
       });
       return;
     }
+    
+    // Obtener nombres de los vendedores seleccionados
+    const nombresVendedores = vendedores
+      .filter(v => selectedVendedores.includes(v.id))
+      .map(v => v.nombre);
+    
     onRequestRecommendations({
       cantidad_vendedores: parseInt(cantidadVendedores) || selectedVendedores.length
-    }, selectedVendedores, {
+    }, {
+      ids: selectedVendedores,
+      nombres: nombresVendedores
+    }, {
       comuna: selectedComuna !== 'all' ? selectedComuna : null,
       barrio: selectedBarrio !== 'all' ? selectedBarrio : null,
       provincia: selectedProvincia !== 'all' ? selectedProvincia : null

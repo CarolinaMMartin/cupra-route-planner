@@ -49,15 +49,16 @@ const AssignorDashboard = () => {
     loadPlacesData();
   }, []);
 
-  const handleRequestRecommendations = async (filters: any, selectedVendedoresIds: string[], placesFilters: any) => {
+  const handleRequestRecommendations = async (filters: any, selectedVendedoresData: { ids: string[], nombres: string[] }, placesFilters: any) => {
     setIsLoading(true);
-    setSelectedVendedoresIds(selectedVendedoresIds);
+    setSelectedVendedoresIds(selectedVendedoresData.ids);
     
     try {
       // Llamar al webhook de n8n
       const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
       const payload = {
         cantidad_vendedores: filters.cantidad_vendedores,
+        nombres_vendedores: selectedVendedoresData.nombres,
         provincia: placesFilters.provincia,
         comuna: placesFilters.comuna,
         barrio: placesFilters.barrio
