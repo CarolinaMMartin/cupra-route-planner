@@ -12,7 +12,7 @@ import {
 } from "@dnd-kit/core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package } from "lucide-react";
+import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -33,6 +33,30 @@ interface ClienteAsignado {
   cuit_dni: string;
   barrio_principal?: string;
   dias_desde_ultima_compra?: number;
+  // Información de contacto y ubicación
+  ciudad_principa?: string;
+  provincia_principal?: string;
+  direccion_principal?: string;
+  todas_direcciones?: string[];
+  todas_ciudades?: string[];
+  todos_barrios?: string[];
+  // Información comercial
+  primera_compra?: string;
+  ultima_compra?: string;
+  cantidad_ordenes?: number;
+  monto_total_historico?: number;
+  ticket_promedio?: number;
+  categoria_recencia?: string;
+  categoria_volumen?: string;
+  score_recencia?: number;
+  score_volumen?: number;
+  score_comercial?: number;
+  participacion_mercado?: number;
+  // Productos y vendedores
+  productos_comprados?: string[];
+  todos_vendedores?: string[];
+  etiquetas?: string[];
+  canal?: string;
 }
 
 interface ClienteInfo {
@@ -99,7 +123,7 @@ const VendedorKanban = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Obtener asignaciones del vendedor con información del cliente
+      // Obtener asignaciones del vendedor con información completa del cliente
       const { data: asignaciones, error } = await supabase
         .from('asignaciones_vendedores_clientes')
         .select(`
@@ -110,7 +134,28 @@ const VendedorKanban = () => {
             razon_social,
             cuit_dni,
             barrio_principal,
-            dias_desde_ultima_compra
+            dias_desde_ultima_compra,
+            ciudad_principa,
+            provincia_principal,
+            direccion_principal,
+            todas_direcciones,
+            todas_ciudades,
+            todos_barrios,
+            primera_compra,
+            ultima_compra,
+            cantidad_ordenes,
+            monto_total_historico,
+            ticket_promedio,
+            categoria_recencia,
+            categoria_volumen,
+            score_recencia,
+            score_volumen,
+            score_comercial,
+            participacion_mercado,
+            productos_comprados,
+            todos_vendedores,
+            etiquetas,
+            canal
           )
         `)
         .eq('vendedor_id', user.id);
@@ -133,6 +178,27 @@ const VendedorKanban = () => {
           cuit_dni: asig.clientes?.cuit_dni || '',
           barrio_principal: asig.clientes?.barrio_principal,
           dias_desde_ultima_compra: asig.clientes?.dias_desde_ultima_compra,
+          ciudad_principa: asig.clientes?.ciudad_principa,
+          provincia_principal: asig.clientes?.provincia_principal,
+          direccion_principal: asig.clientes?.direccion_principal,
+          todas_direcciones: asig.clientes?.todas_direcciones,
+          todas_ciudades: asig.clientes?.todas_ciudades,
+          todos_barrios: asig.clientes?.todos_barrios,
+          primera_compra: asig.clientes?.primera_compra,
+          ultima_compra: asig.clientes?.ultima_compra,
+          cantidad_ordenes: asig.clientes?.cantidad_ordenes,
+          monto_total_historico: asig.clientes?.monto_total_historico,
+          ticket_promedio: asig.clientes?.ticket_promedio,
+          categoria_recencia: asig.clientes?.categoria_recencia,
+          categoria_volumen: asig.clientes?.categoria_volumen,
+          score_recencia: asig.clientes?.score_recencia,
+          score_volumen: asig.clientes?.score_volumen,
+          score_comercial: asig.clientes?.score_comercial,
+          participacion_mercado: asig.clientes?.participacion_mercado,
+          productos_comprados: asig.clientes?.productos_comprados,
+          todos_vendedores: asig.clientes?.todos_vendedores,
+          etiquetas: asig.clientes?.etiquetas,
+          canal: asig.clientes?.canal,
         };
         grouped[asig.estado].push(cliente);
       });
@@ -224,24 +290,12 @@ const VendedorKanban = () => {
 
   const handleCardClick = async (cliente: ClienteAsignado) => {
     setSelectedCliente(cliente);
-    setIsLoading(true);
     setShowInfoDialog(true);
     
+    // Ya no necesitamos hacer una query adicional porque tenemos toda la info
+    // Solo buscamos el último feedback
     try {
-      // Obtener información completa del cliente desde clientes_recomendaciones_temporal
-      const { data: clienteData, error: clienteError } = await supabase
-        .from('clientes_recomendaciones_temporal')
-        .select('*')
-        .eq('cuit_dni', cliente.cuit_dni)
-        .limit(1)
-        .single();
-
-      if (clienteError) {
-        console.error('Error fetching cliente info:', clienteError);
-      }
-
-      // Obtener el último feedback del cliente
-      const { data: feedbackData, error: feedbackError } = await supabase
+      const { data: feedbackData } = await supabase
         .from('cliente_feedbacks')
         .select('feedback')
         .eq('client_id', cliente.client_id)
@@ -249,44 +303,15 @@ const VendedorKanban = () => {
         .limit(1)
         .maybeSingle();
 
-      if (feedbackError) {
-        console.error('Error fetching feedback:', feedbackError);
-      }
-
       const info: ClienteInfo = {
         razon_social: cliente.razon_social,
         cuit_dni: cliente.cuit_dni,
-        score_comercial: clienteData?.score_comercial,
-        score_recencia: clienteData?.score_recencia,
-        score_volumen: clienteData?.score_volumen,
-        score_volumen_num: clienteData?.score_volumen_num,
-        score_recencia_num: clienteData?.score_recencia_num,
-        priority_score: clienteData?.priority_score,
-        orders_count: clienteData?.orders_count,
-        monto_total_vendido: clienteData?.monto_total_vendido,
-        avg_ticket: clienteData?.avg_ticket,
-        participacion: clienteData?.participacion,
-        first_purchase_at: clienteData?.first_purchase_at,
-        last_purchase_at: clienteData?.last_purchase_at,
-        days_since_last_purchase: clienteData?.days_since_last_purchase,
-        provincias: clienteData?.provincias,
-        ciudades: clienteData?.ciudades,
-        telefonos: clienteData?.telefonos,
-        etiquetas: clienteData?.etiquetas,
-        vendedores: clienteData?.vendedores,
         ultimo_feedback: feedbackData?.feedback,
       };
 
       setClienteInfo(info);
     } catch (error) {
-      console.error('Error fetching cliente info:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Error al cargar la información del cliente",
-      });
-    } finally {
-      setIsLoading(false);
+      console.error('Error fetching feedback:', error);
     }
   };
 
@@ -522,131 +547,159 @@ const VendedorKanban = () => {
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedCliente?.razon_social}</DialogTitle>
-            <DialogDescription>Información detallada del cliente</DialogDescription>
+            <DialogDescription>Información completa del cliente y contacto</DialogDescription>
           </DialogHeader>
           
-          {clienteInfo && (
+          {selectedCliente && (
             <div className="space-y-6">
-              {/* Información básica */}
+              {/* Botones de acción rápida */}
+              <div className="flex flex-wrap gap-2">
+                {selectedCliente.direccion_principal && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const address = `${selectedCliente.direccion_principal}, ${selectedCliente.ciudad_principa || ''}, ${selectedCliente.provincia_principal || ''}`;
+                      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank');
+                    }}
+                  >
+                    <Navigation className="w-4 h-4 mr-2" />
+                    Ver en Mapa
+                  </Button>
+                )}
+              </div>
+
+              {/* Información de contacto y ubicación */}
               <div>
-                <h3 className="text-sm font-semibold mb-2">Información de Contacto</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">CUIT/DNI</p>
-                    <p className="text-sm">{clienteInfo.cuit_dni}</p>
+                <h3 className="text-sm font-semibold mb-3">Información de Contacto</h3>
+                <div className="grid gap-3">
+                  <div className="flex items-start gap-2">
+                    <Building className="w-4 h-4 text-muted-foreground mt-0.5" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">CUIT/DNI</p>
+                      <p className="text-sm font-medium">{selectedCliente.cuit_dni}</p>
+                    </div>
                   </div>
-                  {clienteInfo.telefonos && clienteInfo.telefonos.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Teléfonos</p>
-                      <p className="text-sm">{clienteInfo.telefonos.join(', ')}</p>
+
+                  {selectedCliente.direccion_principal && (
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Dirección Principal</p>
+                        <p className="text-sm font-medium">{selectedCliente.direccion_principal}</p>
+                        {selectedCliente.barrio_principal && (
+                          <p className="text-xs text-muted-foreground">Barrio: {selectedCliente.barrio_principal}</p>
+                        )}
+                        {selectedCliente.ciudad_principa && selectedCliente.provincia_principal && (
+                          <p className="text-xs text-muted-foreground">
+                            {selectedCliente.ciudad_principa}, {selectedCliente.provincia_principal}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   )}
-                  {clienteInfo.provincias && clienteInfo.provincias.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Provincia</p>
-                      <p className="text-sm">{clienteInfo.provincias.join(', ')}</p>
-                    </div>
-                  )}
-                  {clienteInfo.ciudades && clienteInfo.ciudades.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Ciudad</p>
-                      <p className="text-sm">{clienteInfo.ciudades.join(', ')}</p>
+
+                  {selectedCliente.todas_direcciones && selectedCliente.todas_direcciones.length > 1 && (
+                    <div className="pl-6">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Otras direcciones:</p>
+                      <div className="space-y-1">
+                        {selectedCliente.todas_direcciones.slice(0, 3).map((dir, idx) => (
+                          <p key={idx} className="text-xs">{dir}</p>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Scores */}
+              {/* Información comercial */}
               <div>
-                <h3 className="text-sm font-semibold mb-2">Scores</h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                  {clienteInfo.score_comercial && (
-                    <Badge variant="outline" className="justify-center py-2">
-                      Comercial: {clienteInfo.score_comercial}
-                    </Badge>
-                  )}
-                  {clienteInfo.score_recencia && (
-                    <Badge variant="outline" className="justify-center py-2">
-                      Recencia: {clienteInfo.score_recencia}
-                    </Badge>
-                  )}
-                  {clienteInfo.score_volumen && (
-                    <Badge variant="outline" className="justify-center py-2">
-                      Volumen: {clienteInfo.score_volumen}
-                    </Badge>
-                  )}
-                  {clienteInfo.priority_score !== undefined && (
-                    <Badge variant="secondary" className="justify-center py-2">
-                      Prioridad: {clienteInfo.priority_score}
-                    </Badge>
-                  )}
-                </div>
-              </div>
-
-              {/* Métricas de ventas */}
-              <div>
-                <h3 className="text-sm font-semibold mb-2">Historial de Ventas</h3>
+                <h3 className="text-sm font-semibold mb-3">Información Comercial</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  {clienteInfo.orders_count !== undefined && (
+                  {selectedCliente.cantidad_ordenes !== undefined && (
                     <div className="flex items-start gap-2">
                       <Package className="w-4 h-4 text-muted-foreground mt-1" />
                       <div>
                         <p className="text-xs text-muted-foreground">Órdenes</p>
-                        <p className="text-lg font-bold">{clienteInfo.orders_count}</p>
+                        <p className="text-lg font-bold">{selectedCliente.cantidad_ordenes}</p>
                       </div>
                     </div>
                   )}
-                  {clienteInfo.monto_total_vendido !== undefined && (
+                  {selectedCliente.monto_total_historico !== undefined && (
                     <div className="flex items-start gap-2">
                       <TrendingUp className="w-4 h-4 text-muted-foreground mt-1" />
                       <div>
                         <p className="text-xs text-muted-foreground">Total vendido</p>
                         <p className="text-lg font-bold">
-                          ${clienteInfo.monto_total_vendido.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                          ${Number(selectedCliente.monto_total_historico).toLocaleString('es-AR', { maximumFractionDigits: 0 })}
                         </p>
                       </div>
                     </div>
                   )}
-                  {clienteInfo.avg_ticket !== undefined && (
+                  {selectedCliente.ticket_promedio !== undefined && (
                     <div className="flex items-start gap-2">
                       <TrendingDown className="w-4 h-4 text-muted-foreground mt-1" />
                       <div>
                         <p className="text-xs text-muted-foreground">Ticket promedio</p>
                         <p className="text-lg font-bold">
-                          ${clienteInfo.avg_ticket.toLocaleString('es-AR', { maximumFractionDigits: 0 })}
+                          ${Number(selectedCliente.ticket_promedio).toLocaleString('es-AR', { maximumFractionDigits: 0 })}
                         </p>
                       </div>
                     </div>
                   )}
-                  {clienteInfo.participacion !== undefined && (
+                  {selectedCliente.participacion_mercado !== undefined && (
                     <div>
                       <p className="text-xs text-muted-foreground">Participación</p>
-                      <p className="text-lg font-bold">{clienteInfo.participacion}%</p>
+                      <p className="text-lg font-bold">{Number(selectedCliente.participacion_mercado).toFixed(2)}%</p>
                     </div>
                   )}
-                  {clienteInfo.days_since_last_purchase !== undefined && (
+                  {selectedCliente.dias_desde_ultima_compra !== undefined && (
                     <div>
                       <p className="text-xs text-muted-foreground">Última compra</p>
-                      <p className="text-lg font-bold">hace {clienteInfo.days_since_last_purchase} días</p>
+                      <p className="text-lg font-bold">hace {selectedCliente.dias_desde_ultima_compra} días</p>
                     </div>
                   )}
-                  {clienteInfo.first_purchase_at && (
+                  {selectedCliente.primera_compra && (
                     <div>
                       <p className="text-xs text-muted-foreground">Primera compra</p>
                       <p className="text-sm font-semibold">
-                        {new Date(clienteInfo.first_purchase_at).toLocaleDateString('es-AR')}
+                        {new Date(selectedCliente.primera_compra).toLocaleDateString('es-AR')}
                       </p>
                     </div>
                   )}
                 </div>
               </div>
 
+              {/* Scores */}
+              {(selectedCliente.categoria_recencia || selectedCliente.categoria_volumen || selectedCliente.score_comercial) && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">Scores</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {selectedCliente.score_comercial && (
+                      <Badge variant="outline" className="justify-center py-2">
+                        Comercial: {selectedCliente.score_comercial}
+                      </Badge>
+                    )}
+                    {selectedCliente.categoria_recencia && (
+                      <Badge variant="outline" className="justify-center py-2">
+                        Recencia: {selectedCliente.categoria_recencia}
+                      </Badge>
+                    )}
+                    {selectedCliente.categoria_volumen && (
+                      <Badge variant="outline" className="justify-center py-2">
+                        Volumen: {selectedCliente.categoria_volumen}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Vendedores previos */}
-              {clienteInfo.vendedores && clienteInfo.vendedores.length > 0 && (
+              {selectedCliente.todos_vendedores && selectedCliente.todos_vendedores.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold mb-2">Vendedores Previos</h3>
                   <div className="flex flex-wrap gap-2">
-                    {clienteInfo.vendedores.map((vendedor, idx) => (
+                    {selectedCliente.todos_vendedores.map((vendedor, idx) => (
                       <Badge key={idx} variant="secondary">
                         {vendedor}
                       </Badge>
@@ -655,15 +708,15 @@ const VendedorKanban = () => {
                 </div>
               )}
 
-              {/* Productos (Etiquetas) */}
-              {clienteInfo.etiquetas && clienteInfo.etiquetas.length > 0 && (
+              {/* Productos comprados */}
+              {selectedCliente.productos_comprados && selectedCliente.productos_comprados.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold mb-2">Productos Comprados</h3>
+                  <h3 className="text-sm font-semibold mb-2">Productos Comprados Habitualmente</h3>
                   <div className="max-h-32 overflow-y-auto bg-muted/50 rounded-lg p-3">
                     <div className="flex flex-wrap gap-1">
-                      {clienteInfo.etiquetas.map((etiqueta, idx) => (
+                      {selectedCliente.productos_comprados.map((producto, idx) => (
                         <Badge key={idx} variant="outline" className="text-xs">
-                          {etiqueta}
+                          {producto}
                         </Badge>
                       ))}
                     </div>
@@ -671,8 +724,22 @@ const VendedorKanban = () => {
                 </div>
               )}
 
+              {/* Etiquetas */}
+              {selectedCliente.etiquetas && selectedCliente.etiquetas.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-semibold mb-2">Etiquetas</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedCliente.etiquetas.map((etiqueta, idx) => (
+                      <Badge key={idx} variant="secondary">
+                        {etiqueta}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Último feedback */}
-              {clienteInfo.ultimo_feedback && (
+              {clienteInfo?.ultimo_feedback && (
                 <div>
                   <h3 className="text-sm font-semibold mb-2">Último Feedback</h3>
                   <div className="p-3 bg-muted rounded-lg">
