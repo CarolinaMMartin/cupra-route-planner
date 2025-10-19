@@ -204,42 +204,21 @@ export type Database = {
       places: {
         Row: {
           barrio_principal: string | null
-          client_id: string
           comuna: string | null
-          createdat: string
-          direccion_principal: string | null
           id: string
-          lat: number | null
-          long: number | null
-          place_id: string | null
           provincia_principal: string | null
-          updatedat: string
         }
         Insert: {
           barrio_principal?: string | null
-          client_id: string
           comuna?: string | null
-          createdat?: string
-          direccion_principal?: string | null
           id?: string
-          lat?: number | null
-          long?: number | null
-          place_id?: string | null
           provincia_principal?: string | null
-          updatedat?: string
         }
         Update: {
           barrio_principal?: string | null
-          client_id?: string
           comuna?: string | null
-          createdat?: string
-          direccion_principal?: string | null
           id?: string
-          lat?: number | null
-          long?: number | null
-          place_id?: string | null
           provincia_principal?: string | null
-          updatedat?: string
         }
         Relationships: []
       }

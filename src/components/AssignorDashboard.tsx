@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, List } from "lucide-react";
@@ -25,7 +25,47 @@ const AssignorDashboard = () => {
   const [selectedProvincia, setSelectedProvincia] = useState<string>('all');
   const [selectedVendedor, setSelectedVendedor] = useState<string>('all');
   const [selectedVendedoresIds, setSelectedVendedoresIds] = useState<string[]>([]);
+  const [selectedPlacesComuna, setSelectedPlacesComuna] = useState<string>('all');
+  const [selectedPlacesBarrio, setSelectedPlacesBarrio] = useState<string>('all');
+  const [selectedPlacesProvincia, setSelectedPlacesProvincia] = useState<string>('all');
+  const [placesOptions, setPlacesOptions] = useState<{ comunas: string[], barrios: string[], provincias: string[] }>({
+    comunas: [],
+    barrios: [],
+    provincias: []
+  });
   const { toast } = useToast();
+
+  // Cargar opciones de places al montar el componente
+  useEffect(() => {
+    const loadPlacesOptions = async () => {
+      const { data, error } = await supabase
+        .from('places')
+        .select('comuna, barrio_principal, provincia_principal');
+
+      if (error) {
+        console.error('Error loading places:', error);
+        return;
+      }
+
+      const comunasSet = new Set<string>();
+      const barriosSet = new Set<string>();
+      const provinciasSet = new Set<string>();
+
+      data?.forEach(place => {
+        if (place.comuna) comunasSet.add(place.comuna);
+        if (place.barrio_principal) barriosSet.add(place.barrio_principal);
+        if (place.provincia_principal) provinciasSet.add(place.provincia_principal);
+      });
+
+      setPlacesOptions({
+        comunas: Array.from(comunasSet).sort(),
+        barrios: Array.from(barriosSet).sort(),
+        provincias: Array.from(provinciasSet).sort()
+      });
+    };
+
+    loadPlacesOptions();
+  }, []);
 
   const handleRequestRecommendations = async (filters: any, selectedVendedoresIds: string[]) => {
     setIsLoading(true);
@@ -134,6 +174,9 @@ const AssignorDashboard = () => {
     setSelectedCiudad('all');
     setSelectedProvincia('all');
     setSelectedVendedor('all');
+    setSelectedPlacesComuna('all');
+    setSelectedPlacesBarrio('all');
+    setSelectedPlacesProvincia('all');
   };
 
   // Obtener opciones únicas para los filtros
@@ -253,6 +296,13 @@ const AssignorDashboard = () => {
               onCiudadChange={setSelectedCiudad}
               onProvinciaChange={setSelectedProvincia}
               onVendedorChange={setSelectedVendedor}
+              placesOptions={placesOptions}
+              selectedPlacesComuna={selectedPlacesComuna}
+              selectedPlacesBarrio={selectedPlacesBarrio}
+              selectedPlacesProvincia={selectedPlacesProvincia}
+              onPlacesComunaChange={setSelectedPlacesComuna}
+              onPlacesBarrioChange={setSelectedPlacesBarrio}
+              onPlacesProvinciaChange={setSelectedPlacesProvincia}
               onClearFilters={handleClearFilters}
             />
             
