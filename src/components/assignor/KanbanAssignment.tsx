@@ -13,10 +13,11 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MapPin, Star, Calendar, ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save } from "lucide-react";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import ClientDetailCard from "./ClientDetailCard";
 
 interface Vendedor {
   id: string;
@@ -247,27 +248,14 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
 
     return (
       <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
-        <Card className={`p-3 cursor-move transition-all ${isDragging ? 'opacity-50' : 'hover-lift'}`}>
-          <div className="space-y-2">
-            <div>
-              <h4 className="font-semibold text-sm">{recomendacion.nombre}</h4>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {recomendacion.direccion}
-              </p>
-            </div>
-            <div className="flex gap-2 text-xs">
-              <span className="flex items-center gap-1">
-                <Star className="w-3 h-3 text-accent" />
-                {recomendacion.score}
-              </span>
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3 h-3 text-accent" />
-                {recomendacion.dias_sin_visita}d
-              </span>
-            </div>
-          </div>
-        </Card>
+        <div className={`cursor-move transition-all ${isDragging ? 'opacity-50' : ''}`}>
+          <ClientDetailCard
+            cliente={recomendacion}
+            isSelected={false}
+            onToggle={() => {}}
+            showCheckbox={false}
+          />
+        </div>
       </div>
     );
   };
@@ -277,27 +265,12 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
     if (!recomendacion) return null;
 
     return (
-      <Card className="p-3">
-        <div className="space-y-2">
-          <div>
-            <h4 className="font-semibold text-sm">{recomendacion.nombre}</h4>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <MapPin className="w-3 h-3" />
-              {recomendacion.direccion}
-            </p>
-          </div>
-          <div className="flex gap-2 text-xs">
-            <span className="flex items-center gap-1">
-              <Star className="w-3 h-3 text-accent" />
-              {recomendacion.score}
-            </span>
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3 h-3 text-accent" />
-              {recomendacion.dias_sin_visita}d
-            </span>
-          </div>
-        </div>
-      </Card>
+      <ClientDetailCard
+        cliente={recomendacion}
+        isSelected={false}
+        onToggle={() => {}}
+        showCheckbox={false}
+      />
     );
   };
 

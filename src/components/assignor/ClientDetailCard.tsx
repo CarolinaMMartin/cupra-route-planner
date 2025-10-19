@@ -1,0 +1,320 @@
+import { useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { 
+  MapPin, 
+  Star, 
+  Calendar, 
+  Lightbulb, 
+  ChevronDown, 
+  ChevronUp,
+  DollarSign,
+  ShoppingCart,
+  TrendingUp,
+  Tag,
+  Phone,
+  Building2,
+  AlertCircle
+} from "lucide-react";
+import { Sucursal } from "@/types/sales";
+
+interface ClientDetailCardProps {
+  cliente: Sucursal;
+  isSelected: boolean;
+  onToggle: (id: string) => void;
+  showCheckbox?: boolean;
+}
+
+const ClientDetailCard = ({ 
+  cliente, 
+  isSelected, 
+  onToggle,
+  showCheckbox = true 
+}: ClientDetailCardProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const formatCurrency = (value?: number) => {
+    if (!value) return 'N/A';
+    return new Intl.NumberFormat('es-AR', { 
+      style: 'currency', 
+      currency: 'ARS',
+      maximumFractionDigits: 0
+    }).format(value);
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('es-AR');
+  };
+
+  return (
+    <Card
+      className="p-4 hover-lift cursor-pointer transition-all"
+      onClick={() => showCheckbox && onToggle(cliente.id)}
+    >
+      <div className="flex items-start gap-4">
+        {showCheckbox && (
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => onToggle(cliente.id)}
+            className="mt-1"
+          />
+        )}
+        
+        <div className="flex-1 space-y-3">
+          {/* Header básico */}
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h3 className="font-serif font-semibold text-lg">{cliente.nombre}</h3>
+              {cliente.fantasia && cliente.fantasia !== cliente.nombre && (
+                <p className="text-sm text-muted-foreground">({cliente.fantasia})</p>
+              )}
+              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                <MapPin className="w-3 h-3" />
+                {cliente.direccion_principal || cliente.direccion}
+              </p>
+              {cliente.cuit_dni && (
+                <p className="text-xs text-muted-foreground">CUIT/DNI: {cliente.cuit_dni}</p>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 items-end">
+              <Badge variant={cliente.tipo_cliente === 'Premium' ? 'default' : 'secondary'}>
+                {cliente.tipo_cliente}
+              </Badge>
+              {cliente.canal && (
+                <Badge variant="outline">{cliente.canal}</Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Métricas principales */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+            <div className="flex items-center gap-2">
+              <Star className="w-4 h-4 text-accent" />
+              <span>Score: {cliente.score}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-accent" />
+              <span>{cliente.dias_sin_visita} días sin visita</span>
+            </div>
+            {cliente.cantidad_ordenes !== undefined && (
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4 text-accent" />
+                <span>{cliente.cantidad_ordenes} órdenes</span>
+              </div>
+            )}
+            {cliente.ticket_promedio !== undefined && (
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-accent" />
+                <span>{formatCurrency(cliente.ticket_promedio)}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Justificación IA */}
+          {cliente.justificacion && (
+            <div className="bg-muted/50 p-3 rounded-md flex gap-2">
+              <Lightbulb className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-muted-foreground">{cliente.justificacion}</p>
+            </div>
+          )}
+
+          {/* Alertas importantes */}
+          {cliente.requiere_visita === "1" && (
+            <div className="bg-destructive/10 p-3 rounded-md flex gap-2 items-center">
+              <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+              <p className="text-sm font-medium text-destructive">Requiere visita urgente</p>
+            </div>
+          )}
+
+          {/* Collapsible con información completa */}
+          <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button 
+                variant="ghost" 
+                className="w-full justify-between p-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                }}
+              >
+                <span className="text-sm font-medium">Ver más información</span>
+                {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </Button>
+            </CollapsibleTrigger>
+            
+            <CollapsibleContent className="space-y-4 pt-3">
+              {/* Información comercial */}
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4" />
+                  Información Comercial
+                </h4>
+                <div className="grid grid-cols-2 gap-2 text-xs pl-6">
+                  <div>
+                    <span className="text-muted-foreground">Primera compra:</span>
+                    <p className="font-medium">{formatDate(cliente.primera_compra)}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Última compra:</span>
+                    <p className="font-medium">{formatDate(cliente.ultima_compra)}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Días desde última compra:</span>
+                    <p className="font-medium">{cliente.dias_desde_ultima_compra || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Monto total histórico:</span>
+                    <p className="font-medium">{formatCurrency(cliente.monto_total_historico)}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Categoría recencia:</span>
+                    <p className="font-medium">
+                      <Badge variant="outline" className="text-xs">
+                        {cliente.categoria_recencia || 'N/A'}
+                      </Badge>
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Categoría volumen:</span>
+                    <p className="font-medium">
+                      <Badge variant="outline" className="text-xs">
+                        {cliente.categoria_volumen || 'N/A'}
+                      </Badge>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scores */}
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  <Star className="w-4 h-4" />
+                  Scores de Evaluación
+                </h4>
+                <div className="grid grid-cols-3 gap-2 text-xs pl-6">
+                  <div>
+                    <span className="text-muted-foreground">Recencia:</span>
+                    <p className="font-medium">{cliente.score_recencia || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Volumen:</span>
+                    <p className="font-medium">{cliente.score_volumen || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Comercial:</span>
+                    <p className="font-medium">{cliente.score_comercial || 'N/A'}</p>
+                  </div>
+                </div>
+                {cliente.participacion_mercado !== undefined && (
+                  <div className="text-xs pl-6">
+                    <span className="text-muted-foreground">Participación de mercado:</span>
+                    <p className="font-medium">{cliente.participacion_mercado}%</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Ubicación */}
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                  <Building2 className="w-4 h-4" />
+                  Ubicaciones
+                </h4>
+                <div className="space-y-2 text-xs pl-6">
+                  {cliente.provincia_principal && (
+                    <div>
+                      <span className="text-muted-foreground">Provincia:</span>
+                      <p className="font-medium">{cliente.provincia_principal}</p>
+                    </div>
+                  )}
+                  {cliente.ciudad_principa && (
+                    <div>
+                      <span className="text-muted-foreground">Ciudad:</span>
+                      <p className="font-medium">{cliente.ciudad_principa}</p>
+                    </div>
+                  )}
+                  {cliente.barrio_principal && (
+                    <div>
+                      <span className="text-muted-foreground">Barrio:</span>
+                      <p className="font-medium">{cliente.barrio_principal}</p>
+                    </div>
+                  )}
+                  {cliente.todas_ciudades && cliente.todas_ciudades.length > 1 && (
+                    <div>
+                      <span className="text-muted-foreground">Todas las ciudades:</span>
+                      <p className="font-medium">{cliente.todas_ciudades.join(', ')}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Vendedores */}
+              {(cliente.vendedor_principal || cliente.todos_vendedores) && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <Phone className="w-4 h-4" />
+                    Vendedores
+                  </h4>
+                  <div className="space-y-2 text-xs pl-6">
+                    {cliente.vendedor_principal && (
+                      <div>
+                        <span className="text-muted-foreground">Vendedor principal:</span>
+                        <p className="font-medium">{cliente.vendedor_principal}</p>
+                      </div>
+                    )}
+                    {cliente.todos_vendedores && cliente.todos_vendedores.length > 0 && (
+                      <div>
+                        <span className="text-muted-foreground">Todos los vendedores:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {cliente.todos_vendedores.map((v, idx) => (
+                            <Badge key={idx} variant="outline" className="text-xs">{v}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Productos */}
+              {cliente.productos_comprados && cliente.productos_comprados.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <ShoppingCart className="w-4 h-4" />
+                    Productos Comprados
+                  </h4>
+                  <div className="pl-6">
+                    <ul className="text-xs space-y-1 list-disc list-inside">
+                      {cliente.productos_comprados.map((prod, idx) => (
+                        <li key={idx} className="text-muted-foreground">{prod}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Etiquetas */}
+              {cliente.etiquetas && cliente.etiquetas.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <Tag className="w-4 h-4" />
+                    Etiquetas
+                  </h4>
+                  <div className="flex flex-wrap gap-1 pl-6">
+                    {cliente.etiquetas.map((tag, idx) => (
+                      <Badge key={idx} variant="secondary" className="text-xs">{tag}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+export default ClientDetailCard;

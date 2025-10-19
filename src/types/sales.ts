@@ -12,6 +12,33 @@ export interface Sucursal {
   cuit_dni?: string;
   client_id?: string;
   vendedores?: string[];
+  // Datos completos de clientes
+  fantasia?: string;
+  primera_compra?: string;
+  ultima_compra?: string;
+  dias_desde_ultima_compra?: number;
+  cantidad_ordenes?: number;
+  monto_total_historico?: number;
+  ticket_promedio?: number;
+  categoria_recencia?: string;
+  categoria_volumen?: string;
+  score_recencia?: number;
+  score_volumen?: number;
+  score_comercial?: number;
+  participacion_mercado?: number;
+  ciudad_principa?: string;
+  barrio_principal?: string;
+  direccion_principal?: string;
+  provincia_principal?: string;
+  vendedor_principal?: string;
+  productos_comprados?: string[];
+  todas_ciudades?: string[];
+  todos_barrios?: string[];
+  todas_direcciones?: string[];
+  todos_vendedores?: string[];
+  requiere_visita?: string;
+  canal?: string;
+  etiquetas?: string[];
 }
 
 export interface Vendedor {

@@ -88,7 +88,7 @@ const AssignorDashboard = () => {
 
       if (error) throw error;
 
-      // Mapear los datos al formato Sucursal
+      // Mapear los datos al formato Sucursal con TODOS los campos de clientes
       const mappedRecommendations: Sucursal[] = (data || []).map((rec: any) => ({
         id: rec.id,
         nombre: rec.razon_social,
@@ -102,6 +102,28 @@ const AssignorDashboard = () => {
         justificacion: rec.justificacion,
         cuit_dni: rec.cuit_dni,
         vendedores: rec.vendedores || [],
+        client_id: rec.client_id,
+        // Campos completos de clientes
+        fantasia: rec.razon_social,
+        primera_compra: rec.first_purchase_at,
+        ultima_compra: rec.last_purchase_at,
+        dias_desde_ultima_compra: rec.days_since_last_purchase,
+        cantidad_ordenes: rec.orders_count,
+        monto_total_historico: rec.monto_total_vendido,
+        ticket_promedio: rec.avg_ticket,
+        categoria_recencia: rec.score_recencia,
+        categoria_volumen: rec.score_volumen,
+        score_recencia: rec.score_recencia_num,
+        score_volumen: rec.score_volumen_num,
+        score_comercial: rec.priority_score,
+        participacion_mercado: rec.participacion,
+        ciudad_principa: rec.ciudades?.[0],
+        provincia_principal: rec.provincias?.[0],
+        productos_comprados: rec.etiquetas || [],
+        todas_ciudades: rec.ciudades || [],
+        todos_vendedores: rec.vendedores || [],
+        etiquetas: rec.etiquetas || [],
+        telefonos: rec.telefonos || [],
       }));
 
       setRecommendations(mappedRecommendations);
