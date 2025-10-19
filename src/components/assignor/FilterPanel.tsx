@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,12 +16,12 @@ interface Vendedor {
 interface FilterPanelProps {
   onRequestRecommendations: (filters: any, selectedVendedores: string[], placesFilters: any) => void;
   isLoading: boolean;
-  placesOptions: { comunas: string[], barrios: string[], provincias: string[] };
+  placesData: Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>;
 }
 const FilterPanel = ({
   onRequestRecommendations,
   isLoading,
-  placesOptions
+  placesData
 }: FilterPanelProps) => {
   const [cantidadVendedores, setCantidadVendedores] = useState('');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -33,6 +33,53 @@ const FilterPanel = ({
   const {
     toast
   } = useToast();
+
+  // Obtener provincias únicas ordenadas alfabéticamente
+  const provincias = useMemo(() => {
+    const set = new Set<string>();
+    placesData.forEach(place => {
+      if (place.provincia_principal) set.add(place.provincia_principal);
+    });
+    return Array.from(set).sort();
+  }, [placesData]);
+
+  // Obtener comunas filtradas por provincia y ordenadas alfabéticamente
+  const comunas = useMemo(() => {
+    const filtered = placesData.filter(place => 
+      selectedProvincia === 'all' || place.provincia_principal === selectedProvincia
+    );
+    const set = new Set<string>();
+    filtered.forEach(place => {
+      if (place.comuna) set.add(place.comuna);
+    });
+    return Array.from(set).sort();
+  }, [placesData, selectedProvincia]);
+
+  // Obtener barrios filtrados por provincia y comuna, ordenados alfabéticamente
+  const barrios = useMemo(() => {
+    const filtered = placesData.filter(place => 
+      (selectedProvincia === 'all' || place.provincia_principal === selectedProvincia) &&
+      (selectedComuna === 'all' || place.comuna === selectedComuna)
+    );
+    const set = new Set<string>();
+    filtered.forEach(place => {
+      if (place.barrio_principal) set.add(place.barrio_principal);
+    });
+    return Array.from(set).sort();
+  }, [placesData, selectedProvincia, selectedComuna]);
+
+  // Resetear filtros dependientes cuando cambia la provincia
+  const handleProvinciaChange = (value: string) => {
+    setSelectedProvincia(value);
+    setSelectedComuna('all');
+    setSelectedBarrio('all');
+  };
+
+  // Resetear barrio cuando cambia la comuna
+  const handleComunaChange = (value: string) => {
+    setSelectedComuna(value);
+    setSelectedBarrio('all');
+  };
   useEffect(() => {
     fetchVendedores();
   }, []);
@@ -128,13 +175,13 @@ const FilterPanel = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="provincia-filter">Provincia</Label>
-              <Select value={selectedProvincia} onValueChange={setSelectedProvincia}>
+              <Select value={selectedProvincia} onValueChange={handleProvinciaChange}>
                 <SelectTrigger id="provincia-filter" className="bg-background">
                   <SelectValue placeholder="Todas las provincias" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="all">Todas las provincias</SelectItem>
-                  {placesOptions.provincias.map((provincia) => (
+                  {provincias.map((provincia) => (
                     <SelectItem key={provincia} value={provincia}>
                       {provincia}
                     </SelectItem>
@@ -144,14 +191,14 @@ const FilterPanel = ({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="comuna-filter">Comuna</Label>
-              <Select value={selectedComuna} onValueChange={setSelectedComuna}>
+              <Label htmlFor="comuna-filter">Comuna / Distrito</Label>
+              <Select value={selectedComuna} onValueChange={handleComunaChange}>
                 <SelectTrigger id="comuna-filter" className="bg-background">
                   <SelectValue placeholder="Todas las comunas" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="all">Todas las comunas</SelectItem>
-                  {placesOptions.comunas.map((comuna) => (
+                  {comunas.map((comuna) => (
                     <SelectItem key={comuna} value={comuna}>
                       {comuna}
                     </SelectItem>
@@ -168,7 +215,7 @@ const FilterPanel = ({
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="all">Todos los barrios</SelectItem>
-                  {placesOptions.barrios.map((barrio) => (
+                  {barrios.map((barrio) => (
                     <SelectItem key={barrio} value={barrio}>
                       {barrio}
                     </SelectItem>

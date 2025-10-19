@@ -28,16 +28,12 @@ const AssignorDashboard = () => {
   const [selectedPlacesComuna, setSelectedPlacesComuna] = useState<string>('all');
   const [selectedPlacesBarrio, setSelectedPlacesBarrio] = useState<string>('all');
   const [selectedPlacesProvincia, setSelectedPlacesProvincia] = useState<string>('all');
-  const [placesOptions, setPlacesOptions] = useState<{ comunas: string[], barrios: string[], provincias: string[] }>({
-    comunas: [],
-    barrios: [],
-    provincias: []
-  });
+  const [placesData, setPlacesData] = useState<Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>>([]);
   const { toast } = useToast();
 
-  // Cargar opciones de places al montar el componente
+  // Cargar datos de places al montar el componente
   useEffect(() => {
-    const loadPlacesOptions = async () => {
+    const loadPlacesData = async () => {
       const { data, error } = await supabase
         .from('places')
         .select('comuna, barrio_principal, provincia_principal');
@@ -47,24 +43,10 @@ const AssignorDashboard = () => {
         return;
       }
 
-      const comunasSet = new Set<string>();
-      const barriosSet = new Set<string>();
-      const provinciasSet = new Set<string>();
-
-      data?.forEach(place => {
-        if (place.comuna) comunasSet.add(place.comuna);
-        if (place.barrio_principal) barriosSet.add(place.barrio_principal);
-        if (place.provincia_principal) provinciasSet.add(place.provincia_principal);
-      });
-
-      setPlacesOptions({
-        comunas: Array.from(comunasSet).sort(),
-        barrios: Array.from(barriosSet).sort(),
-        provincias: Array.from(provinciasSet).sort()
-      });
+      setPlacesData(data || []);
     };
 
-    loadPlacesOptions();
+    loadPlacesData();
   }, []);
 
   const handleRequestRecommendations = async (filters: any, selectedVendedoresIds: string[], placesFilters: any) => {
@@ -268,7 +250,7 @@ const AssignorDashboard = () => {
               <FilterPanel 
                 onRequestRecommendations={handleRequestRecommendations} 
                 isLoading={isLoading}
-                placesOptions={placesOptions}
+                placesData={placesData}
               />
             </CardContent>
           </Card>
@@ -322,7 +304,7 @@ const AssignorDashboard = () => {
               onCiudadChange={setSelectedCiudad}
               onProvinciaChange={setSelectedProvincia}
               onVendedorChange={setSelectedVendedor}
-              placesOptions={placesOptions}
+              placesData={placesData}
               selectedPlacesComuna={selectedPlacesComuna}
               selectedPlacesBarrio={selectedPlacesBarrio}
               selectedPlacesProvincia={selectedPlacesProvincia}

@@ -2,6 +2,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
+import { useMemo } from "react";
 
 interface RecommendationFiltersProps {
   ciudades: string[];
@@ -13,7 +14,7 @@ interface RecommendationFiltersProps {
   onCiudadChange: (value: string) => void;
   onProvinciaChange: (value: string) => void;
   onVendedorChange: (value: string) => void;
-  placesOptions: { comunas: string[], barrios: string[], provincias: string[] };
+  placesData: Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>;
   selectedPlacesComuna: string;
   selectedPlacesBarrio: string;
   selectedPlacesProvincia: string;
@@ -33,7 +34,7 @@ const RecommendationFilters = ({
   onCiudadChange,
   onProvinciaChange,
   onVendedorChange,
-  placesOptions,
+  placesData,
   selectedPlacesComuna,
   selectedPlacesBarrio,
   selectedPlacesProvincia,
@@ -42,6 +43,53 @@ const RecommendationFilters = ({
   onPlacesProvinciaChange,
   onClearFilters,
 }: RecommendationFiltersProps) => {
+  // Obtener provincias únicas de places ordenadas alfabéticamente
+  const placesProvincia = useMemo(() => {
+    const set = new Set<string>();
+    placesData.forEach(place => {
+      if (place.provincia_principal) set.add(place.provincia_principal);
+    });
+    return Array.from(set).sort();
+  }, [placesData]);
+
+  // Obtener comunas filtradas por provincia y ordenadas alfabéticamente
+  const placesComunas = useMemo(() => {
+    const filtered = placesData.filter(place => 
+      selectedPlacesProvincia === 'all' || place.provincia_principal === selectedPlacesProvincia
+    );
+    const set = new Set<string>();
+    filtered.forEach(place => {
+      if (place.comuna) set.add(place.comuna);
+    });
+    return Array.from(set).sort();
+  }, [placesData, selectedPlacesProvincia]);
+
+  // Obtener barrios filtrados por provincia y comuna, ordenados alfabéticamente
+  const placesBarrios = useMemo(() => {
+    const filtered = placesData.filter(place => 
+      (selectedPlacesProvincia === 'all' || place.provincia_principal === selectedPlacesProvincia) &&
+      (selectedPlacesComuna === 'all' || place.comuna === selectedPlacesComuna)
+    );
+    const set = new Set<string>();
+    filtered.forEach(place => {
+      if (place.barrio_principal) set.add(place.barrio_principal);
+    });
+    return Array.from(set).sort();
+  }, [placesData, selectedPlacesProvincia, selectedPlacesComuna]);
+
+  // Resetear filtros dependientes cuando cambia la provincia
+  const handlePlacesProvinciaChange = (value: string) => {
+    onPlacesProvinciaChange(value);
+    onPlacesComunaChange('all');
+    onPlacesBarrioChange('all');
+  };
+
+  // Resetear barrio cuando cambia la comuna
+  const handlePlacesComunaChange = (value: string) => {
+    onPlacesComunaChange(value);
+    onPlacesBarrioChange('all');
+  };
+
   const hasActiveFilters = 
     selectedCiudad !== 'all' || 
     selectedProvincia !== 'all' || 
@@ -129,13 +177,13 @@ const RecommendationFilters = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="places-provincia-filter">Provincia (Places)</Label>
-              <Select value={selectedPlacesProvincia} onValueChange={onPlacesProvinciaChange}>
+              <Select value={selectedPlacesProvincia} onValueChange={handlePlacesProvinciaChange}>
                 <SelectTrigger id="places-provincia-filter" className="bg-background">
                   <SelectValue placeholder="Todas las provincias" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="all">Todas las provincias</SelectItem>
-                  {placesOptions.provincias.map((provincia) => (
+                  {placesProvincia.map((provincia) => (
                     <SelectItem key={provincia} value={provincia}>
                       {provincia}
                     </SelectItem>
@@ -145,14 +193,14 @@ const RecommendationFilters = ({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="places-comuna-filter">Comuna (Places)</Label>
-              <Select value={selectedPlacesComuna} onValueChange={onPlacesComunaChange}>
+              <Label htmlFor="places-comuna-filter">Comuna / Distrito (Places)</Label>
+              <Select value={selectedPlacesComuna} onValueChange={handlePlacesComunaChange}>
                 <SelectTrigger id="places-comuna-filter" className="bg-background">
                   <SelectValue placeholder="Todas las comunas" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="all">Todas las comunas</SelectItem>
-                  {placesOptions.comunas.map((comuna) => (
+                  {placesComunas.map((comuna) => (
                     <SelectItem key={comuna} value={comuna}>
                       {comuna}
                     </SelectItem>
@@ -169,7 +217,7 @@ const RecommendationFilters = ({
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="all">Todos los barrios</SelectItem>
-                  {placesOptions.barrios.map((barrio) => (
+                  {placesBarrios.map((barrio) => (
                     <SelectItem key={barrio} value={barrio}>
                       {barrio}
                     </SelectItem>
