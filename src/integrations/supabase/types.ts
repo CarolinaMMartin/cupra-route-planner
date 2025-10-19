@@ -87,30 +87,48 @@ export type Database = {
       }
       clientes: {
         Row: {
+          canal: string | null
           client_id: string
           created_at: string | null
           cuit_dni: string | null
+          etiquetas: string[] | null
           id: string
           last_recommendation_at: string | null
           razon_social: string | null
+          requiere_visita: string | null
+          todas_direcciones: string[] | null
+          todos_barrios: string[] | null
+          todos_vendedores: string[] | null
           updated_at: string | null
         }
         Insert: {
+          canal?: string | null
           client_id: string
           created_at?: string | null
           cuit_dni?: string | null
+          etiquetas?: string[] | null
           id?: string
           last_recommendation_at?: string | null
           razon_social?: string | null
+          requiere_visita?: string | null
+          todas_direcciones?: string[] | null
+          todos_barrios?: string[] | null
+          todos_vendedores?: string[] | null
           updated_at?: string | null
         }
         Update: {
+          canal?: string | null
           client_id?: string
           created_at?: string | null
           cuit_dni?: string | null
+          etiquetas?: string[] | null
           id?: string
           last_recommendation_at?: string | null
           razon_social?: string | null
+          requiere_visita?: string | null
+          todas_direcciones?: string[] | null
+          todos_barrios?: string[] | null
+          todos_vendedores?: string[] | null
           updated_at?: string | null
         }
         Relationships: []
