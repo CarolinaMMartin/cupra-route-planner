@@ -73,7 +73,7 @@ const Index = () => {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-6">
-          <img src={cupraLogo} alt="Cupra Wines" className="w-32 h-auto mx-auto opacity-50 animate-pulse" />
+          <img src={cupraLogo} alt="Cupra Wines" className="w-64 h-auto mx-auto opacity-50 animate-pulse" />
           <p className="text-muted-foreground tracking-wide">Cargando...</p>
         </div>
       </div>
@@ -86,7 +86,7 @@ const Index = () => {
         <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
           <div className="flex justify-between items-center py-5">
             <div className="flex items-center gap-4">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-[90px] w-auto" />
+              <img src={cupraLogo} alt="Cupra Wines" className="h-32 w-auto" />
               <div className="h-8 w-px bg-border/50" />
               <div>
                 <p className="text-xs tracking-widest uppercase text-muted-foreground font-light">Sales Planner</p>

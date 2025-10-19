@@ -102,7 +102,7 @@ const Auth = () => {
       <Card className="w-full max-w-md matte-card shadow-large relative z-10">
         <CardHeader className="text-center space-y-6 pt-8">
           <div className="flex justify-center">
-            <img src={cupraLogo} alt="Cupra Wines" className="h-16 w-auto" />
+            <img src={cupraLogo} alt="Cupra Wines" className="h-32 w-auto" />
           </div>
           <div className="space-y-2">
             <CardTitle className="text-2xl font-serif tracking-wide">Sistema de Planificación</CardTitle>
