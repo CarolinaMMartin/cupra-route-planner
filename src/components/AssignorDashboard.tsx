@@ -209,6 +209,7 @@ const AssignorDashboard = () => {
   // Aplicar filtros a las recomendaciones
   const filteredRecommendations = useMemo(() => {
     return recommendations.filter((rec: any) => {
+      // Filtros de recomendaciones originales
       if (selectedCiudad !== 'all' && rec.direccion !== selectedCiudad) {
         return false;
       }
@@ -219,11 +220,25 @@ const AssignorDashboard = () => {
         if (!rec.vendedores || !Array.isArray(rec.vendedores)) {
           return false;
         }
-        return rec.vendedores.includes(selectedVendedor);
+        if (!rec.vendedores.includes(selectedVendedor)) {
+          return false;
+        }
       }
+      
+      // Filtros de Places
+      if (selectedPlacesProvincia !== 'all') {
+        if (!rec.zona || rec.zona !== selectedPlacesProvincia) {
+          return false;
+        }
+      }
+      
+      // Nota: Los filtros de comuna y barrio no se pueden aplicar directamente
+      // porque las recomendaciones no tienen esos campos
+      // Se mantienen para consistencia de UI pero no afectan el filtrado por ahora
+      
       return true;
     });
-  }, [recommendations, selectedCiudad, selectedProvincia, selectedVendedor]);
+  }, [recommendations, selectedCiudad, selectedProvincia, selectedVendedor, selectedPlacesProvincia]);
 
   const selectedRecommendations = filteredRecommendations.filter(r => 
     selectedSucursales.includes(r.id)
