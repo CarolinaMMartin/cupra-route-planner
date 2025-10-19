@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingUp, Users, MapPin } from "lucide-react";
+import { ArrowLeft, TrendingUp, Users, MapPin, DollarSign, ShoppingCart, Filter, Download, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo.png";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 
 interface BarrioVentas {
   barrio: string;
@@ -26,9 +29,14 @@ const ClientesDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [barriosData, setBarriosData] = useState<BarrioVentas[]>([]);
-  const [clientesData, setClientesData] = useState<ClienteVentas[]>([]);
-  const [vendedoresData, setVendedoresData] = useState<VendedorVentas[]>([]);
+  const [clientesData, setClientesData] = useState<any[]>([]);
+  
+  // Filtros
+  const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
+  const [selectedCiudad, setSelectedCiudad] = useState<string>("all");
+  const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [selectedCanal, setSelectedCanal] = useState<string>("all");
 
   useEffect(() => {
     checkAuthAndFetchData();
@@ -74,13 +82,76 @@ const ClientesDashboard = () => {
   const fetchDashboardData = async () => {
     const { data: clientes } = await supabase
       .from('clientes')
-      .select('barrio_principal, todos_barrios, razon_social, monto_total_historico, vendedor_principal, todos_vendedores');
+      .select('*');
 
     if (!clientes) return;
+    setClientesData(clientes);
+  };
 
-    // Procesar barrios con más ventas
+  // Opciones únicas para filtros
+  const provincias = useMemo(() => {
+    const uniqueProvincias = new Set<string>();
+    clientesData.forEach(cliente => {
+      if (cliente.provincia_principal) uniqueProvincias.add(cliente.provincia_principal);
+    });
+    return Array.from(uniqueProvincias).sort();
+  }, [clientesData]);
+
+  const ciudades = useMemo(() => {
+    const uniqueCiudades = new Set<string>();
+    clientesData.forEach(cliente => {
+      const ciudadesList = cliente.todas_ciudades || [cliente.ciudad_principa];
+      ciudadesList.forEach((c: string) => c && uniqueCiudades.add(c));
+    });
+    return Array.from(uniqueCiudades).sort();
+  }, [clientesData]);
+
+  const vendedores = useMemo(() => {
+    const uniqueVendedores = new Set<string>();
+    clientesData.forEach(cliente => {
+      const vendedoresList = cliente.todos_vendedores || [cliente.vendedor_principal];
+      vendedoresList.forEach((v: string) => v && uniqueVendedores.add(v));
+    });
+    return Array.from(uniqueVendedores).sort();
+  }, [clientesData]);
+
+  const canales = useMemo(() => {
+    const uniqueCanales = new Set<string>();
+    clientesData.forEach(cliente => {
+      if (cliente.canal) uniqueCanales.add(cliente.canal);
+    });
+    return Array.from(uniqueCanales).sort();
+  }, [clientesData]);
+
+  // Datos filtrados
+  const filteredData = useMemo(() => {
+    return clientesData.filter(cliente => {
+      const matchProvincia = selectedProvincia === "all" || cliente.provincia_principal === selectedProvincia;
+      const matchCiudad = selectedCiudad === "all" || (cliente.todas_ciudades || []).includes(selectedCiudad);
+      const matchVendedor = selectedVendedor === "all" || (cliente.todos_vendedores || []).includes(selectedVendedor);
+      const matchCanal = selectedCanal === "all" || cliente.canal === selectedCanal;
+      const matchSearch = searchTerm === "" || 
+        (cliente.razon_social || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (cliente.fantasia || "").toLowerCase().includes(searchTerm.toLowerCase());
+      
+      return matchProvincia && matchCiudad && matchVendedor && matchCanal && matchSearch;
+    });
+  }, [clientesData, selectedProvincia, selectedCiudad, selectedVendedor, selectedCanal, searchTerm]);
+
+  // KPIs calculados
+  const kpis = useMemo(() => {
+    const totalVentas = filteredData.reduce((sum, c) => sum + Number(c.monto_total_historico || 0), 0);
+    const totalClientes = filteredData.length;
+    const totalOrdenes = filteredData.reduce((sum, c) => sum + Number(c.cantidad_ordenes || 0), 0);
+    const ticketPromedio = totalOrdenes > 0 ? totalVentas / totalOrdenes : 0;
+
+    return { totalVentas, totalClientes, totalOrdenes, ticketPromedio };
+  }, [filteredData]);
+
+  // Top barrios
+  const topBarrios = useMemo(() => {
     const barriosMap = new Map<string, number>();
-    clientes.forEach(cliente => {
+    filteredData.forEach(cliente => {
       const barrios = cliente.todos_barrios || [cliente.barrio_principal];
       const monto = cliente.monto_total_historico || 0;
       barrios.forEach((barrio: string) => {
@@ -89,38 +160,49 @@ const ClientesDashboard = () => {
         }
       });
     });
-    const barriosOrdenados = Array.from(barriosMap.entries())
+    return Array.from(barriosMap.entries())
       .map(([barrio, ventas]) => ({ barrio, ventas }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
-    setBarriosData(barriosOrdenados);
+  }, [filteredData]);
 
-    // Top 5 clientes con más ventas
-    const clientesOrdenados = clientes
+  // Top clientes
+  const topClientes = useMemo(() => {
+    return filteredData
       .map(c => ({
         razon_social: c.razon_social || 'Sin nombre',
-        monto_total: Number(c.monto_total_historico || 0)
+        monto_total: Number(c.monto_total_historico || 0),
+        ordenes: Number(c.cantidad_ordenes || 0),
+        provincia: c.provincia_principal
       }))
       .sort((a, b) => b.monto_total - a.monto_total)
-      .slice(0, 5);
-    setClientesData(clientesOrdenados);
+      .slice(0, 10);
+  }, [filteredData]);
 
-    // Vendedores con más ventas
+  // Top vendedores
+  const topVendedores = useMemo(() => {
     const vendedoresMap = new Map<string, number>();
-    clientes.forEach(cliente => {
-      const vendedores = cliente.todos_vendedores || [cliente.vendedor_principal];
+    filteredData.forEach(cliente => {
+      const vendedoresList = cliente.todos_vendedores || [cliente.vendedor_principal];
       const monto = cliente.monto_total_historico || 0;
-      vendedores.forEach((vendedor: string) => {
+      vendedoresList.forEach((vendedor: string) => {
         if (vendedor) {
           vendedoresMap.set(vendedor, (vendedoresMap.get(vendedor) || 0) + Number(monto));
         }
       });
     });
-    const vendedoresOrdenados = Array.from(vendedoresMap.entries())
+    return Array.from(vendedoresMap.entries())
       .map(([vendedor, ventas]) => ({ vendedor, ventas }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
-    setVendedoresData(vendedoresOrdenados);
+  }, [filteredData]);
+
+  const handleClearFilters = () => {
+    setSelectedProvincia("all");
+    setSelectedCiudad("all");
+    setSelectedVendedor("all");
+    setSelectedCanal("all");
+    setSearchTerm("");
   };
 
   const formatCurrency = (amount: number) => {
@@ -141,10 +223,10 @@ const ClientesDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen p-6">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen p-4 md:p-6">
+      <div className="max-w-[1920px] mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button
               variant="outline"
@@ -155,124 +237,295 @@ const ClientesDashboard = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-4xl font-bold text-foreground">
+              <h1 className="text-3xl md:text-4xl font-bold text-foreground">
                 Dashboard de Consultas
               </h1>
-              <p className="text-muted-foreground mt-1">
-                Análisis completo de clientes y ventas
+              <p className="text-sm text-muted-foreground mt-1">
+                Análisis interactivo de clientes y ventas
               </p>
             </div>
           </div>
-          <img src={cupraLogo} alt="Cupra Logo" className="h-16" />
+          <img src={cupraLogo} alt="Cupra Logo" className="h-12 md:h-16" />
         </div>
 
-        {/* Métricas Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Barrios con más ventas */}
-          <Card className="matte-card p-6 hover-lift">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 rounded-lg bg-accent/20">
-                <MapPin className="h-6 w-6 text-accent" />
+        {/* Panel de Filtros */}
+        <Card className="matte-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Filter className="h-5 w-5" />
+              Filtros Interactivos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Buscar Cliente
+                </label>
+                <Input
+                  placeholder="Razón social..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="bg-background/50"
+                />
               </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">
-                  Barrios con Más Ventas
-                </h2>
-                <p className="text-sm text-muted-foreground">Top 10 zonas</p>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Provincia
+                </label>
+                <Select value={selectedProvincia} onValueChange={setSelectedProvincia}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="all">Todas</SelectItem>
+                    {provincias.map(p => (
+                      <SelectItem key={p} value={p}>{p}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Ciudad
+                </label>
+                <Select value={selectedCiudad} onValueChange={setSelectedCiudad}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="all">Todas</SelectItem>
+                    {ciudades.map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Vendedor
+                </label>
+                <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="all">Todos</SelectItem>
+                    {vendedores.map(v => (
+                      <SelectItem key={v} value={v}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Canal
+                </label>
+                <Select value={selectedCanal} onValueChange={setSelectedCanal}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="all">Todos</SelectItem>
+                    {canales.map(c => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div className="space-y-3">
-              {barriosData.map((barrio, index) => (
-                <div
-                  key={barrio.barrio}
-                  className="flex items-center justify-between p-3 rounded-lg bg-card/50 border border-border/40"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg font-bold text-accent w-6">
-                      {index + 1}
-                    </span>
-                    <span className="text-sm font-medium text-foreground">
-                      {barrio.barrio}
-                    </span>
-                  </div>
-                  <span className="text-sm font-semibold text-secondary">
-                    {formatCurrency(barrio.ventas)}
-                  </span>
-                </div>
-              ))}
+
+            <div className="flex gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearFilters}
+                className="gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Limpiar Filtros
+              </Button>
+              <Badge variant="secondary" className="ml-auto">
+                {filteredData.length} clientes filtrados
+              </Badge>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="matte-card hover-lift">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Ventas Totales
+                </CardTitle>
+                <DollarSign className="h-5 w-5 text-accent" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-secondary">
+                {formatCurrency(kpis.totalVentas)}
+              </div>
+            </CardContent>
           </Card>
 
-          {/* Top 5 Clientes */}
-          <Card className="matte-card p-6 hover-lift">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 rounded-lg bg-secondary/20">
-                <TrendingUp className="h-6 w-6 text-secondary" />
+          <Card className="matte-card hover-lift">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Clientes
+                </CardTitle>
+                <Users className="h-5 w-5 text-accent" />
               </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">
-                  Top 5 Clientes
-                </h2>
-                <p className="text-sm text-muted-foreground">Por volumen de ventas</p>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-foreground">
+                {kpis.totalClientes.toLocaleString()}
               </div>
-            </div>
-            <div className="space-y-3">
-              {clientesData.map((cliente, index) => (
-                <div
-                  key={cliente.razon_social}
-                  className="flex items-start justify-between p-4 rounded-lg bg-card/50 border border-border/40"
-                >
-                  <div className="flex items-start gap-3 flex-1">
-                    <span className="text-xl font-bold text-secondary w-6">
-                      {index + 1}
+            </CardContent>
+          </Card>
+
+          <Card className="matte-card hover-lift">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Órdenes Totales
+                </CardTitle>
+                <ShoppingCart className="h-5 w-5 text-accent" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-foreground">
+                {kpis.totalOrdenes.toLocaleString()}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="matte-card hover-lift">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Ticket Promedio
+                </CardTitle>
+                <TrendingUp className="h-5 w-5 text-accent" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-secondary">
+                {formatCurrency(kpis.ticketPromedio)}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Gráficos y Tablas */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Top Barrios */}
+          <Card className="matte-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5 text-accent" />
+                Top 10 Barrios
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {topBarrios.map((barrio, index) => (
+                  <div
+                    key={barrio.barrio}
+                    className="flex items-center justify-between p-3 rounded-lg bg-card/50 border border-border/40 hover:bg-card/70 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <Badge variant="secondary" className="shrink-0">
+                        {index + 1}
+                      </Badge>
+                      <span className="text-sm font-medium text-foreground truncate">
+                        {barrio.barrio}
+                      </span>
+                    </div>
+                    <span className="text-sm font-semibold text-accent ml-2 shrink-0">
+                      {formatCurrency(barrio.ventas)}
                     </span>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-foreground line-clamp-2">
-                        {cliente.razon_social}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatCurrency(cliente.monto_total)}
-                      </p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Top Clientes */}
+          <Card className="matte-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-secondary" />
+                Top 10 Clientes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {topClientes.map((cliente, index) => (
+                  <div
+                    key={`${cliente.razon_social}-${index}`}
+                    className="p-3 rounded-lg bg-card/50 border border-border/40 hover:bg-card/70 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <Badge variant="secondary" className="shrink-0 mt-0.5">
+                        {index + 1}
+                      </Badge>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground line-clamp-1">
+                          {cliente.razon_social}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="text-xs text-accent font-semibold">
+                            {formatCurrency(cliente.monto_total)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            • {cliente.ordenes} órdenes
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </CardContent>
           </Card>
 
-          {/* Vendedores con más ventas */}
-          <Card className="matte-card p-6 hover-lift">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 rounded-lg bg-accent/20">
-                <Users className="h-6 w-6 text-accent" />
-              </div>
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">
-                  Vendedores Destacados
-                </h2>
-                <p className="text-sm text-muted-foreground">Por valor de ventas</p>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {vendedoresData.map((vendedor, index) => (
-                <div
-                  key={vendedor.vendedor}
-                  className="flex items-center justify-between p-3 rounded-lg bg-card/50 border border-border/40"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg font-bold text-accent w-6">
-                      {index + 1}
-                    </span>
-                    <span className="text-sm font-medium text-foreground">
-                      {vendedor.vendedor}
+          {/* Top Vendedores */}
+          <Card className="matte-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-accent" />
+                Top 10 Vendedores
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {topVendedores.map((vendedor, index) => (
+                  <div
+                    key={vendedor.vendedor}
+                    className="flex items-center justify-between p-3 rounded-lg bg-card/50 border border-border/40 hover:bg-card/70 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <Badge variant="secondary" className="shrink-0">
+                        {index + 1}
+                      </Badge>
+                      <span className="text-sm font-medium text-foreground truncate">
+                        {vendedor.vendedor}
+                      </span>
+                    </div>
+                    <span className="text-sm font-semibold text-accent ml-2 shrink-0">
+                      {formatCurrency(vendedor.ventas)}
                     </span>
                   </div>
-                  <span className="text-sm font-semibold text-secondary">
-                    {formatCurrency(vendedor.ventas)}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </CardContent>
           </Card>
         </div>
       </div>
