@@ -28,18 +28,11 @@ interface Vendedor {
 interface KanbanAssignmentProps {
   selectedRecommendations: Sucursal[];
   selectedVendedoresIds: string[];
-  vendedorBarrios: Array<{ vendedorId: string; barrios: string[] }>;
   onBack: () => void;
   onComplete?: () => void;
 }
 
-const KanbanAssignment = ({ 
-  selectedRecommendations, 
-  selectedVendedoresIds, 
-  vendedorBarrios,
-  onBack, 
-  onComplete 
-}: KanbanAssignmentProps) => {
+const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBack, onComplete }: KanbanAssignmentProps) => {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({
     unassigned: selectedRecommendations.map(r => r.id),
@@ -80,8 +73,16 @@ const KanbanAssignment = ({
 
       setVendedores(mappedVendedores);
       
-      // Obtener las últimas asignaciones para auto-asignar por último vendedor
-      await autoAssignByLastVendedor(mappedVendedores);
+      // Inicializar columnas de vendedores vacías
+      const vendedorColumns = mappedVendedores.reduce((acc, v) => {
+        acc[v.id] = [];
+        return acc;
+      }, {} as Record<string, string[]>);
+      
+      setAssignments(prev => ({
+        ...prev,
+        ...vendedorColumns,
+      }));
     } catch (error) {
       console.error('Error fetching vendedores:', error);
       toast({
@@ -90,155 +91,6 @@ const KanbanAssignment = ({
         description: "Error al cargar vendedores seleccionados",
       });
     }
-  };
-
-  const autoAssignByLastVendedor = async (vendedoresList: Vendedor[]) => {
-    try {
-      // Obtener client_ids de las recomendaciones
-      const cuitDniMap = new Map<string, string>();
-      selectedRecommendations.forEach(rec => {
-        if (rec.cuit_dni) {
-          cuitDniMap.set(rec.id, rec.cuit_dni);
-        }
-      });
-
-      const cuitDnis = Array.from(cuitDniMap.values());
-      const { data: clientes, error: clientesError } = await supabase
-        .from('clientes')
-        .select('client_id, cuit_dni')
-        .in('cuit_dni', cuitDnis);
-
-      if (clientesError) throw clientesError;
-
-      // Crear mapa de cuit_dni a client_id
-      const clienteIdMap = new Map<string, string>();
-      (clientes || []).forEach(cliente => {
-        clienteIdMap.set(cliente.cuit_dni, cliente.client_id);
-      });
-
-      // Obtener últimas asignaciones
-      const clientIds = Array.from(clienteIdMap.values());
-      if (clientIds.length === 0) {
-        initializeEmptyAssignments(vendedoresList);
-        return;
-      }
-
-      const { data: asignaciones, error: asignacionesError } = await supabase
-        .from('asignaciones_vendedores_clientes')
-        .select('client_id, vendedor_id, created_at')
-        .in('client_id', clientIds)
-        .order('created_at', { ascending: false });
-
-      if (asignacionesError) throw asignacionesError;
-
-      // Crear mapa de client_id a último vendedor_id
-      const lastVendedorMap = new Map<string, string>();
-      (asignaciones || []).forEach(asig => {
-        if (!lastVendedorMap.has(asig.client_id)) {
-          lastVendedorMap.set(asig.client_id, asig.vendedor_id);
-        }
-      });
-
-      // Crear mapa inverso de cuit_dni a recomendacion_id
-      const cuitToRecMap = new Map<string, string>();
-      selectedRecommendations.forEach(rec => {
-        if (rec.cuit_dni) {
-          cuitToRecMap.set(rec.cuit_dni, rec.id);
-        }
-      });
-
-      // Asignar automáticamente según último vendedor
-      const newAssignments: Record<string, string[]> = {
-        unassigned: [],
-      };
-
-      // Inicializar columnas de vendedores
-      vendedoresList.forEach(v => {
-        newAssignments[v.id] = [];
-      });
-
-      selectedRecommendations.forEach(rec => {
-        if (rec.cuit_dni) {
-          const clientId = clienteIdMap.get(rec.cuit_dni);
-          if (clientId) {
-            const lastVendedorId = lastVendedorMap.get(clientId);
-            // Si tiene último vendedor Y ese vendedor está en la lista seleccionada
-            if (lastVendedorId && vendedoresList.some(v => v.id === lastVendedorId)) {
-              newAssignments[lastVendedorId].push(rec.id);
-            } else {
-              // Si no tiene último vendedor o el vendedor no está disponible
-              newAssignments.unassigned.push(rec.id);
-            }
-          } else {
-            newAssignments.unassigned.push(rec.id);
-          }
-        } else {
-          newAssignments.unassigned.push(rec.id);
-        }
-      });
-
-      setAssignments(newAssignments);
-
-      // Aplicar asignación automática por barrios (solo a los que quedaron sin asignar)
-      if (vendedorBarrios.length > 0) {
-        applyBarrioAssignments(newAssignments, vendedoresList);
-      }
-    } catch (error) {
-      console.error('Error auto-assigning by last vendedor:', error);
-      // Si hay error, inicializar todo en unassigned
-      initializeEmptyAssignments(vendedoresList);
-    }
-  };
-
-  const applyBarrioAssignments = (currentAssignments: Record<string, string[]>, vendedoresList: Vendedor[]) => {
-    const updatedAssignments = { ...currentAssignments };
-    const stillUnassigned: string[] = [];
-
-    // Para cada cliente sin asignar, verificar si tiene barrio que coincida con alguna regla
-    currentAssignments.unassigned.forEach(recId => {
-      const rec = selectedRecommendations.find(r => r.id === recId);
-      if (!rec) {
-        stillUnassigned.push(recId);
-        return;
-      }
-
-      // Obtener barrio del cliente (puede estar en barrio_principal o en todos_barrios)
-      const clientBarrios = rec.todos_barrios || [];
-      let assigned = false;
-
-      // Buscar si algún vendedor tiene asignado alguno de los barrios del cliente
-      for (const vbConfig of vendedorBarrios) {
-        if (vbConfig.vendedorId && vbConfig.barrios.length > 0) {
-          // Verificar si algún barrio del cliente coincide con los barrios del vendedor
-          const hasMatchingBarrio = clientBarrios.some(cb => vbConfig.barrios.includes(cb));
-          
-          if (hasMatchingBarrio && vendedoresList.some(v => v.id === vbConfig.vendedorId)) {
-            updatedAssignments[vbConfig.vendedorId].push(recId);
-            assigned = true;
-            break;
-          }
-        }
-      }
-
-      if (!assigned) {
-        stillUnassigned.push(recId);
-      }
-    });
-
-    updatedAssignments.unassigned = stillUnassigned;
-    setAssignments(updatedAssignments);
-  };
-
-  const initializeEmptyAssignments = (vendedoresList: Vendedor[]) => {
-    const vendedorColumns = vendedoresList.reduce((acc, v) => {
-      acc[v.id] = [];
-      return acc;
-    }, {} as Record<string, string[]>);
-    
-    setAssignments({
-      unassigned: selectedRecommendations.map(r => r.id),
-      ...vendedorColumns,
-    });
   };
 
   const handleDragStart = (event: DragStartEvent) => {

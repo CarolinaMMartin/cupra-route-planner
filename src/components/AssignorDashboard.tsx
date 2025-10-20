@@ -29,7 +29,6 @@ const AssignorDashboard = () => {
   const [selectedPlacesBarrio, setSelectedPlacesBarrio] = useState<string>('all');
   const [selectedPlacesProvincia, setSelectedPlacesProvincia] = useState<string>('all');
   const [placesData, setPlacesData] = useState<Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>>([]);
-  const [vendedorBarrios, setVendedorBarrios] = useState<Array<{ vendedorId: string; barrios: string[] }>>([]);
   const { toast } = useToast();
 
   // Cargar datos de places al montar el componente
@@ -50,15 +49,9 @@ const AssignorDashboard = () => {
     loadPlacesData();
   }, []);
 
-  const handleRequestRecommendations = async (
-    filters: any, 
-    selectedVendedoresData: { ids: string[], nombres: string[] }, 
-    placesFilters: any,
-    vendedorBarrios: Array<{ vendedorId: string; barrios: string[] }>
-  ) => {
+  const handleRequestRecommendations = async (filters: any, selectedVendedoresData: { ids: string[], nombres: string[] }, placesFilters: any) => {
     setIsLoading(true);
     setSelectedVendedoresIds(selectedVendedoresData.ids);
-    setVendedorBarrios(vendedorBarrios);
     
     try {
       // Llamar al webhook de n8n
@@ -355,7 +348,6 @@ const AssignorDashboard = () => {
             <KanbanAssignment
               selectedRecommendations={selectedRecommendations}
               selectedVendedoresIds={selectedVendedoresIds}
-              vendedorBarrios={vendedorBarrios}
               onBack={handleBackToPreselection}
               onComplete={handleAssignmentComplete}
             />
