@@ -346,7 +346,7 @@ export type Database = {
           etiquetas: string[] | null
           first_purchase_at: string | null
           id: string
-          justificacion: string
+          justificacion: string | null
           last_purchase_at: string | null
           last_recomendation: string | null
           monto_total_vendido: number | null
@@ -357,7 +357,7 @@ export type Database = {
           productos_comprados: string[] | null
           provincia_principal: string | null
           provincias: string[] | null
-          razon_social: string
+          razon_social: string | null
           requiere_visita: string | null
           score_comercial: string | null
           score_recencia: string | null
@@ -389,7 +389,7 @@ export type Database = {
           etiquetas?: string[] | null
           first_purchase_at?: string | null
           id?: string
-          justificacion: string
+          justificacion?: string | null
           last_purchase_at?: string | null
           last_recomendation?: string | null
           monto_total_vendido?: number | null
@@ -400,7 +400,7 @@ export type Database = {
           productos_comprados?: string[] | null
           provincia_principal?: string | null
           provincias?: string[] | null
-          razon_social: string
+          razon_social?: string | null
           requiere_visita?: string | null
           score_comercial?: string | null
           score_recencia?: string | null
@@ -432,7 +432,7 @@ export type Database = {
           etiquetas?: string[] | null
           first_purchase_at?: string | null
           id?: string
-          justificacion?: string
+          justificacion?: string | null
           last_purchase_at?: string | null
           last_recomendation?: string | null
           monto_total_vendido?: number | null
@@ -443,7 +443,7 @@ export type Database = {
           productos_comprados?: string[] | null
           provincia_principal?: string | null
           provincias?: string[] | null
-          razon_social?: string
+          razon_social?: string | null
           requiere_visita?: string | null
           score_comercial?: string | null
           score_recencia?: string | null
