@@ -30,11 +30,7 @@ interface AutoAssignByZoneDialogProps {
   onApplyAssignment: (vendedorBarrios: VendedorBarrios) => void;
 }
 
-const AutoAssignByZoneDialog = ({
-  vendedores,
-  recommendations,
-  onApplyAssignment,
-}: AutoAssignByZoneDialogProps) => {
+const AutoAssignByZoneDialog = ({ vendedores, recommendations, onApplyAssignment }: AutoAssignByZoneDialogProps) => {
   const [open, setOpen] = useState(false);
   const [vendedorBarrios, setVendedorBarrios] = useState<VendedorBarrios>({});
   const [availableBarrios, setAvailableBarrios] = useState<string[]>([]);
@@ -42,15 +38,16 @@ const AutoAssignByZoneDialog = ({
   useEffect(() => {
     // Obtener todos los barrios únicos de las recomendaciones
     const barriosSet = new Set<string>();
+    console.log("Recommendations", recommendations);
     recommendations.forEach((rec) => {
       // Primero intentar con barrio_principal
-      if (rec.barrio_principal && typeof rec.barrio_principal === 'string' && rec.barrio_principal.trim()) {
+      if (rec.barrio_principal && typeof rec.barrio_principal === "string" && rec.barrio_principal.trim()) {
         barriosSet.add(rec.barrio_principal.trim());
       }
       // También incluir todos_barrios si existe
       if (rec.todos_barrios && Array.isArray(rec.todos_barrios) && rec.todos_barrios.length > 0) {
         rec.todos_barrios.forEach((b) => {
-          if (b && typeof b === 'string' && b.trim()) {
+          if (b && typeof b === "string" && b.trim()) {
             barriosSet.add(b.trim());
           }
         });
@@ -66,9 +63,7 @@ const AutoAssignByZoneDialog = ({
 
       return {
         ...prev,
-        [vendedorId]: isSelected
-          ? currentBarrios.filter((b) => b !== barrio)
-          : [...currentBarrios, barrio],
+        [vendedorId]: isSelected ? currentBarrios.filter((b) => b !== barrio) : [...currentBarrios, barrio],
       };
     });
   };
@@ -122,9 +117,7 @@ const AutoAssignByZoneDialog = ({
                 <CardHeader className="pb-3">
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-base">{vendedor.nombre}</CardTitle>
-                    <Badge variant="secondary">
-                      {vendedorBarrios[vendedor.id]?.length || 0} barrios
-                    </Badge>
+                    <Badge variant="secondary">{vendedorBarrios[vendedor.id]?.length || 0} barrios</Badge>
                   </div>
                   {vendedorBarrios[vendedor.id] && vendedorBarrios[vendedor.id].length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
@@ -153,7 +146,7 @@ const AutoAssignByZoneDialog = ({
                       {availableBarrios.map((barrio) => {
                         const isSelected = vendedorBarrios[vendedor.id]?.includes(barrio);
                         const clientCount = getClientCountByBarrio(barrio);
-                        
+
                         return (
                           <div
                             key={barrio}
@@ -193,9 +186,7 @@ const AutoAssignByZoneDialog = ({
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleApply}>
-              Aplicar asignación
-            </Button>
+            <Button onClick={handleApply}>Aplicar asignación</Button>
           </div>
         </div>
       </DialogContent>
