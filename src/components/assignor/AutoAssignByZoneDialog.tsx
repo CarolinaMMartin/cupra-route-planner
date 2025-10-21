@@ -120,7 +120,7 @@ const AutoAssignByZoneDialog = ({ vendedores, recommendations, onApplyAssignment
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4 max-h-[60vh]">
+        <ScrollArea className="h-[60vh] pr-4">
           <div className="space-y-4 pb-4">
             {vendedores.map((vendedor) => (
               <Card key={vendedor.id}>
