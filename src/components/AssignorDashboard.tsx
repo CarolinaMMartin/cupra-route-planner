@@ -13,33 +13,33 @@ import TodayAssignments from "./assignor/TodayAssignments";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 
-type FlowStep = 'recommendations' | 'preselection' | 'assignment';
+type FlowStep = "recommendations" | "preselection" | "assignment";
 
 const AssignorDashboard = () => {
-  const [flowStep, setFlowStep] = useState<FlowStep>('recommendations');
-  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [flowStep, setFlowStep] = useState<FlowStep>("recommendations");
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [recommendations, setRecommendations] = useState<Sucursal[]>([]);
   const [selectedSucursales, setSelectedSucursales] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedCiudad, setSelectedCiudad] = useState<string>('all');
-  const [selectedProvincia, setSelectedProvincia] = useState<string>('all');
-  const [selectedVendedor, setSelectedVendedor] = useState<string>('all');
+  const [selectedCiudad, setSelectedCiudad] = useState<string>("all");
+  const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
+  const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
   const [selectedVendedoresIds, setSelectedVendedoresIds] = useState<string[]>([]);
-  const [selectedPlacesComuna, setSelectedPlacesComuna] = useState<string>('all');
-  const [selectedPlacesBarrio, setSelectedPlacesBarrio] = useState<string>('all');
-  const [selectedPlacesProvincia, setSelectedPlacesProvincia] = useState<string>('all');
-  const [placesData, setPlacesData] = useState<Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>>([]);
+  const [selectedPlacesComuna, setSelectedPlacesComuna] = useState<string>("all");
+  const [selectedPlacesBarrio, setSelectedPlacesBarrio] = useState<string>("all");
+  const [selectedPlacesProvincia, setSelectedPlacesProvincia] = useState<string>("all");
+  const [placesData, setPlacesData] = useState<
+    Array<{ comuna: string | null; barrio_principal: string | null; provincia_principal: string | null }>
+  >([]);
   const { toast } = useToast();
 
   // Cargar datos de places al montar el componente
   useEffect(() => {
     const loadPlacesData = async () => {
-      const { data, error } = await supabase
-        .from('places')
-        .select('comuna, barrio_principal, provincia_principal');
+      const { data, error } = await supabase.from("places").select("comuna, barrio_principal, provincia_principal");
 
       if (error) {
-        console.error('Error loading places:', error);
+        console.error("Error loading places:", error);
         return;
       }
 
@@ -49,10 +49,14 @@ const AssignorDashboard = () => {
     loadPlacesData();
   }, []);
 
-  const handleRequestRecommendations = async (filters: any, selectedVendedoresData: { ids: string[], nombres: string[] }, placesFilters: any) => {
+  const handleRequestRecommendations = async (
+    filters: any,
+    selectedVendedoresData: { ids: string[]; nombres: string[] },
+    placesFilters: any,
+  ) => {
     setIsLoading(true);
     setSelectedVendedoresIds(selectedVendedoresData.ids);
-    
+
     try {
       // Llamar al webhook de n8n
       const webhookUrl = import.meta.env.VITE_N8N_WEBHOOK_URL;
@@ -61,31 +65,31 @@ const AssignorDashboard = () => {
         nombres_vendedores: selectedVendedoresData.nombres,
         provincia: placesFilters.provincia,
         comuna: placesFilters.comuna,
-        barrio: placesFilters.barrio
+        barrio: placesFilters.barrio,
       };
-      
-      console.log('Enviando al webhook:', payload);
-      
+
+      console.log("Enviando al webhook:", payload);
+
       const response = await fetch(webhookUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error('Error al llamar al webhook');
+        throw new Error("Error al llamar al webhook");
       }
 
       // Esperar un momento para que n8n procese y guarde en la tabla
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
       // Obtener las recomendaciones de la tabla recomendaciones_ia
       const { data, error } = await supabase
-        .from('recomendaciones_ia')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from("recomendaciones_ia")
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
 
@@ -93,9 +97,9 @@ const AssignorDashboard = () => {
       const mappedRecommendations: Sucursal[] = (data || []).map((rec: any) => ({
         id: rec.id,
         nombre: rec.razon_social,
-        direccion: rec.ciudades?.[0] || 'Sin dirección',
-        zona: rec.provincias?.[0] || 'Sin zona',
-        tipo_cliente: rec.score_comercial || 'Estándar',
+        direccion: rec.ciudades?.[0] || "Sin dirección",
+        zona: rec.provincias?.[0] || "Sin zona",
+        tipo_cliente: rec.score_comercial || "Estándar",
         score: rec.priority_score || 0,
         dias_sin_visita: rec.days_since_last_purchase || 0,
         latitud: 0,
@@ -125,17 +129,18 @@ const AssignorDashboard = () => {
         todos_vendedores: rec.vendedores || [],
         etiquetas: rec.etiquetas || [],
         telefonos: rec.telefonos || [],
+        barrio_principal: rec.barrio_principal,
       }));
 
       setRecommendations(mappedRecommendations);
-      setFlowStep('preselection');
+      setFlowStep("preselection");
       setSelectedSucursales([]);
       toast({
         title: "Recomendaciones generadas",
         description: `Se encontraron ${mappedRecommendations.length} recomendaciones para ${selectedVendedoresIds.length} vendedores`,
       });
     } catch (error) {
-      console.error('Error:', error);
+      console.error("Error:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -147,34 +152,32 @@ const AssignorDashboard = () => {
   };
 
   const toggleSucursal = (id: string) => {
-    setSelectedSucursales(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    );
+    setSelectedSucursales((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   };
 
   const toggleAllSucursales = () => {
     if (selectedSucursales.length === recommendations.length) {
       setSelectedSucursales([]);
     } else {
-      setSelectedSucursales(recommendations.map(r => r.id));
+      setSelectedSucursales(recommendations.map((r) => r.id));
     }
   };
 
   const handleContinueToAssignment = () => {
-    setFlowStep('assignment');
+    setFlowStep("assignment");
   };
 
   const handleBackToPreselection = () => {
-    setFlowStep('preselection');
+    setFlowStep("preselection");
   };
 
   const handleBackToRecommendations = () => {
-    setFlowStep('recommendations');
+    setFlowStep("recommendations");
     setRecommendations([]);
     setSelectedSucursales([]);
-    setSelectedCiudad('all');
-    setSelectedProvincia('all');
-    setSelectedVendedor('all');
+    setSelectedCiudad("all");
+    setSelectedProvincia("all");
+    setSelectedVendedor("all");
     setSelectedVendedoresIds([]);
   };
 
@@ -183,12 +186,12 @@ const AssignorDashboard = () => {
   };
 
   const handleClearFilters = () => {
-    setSelectedCiudad('all');
-    setSelectedProvincia('all');
-    setSelectedVendedor('all');
-    setSelectedPlacesComuna('all');
-    setSelectedPlacesBarrio('all');
-    setSelectedPlacesProvincia('all');
+    setSelectedCiudad("all");
+    setSelectedProvincia("all");
+    setSelectedVendedor("all");
+    setSelectedPlacesComuna("all");
+    setSelectedPlacesBarrio("all");
+    setSelectedPlacesProvincia("all");
   };
 
   // Obtener opciones únicas para los filtros
@@ -198,10 +201,10 @@ const AssignorDashboard = () => {
     const vendedoresSet = new Set<string>();
 
     recommendations.forEach((rec: any) => {
-      if (rec.direccion && rec.direccion !== 'Sin dirección') {
+      if (rec.direccion && rec.direccion !== "Sin dirección") {
         ciudadesSet.add(rec.direccion);
       }
-      if (rec.zona && rec.zona !== 'Sin zona') {
+      if (rec.zona && rec.zona !== "Sin zona") {
         provinciasSet.add(rec.zona);
       }
       if (rec.vendedores && Array.isArray(rec.vendedores)) {
@@ -222,13 +225,13 @@ const AssignorDashboard = () => {
   const filteredRecommendations = useMemo(() => {
     return recommendations.filter((rec: any) => {
       // Filtros de recomendaciones originales
-      if (selectedCiudad !== 'all' && rec.direccion !== selectedCiudad) {
+      if (selectedCiudad !== "all" && rec.direccion !== selectedCiudad) {
         return false;
       }
-      if (selectedProvincia !== 'all' && rec.zona !== selectedProvincia) {
+      if (selectedProvincia !== "all" && rec.zona !== selectedProvincia) {
         return false;
       }
-      if (selectedVendedor !== 'all') {
+      if (selectedVendedor !== "all") {
         if (!rec.vendedores || !Array.isArray(rec.vendedores)) {
           return false;
         }
@@ -236,53 +239,47 @@ const AssignorDashboard = () => {
           return false;
         }
       }
-      
+
       // Filtros de Places
-      if (selectedPlacesProvincia !== 'all') {
+      if (selectedPlacesProvincia !== "all") {
         if (!rec.zona || rec.zona !== selectedPlacesProvincia) {
           return false;
         }
       }
-      
+
       // Nota: Los filtros de comuna y barrio no se pueden aplicar directamente
       // porque las recomendaciones no tienen esos campos
       // Se mantienen para consistencia de UI pero no afectan el filtrado por ahora
-      
+
       return true;
     });
   }, [recommendations, selectedCiudad, selectedProvincia, selectedVendedor, selectedPlacesProvincia]);
 
-  const selectedRecommendations = filteredRecommendations.filter(r => 
-    selectedSucursales.includes(r.id)
-  );
+  const selectedRecommendations = filteredRecommendations.filter((r) => selectedSucursales.includes(r.id));
 
   return (
     <div className="space-y-6">
-      {flowStep === 'recommendations' && (
+      {flowStep === "recommendations" && (
         <>
           <Card className="shadow-medium">
             <CardHeader>
-              <CardTitle className="font-serif tracking-wide">
-                Panel de Asignación
-              </CardTitle>
-              <CardDescription>
-                Filtra sucursales y solicita recomendaciones inteligentes
-              </CardDescription>
+              <CardTitle className="font-serif tracking-wide">Panel de Asignación</CardTitle>
+              <CardDescription>Filtra sucursales y solicita recomendaciones inteligentes</CardDescription>
             </CardHeader>
             <CardContent>
-              <FilterPanel 
-                onRequestRecommendations={handleRequestRecommendations} 
+              <FilterPanel
+                onRequestRecommendations={handleRequestRecommendations}
                 isLoading={isLoading}
                 placesData={placesData}
               />
             </CardContent>
           </Card>
-          
+
           <TodayAssignments />
         </>
       )}
 
-      {flowStep === 'preselection' && recommendations.length > 0 && (
+      {flowStep === "preselection" && recommendations.length > 0 && (
         <Card className="shadow-medium">
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -291,24 +288,21 @@ const AssignorDashboard = () => {
                 <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
               </div>
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={handleBackToRecommendations}
-                >
+                <Button variant="outline" onClick={handleBackToRecommendations}>
                   Nueva búsqueda
                 </Button>
                 <Button
-                  variant={viewMode === 'list' ? 'default' : 'outline'}
+                  variant={viewMode === "list" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setViewMode('list')}
+                  onClick={() => setViewMode("list")}
                 >
                   <List className="w-4 h-4 mr-2" />
                   Lista
                 </Button>
                 <Button
-                  variant={viewMode === 'map' ? 'default' : 'outline'}
+                  variant={viewMode === "map" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setViewMode('map')}
+                  onClick={() => setViewMode("map")}
                 >
                   <MapPin className="w-4 h-4 mr-2" />
                   Mapa
@@ -317,7 +311,7 @@ const AssignorDashboard = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {viewMode === 'list' ? (
+            {viewMode === "list" ? (
               <PreselectionStep
                 recommendations={filteredRecommendations}
                 selectedIds={selectedSucursales}
@@ -336,7 +330,7 @@ const AssignorDashboard = () => {
         </Card>
       )}
 
-      {flowStep === 'assignment' && (
+      {flowStep === "assignment" && (
         <Card className="shadow-medium">
           <CardHeader>
             <CardTitle>Paso 2: Asignación Visual</CardTitle>
