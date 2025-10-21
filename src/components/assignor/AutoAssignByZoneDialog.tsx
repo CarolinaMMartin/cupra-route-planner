@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,10 +10,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { MapPin, Wand2, X } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { MapPin, Wand2, X, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Sucursal } from "@/types/sales";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Vendedor {
   id: string;
@@ -45,15 +52,11 @@ const AutoAssignByZoneDialog = ({ vendedores, recommendations, onApplyAssignment
   ];
 
   useEffect(() => {
-    // Obtener todos los barrios únicos de las recomendaciones
     const barriosSet = new Set<string>();
-    console.log("Recommendations", recommendations);
     recommendations.forEach((rec) => {
-      // Primero intentar con barrio_principal
       if (rec.barrio_principal && typeof rec.barrio_principal === "string" && rec.barrio_principal.trim()) {
         barriosSet.add(rec.barrio_principal.trim());
       }
-      // También incluir todos_barrios si existe
       if (rec.todos_barrios && Array.isArray(rec.todos_barrios) && rec.todos_barrios.length > 0) {
         rec.todos_barrios.forEach((b) => {
           if (b && typeof b === "string" && b.trim()) {
@@ -66,14 +69,26 @@ const AutoAssignByZoneDialog = ({ vendedores, recommendations, onApplyAssignment
     setAvailableBarrios(barrios.length > 0 ? barrios : DEFAULT_BARRIOS);
   }, [recommendations]);
 
-  const handleToggleBarrio = (vendedorId: string, barrio: string) => {
+  const unassignedZones = useMemo(() => {
+    const assignedBarrios = new Set<string>();
+    Object.values(vendedorBarrios).forEach((barrios) => {
+      barrios.forEach((barrio) => assignedBarrios.add(barrio));
+    });
+    return availableBarrios.filter((barrio) => !assignedBarrios.has(barrio));
+  }, [availableBarrios, vendedorBarrios]);
+
+  const totalZones = availableBarrios.length;
+  const assignedZones = totalZones - unassignedZones.length;
+
+  const handleAddBarrio = (vendedorId: string, barrio: string) => {
     setVendedorBarrios((prev) => {
       const currentBarrios = prev[vendedorId] || [];
-      const isSelected = currentBarrios.includes(barrio);
-
+      if (currentBarrios.includes(barrio)) {
+        return prev;
+      }
       return {
         ...prev,
-        [vendedorId]: isSelected ? currentBarrios.filter((b) => b !== barrio) : [...currentBarrios, barrio],
+        [vendedorId]: [...currentBarrios, barrio],
       };
     });
   };
@@ -104,6 +119,11 @@ const AutoAssignByZoneDialog = ({ vendedores, recommendations, onApplyAssignment
     }).length;
   };
 
+  const getAvailableBarriosForVendedor = (vendedorId: string) => {
+    const currentBarrios = vendedorBarrios[vendedorId] || [];
+    return availableBarrios.filter((barrio) => !currentBarrios.includes(barrio));
+  };
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -114,77 +134,102 @@ const AutoAssignByZoneDialog = ({ vendedores, recommendations, onApplyAssignment
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>Asignación automática por zona</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="text-xl font-semibold">Asignación automática por zona</DialogTitle>
+          <DialogDescription className="text-sm">
             Asigna barrios a cada vendedor. Los clientes se asignarán automáticamente según su ubicación.
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="h-[60vh] pr-4">
-          <div className="space-y-4 pb-4">
-            {vendedores.map((vendedor) => (
-              <Card key={vendedor.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">{vendedor.nombre}</CardTitle>
-                    <Badge variant="secondary">{vendedorBarrios[vendedor.id]?.length || 0} barrios</Badge>
-                  </div>
-                  {vendedorBarrios[vendedor.id] && vendedorBarrios[vendedor.id].length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {vendedorBarrios[vendedor.id].map((barrio) => (
-                        <Badge
-                          key={barrio}
-                          variant="default"
-                          className="gap-1 cursor-pointer hover:bg-destructive"
-                          onClick={() => handleRemoveVendedorBarrio(vendedor.id, barrio)}
-                        >
-                          <MapPin className="w-3 h-3" />
-                          {barrio}
-                          <X className="w-3 h-3" />
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  {availableBarrios.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      No hay barrios disponibles en las recomendaciones actuales
-                    </p>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto">
-                      {availableBarrios.map((barrio) => {
-                        const isSelected = vendedorBarrios[vendedor.id]?.includes(barrio);
-                        const clientCount = getClientCountByBarrio(barrio);
+        {/* Estado de asignación */}
+        <Alert className={unassignedZones.length === 0 ? "border-green-500/50 bg-green-500/10" : "border-amber-500/50 bg-amber-500/10"}>
+          <div className="flex items-center gap-2">
+            {unassignedZones.length === 0 ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <AlertDescription className="text-green-700 dark:text-green-300 font-medium">
+                  Todas las zonas están asignadas ({assignedZones}/{totalZones})
+                </AlertDescription>
+              </>
+            ) : (
+              <>
+                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <AlertDescription className="text-amber-700 dark:text-amber-300 font-medium">
+                  Hay {unassignedZones.length} zona{unassignedZones.length !== 1 ? 's' : ''} sin asignar ({assignedZones}/{totalZones} asignadas)
+                </AlertDescription>
+              </>
+            )}
+          </div>
+        </Alert>
 
-                        return (
-                          <div
-                            key={barrio}
-                            className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent cursor-pointer"
-                            onClick={() => handleToggleBarrio(vendedor.id, barrio)}
-                          >
-                            <Checkbox
-                              id={`${vendedor.id}-${barrio}`}
-                              checked={isSelected}
-                              onCheckedChange={() => handleToggleBarrio(vendedor.id, barrio)}
-                            />
-                            <label
-                              htmlFor={`${vendedor.id}-${barrio}`}
-                              className="flex-1 text-sm cursor-pointer flex items-center justify-between"
-                            >
-                              <span>{barrio}</span>
-                              <Badge variant="outline" className="ml-2">
-                                {clientCount}
-                              </Badge>
-                            </label>
-                          </div>
-                        );
-                      })}
+        <ScrollArea className="h-[60vh] pr-4">
+          <div className="space-y-3 pb-4">
+            {vendedores.map((vendedor) => {
+              const availableOptions = getAvailableBarriosForVendedor(vendedor.id);
+              
+              return (
+                <Card key={vendedor.id} className="border-border/50">
+                  <CardHeader className="pb-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base font-semibold">{vendedor.nombre}</CardTitle>
+                      <Badge variant="secondary" className="font-medium">
+                        {vendedorBarrios[vendedor.id]?.length || 0} {vendedorBarrios[vendedor.id]?.length === 1 ? 'zona' : 'zonas'}
+                      </Badge>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+
+                    {/* Select para agregar zonas */}
+                    {availableOptions.length > 0 && (
+                      <Select onValueChange={(value) => handleAddBarrio(vendedor.id, value)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="+ Agregar zona" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <ScrollArea className="h-[200px]">
+                            {availableOptions.map((barrio) => {
+                              const clientCount = getClientCountByBarrio(barrio);
+                              return (
+                                <SelectItem key={barrio} value={barrio}>
+                                  <div className="flex items-center justify-between w-full gap-4">
+                                    <span className="flex items-center gap-2">
+                                      <MapPin className="w-3 h-3" />
+                                      {barrio}
+                                    </span>
+                                    <Badge variant="outline" className="ml-auto text-xs">
+                                      {clientCount}
+                                    </Badge>
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
+                          </ScrollArea>
+                        </SelectContent>
+                      </Select>
+                    )}
+
+                    {/* Zonas asignadas */}
+                    {vendedorBarrios[vendedor.id] && vendedorBarrios[vendedor.id].length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {vendedorBarrios[vendedor.id].map((barrio) => {
+                          const clientCount = getClientCountByBarrio(barrio);
+                          return (
+                            <Badge
+                              key={barrio}
+                              variant="default"
+                              className="gap-1.5 cursor-pointer hover:bg-destructive transition-colors pr-1"
+                              onClick={() => handleRemoveVendedorBarrio(vendedor.id, barrio)}
+                            >
+                              <MapPin className="w-3 h-3" />
+                              <span>{barrio}</span>
+                              <span className="text-xs opacity-70">({clientCount})</span>
+                              <X className="w-3.5 h-3.5 ml-1 hover:scale-110 transition-transform" />
+                            </Badge>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </CardHeader>
+                </Card>
+              );
+            })}
           </div>
         </ScrollArea>
 
