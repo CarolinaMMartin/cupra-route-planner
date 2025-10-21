@@ -43,12 +43,13 @@ const AutoAssignByZoneDialog = ({
     // Obtener todos los barrios únicos de las recomendaciones
     const barriosSet = new Set<string>();
     recommendations.forEach((rec) => {
-      if (rec.barrio_principal) {
-        barriosSet.add(rec.barrio_principal);
-      }
-      // También incluir barrios del array todos_barrios
-      if (rec.todos_barrios && Array.isArray(rec.todos_barrios)) {
-        rec.todos_barrios.forEach((b) => barriosSet.add(b));
+      // Priorizar todos_barrios si existe
+      if (rec.todos_barrios && Array.isArray(rec.todos_barrios) && rec.todos_barrios.length > 0) {
+        rec.todos_barrios.forEach((b) => {
+          if (b && b.trim()) barriosSet.add(b.trim());
+        });
+      } else if (rec.barrio_principal && rec.barrio_principal.trim()) {
+        barriosSet.add(rec.barrio_principal.trim());
       }
     });
     setAvailableBarrios(Array.from(barriosSet).sort());
@@ -139,35 +140,41 @@ const AutoAssignByZoneDialog = ({
                   )}
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto">
-                    {availableBarrios.map((barrio) => {
-                      const isSelected = vendedorBarrios[vendedor.id]?.includes(barrio);
-                      const clientCount = getClientCountByBarrio(barrio);
-                      
-                      return (
-                        <div
-                          key={barrio}
-                          className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent cursor-pointer"
-                          onClick={() => handleToggleBarrio(vendedor.id, barrio)}
-                        >
-                          <Checkbox
-                            id={`${vendedor.id}-${barrio}`}
-                            checked={isSelected}
-                            onCheckedChange={() => handleToggleBarrio(vendedor.id, barrio)}
-                          />
-                          <label
-                            htmlFor={`${vendedor.id}-${barrio}`}
-                            className="flex-1 text-sm cursor-pointer flex items-center justify-between"
+                  {availableBarrios.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      No hay barrios disponibles en las recomendaciones actuales
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto">
+                      {availableBarrios.map((barrio) => {
+                        const isSelected = vendedorBarrios[vendedor.id]?.includes(barrio);
+                        const clientCount = getClientCountByBarrio(barrio);
+                        
+                        return (
+                          <div
+                            key={barrio}
+                            className="flex items-center space-x-2 p-2 rounded-md hover:bg-accent cursor-pointer"
+                            onClick={() => handleToggleBarrio(vendedor.id, barrio)}
                           >
-                            <span>{barrio}</span>
-                            <Badge variant="outline" className="ml-2">
-                              {clientCount}
-                            </Badge>
-                          </label>
-                        </div>
-                      );
-                    })}
-                  </div>
+                            <Checkbox
+                              id={`${vendedor.id}-${barrio}`}
+                              checked={isSelected}
+                              onCheckedChange={() => handleToggleBarrio(vendedor.id, barrio)}
+                            />
+                            <label
+                              htmlFor={`${vendedor.id}-${barrio}`}
+                              className="flex-1 text-sm cursor-pointer flex items-center justify-between"
+                            >
+                              <span>{barrio}</span>
+                              <Badge variant="outline" className="ml-2">
+                                {clientCount}
+                              </Badge>
+                            </label>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
