@@ -35,6 +35,15 @@ const AutoAssignByZoneDialog = ({ vendedores, recommendations, onApplyAssignment
   const [vendedorBarrios, setVendedorBarrios] = useState<VendedorBarrios>({});
   const [availableBarrios, setAvailableBarrios] = useState<string[]>([]);
 
+  // Fallback de barrios cuando no se detectan desde las recomendaciones
+  const DEFAULT_BARRIOS = [
+    "Belgrano",
+    "Palermo",
+    "Recoleta",
+    "Retiro",
+    "Puerto Madero",
+  ];
+
   useEffect(() => {
     // Obtener todos los barrios únicos de las recomendaciones
     const barriosSet = new Set<string>();
@@ -53,7 +62,8 @@ const AutoAssignByZoneDialog = ({ vendedores, recommendations, onApplyAssignment
         });
       }
     });
-    setAvailableBarrios(Array.from(barriosSet).sort());
+    const barrios = Array.from(barriosSet).sort();
+    setAvailableBarrios(barrios.length > 0 ? barrios : DEFAULT_BARRIOS);
   }, [recommendations]);
 
   const handleToggleBarrio = (vendedorId: string, barrio: string) => {
