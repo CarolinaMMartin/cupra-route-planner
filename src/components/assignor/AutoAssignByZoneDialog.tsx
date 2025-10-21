@@ -43,13 +43,17 @@ const AutoAssignByZoneDialog = ({
     // Obtener todos los barrios únicos de las recomendaciones
     const barriosSet = new Set<string>();
     recommendations.forEach((rec) => {
-      // Priorizar todos_barrios si existe
+      // Primero intentar con barrio_principal
+      if (rec.barrio_principal && typeof rec.barrio_principal === 'string' && rec.barrio_principal.trim()) {
+        barriosSet.add(rec.barrio_principal.trim());
+      }
+      // También incluir todos_barrios si existe
       if (rec.todos_barrios && Array.isArray(rec.todos_barrios) && rec.todos_barrios.length > 0) {
         rec.todos_barrios.forEach((b) => {
-          if (b && b.trim()) barriosSet.add(b.trim());
+          if (b && typeof b === 'string' && b.trim()) {
+            barriosSet.add(b.trim());
+          }
         });
-      } else if (rec.barrio_principal && rec.barrio_principal.trim()) {
-        barriosSet.add(rec.barrio_principal.trim());
       }
     });
     setAvailableBarrios(Array.from(barriosSet).sort());
@@ -111,8 +115,8 @@ const AutoAssignByZoneDialog = ({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
-          <div className="space-y-4">
+        <ScrollArea className="flex-1 pr-4 max-h-[60vh]">
+          <div className="space-y-4 pb-4">
             {vendedores.map((vendedor) => (
               <Card key={vendedor.id}>
                 <CardHeader className="pb-3">

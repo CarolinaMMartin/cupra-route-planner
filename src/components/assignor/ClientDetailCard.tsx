@@ -63,6 +63,9 @@ const ClientDetailCard = ({
           <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
             <MapPin className="w-3 h-3 flex-shrink-0" />
             {cliente.direccion_principal || cliente.direccion || 'Sin dirección'}
+            {cliente.barrio_principal && (
+              <span className="text-accent font-medium">• {cliente.barrio_principal}</span>
+            )}
           </p>
           <div className="flex items-center justify-between gap-2">
             <Badge variant="outline" className="text-xs whitespace-nowrap">
