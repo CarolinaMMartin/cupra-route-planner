@@ -18,6 +18,7 @@ import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import ClientDetailCard from "./ClientDetailCard";
+import AutoAssignByZoneDialog from "./AutoAssignByZoneDialog";
 
 interface Vendedor {
   id: string;
@@ -91,6 +92,55 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
         description: "Error al cargar vendedores seleccionados",
       });
     }
+  };
+
+  const handleAutoAssignByZone = (vendedorBarrios: Record<string, string[]>) => {
+    // Crear un nuevo objeto de asignaciones empezando desde el estado actual
+    const newAssignments = { ...assignments };
+
+    // Para cada cliente en las recomendaciones
+    selectedRecommendations.forEach((rec) => {
+      const clientBarrios: string[] = [];
+      
+      // Recopilar todos los barrios del cliente
+      if (rec.barrio_principal) {
+        clientBarrios.push(rec.barrio_principal);
+      }
+      if (rec.todos_barrios && Array.isArray(rec.todos_barrios)) {
+        clientBarrios.push(...rec.todos_barrios);
+      }
+
+      // Buscar si algún vendedor tiene asignado alguno de los barrios del cliente
+      let assignedVendedor: string | null = null;
+      
+      for (const [vendedorId, barrios] of Object.entries(vendedorBarrios)) {
+        if (barrios.some(b => clientBarrios.includes(b))) {
+          assignedVendedor = vendedorId;
+          break;
+        }
+      }
+
+      if (assignedVendedor) {
+        // Remover el cliente de todas las columnas
+        Object.keys(newAssignments).forEach((columnId) => {
+          newAssignments[columnId] = newAssignments[columnId].filter(
+            (id) => id !== rec.id
+          );
+        });
+
+        // Asignar al vendedor correspondiente
+        if (!newAssignments[assignedVendedor].includes(rec.id)) {
+          newAssignments[assignedVendedor].push(rec.id);
+        }
+      }
+    });
+
+    setAssignments(newAssignments);
+    
+    toast({
+      title: "Asignación automática aplicada",
+      description: "Los clientes fueron asignados según sus zonas",
+    });
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -313,10 +363,18 @@ const KanbanAssignment = ({ selectedRecommendations, selectedVendedoresIds, onBa
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={onBack} className="gap-2">
-          <ArrowLeft className="w-4 h-4" />
-          Volver a la preselección
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onBack} className="gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Volver a la preselección
+          </Button>
+          
+          <AutoAssignByZoneDialog
+            vendedores={vendedores}
+            recommendations={selectedRecommendations}
+            onApplyAssignment={handleAutoAssignByZone}
+          />
+        </div>
         
         <Button onClick={handleSave} disabled={isLoading} size="lg" className="gap-2">
           <Save className="w-4 h-4" />
