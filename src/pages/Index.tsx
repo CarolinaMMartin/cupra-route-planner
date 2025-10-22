@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, UserCog, BarChart3 } from "lucide-react";
+import { LogOut, User, UserCog, BarChart3, Layers } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import VendedorKanban from "@/components/vendedor/VendedorKanban";
@@ -104,6 +104,15 @@ const Index = () => {
                   >
                     <BarChart3 className="w-4 h-4" />
                     <span className="text-sm tracking-wide">Dashboard de Consultas</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate("/areas")}
+                    className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
+                  >
+                    <Layers className="w-4 h-4" />
+                    <span className="text-sm tracking-wide">Asignaciones de Áreas</span>
                   </Button>
                   <Button
                     variant="ghost"

@@ -12,6 +12,7 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -293,6 +294,9 @@ function DraggablePlace({ place, id, areaId }: { place: Place; id: string; areaI
 }
 
 export default function AreasManager() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  
   const [areas, setAreas] = useState<Area[]>([]);
   const [unassignedPlaces, setUnassignedPlaces] = useState<Place[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -311,7 +315,40 @@ export default function AreasManager() {
     color: "#3b82f6",
   });
 
-  const { toast } = useToast();
+  // Verificar acceso de usuario
+  useEffect(() => {
+    checkAccess();
+  }, []);
+
+  async function checkAccess() {
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const userId = session.session?.user?.id;
+      
+      if (!userId) {
+        navigate("/auth");
+        return;
+      }
+      
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("rol")
+        .eq("user_id", userId)
+        .maybeSingle();
+      
+      if (!profile || profile.rol !== "asignador") {
+        toast({
+          title: "Acceso restringido",
+          description: "No tienes permisos para acceder a esta página",
+          variant: "destructive",
+        });
+        navigate("/");
+      }
+    } catch (error) {
+      console.error("Error checking access:", error);
+      navigate("/");
+    }
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
