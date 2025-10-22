@@ -3,6 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import { useMemo } from "react";
+import { MultiSelect } from "@/components/ui/multi-select";
 
 interface RecommendationFiltersProps {
   ciudades: string[];
@@ -15,11 +16,11 @@ interface RecommendationFiltersProps {
   onProvinciaChange: (value: string) => void;
   onVendedorChange: (value: string) => void;
   placesData: Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>;
-  selectedPlacesComuna: string;
-  selectedPlacesBarrio: string;
+  selectedPlacesComuna: string[];
+  selectedPlacesBarrio: string[];
   selectedPlacesProvincia: string;
-  onPlacesComunaChange: (value: string) => void;
-  onPlacesBarrioChange: (value: string) => void;
+  onPlacesComunaChange: (values: string[]) => void;
+  onPlacesBarrioChange: (values: string[]) => void;
   onPlacesProvinciaChange: (value: string) => void;
   onClearFilters: () => void;
 }
@@ -68,7 +69,7 @@ const RecommendationFilters = ({
   const placesBarrios = useMemo(() => {
     const filtered = placesData.filter(place => 
       (selectedPlacesProvincia === 'all' || place.provincia_principal === selectedPlacesProvincia) &&
-      (selectedPlacesComuna === 'all' || place.comuna === selectedPlacesComuna)
+      (selectedPlacesComuna.length === 0 || selectedPlacesComuna.includes(place.comuna || ''))
     );
     const set = new Set<string>();
     filtered.forEach(place => {
@@ -80,22 +81,16 @@ const RecommendationFilters = ({
   // Resetear filtros dependientes cuando cambia la provincia
   const handlePlacesProvinciaChange = (value: string) => {
     onPlacesProvinciaChange(value);
-    onPlacesComunaChange('all');
-    onPlacesBarrioChange('all');
-  };
-
-  // Resetear barrio cuando cambia la comuna
-  const handlePlacesComunaChange = (value: string) => {
-    onPlacesComunaChange(value);
-    onPlacesBarrioChange('all');
+    onPlacesComunaChange([]);
+    onPlacesBarrioChange([]);
   };
 
   const hasActiveFilters = 
     selectedCiudad !== 'all' || 
     selectedProvincia !== 'all' || 
     selectedVendedor !== 'all' ||
-    selectedPlacesComuna !== 'all' ||
-    selectedPlacesBarrio !== 'all' ||
+    selectedPlacesComuna.length > 0 ||
+    selectedPlacesBarrio.length > 0 ||
     selectedPlacesProvincia !== 'all';
 
   return (
@@ -194,36 +189,24 @@ const RecommendationFilters = ({
 
             <div className="space-y-2">
               <Label htmlFor="places-comuna-filter">Comuna / Distrito (Places)</Label>
-              <Select value={selectedPlacesComuna} onValueChange={handlePlacesComunaChange}>
-                <SelectTrigger id="places-comuna-filter" className="bg-background">
-                  <SelectValue placeholder="Todas las comunas" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">Todas las comunas</SelectItem>
-                  {placesComunas.map((comuna) => (
-                    <SelectItem key={comuna} value={comuna}>
-                      {comuna}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={placesComunas}
+                selected={selectedPlacesComuna}
+                onChange={onPlacesComunaChange}
+                placeholder="Todas las comunas"
+                className="w-full"
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="places-barrio-filter">Barrio (Places)</Label>
-              <Select value={selectedPlacesBarrio} onValueChange={onPlacesBarrioChange}>
-                <SelectTrigger id="places-barrio-filter" className="bg-background">
-                  <SelectValue placeholder="Todos los barrios" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">Todos los barrios</SelectItem>
-                  {placesBarrios.map((barrio) => (
-                    <SelectItem key={barrio} value={barrio}>
-                      {barrio}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={placesBarrios}
+                selected={selectedPlacesBarrio}
+                onChange={onPlacesBarrioChange}
+                placeholder="Todos los barrios"
+                className="w-full"
+              />
             </div>
           </div>
         </div>

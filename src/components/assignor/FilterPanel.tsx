@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Users, MapPin } from "lucide-react";
+import { Sparkles, Users, MapPin, X } from "lucide-react";
+import { MultiSelect } from "@/components/ui/multi-select";
 interface Vendedor {
   id: string;
   nombre: string;
@@ -27,8 +28,8 @@ const FilterPanel = ({
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [selectedVendedores, setSelectedVendedores] = useState<string[]>([]);
   const [isLoadingVendedores, setIsLoadingVendedores] = useState(true);
-  const [selectedComuna, setSelectedComuna] = useState<string>('all');
-  const [selectedBarrio, setSelectedBarrio] = useState<string>('all');
+  const [selectedComuna, setSelectedComuna] = useState<string[]>([]);
+  const [selectedBarrio, setSelectedBarrio] = useState<string[]>([]);
   const [selectedProvincia, setSelectedProvincia] = useState<string>('all');
   const {
     toast
@@ -59,7 +60,7 @@ const FilterPanel = ({
   const barrios = useMemo(() => {
     const filtered = placesData.filter(place => 
       (selectedProvincia === 'all' || place.provincia_principal === selectedProvincia) &&
-      (selectedComuna === 'all' || place.comuna === selectedComuna)
+      (selectedComuna.length === 0 || selectedComuna.includes(place.comuna || ''))
     );
     const set = new Set<string>();
     filtered.forEach(place => {
@@ -71,15 +72,20 @@ const FilterPanel = ({
   // Resetear filtros dependientes cuando cambia la provincia
   const handleProvinciaChange = (value: string) => {
     setSelectedProvincia(value);
-    setSelectedComuna('all');
-    setSelectedBarrio('all');
+    setSelectedComuna([]);
+    setSelectedBarrio([]);
   };
 
-  // Resetear barrio cuando cambia la comuna
-  const handleComunaChange = (value: string) => {
-    setSelectedComuna(value);
-    setSelectedBarrio('all');
+  const handleClearFilters = () => {
+    setSelectedProvincia('all');
+    setSelectedComuna([]);
+    setSelectedBarrio([]);
   };
+
+  const hasActiveFilters = 
+    selectedProvincia !== 'all' ||
+    selectedComuna.length > 0 ||
+    selectedBarrio.length > 0;
   useEffect(() => {
     fetchVendedores();
   }, []);
@@ -142,8 +148,8 @@ const FilterPanel = ({
       ids: selectedVendedores,
       nombres: nombresVendedores
     }, {
-      comuna: selectedComuna !== 'all' ? selectedComuna : null,
-      barrio: selectedBarrio !== 'all' ? selectedBarrio : null,
+      comuna: selectedComuna.length > 0 ? selectedComuna : null,
+      barrio: selectedBarrio.length > 0 ? selectedBarrio : null,
       provincia: selectedProvincia !== 'all' ? selectedProvincia : null
     });
   };
@@ -176,9 +182,23 @@ const FilterPanel = ({
 
       <Card className="p-4 bg-muted/50">
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-accent" />
-            <h3 className="font-semibold">Filtros de Ubicación</h3>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-accent" />
+              <h3 className="font-semibold">Filtros de Ubicación</h3>
+            </div>
+            {hasActiveFilters && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleClearFilters}
+                className="h-8 px-2"
+              >
+                <X className="w-4 h-4 mr-1" />
+                Limpiar filtros
+              </Button>
+            )}
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -201,36 +221,24 @@ const FilterPanel = ({
 
             <div className="space-y-2">
               <Label htmlFor="comuna-filter">Comuna / Distrito</Label>
-              <Select value={selectedComuna} onValueChange={handleComunaChange}>
-                <SelectTrigger id="comuna-filter" className="bg-background">
-                  <SelectValue placeholder="Todas las comunas" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">Todas las comunas</SelectItem>
-                  {comunas.map((comuna) => (
-                    <SelectItem key={comuna} value={comuna}>
-                      {comuna}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={comunas}
+                selected={selectedComuna}
+                onChange={setSelectedComuna}
+                placeholder="Todas las comunas"
+                className="w-full"
+              />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="barrio-filter">Barrio</Label>
-              <Select value={selectedBarrio} onValueChange={setSelectedBarrio}>
-                <SelectTrigger id="barrio-filter" className="bg-background">
-                  <SelectValue placeholder="Todos los barrios" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">Todos los barrios</SelectItem>
-                  {barrios.map((barrio) => (
-                    <SelectItem key={barrio} value={barrio}>
-                      {barrio}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={barrios}
+                selected={selectedBarrio}
+                onChange={setSelectedBarrio}
+                placeholder="Todos los barrios"
+                className="w-full"
+              />
             </div>
           </div>
         </div>

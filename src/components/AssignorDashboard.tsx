@@ -25,8 +25,8 @@ const AssignorDashboard = () => {
   const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
   const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
   const [selectedVendedoresIds, setSelectedVendedoresIds] = useState<string[]>([]);
-  const [selectedPlacesComuna, setSelectedPlacesComuna] = useState<string>("all");
-  const [selectedPlacesBarrio, setSelectedPlacesBarrio] = useState<string>("all");
+  const [selectedPlacesComuna, setSelectedPlacesComuna] = useState<string[]>([]);
+  const [selectedPlacesBarrio, setSelectedPlacesBarrio] = useState<string[]>([]);
   const [selectedPlacesProvincia, setSelectedPlacesProvincia] = useState<string>("all");
   const [placesData, setPlacesData] = useState<
     Array<{ comuna: string | null; barrio_principal: string | null; provincia_principal: string | null }>
@@ -189,8 +189,8 @@ const AssignorDashboard = () => {
     setSelectedCiudad("all");
     setSelectedProvincia("all");
     setSelectedVendedor("all");
-    setSelectedPlacesComuna("all");
-    setSelectedPlacesBarrio("all");
+    setSelectedPlacesComuna([]);
+    setSelectedPlacesBarrio([]);
     setSelectedPlacesProvincia("all");
   };
 
@@ -247,9 +247,17 @@ const AssignorDashboard = () => {
         }
       }
 
-      // Nota: Los filtros de comuna y barrio no se pueden aplicar directamente
-      // porque las recomendaciones no tienen esos campos
-      // Se mantienen para consistencia de UI pero no afectan el filtrado por ahora
+      if (selectedPlacesComuna.length > 0) {
+        // El campo comuna no está directamente en recomendaciones
+        // Este filtro será más efectivo cuando se integre con places
+        return true;
+      }
+
+      if (selectedPlacesBarrio.length > 0) {
+        if (!rec.barrio_principal || !selectedPlacesBarrio.includes(rec.barrio_principal)) {
+          return false;
+        }
+      }
 
       return true;
     });
