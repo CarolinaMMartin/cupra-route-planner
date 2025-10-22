@@ -123,9 +123,8 @@ async function getData() {
     }
   });
 
-  // Unassigned places
-  const assignedPlaceIds = new Set(areasPlaces.map((ap) => ap.place_id));
-  const unassignedPlaces = places.filter((p) => !assignedPlaceIds.has(p.id));
+  // TODOS los places están disponibles en "Sin Área" para permitir múltiples asignaciones
+  const unassignedPlaces = places;
 
   return {
     areas: Array.from(areasMap.values()),
@@ -156,26 +155,40 @@ async function createArea(data: {
   return newArea;
 }
 
+// Helper para asignar un place a un área (permite múltiples asignaciones)
 async function assignPlaceToArea(placeId: string, areaId: string) {
   const profileId = await getCurrentProfileId();
 
-  const { error } = await supabase.from("areas_places").upsert(
-    {
-      area_id: areaId,
+  // Verificar si ya existe esta relación específica
+  const { data: existing } = await supabase
+    .from("areas_places")
+    .select("id")
+    .eq("place_id", placeId)
+    .eq("area_id", areaId)
+    .maybeSingle();
+
+  // Si ya existe, no hacer nada
+  if (existing) return;
+
+  // Insertar nueva relación (permite duplicados con diferentes area_id)
+  const { error } = await supabase
+    .from("areas_places")
+    .insert({
       place_id: placeId,
+      area_id: areaId,
       created_by: profileId,
-    },
-    { onConflict: "area_id,place_id" }
-  );
+    });
 
   if (error) throw error;
 }
 
-async function unassignPlace(placeId: string) {
+// Helper para desasignar un place de un área específica
+async function unassignPlace(placeId: string, areaId: string) {
   const { error } = await supabase
     .from("areas_places")
     .delete()
-    .eq("place_id", placeId);
+    .eq("place_id", placeId)
+    .eq("area_id", areaId);
 
   if (error) throw error;
 }
@@ -246,9 +259,13 @@ function DroppableArea({
   );
 }
 
-function DraggablePlace({ place, id }: { place: Place; id: string }) {
+function DraggablePlace({ place, id, areaId }: { place: Place; id: string; areaId?: string }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: id,
+    data: {
+      placeId: place.id,
+      areaId: areaId || null, // Guardamos el área de origen
+    },
   });
 
   const style = transform
@@ -313,22 +330,20 @@ export default function AreasManager() {
   }
 
   function handleDragStart(event: DragStartEvent) {
-    const placeId = event.active.id as string;
-    let sourceAreaId: string | null = null;
+    const dragData = event.active.data.current;
+    const placeId = dragData?.placeId as string;
+    const sourceAreaId = dragData?.areaId as string | null;
+
+    // Buscar el place
     let place: Place | undefined;
-
-    // Find place in unassigned
-    place = unassignedPlaces.find((p) => p.id === placeId);
-
-    // Find place in areas
-    if (!place) {
-      for (const area of areas) {
-        place = area.places.find((p) => p.id === placeId);
-        if (place) {
-          sourceAreaId = area.id;
-          break;
-        }
-      }
+    
+    if (!sourceAreaId) {
+      // Viene de "Sin Área"
+      place = unassignedPlaces.find((p) => p.id === placeId);
+    } else {
+      // Viene de un área específica
+      const sourceArea = areas.find((a) => a.id === sourceAreaId);
+      place = sourceArea?.places.find((p) => p.id === placeId);
     }
 
     if (place) {
@@ -344,54 +359,59 @@ export default function AreasManager() {
       return;
     }
 
-    const placeId = active.id as string;
+    const dragData = active.data.current;
+    const placeId = dragData?.placeId as string;
+    const sourceAreaId = dragData?.areaId as string | null;
     const overAreaId = over.id as string;
-    const sourceAreaId = draggedPlace.sourceAreaId;
 
-    // No change
-    if (overAreaId === sourceAreaId) {
+    // Si se suelta en el mismo lugar, no hacer nada
+    if (overAreaId === sourceAreaId || overAreaId === "unassigned" && !sourceAreaId) {
       setDraggedPlace(null);
       return;
     }
 
-    // Optimistic update
-    const updatedAreas = [...areas];
-    let updatedUnassigned = [...unassignedPlaces];
-
-    // Remove from source
-    if (sourceAreaId) {
-      const sourceArea = updatedAreas.find((a) => a.id === sourceAreaId);
-      if (sourceArea) {
-        sourceArea.places = sourceArea.places.filter((p) => p.id !== placeId);
-      }
-    } else {
-      updatedUnassigned = updatedUnassigned.filter((p) => p.id !== placeId);
-    }
-
-    // Add to destination
-    if (overAreaId === "unassigned") {
-      updatedUnassigned.push(draggedPlace.place);
-    } else {
-      const destArea = updatedAreas.find((a) => a.id === overAreaId);
-      if (destArea) {
-        destArea.places.push(draggedPlace.place);
-      }
-    }
-
-    setAreas(updatedAreas);
-    setUnassignedPlaces(updatedUnassigned);
-    setDraggedPlace(null);
-
     // Persist to database
     try {
       if (overAreaId === "unassigned") {
-        await unassignPlace(placeId);
-        toast({
-          title: "Éxito",
-          description: "Lugar movido a sin área",
-        });
+        // Eliminar solo del área específica de origen
+        if (sourceAreaId) {
+          await unassignPlace(placeId, sourceAreaId);
+          
+          // Optimistic update: remover solo del área de origen
+          setAreas((prev) =>
+            prev.map((area) =>
+              area.id === sourceAreaId
+                ? {
+                    ...area,
+                    places: area.places.filter((p) => p.id !== placeId),
+                  }
+                : area
+            )
+          );
+          
+          toast({
+            title: "Éxito",
+            description: "Lugar removido del área",
+          });
+        }
       } else {
+        // Asignar a nueva área (sin eliminar de otras)
         await assignPlaceToArea(placeId, overAreaId);
+        
+        // Optimistic update: agregar al área destino si no existe
+        setAreas((prev) =>
+          prev.map((area) => {
+            if (area.id === overAreaId) {
+              // Verificar si ya existe para evitar duplicados visuales
+              const exists = area.places.some((p) => p.id === placeId);
+              if (!exists) {
+                return { ...area, places: [...area.places, draggedPlace.place] };
+              }
+            }
+            return area;
+          })
+        );
+        
         toast({
           title: "Éxito",
           description: "Lugar asignado al área",
@@ -404,9 +424,11 @@ export default function AreasManager() {
         description: "No se pudo actualizar la asignación",
         variant: "destructive",
       });
-      // Revert on error
+      // Recargar en caso de error
       loadData();
     }
+    
+    setDraggedPlace(null);
   }
 
   async function handleCreateArea(e: React.FormEvent) {
@@ -598,9 +620,10 @@ export default function AreasManager() {
                     <div className="space-y-2">
                       {filterPlaces(unassignedPlaces).map((place) => (
                         <DraggablePlace
-                          key={place.id}
+                          key={`unassigned-${place.id}`}
                           place={place}
-                          id={place.id}
+                          id={`unassigned-${place.id}`}
+                          areaId={undefined}
                         />
                       ))}
                     </div>
@@ -645,9 +668,10 @@ export default function AreasManager() {
                       <div className="space-y-2">
                         {filterPlaces(area.places).map((place) => (
                           <DraggablePlace
-                            key={place.id}
+                            key={`${area.id}-${place.id}`}
                             place={place}
-                            id={place.id}
+                            id={`${area.id}-${place.id}`}
+                            areaId={area.id}
                           />
                         ))}
                       </div>
