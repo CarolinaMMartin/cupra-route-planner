@@ -14,6 +14,136 @@ export type Database = {
   }
   public: {
     Tables: {
+      areas: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          created_by: string | null
+          descripcion: string | null
+          id: string
+          nombre: string
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          descripcion?: string | null
+          id?: string
+          nombre: string
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          descripcion?: string | null
+          id?: string
+          nombre?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "areas_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      areas_places: {
+        Row: {
+          area_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          place_id: string
+        }
+        Insert: {
+          area_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          place_id: string
+        }
+        Update: {
+          area_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          place_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "areas_places_area_id_fkey"
+            columns: ["area_id"]
+            isOneToOne: false
+            referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "areas_places_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "areas_places_place_id_fkey"
+            columns: ["place_id"]
+            isOneToOne: false
+            referencedRelation: "places"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      areas_vendedores: {
+        Row: {
+          area_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          vendedor_id: string
+        }
+        Insert: {
+          area_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          vendedor_id: string
+        }
+        Update: {
+          area_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "areas_vendedores_area_id_fkey"
+            columns: ["area_id"]
+            isOneToOne: false
+            referencedRelation: "areas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "areas_vendedores_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "areas_vendedores_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asignaciones_vendedores_clientes: {
         Row: {
           client_id: string
