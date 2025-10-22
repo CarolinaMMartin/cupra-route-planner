@@ -53,7 +53,7 @@ const FilterPanel = ({
     filtered.forEach(place => {
       if (place.comuna) set.add(place.comuna);
     });
-    return Array.from(set).sort();
+    return Array.from(set).sort().map(c => ({ label: c, value: c }));
   }, [placesData, selectedProvincia]);
 
   // Obtener barrios filtrados por provincia y comuna, ordenados alfabéticamente
@@ -66,7 +66,7 @@ const FilterPanel = ({
     filtered.forEach(place => {
       if (place.barrio_principal) set.add(place.barrio_principal);
     });
-    return Array.from(set).sort();
+    return Array.from(set).sort().map(b => ({ label: b, value: b }));
   }, [placesData, selectedProvincia, selectedComuna]);
 
   // Resetear filtros dependientes cuando cambia la provincia

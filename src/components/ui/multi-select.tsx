@@ -16,8 +16,13 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 
+interface Option {
+  label: string;
+  value: string;
+}
+
 interface MultiSelectProps {
-  options: string[];
+  options: Option[];
   selected: string[];
   onChange: (values: string[]) => void;
   placeholder?: string;
@@ -32,6 +37,11 @@ export function MultiSelect({
   className,
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
+
+  const getLabel = (value: string) => {
+    const option = options.find((opt) => opt.value === value);
+    return option ? option.label : value;
+  };
 
   const handleSelect = (value: string) => {
     if (selected.includes(value)) {
@@ -67,7 +77,7 @@ export function MultiSelect({
             {selected.length === 0 ? (
               <span className="text-muted-foreground text-sm">{placeholder}</span>
             ) : selected.length === 1 ? (
-              <span className="text-sm truncate">{selected[0]}</span>
+              <span className="text-sm truncate">{getLabel(selected[0])}</span>
             ) : (
               <span className="text-sm">
                 {selected.length} seleccionado{selected.length !== 1 ? 's' : ''}
@@ -92,17 +102,17 @@ export function MultiSelect({
           <CommandGroup className="max-h-64 overflow-auto">
             {options.map((option) => (
               <CommandItem
-                key={option}
-                value={option}
-                onSelect={() => handleSelect(option)}
+                key={option.value}
+                value={option.label}
+                onSelect={() => handleSelect(option.value)}
               >
                 <Check
                   className={cn(
                     "mr-2 h-4 w-4",
-                    selected.includes(option) ? "opacity-100" : "opacity-0"
+                    selected.includes(option.value) ? "opacity-100" : "opacity-0"
                   )}
                 />
-                {option}
+                {option.label}
               </CommandItem>
             ))}
           </CommandGroup>
