@@ -97,16 +97,17 @@ const ClientDetailCard = ({
 
   return (
     <Card
-      className="p-4 hover-lift cursor-pointer transition-all"
-      onClick={() => showCheckbox && onToggle(cliente.id)}
+      className="p-4 hover-lift transition-all"
     >
       <div className="flex items-start gap-4">
         {showCheckbox && (
-          <Checkbox
-            checked={isSelected}
-            onCheckedChange={() => onToggle(cliente.id)}
-            className="mt-1"
-          />
+          <div onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggle(cliente.id)}
+              className="mt-1"
+            />
+          </div>
         )}
         
         <div className="flex-1 space-y-3">
