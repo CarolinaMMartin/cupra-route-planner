@@ -59,38 +59,29 @@ export function MultiSelect({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "w-full justify-between bg-background hover:bg-background",
+            "w-full justify-between bg-background hover:bg-background h-auto min-h-10 py-2",
             className
           )}
         >
-          <div className="flex gap-1 flex-wrap">
+          <div className="flex-1 flex items-center gap-1 min-w-0">
             {selected.length === 0 ? (
-              <span className="text-muted-foreground">{placeholder}</span>
+              <span className="text-muted-foreground text-sm">{placeholder}</span>
+            ) : selected.length === 1 ? (
+              <span className="text-sm truncate">{selected[0]}</span>
             ) : (
-              selected.slice(0, 2).map((value) => (
-                <Badge
-                  key={value}
-                  variant="secondary"
-                  className="mr-1"
-                  onClick={(e) => handleRemove(value, e)}
-                >
-                  {value}
-                  <X className="ml-1 h-3 w-3" />
-                </Badge>
-              ))
-            )}
-            {selected.length > 2 && (
-              <Badge variant="secondary">+{selected.length - 2}</Badge>
+              <span className="text-sm">
+                {selected.length} seleccionado{selected.length !== 1 ? 's' : ''}
+              </span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 ml-2 shrink-0">
             {selected.length > 0 && (
               <X
-                className="h-4 w-4 shrink-0 opacity-50 hover:opacity-100"
+                className="h-4 w-4 opacity-50 hover:opacity-100 transition-opacity"
                 onClick={handleClear}
               />
             )}
-            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+            <ChevronsUpDown className="h-4 w-4 opacity-50" />
           </div>
         </Button>
       </PopoverTrigger>
