@@ -25,9 +25,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Loader2 } from "lucide-react";
+import { Plus, MapPin, Loader2, Minimize2, Trash2, Maximize2 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Types
@@ -290,6 +300,8 @@ export default function AreasManager() {
   const [searchFilter, setSearchFilter] = useState("");
   const [draggedPlace, setDraggedPlace] = useState<DraggedPlace | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [minimizedAreas, setMinimizedAreas] = useState<Set<string>>(new Set());
+  const [areaToDelete, setAreaToDelete] = useState<string | null>(null);
   const [newAreaForm, setNewAreaForm] = useState({
     nombre: "",
     descripcion: "",
@@ -486,6 +498,61 @@ export default function AreasManager() {
     }
   }
 
+  function handleMinimizeArea(areaId: string) {
+    setMinimizedAreas((prev) => new Set(prev).add(areaId));
+    toast({
+      title: "Área minimizada",
+      description: "El área se ha ocultado del tablero",
+    });
+  }
+
+  function handleRestoreArea(areaId: string) {
+    setMinimizedAreas((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(areaId);
+      return newSet;
+    });
+    toast({
+      title: "Área restaurada",
+      description: "El área se ha restaurado al tablero",
+    });
+  }
+
+  async function handleDeleteArea(areaId: string) {
+    try {
+      // Delete area relationships first
+      await supabase.from("areas_vendedores").delete().eq("area_id", areaId);
+      await supabase.from("areas_places").delete().eq("area_id", areaId);
+      
+      // Delete area
+      const { error } = await supabase.from("areas").delete().eq("id", areaId);
+      
+      if (error) throw error;
+
+      // Update local state
+      setAreas((prev) => prev.filter((area) => area.id !== areaId));
+      setMinimizedAreas((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(areaId);
+        return newSet;
+      });
+
+      toast({
+        title: "Área eliminada",
+        description: "El área y sus asignaciones se han eliminado correctamente",
+      });
+      
+      setAreaToDelete(null);
+    } catch (error) {
+      console.error("Error deleting area:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar el área",
+        variant: "destructive",
+      });
+    }
+  }
+
   function filterPlaces(places: Place[]) {
     if (!searchFilter.trim()) return places;
     const query = searchFilter.toLowerCase();
@@ -501,6 +568,9 @@ export default function AreasManager() {
     label: p.nombre,
     value: p.id,
   }));
+
+  const visibleAreas = areas.filter((area) => !minimizedAreas.has(area.id));
+  const hiddenAreas = areas.filter((area) => minimizedAreas.has(area.id));
 
   if (loading) {
     return (
@@ -589,6 +659,39 @@ export default function AreasManager() {
           </Dialog>
         </div>
 
+        {/* Minimized Areas Bar */}
+        {hiddenAreas.length > 0 && (
+          <div className="bg-muted/20 rounded-xl p-4 border animate-fade-in">
+            <div className="flex items-center gap-2 mb-3">
+              <Minimize2 className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-muted-foreground">
+                Áreas minimizadas ({hiddenAreas.length})
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {hiddenAreas.map((area) => (
+                <Button
+                  key={area.id}
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => handleRestoreArea(area.id)}
+                  className="animate-scale-in hover-scale"
+                  style={{
+                    borderLeftWidth: "3px",
+                    borderLeftColor: area.color || undefined,
+                  }}
+                >
+                  <Maximize2 className="mr-2 h-3 w-3" />
+                  {area.nombre}
+                  <Badge variant="outline" className="ml-2">
+                    {area.places.length}
+                  </Badge>
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Search Filter */}
         <div className="max-w-md">
           <Input
@@ -633,22 +736,46 @@ export default function AreasManager() {
             </DroppableArea>
 
             {/* Area Columns */}
-            {areas.map((area) => (
+            {visibleAreas.map((area) => (
               <DroppableArea key={area.id} id={area.id}>
                 <Card
-                  className="w-80 flex-shrink-0"
-                  style={{ borderTopColor: area.color || undefined }}
+                  className="w-80 flex-shrink-0 animate-fade-in"
+                  style={{ borderTopColor: area.color || undefined, borderTopWidth: "4px" }}
                 >
                   <CardHeader>
-                    <CardTitle className="text-lg">{area.nombre}</CardTitle>
-                    {area.descripcion && (
-                      <p className="text-sm text-muted-foreground">
-                        {area.descripcion}
-                      </p>
-                    )}
-                    <p className="text-sm text-muted-foreground">
-                      {filterPlaces(area.places).length} lugares
-                    </p>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg">{area.nombre}</CardTitle>
+                        {area.descripcion && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {area.descripcion}
+                          </p>
+                        )}
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {filterPlaces(area.places).length} lugares
+                        </p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleMinimizeArea(area.id)}
+                          className="h-8 w-8 hover:bg-muted"
+                          title="Minimizar área"
+                        >
+                          <Minimize2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setAreaToDelete(area.id)}
+                          className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
+                          title="Eliminar área"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
@@ -686,6 +813,29 @@ export default function AreasManager() {
             {draggedPlace ? <PlaceItem place={draggedPlace.place} /> : null}
           </DragOverlay>
         </DndContext>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={!!areaToDelete} onOpenChange={() => setAreaToDelete(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Eliminar área?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción eliminará el área y todas sus asignaciones de lugares y vendedores.
+                Los lugares volverán a estar disponibles en "Sin Área".
+                Esta acción no se puede deshacer.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => areaToDelete && handleDeleteArea(areaToDelete)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
