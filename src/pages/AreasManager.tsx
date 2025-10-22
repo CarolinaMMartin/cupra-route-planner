@@ -8,6 +8,8 @@ import {
   useSensors,
   PointerSensor,
   closestCenter,
+  useDraggable,
+  useDroppable,
 } from "@dnd-kit/core";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -233,16 +235,31 @@ function DroppableArea({
   id: string;
   children: React.ReactNode;
 }) {
+  const { setNodeRef } = useDroppable({
+    id: id,
+  });
+
   return (
-    <div data-droppable-id={id} className="flex-1 min-h-[200px]">
+    <div ref={setNodeRef} className="flex-1 min-h-[200px]">
       {children}
     </div>
   );
 }
 
 function DraggablePlace({ place, id }: { place: Place; id: string }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: id,
+  });
+
+  const style = transform
+    ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+        opacity: isDragging ? 0.5 : 1,
+      }
+    : undefined;
+
   return (
-    <div data-draggable-id={id}>
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
       <PlaceItem place={place} />
     </div>
   );
