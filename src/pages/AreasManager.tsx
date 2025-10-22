@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Loader2, Minimize2, Trash2, Maximize2 } from "lucide-react";
+import { Plus, MapPin, Loader2, Minimize2, Trash2, Maximize2, Pencil } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Types
@@ -300,8 +300,11 @@ export default function AreasManager() {
   const [searchFilter, setSearchFilter] = useState("");
   const [draggedPlace, setDraggedPlace] = useState<DraggedPlace | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [minimizedAreas, setMinimizedAreas] = useState<Set<string>>(new Set());
+  const [visibleAreaIds, setVisibleAreaIds] = useState<string[]>([]);
+  const [minimizedAreaIds, setMinimizedAreaIds] = useState<string[]>([]);
   const [areaToDelete, setAreaToDelete] = useState<string | null>(null);
+  const [editingArea, setEditingArea] = useState<Area | null>(null);
+  const [editForm, setEditForm] = useState({ nombre: "", descripcion: "" });
   const [newAreaForm, setNewAreaForm] = useState({
     nombre: "",
     descripcion: "",
@@ -321,6 +324,13 @@ export default function AreasManager() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Inicializar orden de áreas visibles cuando se cargan los datos
+  useEffect(() => {
+    if (areas.length > 0 && visibleAreaIds.length === 0) {
+      setVisibleAreaIds(areas.map(a => a.id));
+    }
+  }, [areas]);
 
   async function loadData() {
     try {
@@ -455,7 +465,11 @@ export default function AreasManager() {
     }
 
     try {
-      await createArea(newAreaForm);
+      const newArea = await createArea(newAreaForm);
+      
+      // Agregar nueva área al final de las visibles
+      setVisibleAreaIds((prev) => [...prev, newArea.id]);
+      
       toast({
         title: "Éxito",
         description: "Área creada correctamente",
@@ -499,7 +513,8 @@ export default function AreasManager() {
   }
 
   function handleMinimizeArea(areaId: string) {
-    setMinimizedAreas((prev) => new Set(prev).add(areaId));
+    setVisibleAreaIds((prev) => prev.filter(id => id !== areaId));
+    setMinimizedAreaIds((prev) => [...prev, areaId]);
     toast({
       title: "Área minimizada",
       description: "El área se ha ocultado del tablero",
@@ -507,11 +522,8 @@ export default function AreasManager() {
   }
 
   function handleRestoreArea(areaId: string) {
-    setMinimizedAreas((prev) => {
-      const newSet = new Set(prev);
-      newSet.delete(areaId);
-      return newSet;
-    });
+    setMinimizedAreaIds((prev) => prev.filter(id => id !== areaId));
+    setVisibleAreaIds((prev) => [...prev, areaId]); // Agregar al final
     toast({
       title: "Área restaurada",
       description: "El área se ha restaurado al tablero",
@@ -531,11 +543,8 @@ export default function AreasManager() {
 
       // Update local state
       setAreas((prev) => prev.filter((area) => area.id !== areaId));
-      setMinimizedAreas((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(areaId);
-        return newSet;
-      });
+      setVisibleAreaIds((prev) => prev.filter(id => id !== areaId));
+      setMinimizedAreaIds((prev) => prev.filter(id => id !== areaId));
 
       toast({
         title: "Área eliminada",
@@ -548,6 +557,64 @@ export default function AreasManager() {
       toast({
         title: "Error",
         description: "No se pudo eliminar el área",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleUpdateArea() {
+    if (!editingArea) return;
+
+    const trimmedNombre = editForm.nombre.trim();
+    if (!trimmedNombre) {
+      toast({
+        title: "Error",
+        description: "El nombre del área no puede estar vacío",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (trimmedNombre.length > 50) {
+      toast({
+        title: "Error",
+        description: "El nombre no puede tener más de 50 caracteres",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from("areas")
+        .update({
+          nombre: trimmedNombre,
+          descripcion: editForm.descripcion.trim() || null,
+        })
+        .eq("id", editingArea.id);
+
+      if (error) throw error;
+
+      // Actualizar estado local
+      setAreas((prev) =>
+        prev.map((area) =>
+          area.id === editingArea.id
+            ? { ...area, nombre: trimmedNombre, descripcion: editForm.descripcion.trim() || null }
+            : area
+        )
+      );
+
+      toast({
+        title: "Área actualizada correctamente",
+      });
+
+      setEditingArea(null);
+      setEditForm({ nombre: "", descripcion: "" });
+    } catch (error) {
+      console.error("Error updating area:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el área",
         variant: "destructive",
       });
     }
@@ -569,8 +636,14 @@ export default function AreasManager() {
     value: p.id,
   }));
 
-  const visibleAreas = areas.filter((area) => !minimizedAreas.has(area.id));
-  const hiddenAreas = areas.filter((area) => minimizedAreas.has(area.id));
+  // Ordenar áreas visibles según visibleAreaIds
+  const visibleAreas = visibleAreaIds
+    .map(id => areas.find(a => a.id === id))
+    .filter((area): area is Area => area !== undefined);
+  
+  const hiddenAreas = minimizedAreaIds
+    .map(id => areas.find(a => a.id === id))
+    .filter((area): area is Area => area !== undefined);
 
   if (loading) {
     return (
@@ -745,7 +818,24 @@ export default function AreasManager() {
                   <CardHeader>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1">
-                        <CardTitle className="text-lg">{area.nombre}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-lg">{area.nombre}</CardTitle>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEditingArea(area);
+                              setEditForm({ 
+                                nombre: area.nombre, 
+                                descripcion: area.descripcion || "" 
+                              });
+                            }}
+                            className="h-6 w-6 hover:bg-muted"
+                            title="Editar área"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        </div>
                         {area.descripcion && (
                           <p className="text-sm text-muted-foreground mt-1">
                             {area.descripcion}
@@ -813,6 +903,48 @@ export default function AreasManager() {
             {draggedPlace ? <PlaceItem place={draggedPlace.place} /> : null}
           </DragOverlay>
         </DndContext>
+
+        {/* Edit Area Dialog */}
+        <Dialog open={!!editingArea} onOpenChange={(open) => !open && setEditingArea(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Editar Área</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-nombre">Nombre *</Label>
+                <Input
+                  id="edit-nombre"
+                  value={editForm.nombre}
+                  onChange={(e) => setEditForm({ ...editForm, nombre: e.target.value })}
+                  placeholder="Nombre del área"
+                  maxLength={50}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {editForm.nombre.length}/50 caracteres
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="edit-descripcion">Descripción</Label>
+                <Textarea
+                  id="edit-descripcion"
+                  value={editForm.descripcion}
+                  onChange={(e) => setEditForm({ ...editForm, descripcion: e.target.value })}
+                  placeholder="Descripción del área"
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setEditingArea(null)}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleUpdateArea}>
+                  Guardar
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={!!areaToDelete} onOpenChange={() => setAreaToDelete(null)}>
