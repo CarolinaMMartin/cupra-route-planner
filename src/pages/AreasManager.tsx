@@ -57,6 +57,21 @@ interface DraggedPlace {
 }
 
 // Supabase helpers
+async function getCurrentProfileId() {
+  const { data: session } = await supabase.auth.getSession();
+  const userId = session.session?.user?.id;
+  
+  if (!userId) return null;
+  
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  
+  return profile?.id || null;
+}
+
 async function getData() {
   const [areasRes, placesRes, areasPlacesRes, areasVendedoresRes, profilesRes] =
     await Promise.all([
@@ -122,8 +137,7 @@ async function createArea(data: {
   descripcion?: string;
   color?: string;
 }) {
-  const { data: session } = await supabase.auth.getSession();
-  const userId = session.session?.user?.id;
+  const profileId = await getCurrentProfileId();
 
   const { data: newArea, error } = await supabase
     .from("areas")
@@ -131,7 +145,7 @@ async function createArea(data: {
       nombre: data.nombre,
       descripcion: data.descripcion || null,
       color: data.color || null,
-      created_by: userId || null,
+      created_by: profileId,
     })
     .select()
     .single();
@@ -141,14 +155,13 @@ async function createArea(data: {
 }
 
 async function assignPlaceToArea(placeId: string, areaId: string) {
-  const { data: session } = await supabase.auth.getSession();
-  const userId = session.session?.user?.id;
+  const profileId = await getCurrentProfileId();
 
   const { error } = await supabase.from("areas_places").upsert(
     {
       area_id: areaId,
       place_id: placeId,
-      created_by: userId || null,
+      created_by: profileId,
     },
     { onConflict: "area_id,place_id" }
   );
@@ -166,8 +179,7 @@ async function unassignPlace(placeId: string) {
 }
 
 async function setAreaVendedores(areaId: string, vendedorIds: string[]) {
-  const { data: session } = await supabase.auth.getSession();
-  const userId = session.session?.user?.id;
+  const profileId = await getCurrentProfileId();
 
   // Delete existing
   await supabase.from("areas_vendedores").delete().eq("area_id", areaId);
@@ -178,7 +190,7 @@ async function setAreaVendedores(areaId: string, vendedorIds: string[]) {
       vendedorIds.map((vendedorId) => ({
         area_id: areaId,
         vendedor_id: vendedorId,
-        created_by: userId || null,
+        created_by: profileId,
       }))
     );
 
