@@ -17,6 +17,7 @@ export type Database = {
       areas: {
         Row: {
           color: string | null
+          comentarios: string | null
           created_at: string | null
           created_by: string | null
           descripcion: string | null
@@ -26,6 +27,7 @@ export type Database = {
         }
         Insert: {
           color?: string | null
+          comentarios?: string | null
           created_at?: string | null
           created_by?: string | null
           descripcion?: string | null
@@ -35,6 +37,7 @@ export type Database = {
         }
         Update: {
           color?: string | null
+          comentarios?: string | null
           created_at?: string | null
           created_by?: string | null
           descripcion?: string | null

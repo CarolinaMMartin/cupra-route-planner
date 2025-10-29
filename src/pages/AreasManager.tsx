@@ -1,16 +1,4 @@
 import { useState, useEffect } from "react";
-import {
-  DndContext,
-  DragEndEvent,
-  DragOverlay,
-  DragStartEvent,
-  useSensor,
-  useSensors,
-  PointerSensor,
-  closestCenter,
-  useDraggable,
-  useDroppable,
-} from "@dnd-kit/core";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -19,6 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import {
   Dialog,
   DialogContent,
@@ -38,7 +32,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Loader2, Minimize2, Trash2, Maximize2, Pencil } from "lucide-react";
+import { Plus, MapPin, Loader2, Trash2, Pencil, Save, Search, X } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Types
@@ -54,6 +48,7 @@ interface Area {
   nombre: string;
   descripcion: string | null;
   color: string | null;
+  comentarios: string | null;
   places: Place[];
   vendedores: string[];
 }
@@ -64,10 +59,6 @@ interface Profile {
   email: string;
 }
 
-interface DraggedPlace {
-  place: Place;
-  sourceAreaId: string | null;
-}
 
 // Supabase helpers
 async function getCurrentProfileId() {
@@ -166,11 +157,9 @@ async function createArea(data: {
   return newArea;
 }
 
-// Helper para asignar un place a un área (permite múltiples asignaciones)
 async function assignPlaceToArea(placeId: string, areaId: string) {
   const profileId = await getCurrentProfileId();
 
-  // Verificar si ya existe esta relación específica
   const { data: existing } = await supabase
     .from("areas_places")
     .select("id")
@@ -178,10 +167,8 @@ async function assignPlaceToArea(placeId: string, areaId: string) {
     .eq("area_id", areaId)
     .maybeSingle();
 
-  // Si ya existe, no hacer nada
   if (existing) return;
 
-  // Insertar nueva relación (permite duplicados con diferentes area_id)
   const { error } = await supabase
     .from("areas_places")
     .insert({
@@ -193,13 +180,21 @@ async function assignPlaceToArea(placeId: string, areaId: string) {
   if (error) throw error;
 }
 
-// Helper para desasignar un place de un área específica
 async function unassignPlace(placeId: string, areaId: string) {
   const { error } = await supabase
     .from("areas_places")
     .delete()
     .eq("place_id", placeId)
     .eq("area_id", areaId);
+
+  if (error) throw error;
+}
+
+async function updateAreaComments(areaId: string, comentarios: string) {
+  const { error } = await supabase
+    .from("areas")
+    .update({ comentarios })
+    .eq("id", areaId);
 
   if (error) throw error;
 }
@@ -224,98 +219,27 @@ async function setAreaVendedores(areaId: string, vendedorIds: string[]) {
   }
 }
 
-// Components
-function PlaceItem({ place }: { place: Place }) {
-  return (
-    <div className="p-3 bg-card rounded-lg border hover:border-primary/50 cursor-move transition-colors">
-      <div className="flex items-start gap-2">
-        <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          {place.barrio_principal && (
-            <p className="font-medium text-sm truncate">{place.barrio_principal}</p>
-          )}
-          <div className="flex flex-wrap gap-1 mt-1">
-            {place.comuna && (
-              <Badge variant="secondary" className="text-xs">
-                {place.comuna}
-              </Badge>
-            )}
-            {place.provincia_principal && (
-              <Badge variant="outline" className="text-xs">
-                {place.provincia_principal}
-              </Badge>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DroppableArea({
-  id,
-  children,
-}: {
-  id: string;
-  children: React.ReactNode;
-}) {
-  const { setNodeRef } = useDroppable({
-    id: id,
-  });
-
-  return (
-    <div ref={setNodeRef} className="flex-1 min-h-[200px]">
-      {children}
-    </div>
-  );
-}
-
-function DraggablePlace({ place, id, areaId }: { place: Place; id: string; areaId?: string }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id: id,
-    data: {
-      placeId: place.id,
-      areaId: areaId || null, // Guardamos el área de origen
-    },
-  });
-
-  const style = transform
-    ? {
-        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        opacity: isDragging ? 0.5 : 1,
-      }
-    : undefined;
-
-  return (
-    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
-      <PlaceItem place={place} />
-    </div>
-  );
-}
 
 export default function AreasManager() {
   const navigate = useNavigate();
   const { toast } = useToast();
   
   const [areas, setAreas] = useState<Area[]>([]);
-  const [unassignedPlaces, setUnassignedPlaces] = useState<Place[]>([]);
+  const [allPlaces, setAllPlaces] = useState<Place[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
-  const [draggedPlace, setDraggedPlace] = useState<DraggedPlace | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [visibleAreaIds, setVisibleAreaIds] = useState<string[]>([]);
-  const [minimizedAreaIds, setMinimizedAreaIds] = useState<string[]>([]);
+  const [placeSearchFilter, setPlaceSearchFilter] = useState("");
   const [areaToDelete, setAreaToDelete] = useState<string | null>(null);
   const [editingArea, setEditingArea] = useState<Area | null>(null);
   const [editForm, setEditForm] = useState({ nombre: "", descripcion: "" });
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newAreaForm, setNewAreaForm] = useState({
     nombre: "",
     descripcion: "",
     color: "#3b82f6",
   });
 
-  // Verificar acceso de usuario
   useEffect(() => {
     checkAccess();
   }, []);
@@ -350,31 +274,16 @@ export default function AreasManager() {
     }
   }
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
-
   useEffect(() => {
     loadData();
   }, []);
-
-  // Inicializar orden de áreas visibles cuando se cargan los datos
-  useEffect(() => {
-    if (areas.length > 0 && visibleAreaIds.length === 0) {
-      setVisibleAreaIds(areas.map(a => a.id));
-    }
-  }, [areas]);
 
   async function loadData() {
     try {
       setLoading(true);
       const data = await getData();
       setAreas(data.areas);
-      setUnassignedPlaces(data.unassignedPlaces);
+      setAllPlaces(data.unassignedPlaces);
       setProfiles(data.profiles);
     } catch (error) {
       console.error("Error loading data:", error);
@@ -386,108 +295,6 @@ export default function AreasManager() {
     } finally {
       setLoading(false);
     }
-  }
-
-  function handleDragStart(event: DragStartEvent) {
-    const dragData = event.active.data.current;
-    const placeId = dragData?.placeId as string;
-    const sourceAreaId = dragData?.areaId as string | null;
-
-    // Buscar el place
-    let place: Place | undefined;
-    
-    if (!sourceAreaId) {
-      // Viene de "Sin Área"
-      place = unassignedPlaces.find((p) => p.id === placeId);
-    } else {
-      // Viene de un área específica
-      const sourceArea = areas.find((a) => a.id === sourceAreaId);
-      place = sourceArea?.places.find((p) => p.id === placeId);
-    }
-
-    if (place) {
-      setDraggedPlace({ place, sourceAreaId });
-    }
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-
-    if (!over || !draggedPlace) {
-      setDraggedPlace(null);
-      return;
-    }
-
-    const dragData = active.data.current;
-    const placeId = dragData?.placeId as string;
-    const sourceAreaId = dragData?.areaId as string | null;
-    const overAreaId = over.id as string;
-
-    // Si se suelta en el mismo lugar, no hacer nada
-    if (overAreaId === sourceAreaId || overAreaId === "unassigned" && !sourceAreaId) {
-      setDraggedPlace(null);
-      return;
-    }
-
-    // Persist to database
-    try {
-      if (overAreaId === "unassigned") {
-        // Eliminar solo del área específica de origen
-        if (sourceAreaId) {
-          await unassignPlace(placeId, sourceAreaId);
-          
-          // Optimistic update: remover solo del área de origen
-          setAreas((prev) =>
-            prev.map((area) =>
-              area.id === sourceAreaId
-                ? {
-                    ...area,
-                    places: area.places.filter((p) => p.id !== placeId),
-                  }
-                : area
-            )
-          );
-          
-          toast({
-            title: "Éxito",
-            description: "Lugar removido del área",
-          });
-        }
-      } else {
-        // Asignar a nueva área (sin eliminar de otras)
-        await assignPlaceToArea(placeId, overAreaId);
-        
-        // Optimistic update: agregar al área destino si no existe
-        setAreas((prev) =>
-          prev.map((area) => {
-            if (area.id === overAreaId) {
-              // Verificar si ya existe para evitar duplicados visuales
-              const exists = area.places.some((p) => p.id === placeId);
-              if (!exists) {
-                return { ...area, places: [...area.places, draggedPlace.place] };
-              }
-            }
-            return area;
-          })
-        );
-        
-        toast({
-          title: "Éxito",
-          description: "Lugar asignado al área",
-        });
-      }
-    } catch (error) {
-      console.error("Error updating assignment:", error);
-      toast({
-        title: "Error",
-        description: "No se pudo actualizar la asignación",
-        variant: "destructive",
-      });
-      // Recargar en caso de error
-      loadData();
-    }
-    
-    setDraggedPlace(null);
   }
 
   async function handleCreateArea(e: React.FormEvent) {
@@ -502,16 +309,13 @@ export default function AreasManager() {
     }
 
     try {
-      const newArea = await createArea(newAreaForm);
-      
-      // Agregar nueva área al final de las visibles
-      setVisibleAreaIds((prev) => [...prev, newArea.id]);
+      await createArea(newAreaForm);
       
       toast({
         title: "Éxito",
         description: "Área creada correctamente",
       });
-      setIsDialogOpen(false);
+      setIsCreateDialogOpen(false);
       setNewAreaForm({ nombre: "", descripcion: "", color: "#3b82f6" });
       loadData();
     } catch (error) {
@@ -525,7 +329,6 @@ export default function AreasManager() {
   }
 
   async function handleVendedoresChange(areaId: string, vendedorIds: string[]) {
-    // Optimistic update
     setAreas((prev) =>
       prev.map((area) =>
         area.id === areaId ? { ...area, vendedores: vendedorIds } : area
@@ -535,8 +338,7 @@ export default function AreasManager() {
     try {
       await setAreaVendedores(areaId, vendedorIds);
       toast({
-        title: "Éxito",
-        description: "Vendedores actualizados",
+        title: "Vendedores actualizados",
       });
     } catch (error) {
       console.error("Error updating vendedores:", error);
@@ -549,43 +351,19 @@ export default function AreasManager() {
     }
   }
 
-  function handleMinimizeArea(areaId: string) {
-    setVisibleAreaIds((prev) => prev.filter(id => id !== areaId));
-    setMinimizedAreaIds((prev) => [...prev, areaId]);
-    toast({
-      title: "Área minimizada",
-      description: "El área se ha ocultado del tablero",
-    });
-  }
-
-  function handleRestoreArea(areaId: string) {
-    setMinimizedAreaIds((prev) => prev.filter(id => id !== areaId));
-    setVisibleAreaIds((prev) => [...prev, areaId]); // Agregar al final
-    toast({
-      title: "Área restaurada",
-      description: "El área se ha restaurado al tablero",
-    });
-  }
-
   async function handleDeleteArea(areaId: string) {
     try {
-      // Delete area relationships first
       await supabase.from("areas_vendedores").delete().eq("area_id", areaId);
       await supabase.from("areas_places").delete().eq("area_id", areaId);
       
-      // Delete area
       const { error } = await supabase.from("areas").delete().eq("id", areaId);
       
       if (error) throw error;
 
-      // Update local state
       setAreas((prev) => prev.filter((area) => area.id !== areaId));
-      setVisibleAreaIds((prev) => prev.filter(id => id !== areaId));
-      setMinimizedAreaIds((prev) => prev.filter(id => id !== areaId));
 
       toast({
-        title: "Área eliminada",
-        description: "El área y sus asignaciones se han eliminado correctamente",
+        title: "Área eliminada correctamente",
       });
       
       setAreaToDelete(null);
@@ -632,7 +410,6 @@ export default function AreasManager() {
 
       if (error) throw error;
 
-      // Actualizar estado local
       setAreas((prev) =>
         prev.map((area) =>
           area.id === editingArea.id
@@ -657,15 +434,84 @@ export default function AreasManager() {
     }
   }
 
-  function filterPlaces(places: Place[]) {
-    if (!searchFilter.trim()) return places;
-    const query = searchFilter.toLowerCase();
-    return places.filter(
-      (p) =>
-        p.barrio_principal?.toLowerCase().includes(query) ||
-        p.comuna?.toLowerCase().includes(query) ||
-        p.provincia_principal?.toLowerCase().includes(query)
-    );
+  async function handleCommentsChange(areaId: string, comentarios: string) {
+    try {
+      await updateAreaComments(areaId, comentarios);
+      
+      setAreas((prev) =>
+        prev.map((area) =>
+          area.id === areaId ? { ...area, comentarios } : area
+        )
+      );
+
+      toast({
+        title: "Comentarios guardados",
+      });
+    } catch (error) {
+      console.error("Error updating comments:", error);
+      toast({
+        title: "Error",
+        description: "No se pudieron guardar los comentarios",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleAddPlaceToArea(placeId: string, areaId: string) {
+    try {
+      await assignPlaceToArea(placeId, areaId);
+      
+      const place = allPlaces.find((p) => p.id === placeId);
+      if (place) {
+        setAreas((prev) =>
+          prev.map((area) => {
+            if (area.id === areaId) {
+              const exists = area.places.some((p) => p.id === placeId);
+              if (!exists) {
+                return { ...area, places: [...area.places, place] };
+              }
+            }
+            return area;
+          })
+        );
+      }
+
+      toast({
+        title: "Barrio agregado al área",
+      });
+    } catch (error) {
+      console.error("Error adding place:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo agregar el barrio",
+        variant: "destructive",
+      });
+    }
+  }
+
+  async function handleRemovePlaceFromArea(placeId: string, areaId: string) {
+    try {
+      await unassignPlace(placeId, areaId);
+      
+      setAreas((prev) =>
+        prev.map((area) =>
+          area.id === areaId
+            ? { ...area, places: area.places.filter((p) => p.id !== placeId) }
+            : area
+        )
+      );
+
+      toast({
+        title: "Barrio removido del área",
+      });
+    } catch (error) {
+      console.error("Error removing place:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo remover el barrio",
+        variant: "destructive",
+      });
+    }
   }
 
   const vendedorOptions = profiles.map((p) => ({
@@ -673,14 +519,18 @@ export default function AreasManager() {
     value: p.id,
   }));
 
-  // Ordenar áreas visibles según visibleAreaIds
-  const visibleAreas = visibleAreaIds
-    .map(id => areas.find(a => a.id === id))
-    .filter((area): area is Area => area !== undefined);
-  
-  const hiddenAreas = minimizedAreaIds
-    .map(id => areas.find(a => a.id === id))
-    .filter((area): area is Area => area !== undefined);
+  const filteredAreas = areas.filter((area) =>
+    area.nombre.toLowerCase().includes(searchFilter.toLowerCase())
+  );
+
+  const filteredPlaces = allPlaces.filter((place) => {
+    const query = placeSearchFilter.toLowerCase();
+    return (
+      place.barrio_principal?.toLowerCase().includes(query) ||
+      place.comuna?.toLowerCase().includes(query) ||
+      place.provincia_principal?.toLowerCase().includes(query)
+    );
+  });
 
   if (loading) {
     return (
@@ -691,30 +541,203 @@ export default function AreasManager() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-6">
-      <div className="max-w-[1800px] mx-auto space-y-6">
+    <div className="min-h-screen bg-background p-4 md:p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Gestión de Áreas</h1>
-            <p className="text-muted-foreground">
-              Organiza lugares por área y asigna vendedores
-            </p>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold">Gestión de Áreas</h1>
+              <p className="text-muted-foreground">
+                Organiza barrios por área y gestiona asignaciones
+              </p>
+            </div>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Nueva Área
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Crear Nueva Área</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleCreateArea} className="space-y-4">
+
+          {/* Search */}
+          <Input
+            placeholder="Buscar áreas..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
+
+        {/* Areas List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Áreas Definidas ({filteredAreas.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {filteredAreas.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">
+                No hay áreas definidas aún
+              </p>
+            ) : (
+              <Accordion type="multiple" className="w-full">
+                {filteredAreas.map((area) => (
+                  <AccordionItem key={area.id} value={area.id}>
+                    <AccordionTrigger className="hover:no-underline">
+                      <div className="flex items-center gap-3 flex-1">
+                        <div
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: area.color || "#3b82f6" }}
+                        />
+                        <div className="flex-1 text-left">
+                          <p className="font-semibold">{area.nombre}</p>
+                          {area.descripcion && (
+                            <p className="text-sm text-muted-foreground">
+                              {area.descripcion}
+                            </p>
+                          )}
+                        </div>
+                        <Badge variant="secondary">
+                          {area.places.length} barrios
+                        </Badge>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="space-y-6 pt-4">
+                        {/* Actions */}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditingArea(area);
+                              setEditForm({
+                                nombre: area.nombre,
+                                descripcion: area.descripcion || "",
+                              });
+                            }}
+                          >
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Editar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAreaToDelete(area.id)}
+                            className="text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Eliminar
+                          </Button>
+                        </div>
+
+                        {/* Vendedores */}
+                        <div>
+                          <Label className="text-sm font-medium mb-2 block">
+                            Vendedores Asignados
+                          </Label>
+                          <MultiSelect
+                            options={vendedorOptions}
+                            selected={area.vendedores}
+                            onChange={(selected) =>
+                              handleVendedoresChange(area.id, selected)
+                            }
+                            placeholder="Seleccionar vendedores"
+                          />
+                        </div>
+
+                        {/* Places/Barrios */}
+                        <div>
+                          <Label className="text-sm font-medium mb-2 block">
+                            Barrios Asignados ({area.places.length})
+                          </Label>
+                          <div className="border rounded-lg p-4 bg-muted/20 space-y-2 max-h-[300px] overflow-y-auto">
+                            {area.places.length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-4">
+                                No hay barrios asignados
+                              </p>
+                            ) : (
+                              area.places.map((place) => (
+                                <div
+                                  key={place.id}
+                                  className="flex items-start justify-between gap-2 p-3 bg-card rounded-lg border"
+                                >
+                                  <div className="flex items-start gap-2 flex-1 min-w-0">
+                                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                      {place.barrio_principal && (
+                                        <p className="font-medium text-sm truncate">
+                                          {place.barrio_principal}
+                                        </p>
+                                      )}
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {place.comuna && (
+                                          <Badge variant="secondary" className="text-xs">
+                                            {place.comuna}
+                                          </Badge>
+                                        )}
+                                        {place.provincia_principal && (
+                                          <Badge variant="outline" className="text-xs">
+                                            {place.provincia_principal}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      handleRemovePlaceFromArea(place.id, area.id)
+                                    }
+                                    className="flex-shrink-0"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Comentarios */}
+                        <div>
+                          <Label className="text-sm font-medium mb-2 block">
+                            Comentarios del Asignador
+                          </Label>
+                          <Textarea
+                            placeholder="Agregar notas o comentarios sobre esta área..."
+                            value={area.comentarios || ""}
+                            onChange={(e) => {
+                              const newValue = e.target.value;
+                              setAreas((prev) =>
+                                prev.map((a) =>
+                                  a.id === area.id
+                                    ? { ...a, comentarios: newValue }
+                                    : a
+                                )
+                              );
+                            }}
+                            onBlur={(e) =>
+                              handleCommentsChange(area.id, e.target.value)
+                            }
+                            rows={4}
+                            className="resize-none"
+                          />
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Create New Area Section */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Crear Nueva Área</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreateArea} className="space-y-4">
+              <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="nombre">Nombre *</Label>
+                  <Label htmlFor="nombre">Nombre del Área *</Label>
                   <Input
                     id="nombre"
                     value={newAreaForm.nombre}
@@ -723,21 +746,6 @@ export default function AreasManager() {
                     }
                     placeholder="Ej: Zona Norte"
                     required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="descripcion">Descripción</Label>
-                  <Textarea
-                    id="descripcion"
-                    value={newAreaForm.descripcion}
-                    onChange={(e) =>
-                      setNewAreaForm({
-                        ...newAreaForm,
-                        descripcion: e.target.value,
-                      })
-                    }
-                    placeholder="Descripción del área"
-                    rows={3}
                   />
                 </div>
                 <div>
@@ -761,185 +769,122 @@ export default function AreasManager() {
                     />
                   </div>
                 </div>
-                <Button type="submit" className="w-full">
-                  Crear Área
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+              </div>
+              <div>
+                <Label htmlFor="descripcion">Descripción</Label>
+                <Textarea
+                  id="descripcion"
+                  value={newAreaForm.descripcion}
+                  onChange={(e) =>
+                    setNewAreaForm({
+                      ...newAreaForm,
+                      descripcion: e.target.value,
+                    })
+                  }
+                  placeholder="Descripción del área"
+                  rows={3}
+                />
+              </div>
+              <Button type="submit" className="w-full">
+                <Plus className="mr-2 h-4 w-4" />
+                Crear Área
+              </Button>
+            </form>
 
-        {/* Minimized Areas Bar */}
-        {hiddenAreas.length > 0 && (
-          <div className="bg-muted/20 rounded-xl p-4 border animate-fade-in">
-            <div className="flex items-center gap-2 mb-3">
-              <Minimize2 className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-muted-foreground">
-                Áreas minimizadas ({hiddenAreas.length})
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {hiddenAreas.map((area) => (
-                <Button
-                  key={area.id}
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleRestoreArea(area.id)}
-                  className="animate-scale-in hover-scale"
-                  style={{
-                    borderLeftWidth: "3px",
-                    borderLeftColor: area.color || undefined,
-                  }}
-                >
-                  <Maximize2 className="mr-2 h-3 w-3" />
-                  {area.nombre}
-                  <Badge variant="outline" className="ml-2">
-                    {area.places.length}
-                  </Badge>
-                </Button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Search Filter */}
-        <div className="max-w-md">
-          <Input
-            placeholder="Buscar por barrio, comuna o provincia..."
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-          />
-        </div>
-
-        {/* Drag and Drop Context */}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {/* Unassigned Column */}
-            <DroppableArea id="unassigned">
-              <Card className="w-80 flex-shrink-0">
-                <CardHeader>
-                  <CardTitle className="text-lg">Sin Área</CardTitle>
-                  <p className="text-sm text-muted-foreground">
-                    {filterPlaces(unassignedPlaces).length} lugares
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[600px] pr-4">
+            {/* Place Search and Add */}
+            <div className="mt-6 pt-6 border-t">
+              <Label className="text-sm font-medium mb-2 block">
+                Buscar y Agregar Barrios
+              </Label>
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar barrios, comunas o provincias..."
+                    value={placeSearchFilter}
+                    onChange={(e) => setPlaceSearchFilter(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                {placeSearchFilter && (
+                  <ScrollArea className="h-[200px] border rounded-lg p-2">
                     <div className="space-y-2">
-                      {filterPlaces(unassignedPlaces).map((place) => (
-                        <DraggablePlace
-                          key={`unassigned-${place.id}`}
-                          place={place}
-                          id={`unassigned-${place.id}`}
-                          areaId={undefined}
-                        />
-                      ))}
+                      {filteredPlaces.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          No se encontraron barrios
+                        </p>
+                      ) : (
+                        filteredPlaces.map((place) => (
+                          <div
+                            key={place.id}
+                            className="flex items-center justify-between p-2 hover:bg-muted rounded"
+                          >
+                            <div className="flex items-start gap-2 flex-1 min-w-0">
+                              <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                {place.barrio_principal && (
+                                  <p className="font-medium text-sm truncate">
+                                    {place.barrio_principal}
+                                  </p>
+                                )}
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {place.comuna && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      {place.comuna}
+                                    </Badge>
+                                  )}
+                                  {place.provincia_principal && (
+                                    <Badge variant="outline" className="text-xs">
+                                      {place.provincia_principal}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>
+                                    Agregar a Área
+                                  </DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-2">
+                                  {areas.map((area) => (
+                                    <Button
+                                      key={area.id}
+                                      variant="outline"
+                                      className="w-full justify-start"
+                                      onClick={() =>
+                                        handleAddPlaceToArea(place.id, area.id)
+                                      }
+                                    >
+                                      <div
+                                        className="w-3 h-3 rounded-full mr-2"
+                                        style={{
+                                          backgroundColor: area.color || "#3b82f6",
+                                        }}
+                                      />
+                                      {area.nombre}
+                                    </Button>
+                                  ))}
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </ScrollArea>
-                </CardContent>
-              </Card>
-            </DroppableArea>
-
-            {/* Area Columns */}
-            {visibleAreas.map((area) => (
-              <DroppableArea key={area.id} id={area.id}>
-                <Card
-                  className="w-80 flex-shrink-0 animate-fade-in"
-                  style={{ borderTopColor: area.color || undefined, borderTopWidth: "4px" }}
-                >
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-lg">{area.nombre}</CardTitle>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditingArea(area);
-                              setEditForm({ 
-                                nombre: area.nombre, 
-                                descripcion: area.descripcion || "" 
-                              });
-                            }}
-                            className="h-6 w-6 hover:bg-muted"
-                            title="Editar área"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        {area.descripcion && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            {area.descripcion}
-                          </p>
-                        )}
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {filterPlaces(area.places).length} lugares
-                        </p>
-                      </div>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleMinimizeArea(area.id)}
-                          className="h-8 w-8 hover:bg-muted"
-                          title="Minimizar área"
-                        >
-                          <Minimize2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setAreaToDelete(area.id)}
-                          className="h-8 w-8 hover:bg-destructive/10 hover:text-destructive"
-                          title="Eliminar área"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <Label className="text-xs text-muted-foreground mb-2">
-                        Vendedores asignados
-                      </Label>
-                      <MultiSelect
-                        options={vendedorOptions}
-                        selected={area.vendedores}
-                        onChange={(selected) =>
-                          handleVendedoresChange(area.id, selected)
-                        }
-                        placeholder="Seleccionar vendedores"
-                      />
-                    </div>
-                    <ScrollArea className="h-[500px] pr-4">
-                      <div className="space-y-2">
-                        {filterPlaces(area.places).map((place) => (
-                          <DraggablePlace
-                            key={`${area.id}-${place.id}`}
-                            place={place}
-                            id={`${area.id}-${place.id}`}
-                            areaId={area.id}
-                          />
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              </DroppableArea>
-            ))}
-          </div>
-
-          <DragOverlay>
-            {draggedPlace ? <PlaceItem place={draggedPlace.place} /> : null}
-          </DragOverlay>
-        </DndContext>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Edit Area Dialog */}
         <Dialog open={!!editingArea} onOpenChange={(open) => !open && setEditingArea(null)}>
@@ -990,7 +935,6 @@ export default function AreasManager() {
               <AlertDialogTitle>¿Eliminar área?</AlertDialogTitle>
               <AlertDialogDescription>
                 Esta acción eliminará el área y todas sus asignaciones de lugares y vendedores.
-                Los lugares volverán a estar disponibles en "Sin Área".
                 Esta acción no se puede deshacer.
               </AlertDialogDescription>
             </AlertDialogHeader>
