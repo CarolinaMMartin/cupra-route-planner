@@ -528,6 +528,7 @@ export type Database = {
           etiquetas: string[] | null
           factores_ia: Json | null
           first_purchase_at: string | null
+          google_maps_link: string | null
           id: string
           justificacion: string | null
           last_purchase_at: string | null
@@ -576,6 +577,7 @@ export type Database = {
           etiquetas?: string[] | null
           factores_ia?: Json | null
           first_purchase_at?: string | null
+          google_maps_link?: string | null
           id?: string
           justificacion?: string | null
           last_purchase_at?: string | null
@@ -624,6 +626,7 @@ export type Database = {
           etiquetas?: string[] | null
           factores_ia?: Json | null
           first_purchase_at?: string | null
+          google_maps_link?: string | null
           id?: string
           justificacion?: string | null
           last_purchase_at?: string | null
