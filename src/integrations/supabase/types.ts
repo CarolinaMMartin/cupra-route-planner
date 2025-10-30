@@ -244,26 +244,35 @@ export type Database = {
       }
       cliente_feedbacks: {
         Row: {
+          actualizar_etiqueta_wa: string | null
           client_id: string
           created_at: string
           feedback: string
           id: string
+          motivo_no_visita: string | null
+          tipo_interaccion: string | null
           vendedor_id: string
           visita_realizada: boolean
         }
         Insert: {
+          actualizar_etiqueta_wa?: string | null
           client_id: string
           created_at?: string
           feedback: string
           id?: string
+          motivo_no_visita?: string | null
+          tipo_interaccion?: string | null
           vendedor_id: string
           visita_realizada?: boolean
         }
         Update: {
+          actualizar_etiqueta_wa?: string | null
           client_id?: string
           created_at?: string
           feedback?: string
           id?: string
+          motivo_no_visita?: string | null
+          tipo_interaccion?: string | null
           vendedor_id?: string
           visita_realizada?: boolean
         }

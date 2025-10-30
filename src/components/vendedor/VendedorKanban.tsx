@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface ClienteAsignado {
   id: string;
@@ -105,6 +106,9 @@ const VendedorKanban = () => {
   const [feedback, setFeedback] = useState("");
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
   const [visitaRealizada, setVisitaRealizada] = useState(false);
+  const [motivoNoVisita, setMotivoNoVisita] = useState("");
+  const [tipoInteraccion, setTipoInteraccion] = useState("");
+  const [actualizarEtiquetaWa, setActualizarEtiquetaWa] = useState("");
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -337,7 +341,34 @@ const VendedorKanban = () => {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Por favor ingrese un feedback",
+        description: "Por favor ingrese un comentario",
+      });
+      return;
+    }
+
+    if (feedback.length > 400) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "El comentario no puede exceder 400 caracteres",
+      });
+      return;
+    }
+
+    if (!visitaRealizada && !motivoNoVisita) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Por favor seleccione el motivo de la no visita",
+      });
+      return;
+    }
+
+    if (visitaRealizada && !tipoInteraccion) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Por favor seleccione el tipo de interacción",
       });
       return;
     }
@@ -347,7 +378,7 @@ const VendedorKanban = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
-      // Guardar feedback con visita_realizada
+      // Guardar feedback con todos los campos
       const { error: feedbackError } = await supabase
         .from('cliente_feedbacks')
         .insert({
@@ -355,6 +386,9 @@ const VendedorKanban = () => {
           vendedor_id: user.id,
           feedback: feedback.trim(),
           visita_realizada: visitaRealizada,
+          motivo_no_visita: !visitaRealizada ? motivoNoVisita : null,
+          tipo_interaccion: visitaRealizada ? tipoInteraccion : null,
+          actualizar_etiqueta_wa: actualizarEtiquetaWa || null,
         });
 
       if (feedbackError) throw feedbackError;
@@ -402,6 +436,9 @@ const VendedorKanban = () => {
       setShowFeedbackDialog(false);
       setFeedback("");
       setVisitaRealizada(false);
+      setMotivoNoVisita("");
+      setTipoInteraccion("");
+      setActualizarEtiquetaWa("");
       setSelectedCliente(null);
     } catch (error) {
       console.error('Error saving feedback:', error);
@@ -788,38 +825,91 @@ const VendedorKanban = () => {
           </DialogHeader>
           
           <div className="space-y-4">
-            <Textarea
-              placeholder="Ingrese sus notas sobre la visita al cliente..."
-              value={feedback}
-              onChange={(e) => setFeedback(e.target.value)}
-              rows={6}
-            />
-            
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Visita realizada:</label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="visita"
-                    checked={visitaRealizada === true}
-                    onChange={() => setVisitaRealizada(true)}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-sm">Sí</span>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="visitaRealizada"
+                checked={visitaRealizada}
+                onCheckedChange={(checked) => setVisitaRealizada(checked === true)}
+              />
+              <label
+                htmlFor="visitaRealizada"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Visita realizada: ☐ Sí / ☐ No
+              </label>
+            </div>
+
+            {!visitaRealizada && (
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Motivo de la No Visita
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="visita"
-                    checked={visitaRealizada === false}
-                    onChange={() => setVisitaRealizada(false)}
-                    className="w-4 h-4"
-                  />
-                  <span className="text-sm">No</span>
-                </label>
+                <select
+                  value={motivoNoVisita}
+                  onChange={(e) => setMotivoNoVisita(e.target.value)}
+                  className="w-full p-2 border rounded-md bg-background"
+                >
+                  <option value="">Seleccione un motivo...</option>
+                  <option value="Local Cerrado / Fuera de Horario">Local Cerrado / Fuera de Horario</option>
+                  <option value="No se encontraba el Contacto/Decisor">No se encontraba el Contacto/Decisor</option>
+                  <option value="Rechazo de visita">Rechazo de visita</option>
+                  <option value="Falta de tiempo (Vendedor)">Falta de tiempo (Vendedor)</option>
+                  <option value="Otro (ver notas)">Otro (ver notas)</option>
+                </select>
               </div>
-              <p className="text-xs text-muted-foreground">
+            )}
+
+            {visitaRealizada && (
+              <div>
+                <label className="text-sm font-medium mb-2 block">
+                  Propósito Principal
+                </label>
+                <select
+                  value={tipoInteraccion}
+                  onChange={(e) => setTipoInteraccion(e.target.value)}
+                  className="w-full p-2 border rounded-md bg-background"
+                >
+                  <option value="">Seleccione el propósito...</option>
+                  <option value="Seguimiento / Rutina">Seguimiento / Rutina</option>
+                  <option value="Asesoramiento (Carta / Exhibición)">Asesoramiento (Carta / Exhibición)</option>
+                  <option value="Gestión de Activación (Degustación / Capacitación)">Gestión de Activación (Degustación / Capacitación)</option>
+                  <option value="Presentación de Muestras">Presentación de Muestras</option>
+                  <option value="Gestión de Problemas (Entrega / Cobranza)">Gestión de Problemas (Entrega / Cobranza)</option>
+                  <option value="Prospección (Visita inicial)">Prospección (Visita inicial)</option>
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">
+                Actualizar Etiqueta (WhatsApp)
+              </label>
+              <select
+                value={actualizarEtiquetaWa}
+                onChange={(e) => setActualizarEtiquetaWa(e.target.value)}
+                className="w-full p-2 border rounded-md bg-background"
+              >
+                <option value="">(No cambiar)</option>
+                <option value="Nuevo Pedido">Nuevo Pedido</option>
+                <option value="Pago Pendiente">Pago Pendiente</option>
+                <option value="Importante (Seguimiento)">Importante (Seguimiento)</option>
+                <option value="Cliente Potencial">Cliente Potencial</option>
+                <option value="Cliente Perdido">Cliente Perdido</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">
+                Comentarios de la visita ({feedback.length}/400)
+              </label>
+              <Textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="Ingrese sus comentarios sobre la visita..."
+                className="min-h-[100px]"
+                maxLength={400}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
                 {visitaRealizada 
                   ? "El cliente será recomendado nuevamente en 15 días"
                   : "El cliente será recomendado nuevamente mañana"}
@@ -833,6 +923,9 @@ const VendedorKanban = () => {
                   setShowFeedbackDialog(false);
                   setFeedback("");
                   setVisitaRealizada(false);
+                  setMotivoNoVisita("");
+                  setTipoInteraccion("");
+                  setActualizarEtiquetaWa("");
                 }}
                 disabled={isSavingFeedback}
               >
