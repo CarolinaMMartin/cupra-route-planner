@@ -14,6 +14,14 @@ interface Vendedor {
   nombre: string;
   email: string;
 }
+
+interface Area {
+  id: string;
+  nombre: string;
+  vendedores: string[];
+  barrios: string[];
+}
+
 interface FilterPanelProps {
   onRequestRecommendations: (filters: any, selectedVendedoresData: { ids: string[], nombres: string[] }, placesFilters: any) => void;
   isLoading: boolean;
@@ -31,6 +39,9 @@ const FilterPanel = ({
   const [selectedComuna, setSelectedComuna] = useState<string[]>([]);
   const [selectedBarrio, setSelectedBarrio] = useState<string[]>([]);
   const [selectedProvincia, setSelectedProvincia] = useState<string>('all');
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [selectedArea, setSelectedArea] = useState<string>('none');
+  const [isLoadingAreas, setIsLoadingAreas] = useState(true);
   const {
     toast
   } = useToast();
@@ -76,10 +87,32 @@ const FilterPanel = ({
     setSelectedBarrio([]);
   };
 
+  const handleAreaChange = (areaId: string) => {
+    setSelectedArea(areaId);
+    
+    if (areaId === 'none') {
+      // Limpiar selecciones
+      return;
+    }
+
+    const area = areas.find(a => a.id === areaId);
+    if (!area) return;
+
+    // Llenar automáticamente los filtros con el contenido del área
+    setSelectedVendedores(area.vendedores);
+    setSelectedBarrio(area.barrios);
+    
+    toast({
+      title: "Área seleccionada",
+      description: `Se han cargado ${area.vendedores.length} vendedores y ${area.barrios.length} barrios del área "${area.nombre}"`
+    });
+  };
+
   const handleClearFilters = () => {
     setSelectedProvincia('all');
     setSelectedComuna([]);
     setSelectedBarrio([]);
+    setSelectedArea('none');
   };
 
   const hasActiveFilters = 
@@ -88,7 +121,71 @@ const FilterPanel = ({
     selectedBarrio.length > 0;
   useEffect(() => {
     fetchVendedores();
+    fetchAreas();
   }, []);
+
+  const fetchAreas = async () => {
+    setIsLoadingAreas(true);
+    try {
+      // Obtener áreas con sus relaciones
+      const { data: areasData, error: areasError } = await supabase
+        .from('areas')
+        .select('id, nombre');
+
+      if (areasError) throw areasError;
+
+      // Para cada área, obtener sus vendedores y barrios
+      const areasWithRelations = await Promise.all(
+        (areasData || []).map(async (area) => {
+          // Obtener vendedores del área
+          const { data: vendedoresData } = await supabase
+            .from('areas_vendedores')
+            .select('vendedor_id')
+            .eq('area_id', area.id);
+
+          // Obtener places (barrios) del área
+          const { data: placesData } = await supabase
+            .from('areas_places')
+            .select('place_id')
+            .eq('area_id', area.id);
+
+          // Obtener los barrios de los places
+          const placeIds = (placesData || []).map(p => p.place_id);
+          const barrios: string[] = [];
+          
+          if (placeIds.length > 0) {
+            const { data: barriosData } = await supabase
+              .from('places')
+              .select('barrio_principal')
+              .in('id', placeIds);
+            
+            (barriosData || []).forEach(p => {
+              if (p.barrio_principal) barrios.push(p.barrio_principal);
+            });
+          }
+
+          return {
+            id: area.id,
+            nombre: area.nombre,
+            vendedores: (vendedoresData || []).map(v => v.vendedor_id),
+            barrios: barrios
+          };
+        })
+      );
+
+      setAreas(areasWithRelations);
+    } catch (error) {
+      console.error('Error fetching areas:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al cargar áreas"
+      });
+    } finally {
+      setIsLoadingAreas(false);
+    }
+  };
+
   const fetchVendedores = async () => {
     setIsLoadingVendedores(true);
     try {
@@ -154,6 +251,35 @@ const FilterPanel = ({
     });
   };
   return <form onSubmit={handleSubmit} className="space-y-6">
+      <Card className="p-4 bg-accent/10 border-accent">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-5 h-5 text-accent" />
+            <h3 className="font-semibold">Filtro Rápido por Área</h3>
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="area-filter">Seleccionar Área</Label>
+            <Select value={selectedArea} onValueChange={handleAreaChange} disabled={isLoadingAreas}>
+              <SelectTrigger id="area-filter" className="bg-background">
+                <SelectValue placeholder="Selecciona un área" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="none">Sin área seleccionada</SelectItem>
+                {areas.map((area) => (
+                  <SelectItem key={area.id} value={area.id}>
+                    {area.nombre} ({area.vendedores.length} vendedores, {area.barrios.length} barrios)
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Al seleccionar un área, se cargarán automáticamente sus vendedores y barrios
+            </p>
+          </div>
+        </div>
+      </Card>
+
       <Card className="p-4 bg-muted/50">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
