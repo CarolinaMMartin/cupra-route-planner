@@ -273,15 +273,31 @@ Considera scores comerciales, recencia, proximidad geográfica y potencial de ve
     }
 
     const aiData = await aiResponse.json();
-    console.log('✅ Respuesta de IA recibida');
+    console.log('✅ Respuesta de IA recibida:', JSON.stringify(aiData).substring(0, 200));
 
     // 6. Extraer recomendaciones del tool call
     const toolCall = aiData.choices[0]?.message?.tool_calls?.[0];
     if (!toolCall) {
+      console.error('❌ Estructura de respuesta IA:', JSON.stringify(aiData));
       throw new Error('No se recibió tool call de la IA');
     }
 
-    const aiRecommendations = JSON.parse(toolCall.function.arguments);
+    console.log('🔧 Tool call arguments:', toolCall.function.arguments?.substring(0, 100));
+    
+    if (!toolCall.function.arguments || toolCall.function.arguments.trim() === '') {
+      console.error('❌ Arguments vacíos. Tool call completo:', JSON.stringify(toolCall));
+      throw new Error('La IA no devolvió argumentos válidos');
+    }
+
+    let aiRecommendations;
+    try {
+      aiRecommendations = JSON.parse(toolCall.function.arguments);
+    } catch (parseError) {
+      console.error('❌ Error parseando arguments:', parseError);
+      console.error('Arguments recibidos:', toolCall.function.arguments);
+      const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+      throw new Error(`Error parseando respuesta de IA: ${errorMsg}`);
+    }
     console.log(`🎯 IA generó ${aiRecommendations.recomendaciones.length} recomendaciones`);
 
     // 7. Enriquecer con datos completos de clientes
