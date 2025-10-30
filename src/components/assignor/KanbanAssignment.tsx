@@ -40,7 +40,7 @@ const KanbanAssignment = ({
 }: KanbanAssignmentProps) => {
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [assignments, setAssignments] = useState<Record<string, string[]>>({
-    unassigned: selectedRecommendations.map((r) => r.id),
+    unassigned: [],
   });
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -60,13 +60,12 @@ const KanbanAssignment = ({
 
   const fetchVendedores = async () => {
     try {
-      // Obtener solo los vendedores seleccionados por el asignador
+      // Obtener TODOS los vendedores activos registrados
       const { data, error } = await supabase
         .from("profiles")
         .select("user_id, nombre, email")
         .eq("rol", "vendedor")
-        .eq("activo", true)
-        .in("user_id", selectedVendedoresIds);
+        .eq("activo", true);
 
       if (error) throw error;
 
@@ -78,25 +77,60 @@ const KanbanAssignment = ({
 
       setVendedores(mappedVendedores);
 
-      // Inicializar columnas de vendedores vacías
-      const vendedorColumns = mappedVendedores.reduce(
-        (acc, v) => {
-          acc[v.id] = [];
-          return acc;
-        },
-        {} as Record<string, string[]>,
-      );
+      // Crear un mapa de nombres a IDs de vendedores (normalizado para comparación)
+      const nombreToIdMap = new Map<string, string>();
+      mappedVendedores.forEach((v) => {
+        nombreToIdMap.set(v.nombre.toUpperCase().trim(), v.id);
+      });
 
-      setAssignments((prev) => ({
-        ...prev,
-        ...vendedorColumns,
-      }));
+      // Inicializar asignaciones: pre-asignar clientes a sus vendedores
+      const newAssignments: Record<string, string[]> = {
+        unassigned: [],
+      };
+
+      // Inicializar columnas de vendedores
+      mappedVendedores.forEach((v) => {
+        newAssignments[v.id] = [];
+      });
+
+      // Pre-asignar cada cliente según sus vendedores
+      selectedRecommendations.forEach((rec) => {
+        let assigned = false;
+
+        // Intentar asignar por vendedor_principal primero
+        if (rec.vendedor_principal) {
+          const vendedorId = nombreToIdMap.get(rec.vendedor_principal.toUpperCase().trim());
+          if (vendedorId && newAssignments[vendedorId]) {
+            newAssignments[vendedorId].push(rec.id);
+            assigned = true;
+          }
+        }
+
+        // Si no se asignó, intentar con el array de vendedores
+        if (!assigned && rec.vendedores && Array.isArray(rec.vendedores) && rec.vendedores.length > 0) {
+          for (const vendedorNombre of rec.vendedores) {
+            const vendedorId = nombreToIdMap.get(vendedorNombre.toUpperCase().trim());
+            if (vendedorId && newAssignments[vendedorId]) {
+              newAssignments[vendedorId].push(rec.id);
+              assigned = true;
+              break;
+            }
+          }
+        }
+
+        // Si no se pudo asignar, va a "Sin asignar"
+        if (!assigned) {
+          newAssignments.unassigned.push(rec.id);
+        }
+      });
+
+      setAssignments(newAssignments);
     } catch (error) {
       console.error("Error fetching vendedores:", error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Error al cargar vendedores seleccionados",
+        description: "Error al cargar vendedores",
       });
     }
   };
