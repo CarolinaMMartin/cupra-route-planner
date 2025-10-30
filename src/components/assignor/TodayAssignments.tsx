@@ -3,8 +3,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Calendar, Edit } from "lucide-react";
+import { Users, Calendar, Edit, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Assignment {
   id: string;
@@ -47,6 +58,7 @@ interface TodayAssignmentsProps {
 const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -120,6 +132,42 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
     }
   };
 
+  const handleDeleteAllAssignments = async () => {
+    setIsDeleting(true);
+    try {
+      // Calcular el inicio del día en UTC
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      const day = today.getDate();
+      const startOfDay = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+
+      const { error } = await supabase
+        .from('asignaciones_vendedores_clientes')
+        .delete()
+        .gte('created_at', startOfDay.toISOString());
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Asignaciones eliminadas",
+        description: `Se eliminaron todas las asignaciones de hoy (${assignments.length} clientes)`,
+      });
+
+      // Actualizar la lista
+      setAssignments([]);
+    } catch (error) {
+      console.error('Error deleting assignments:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al eliminar las asignaciones",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Agrupar asignaciones por vendedor
   const assignmentsByVendedor = assignments.reduce((acc, assignment) => {
     const vendedorNombre = assignment.vendedor?.nombre || 'Vendedor desconocido';
@@ -170,12 +218,37 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
               Total: {assignments.length} cliente{assignments.length !== 1 ? 's' : ''} asignado{assignments.length !== 1 ? 's' : ''}
             </CardDescription>
           </div>
-          {onEditAssignments && (
-            <Button onClick={onEditAssignments} variant="outline" className="gap-2">
-              <Edit className="w-4 h-4" />
-              Modificar asignaciones
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {onEditAssignments && (
+              <Button onClick={onEditAssignments} variant="outline" className="gap-2">
+                <Edit className="w-4 h-4" />
+                Modificar asignaciones
+              </Button>
+            )}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="gap-2" disabled={isDeleting}>
+                  <Trash2 className="w-4 h-4" />
+                  Borrar todas
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta acción eliminará todas las asignaciones de hoy ({assignments.length} cliente{assignments.length !== 1 ? 's' : ''}).
+                    Esta acción no se puede deshacer.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteAllAssignments}>
+                    Eliminar todo
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
