@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Calendar } from "lucide-react";
+import { Users, Calendar, Edit } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Assignment {
   id: string;
@@ -39,7 +40,11 @@ interface Assignment {
   };
 }
 
-const TodayAssignments = () => {
+interface TodayAssignmentsProps {
+  onEditAssignments?: () => void;
+}
+
+const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -147,13 +152,23 @@ const TodayAssignments = () => {
   return (
     <Card className="shadow-medium">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-accent" />
-          Asignaciones de hoy
-        </CardTitle>
-        <CardDescription>
-          Total: {assignments.length} cliente{assignments.length !== 1 ? 's' : ''} asignado{assignments.length !== 1 ? 's' : ''}
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-accent" />
+              Asignaciones de hoy
+            </CardTitle>
+            <CardDescription>
+              Total: {assignments.length} cliente{assignments.length !== 1 ? 's' : ''} asignado{assignments.length !== 1 ? 's' : ''}
+            </CardDescription>
+          </div>
+          {onEditAssignments && (
+            <Button onClick={onEditAssignments} variant="outline" className="gap-2">
+              <Edit className="w-4 h-4" />
+              Modificar asignaciones
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {Object.entries(assignmentsByVendedor).map(([vendedorNombre, data]) => (

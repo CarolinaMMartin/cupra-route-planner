@@ -12,10 +12,12 @@ import RecommendationFilters from "./assignor/RecommendationFilters";
 import TodayAssignments from "./assignor/TodayAssignments";
 import AIInsightsCard from "./assignor/AIInsightsCard";
 import AutoAssignByZoneDialog from "./assignor/AutoAssignByZoneDialog";
+import AssignmentsSelector from "./assignor/AssignmentsSelector";
+import EditAssignmentsKanban from "./assignor/EditAssignmentsKanban";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 
-type FlowStep = "recommendations" | "preselection" | "assignment";
+type FlowStep = "recommendations" | "preselection" | "assignment" | "edit-select" | "edit-kanban";
 
 const AssignorDashboard = () => {
   const [flowStep, setFlowStep] = useState<FlowStep>("recommendations");
@@ -53,6 +55,7 @@ const AssignorDashboard = () => {
 
   const [aiInsights, setAiInsights] = useState<any>(null);
   const [vendedoresData, setVendedoresData] = useState<Array<{ id: string; nombre: string }>>([]);
+  const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
 
   const handleRequestRecommendations = async (
     filters: any,
@@ -217,6 +220,28 @@ const AssignorDashboard = () => {
     handleBackToRecommendations();
   };
 
+  const handleEditAssignments = () => {
+    setFlowStep("edit-select");
+  };
+
+  const handleContinueToEditKanban = (assignments: any[]) => {
+    setSelectedExistingAssignments(assignments);
+    setFlowStep("edit-kanban");
+  };
+
+  const handleBackFromEditKanban = () => {
+    setFlowStep("edit-select");
+  };
+
+  const handleEditComplete = () => {
+    setFlowStep("recommendations");
+    setSelectedExistingAssignments([]);
+    toast({
+      title: "Modificaciones guardadas",
+      description: "Las asignaciones se han actualizado correctamente",
+    });
+  };
+
   const handleClearFilters = () => {
     setSelectedCiudad("all");
     setSelectedProvincia("all");
@@ -327,8 +352,39 @@ const AssignorDashboard = () => {
             </CardContent>
           </Card>
 
-          <TodayAssignments />
+          <TodayAssignments onEditAssignments={handleEditAssignments} />
         </>
+      )}
+
+      {flowStep === "edit-select" && (
+        <Card className="shadow-medium">
+          <CardHeader>
+            <CardTitle>Modificar Asignaciones Existentes</CardTitle>
+            <CardDescription>Selecciona las asignaciones que deseas modificar</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AssignmentsSelector
+              onContinue={handleContinueToEditKanban}
+              onBack={handleBackToRecommendations}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {flowStep === "edit-kanban" && (
+        <Card className="shadow-medium">
+          <CardHeader>
+            <CardTitle>Reasignar Clientes</CardTitle>
+            <CardDescription>Arrastra los clientes entre vendedores para modificar asignaciones</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EditAssignmentsKanban
+              selectedAssignments={selectedExistingAssignments}
+              onBack={handleBackFromEditKanban}
+              onComplete={handleEditComplete}
+            />
+          </CardContent>
+        </Card>
       )}
 
       {flowStep === "preselection" && recommendations.length > 0 && (
