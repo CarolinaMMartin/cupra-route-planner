@@ -232,7 +232,15 @@ export type Database = {
           provincia_principal?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "client_places_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["client_id"]
+          },
+        ]
       }
       cliente_feedbacks: {
         Row: {
