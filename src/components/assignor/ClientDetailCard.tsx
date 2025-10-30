@@ -160,6 +160,20 @@ const ClientDetailCard = ({
             )}
           </div>
 
+          {/* Link a Google Maps */}
+          {cliente.google_maps_link && (
+            <a 
+              href={cliente.google_maps_link} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MapPin className="w-4 h-4" />
+              <span className="font-medium">📍 Ver ubicación en Google Maps</span>
+            </a>
+          )}
+
           {/* Justificación IA */}
           {cliente.ai_reasoning && (
             <div className="bg-gradient-to-r from-primary/10 to-secondary/10 p-3 rounded-md border border-primary/20">

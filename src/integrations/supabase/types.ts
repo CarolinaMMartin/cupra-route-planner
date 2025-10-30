@@ -186,6 +186,54 @@ export type Database = {
           },
         ]
       }
+      client_places: {
+        Row: {
+          barrio_principal: string | null
+          client_id: string
+          comuna: string | null
+          created_at: string | null
+          direccion_principal: string
+          google_maps_link: string | null
+          id: string
+          is_primary: boolean | null
+          lat: number
+          long: number
+          place_id: string | null
+          provincia_principal: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          barrio_principal?: string | null
+          client_id: string
+          comuna?: string | null
+          created_at?: string | null
+          direccion_principal: string
+          google_maps_link?: string | null
+          id?: string
+          is_primary?: boolean | null
+          lat: number
+          long: number
+          place_id?: string | null
+          provincia_principal?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          barrio_principal?: string | null
+          client_id?: string
+          comuna?: string | null
+          created_at?: string | null
+          direccion_principal?: string
+          google_maps_link?: string | null
+          id?: string
+          is_primary?: boolean | null
+          lat?: number
+          long?: number
+          place_id?: string | null
+          provincia_principal?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       cliente_feedbacks: {
         Row: {
           client_id: string

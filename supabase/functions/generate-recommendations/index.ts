@@ -5,12 +5,24 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Función para calcular distancia Haversine entre dos puntos (en km)
+function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Radio de la Tierra en km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
 const RECOMMENDATION_SYSTEM_PROMPT = `Eres un sistema experto en optimización de visitas comerciales para vendedores de vinos premium (marca CUPRA).
 
 CONTEXTO DEL NEGOCIO:
 - Vendemos vinos en canales ON_TRADE (restaurantes, bares) y OFF_TRADE (vinotecas, retailers)
 - Los clientes TOP_10 representan el 80% del volumen
-- La proximidad geográfica es crítica para eficiencia de rutas
+- La proximidad geográfica es crítica para eficiencia de rutas (usamos coordenadas reales)
 - Los vendedores deben mantener contacto regular (ideal: cada 30-45 días)
 
 TU TAREA:
@@ -26,10 +38,12 @@ CRITERIOS DE SCORING:
    - > 90 días: 60 pts (riesgo de pérdida)
    - < 30 días: 40 pts (puede esperar)
 
-3. Proximidad Geográfica (20%):
-   - Mismo barrio que otros clientes: +30 pts
-   - Misma ciudad: +20 pts
-   - Misma provincia: +10 pts
+3. Proximidad Geográfica (20%) - BASADO EN DISTANCIA REAL:
+   - < 5 km de otros clientes del vendedor: 100 pts
+   - 5-10 km: 80 pts
+   - 10-20 km: 50 pts
+   - > 20 km: 20 pts
+   NOTA: Todos los clientes tienen coordenadas reales (lat/long) validadas
 
 4. Potencial de Venta (10%):
    - Ticket promedio > $500k: 100 pts
@@ -38,7 +52,7 @@ CRITERIOS DE SCORING:
 
 REGLAS DE DISTRIBUCIÓN:
 - Distribuir equitativamente entre vendedores
-- Priorizar agrupar clientes geográficamente cercanos
+- PRIORIZAR agrupar clientes geográficamente cercanos usando distancias reales
 - Si un cliente tiene "vendedor_principal", darle bonus +20 pts a ese vendedor
 - No duplicar asignaciones del mismo cliente
 
@@ -100,23 +114,30 @@ Deno.serve(async (req) => {
 
     if (vendedoresError) throw vendedoresError;
 
-    // 3. Construir query de clientes con filtros (más flexible)
+    // 3. Construir query de clientes con filtros + JOIN con client_places para coordenadas
     let clientesQuery = supabaseClient
       .from('clientes')
-      .select('*')
+      .select(`
+        *,
+        client_places!inner(
+          lat, long, barrio_principal, comuna, 
+          provincia_principal, google_maps_link, direccion_principal
+        )
+      `)
+      .eq('client_places.is_primary', true)
       .not('monto_total_historico', 'is', null)
       .order('monto_total_historico', { ascending: false })
       .limit(200);
 
-    // Aplicar filtro de provincia (case-insensitive)
+    // Aplicar filtro de provincia (case-insensitive) en client_places
     if (provincia && provincia !== 'all') {
-      clientesQuery = clientesQuery.ilike('provincia_principal', `%${provincia}%`);
+      clientesQuery = clientesQuery.ilike('client_places.provincia_principal', `%${provincia}%`);
     }
     
-    // Aplicar filtro de barrios (case-insensitive, coincidencias parciales)
+    // Aplicar filtro de barrios (case-insensitive, coincidencias parciales) en client_places
     if (barriosFinales.length > 0) {
       // Crear condiciones OR para cada barrio
-      const barriosConditions = barriosFinales.map((b: string) => `barrio_principal.ilike.%${b}%`).join(',');
+      const barriosConditions = barriosFinales.map((b: string) => `client_places.barrio_principal.ilike.%${b}%`).join(',');
       clientesQuery = clientesQuery.or(barriosConditions);
     }
 
@@ -131,13 +152,20 @@ Deno.serve(async (req) => {
       
       const fallbackQuery = supabaseClient
         .from('clientes')
-        .select('*')
+        .select(`
+          *,
+          client_places!inner(
+            lat, long, barrio_principal, comuna, 
+            provincia_principal, google_maps_link, direccion_principal
+          )
+        `)
+        .eq('client_places.is_primary', true)
         .not('monto_total_historico', 'is', null)
         .order('monto_total_historico', { ascending: false })
         .limit(100);
       
       if (provincia && provincia !== 'all') {
-        fallbackQuery.ilike('provincia_principal', `%${provincia}%`);
+        fallbackQuery.ilike('client_places.provincia_principal', `%${provincia}%`);
       }
       
       const { data: clientesFallback, error: errorFallback } = await fallbackQuery;
@@ -169,21 +197,27 @@ Deno.serve(async (req) => {
       email: v.email
     })) || [];
 
-    const clientesContext = clientes.slice(0, 100).map(c => ({
-      client_id: c.client_id,
-      razon_social: c.razon_social,
-      categoria_volumen: c.categoria_volumen,
-      categoria_recencia: c.categoria_recencia,
-      dias_desde_ultima_compra: c.dias_desde_ultima_compra,
-      ticket_promedio: c.ticket_promedio,
-      barrio: c.barrio_principal,
-      ciudad: c.ciudad_principa,
-      provincia: c.provincia_principal,
-      vendedor_principal: c.vendedor_principal,
-      score_volumen: c.score_volumen,
-      score_recencia: c.score_recencia,
-      score_comercial: c.score_comercial
-    }));
+    const clientesContext = clientes.slice(0, 100).map(c => {
+      const place = Array.isArray(c.client_places) ? c.client_places[0] : c.client_places;
+      return {
+        client_id: c.client_id,
+        razon_social: c.razon_social,
+        categoria_volumen: c.categoria_volumen,
+        categoria_recencia: c.categoria_recencia,
+        dias_desde_ultima_compra: c.dias_desde_ultima_compra,
+        ticket_promedio: c.ticket_promedio,
+        barrio: place?.barrio_principal || c.barrio_principal,
+        ciudad: c.ciudad_principa,
+        provincia: place?.provincia_principal || c.provincia_principal,
+        vendedor_principal: c.vendedor_principal,
+        score_volumen: c.score_volumen,
+        score_recencia: c.score_recencia,
+        score_comercial: c.score_comercial,
+        lat: place?.lat,
+        long: place?.long,
+        direccion: place?.direccion_principal
+      };
+    });
 
     const prompt = `
 VENDEDORES DISPONIBLES:
@@ -308,6 +342,11 @@ Considera scores comerciales, recencia, proximidad geográfica y potencial de ve
       const clienteCompleto = clientes.find(c => c.client_id === rec.client_id);
       if (!clienteCompleto) continue;
 
+      // Extraer datos de client_places
+      const place = Array.isArray(clienteCompleto.client_places) 
+        ? clienteCompleto.client_places[0] 
+        : clienteCompleto.client_places;
+
       enrichedRecommendations.push({
         request_id,
         client_id: rec.client_id,
@@ -336,10 +375,12 @@ Considera scores comerciales, recencia, proximidad geográfica y potencial de ve
         score_recencia: clienteCompleto.categoria_recencia,
         score_comercial: clienteCompleto.score_comercial,
         
-        // Ubicación
+        // Ubicación con datos de client_places
         ciudades: clienteCompleto.todas_ciudades || [clienteCompleto.ciudad_principa],
-        provincias: [clienteCompleto.provincia_principal],
-        barrio_principal: clienteCompleto.barrio_principal,
+        provincias: [place?.provincia_principal || clienteCompleto.provincia_principal],
+        barrio_principal: place?.barrio_principal || clienteCompleto.barrio_principal,
+        direccion_principal: place?.direccion_principal || clienteCompleto.direccion_principal,
+        google_maps_link: place?.google_maps_link || null,
         
         // Otros
         vendedores: clienteCompleto.todos_vendedores || [],

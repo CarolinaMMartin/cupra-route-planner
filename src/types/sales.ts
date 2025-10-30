@@ -49,6 +49,8 @@ export interface Sucursal {
     potencial_venta: number;
   };
   telefonos?: string[];
+  // Link a Google Maps
+  google_maps_link?: string;
 }
 
 export interface Vendedor {
