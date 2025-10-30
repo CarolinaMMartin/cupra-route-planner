@@ -87,11 +87,13 @@ const FilterPanel = ({
     setSelectedBarrio([]);
   };
 
-  const handleAreaChange = (areaId: string) => {
+  const handleAreaChange = async (areaId: string) => {
     setSelectedArea(areaId);
     
     if (areaId === 'none') {
       // Limpiar selecciones
+      setSelectedVendedores(vendedores.map(v => v.id));
+      setSelectedBarrio([]);
       return;
     }
 
@@ -103,9 +105,29 @@ const FilterPanel = ({
     setSelectedBarrio(area.barrios);
     
     toast({
-      title: "Área seleccionada",
-      description: `Se han cargado ${area.vendedores.length} vendedores y ${area.barrios.length} barrios del área "${area.nombre}"`
+      title: "⏳ Generando recomendaciones...",
+      description: `Área "${area.nombre}" cargada. La IA está analizando ${area.barrios.length} barrios...`
     });
+
+    // Obtener nombres de los vendedores seleccionados
+    const nombresVendedores = vendedores
+      .filter(v => area.vendedores.includes(v.id))
+      .map(v => v.nombre);
+
+    // Generar automáticamente recomendaciones para el área
+    setTimeout(() => {
+      onRequestRecommendations({
+        area_id: areaId,
+        cantidad_vendedores: area.vendedores.length
+      }, {
+        ids: area.vendedores,
+        nombres: nombresVendedores
+      }, {
+        comuna: selectedComuna.length > 0 ? selectedComuna : null,
+        barrio: area.barrios.length > 0 ? area.barrios : null,
+        provincia: selectedProvincia !== 'all' ? selectedProvincia : null
+      });
+    }, 100);
   };
 
   const handleClearFilters = () => {
@@ -274,7 +296,7 @@ const FilterPanel = ({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Al seleccionar un área, se cargarán automáticamente sus vendedores y barrios
+              ✨ Al seleccionar un área, se generarán automáticamente recomendaciones de IA que podrás modificar
             </p>
           </div>
         </div>

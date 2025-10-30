@@ -11,7 +11,6 @@ import KanbanAssignment from "./assignor/KanbanAssignment";
 import RecommendationFilters from "./assignor/RecommendationFilters";
 import TodayAssignments from "./assignor/TodayAssignments";
 import AIInsightsCard from "./assignor/AIInsightsCard";
-import AutoAssignByZoneDialog from "./assignor/AutoAssignByZoneDialog";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
 import EditAssignmentsKanban from "./assignor/EditAssignmentsKanban";
 import { Sucursal } from "@/types/sales";
@@ -328,20 +327,8 @@ const AssignorDashboard = () => {
         <>
           <Card className="shadow-medium">
             <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle className="font-serif tracking-wide">Panel de Asignación</CardTitle>
-                  <CardDescription>Filtra sucursales y solicita recomendaciones inteligentes</CardDescription>
-                </div>
-                <AutoAssignByZoneDialog 
-                  onAssignmentComplete={(count) => {
-                    toast({
-                      title: "✅ Asignación completada",
-                      description: `Se asignaron ${count} clientes automáticamente`
-                    });
-                  }}
-                />
-              </div>
+              <CardTitle className="font-serif tracking-wide">Panel de Asignación</CardTitle>
+              <CardDescription>Selecciona un área o aplica filtros para solicitar recomendaciones inteligentes</CardDescription>
             </CardHeader>
             <CardContent>
               <FilterPanel
