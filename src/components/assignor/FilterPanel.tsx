@@ -192,10 +192,10 @@ const FilterPanel = ({
       const {
         data,
         error
-      } = await supabase.from('profiles').select('user_id, nombre, email').eq('rol', 'vendedor').eq('activo', true);
+      } = await supabase.from('profiles').select('id, user_id, nombre, email').eq('rol', 'vendedor').eq('activo', true);
       if (error) throw error;
       const mappedVendedores = (data || []).map(v => ({
-        id: v.user_id,
+        id: v.id, // Usar el profile.id en lugar de user_id
         nombre: v.nombre,
         email: v.email
       }));

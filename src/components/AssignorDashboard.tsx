@@ -95,6 +95,18 @@ const AssignorDashboard = () => {
 
       console.log('✅ Respuesta del edge function:', data);
 
+      // Verificar si no hay recomendaciones
+      if (!data.recomendaciones || data.recomendaciones.length === 0) {
+        toast({
+          variant: "destructive",
+          title: "❌ Sin recomendaciones",
+          description: data.resumen?.descripcion || "No se encontraron recomendaciones para los filtros seleccionados. Intenta con otros criterios.",
+          duration: 5000,
+        });
+        setIsLoading(false);
+        return;
+      }
+
       // Mapear los datos al formato Sucursal
       const mappedRecommendations: Sucursal[] = (data.recomendaciones || []).map((rec: any) => ({
         id: rec.request_id + '-' + rec.client_id, // ID único combinado

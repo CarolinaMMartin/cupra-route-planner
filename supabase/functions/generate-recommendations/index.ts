@@ -107,12 +107,34 @@ Deno.serve(async (req) => {
     }
 
     // 2. Cargar datos de vendedores
+    // Los IDs pueden venir como profile.id o user_id, intentar buscar por ambos
     const { data: vendedoresData, error: vendedoresError } = await supabaseClient
       .from('profiles')
-      .select('user_id, nombre, email')
-      .in('user_id', vendedoresFinales);
+      .select('user_id, nombre, email, id')
+      .or(`user_id.in.(${vendedoresFinales.join(',')}),id.in.(${vendedoresFinales.join(',')})`);
 
-    if (vendedoresError) throw vendedoresError;
+    if (vendedoresError) {
+      console.error('❌ Error cargando vendedores:', vendedoresError);
+      throw vendedoresError;
+    }
+
+    if (!vendedoresData || vendedoresData.length === 0) {
+      console.error('❌ No se encontraron vendedores con los IDs proporcionados:', vendedoresFinales);
+      return new Response(
+        JSON.stringify({
+          recomendaciones: [],
+          resumen: {
+            total_recomendaciones: 0,
+            descripcion: 'No se encontraron vendedores con los IDs proporcionados. Verifica que los vendedores estén activos.',
+            distribucion_por_vendedor: {},
+            zonas_priorizadas: []
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`✅ Vendedores cargados: ${vendedoresData.length}`);
 
     // 3. Construir query de clientes con filtros + JOIN con client_places para coordenadas
     let clientesQuery = supabaseClient
