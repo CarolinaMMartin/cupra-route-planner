@@ -28,7 +28,7 @@ import { Button } from "@/components/ui/button";
 interface ClienteAsignado {
   id: string;
   client_id: string;
-  estado: 'Asignado' | 'Por visitar' | 'Visitado';
+  estado: 'Por visitar' | 'Visitado';
   razon_social: string;
   cuit_dni: string;
   barrio_principal?: string;
@@ -93,7 +93,6 @@ interface ClienteInfo {
 
 const VendedorKanban = () => {
   const [assignments, setAssignments] = useState<Record<string, ClienteAsignado[]>>({
-    'Asignado': [],
     'Por visitar': [],
     'Visitado': [],
   });
@@ -164,18 +163,32 @@ const VendedorKanban = () => {
 
       if (error) throw error;
 
+      // Obtener google_maps_link de client_places para cada cliente
+      const clientIds = [...new Set((asignaciones || []).map((a: any) => a.client_id))];
+      const { data: placesData } = await supabase
+        .from('client_places')
+        .select('client_id, google_maps_link')
+        .in('client_id', clientIds)
+        .eq('is_primary', true);
+
+      const placesMap = new Map(
+        (placesData || []).map(p => [p.client_id, p.google_maps_link])
+      );
+
       // Agrupar por estado
       const grouped: Record<string, ClienteAsignado[]> = {
-        'Asignado': [],
         'Por visitar': [],
         'Visitado': [],
       };
 
       (asignaciones || []).forEach((asig: any) => {
+        // Convertir "Asignado" a "Por visitar"
+        const estado = asig.estado === 'Asignado' ? 'Por visitar' : asig.estado;
+        
         const cliente: ClienteAsignado = {
           id: asig.id,
           client_id: asig.client_id,
-          estado: asig.estado,
+          estado: estado as 'Por visitar' | 'Visitado',
           razon_social: asig.clientes?.razon_social || 'Sin nombre',
           cuit_dni: asig.clientes?.cuit_dni || '',
           barrio_principal: asig.clientes?.barrio_principal,
@@ -201,8 +214,9 @@ const VendedorKanban = () => {
           todos_vendedores: asig.clientes?.todos_vendedores,
           etiquetas: asig.clientes?.etiquetas,
           canal: asig.clientes?.canal,
+          google_maps_link: placesMap.get(asig.client_id) || undefined,
         };
-        grouped[asig.estado].push(cliente);
+        grouped[estado].push(cliente);
       });
 
       setAssignments(grouped);
@@ -231,7 +245,7 @@ const VendedorKanban = () => {
     }
 
     const activeId = active.id as string;
-    const newEstado = over.id as 'Asignado' | 'Por visitar' | 'Visitado';
+    const newEstado = over.id as 'Por visitar' | 'Visitado';
 
     // Encontrar de qué columna viene
     let fromColumn: string | null = null;
@@ -521,12 +535,7 @@ const VendedorKanban = () => {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          <DroppableColumn 
-            id="Asignado" 
-            title="Asignado" 
-            clientes={assignments['Asignado']} 
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <DroppableColumn 
             id="Por visitar" 
             title="Por visitar" 
