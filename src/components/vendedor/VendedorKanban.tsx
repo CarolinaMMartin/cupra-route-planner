@@ -104,6 +104,7 @@ const VendedorKanban = () => {
   const [clienteInfo, setClienteInfo] = useState<ClienteInfo | null>(null);
   const [feedback, setFeedback] = useState("");
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
+  const [visitaRealizada, setVisitaRealizada] = useState(false);
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -346,16 +347,27 @@ const VendedorKanban = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
-      // Guardar feedback
+      // Guardar feedback con visita_realizada
       const { error: feedbackError } = await supabase
         .from('cliente_feedbacks')
         .insert({
           client_id: selectedCliente.client_id,
           vendedor_id: user.id,
           feedback: feedback.trim(),
+          visita_realizada: visitaRealizada,
         });
 
       if (feedbackError) throw feedbackError;
+
+      // Si se realizó la visita, actualizar ultima_visita en clientes
+      if (visitaRealizada) {
+        const { error: clienteUpdateError } = await supabase
+          .from('clientes')
+          .update({ ultima_visita: new Date().toISOString() })
+          .eq('client_id', selectedCliente.client_id);
+
+        if (clienteUpdateError) throw clienteUpdateError;
+      }
 
       // Actualizar estado a "Visitado"
       const { error: updateError } = await supabase
@@ -382,11 +394,14 @@ const VendedorKanban = () => {
 
       toast({
         title: "Feedback guardado",
-        description: "El feedback ha sido guardado exitosamente",
+        description: visitaRealizada 
+          ? "El feedback ha sido guardado y la visita registrada. El cliente será recomendado en 15 días."
+          : "El feedback ha sido guardado. El cliente será recomendado nuevamente mañana.",
       });
 
       setShowFeedbackDialog(false);
       setFeedback("");
+      setVisitaRealizada(false);
       setSelectedCliente(null);
     } catch (error) {
       console.error('Error saving feedback:', error);
@@ -780,12 +795,44 @@ const VendedorKanban = () => {
               rows={6}
             />
             
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Visita realizada:</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="visita"
+                    checked={visitaRealizada === true}
+                    onChange={() => setVisitaRealizada(true)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Sí</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="visita"
+                    checked={visitaRealizada === false}
+                    onChange={() => setVisitaRealizada(false)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">No</span>
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {visitaRealizada 
+                  ? "El cliente será recomendado nuevamente en 15 días"
+                  : "El cliente será recomendado nuevamente mañana"}
+              </p>
+            </div>
+            
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
                   setShowFeedbackDialog(false);
                   setFeedback("");
+                  setVisitaRealizada(false);
                 }}
                 disabled={isSavingFeedback}
               >

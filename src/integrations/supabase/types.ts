@@ -249,6 +249,7 @@ export type Database = {
           feedback: string
           id: string
           vendedor_id: string
+          visita_realizada: boolean
         }
         Insert: {
           client_id: string
@@ -256,6 +257,7 @@ export type Database = {
           feedback: string
           id?: string
           vendedor_id: string
+          visita_realizada?: boolean
         }
         Update: {
           client_id?: string
@@ -263,6 +265,7 @@ export type Database = {
           feedback?: string
           id?: string
           vendedor_id?: string
+          visita_realizada?: boolean
         }
         Relationships: [
           {
@@ -307,6 +310,7 @@ export type Database = {
           todos_barrios: string[] | null
           todos_vendedores: string[] | null
           ultima_compra: string | null
+          ultima_visita: string | null
           updated_at: string | null
           vendedor_principal: string | null
         }
@@ -342,6 +346,7 @@ export type Database = {
           todos_barrios?: string[] | null
           todos_vendedores?: string[] | null
           ultima_compra?: string | null
+          ultima_visita?: string | null
           updated_at?: string | null
           vendedor_principal?: string | null
         }
@@ -377,6 +382,7 @@ export type Database = {
           todos_barrios?: string[] | null
           todos_vendedores?: string[] | null
           ultima_compra?: string | null
+          ultima_visita?: string | null
           updated_at?: string | null
           vendedor_principal?: string | null
         }
