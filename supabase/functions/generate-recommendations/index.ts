@@ -100,25 +100,52 @@ Deno.serve(async (req) => {
 
     if (vendedoresError) throw vendedoresError;
 
-    // 3. Construir query de clientes con filtros
+    // 3. Construir query de clientes con filtros (más flexible)
     let clientesQuery = supabaseClient
       .from('clientes')
       .select('*')
+      .not('monto_total_historico', 'is', null)
       .order('monto_total_historico', { ascending: false })
-      .limit(500); // Limitar para no sobrecargar
+      .limit(200);
 
+    // Aplicar filtro de provincia (case-insensitive)
     if (provincia && provincia !== 'all') {
-      clientesQuery = clientesQuery.eq('provincia_principal', provincia);
+      clientesQuery = clientesQuery.ilike('provincia_principal', `%${provincia}%`);
     }
     
+    // Aplicar filtro de barrios (case-insensitive, coincidencias parciales)
     if (barriosFinales.length > 0) {
-      clientesQuery = clientesQuery.in('barrio_principal', barriosFinales);
+      // Crear condiciones OR para cada barrio
+      const barriosConditions = barriosFinales.map((b: string) => `barrio_principal.ilike.%${b}%`).join(',');
+      clientesQuery = clientesQuery.or(barriosConditions);
     }
 
-    const { data: clientes, error: clientesError } = await clientesQuery;
+    let { data: clientes, error: clientesError } = await clientesQuery;
     if (clientesError) throw clientesError;
 
-    console.log(`📊 Clientes cargados: ${clientes?.length || 0}`);
+    console.log(`📊 Clientes cargados con filtros: ${clientes?.length || 0}`);
+    
+    // Si no se encontraron clientes con los filtros, intentar sin barrios
+    if (!clientes || clientes.length === 0) {
+      console.log('⚠️ Sin resultados con filtros de barrio. Buscando clientes sin ese filtro...');
+      
+      const fallbackQuery = supabaseClient
+        .from('clientes')
+        .select('*')
+        .not('monto_total_historico', 'is', null)
+        .order('monto_total_historico', { ascending: false })
+        .limit(100);
+      
+      if (provincia && provincia !== 'all') {
+        fallbackQuery.ilike('provincia_principal', `%${provincia}%`);
+      }
+      
+      const { data: clientesFallback, error: errorFallback } = await fallbackQuery;
+      if (errorFallback) throw errorFallback;
+      
+      clientes = clientesFallback;
+      console.log(`📊 Clientes cargados (fallback): ${clientes?.length || 0}`);
+    }
 
     if (!clientes || clientes.length === 0) {
       return new Response(
