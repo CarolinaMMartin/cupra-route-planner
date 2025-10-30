@@ -56,8 +56,14 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const fetchTodayAssignments = async () => {
     setIsLoading(true);
     try {
+      // Calcular el inicio del día en UTC para asegurar consistencia
       const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const year = today.getFullYear();
+      const month = today.getMonth();
+      const day = today.getDate();
+      const startOfDay = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+
+      console.log('Fetching assignments from:', startOfDay.toISOString());
 
       const { data, error } = await supabase
         .from('asignaciones_vendedores_clientes')
@@ -67,8 +73,10 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
           vendedor:profiles!asignaciones_vendedores_clientes_vendedor_id_fkey(nombre, email),
           cliente:clientes!asignaciones_vendedores_clientes_client_id_fkey(razon_social, cuit_dni)
         `)
-        .gte('created_at', today.toISOString())
+        .gte('created_at', startOfDay.toISOString())
         .order('created_at', { ascending: false });
+
+      console.log('Assignments fetched:', data?.length);
 
       if (error) throw error;
 
