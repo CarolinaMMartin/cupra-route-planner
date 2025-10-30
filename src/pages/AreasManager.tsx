@@ -238,6 +238,7 @@ export default function AreasManager() {
     nombre: "",
     descripcion: "",
     color: "#3b82f6",
+    selectedPlaces: [] as string[],
   });
 
   useEffect(() => {
@@ -309,14 +310,24 @@ export default function AreasManager() {
     }
 
     try {
-      await createArea(newAreaForm);
+      // Create the area
+      const newArea = await createArea(newAreaForm);
+      
+      // Assign selected places to the area
+      if (newAreaForm.selectedPlaces.length > 0) {
+        await Promise.all(
+          newAreaForm.selectedPlaces.map((placeId) =>
+            assignPlaceToArea(placeId, newArea.id)
+          )
+        );
+      }
       
       toast({
         title: "Éxito",
-        description: "Área creada correctamente",
+        description: `Área creada con ${newAreaForm.selectedPlaces.length} barrio(s)`,
       });
       setIsCreateDialogOpen(false);
-      setNewAreaForm({ nombre: "", descripcion: "", color: "#3b82f6" });
+      setNewAreaForm({ nombre: "", descripcion: "", color: "#3b82f6", selectedPlaces: [] });
       loadData();
     } catch (error) {
       console.error("Error creating area:", error);
@@ -516,6 +527,11 @@ export default function AreasManager() {
 
   const vendedorOptions = profiles.map((p) => ({
     label: p.nombre,
+    value: p.id,
+  }));
+
+  const placeOptions = allPlaces.map((p) => ({
+    label: `${p.barrio_principal || "Sin nombre"} - ${p.comuna || ""} (${p.provincia_principal || ""})`.trim(),
     value: p.id,
   }));
 
@@ -791,113 +807,130 @@ export default function AreasManager() {
                   rows={3}
                 />
               </div>
+              
+              {/* Barrios Selection */}
+              <div>
+                <Label htmlFor="barrios">Barrios</Label>
+                <MultiSelect
+                  options={placeOptions}
+                  selected={newAreaForm.selectedPlaces}
+                  onChange={(selected) =>
+                    setNewAreaForm({ ...newAreaForm, selectedPlaces: selected })
+                  }
+                  placeholder="Seleccionar barrios"
+                  className="w-full"
+                />
+              </div>
+
               <Button type="submit" className="w-full">
                 <Plus className="mr-2 h-4 w-4" />
                 Crear Área
               </Button>
             </form>
+          </CardContent>
+        </Card>
 
-            {/* Place Search and Add */}
-            <div className="mt-6 pt-6 border-t">
-              <Label className="text-sm font-medium mb-2 block">
-                Buscar y Agregar Barrios
-              </Label>
-              <div className="space-y-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Buscar barrios, comunas o provincias..."
-                    value={placeSearchFilter}
-                    onChange={(e) => setPlaceSearchFilter(e.target.value)}
-                    className="pl-9 pr-9"
-                  />
-                  {placeSearchFilter && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setPlaceSearchFilter("")}
-                      className="absolute right-1 top-1 h-8 w-8 p-0"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+        {/* Quick Add Places to Existing Areas */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Agregar Barrios a Áreas Existentes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar barrios, comunas o provincias..."
+                  value={placeSearchFilter}
+                  onChange={(e) => setPlaceSearchFilter(e.target.value)}
+                  className="pl-9 pr-9"
+                />
                 {placeSearchFilter && (
-                  <ScrollArea className="h-[200px] border rounded-lg p-2">
-                    <div className="space-y-2">
-                      {filteredPlaces.length === 0 ? (
-                        <p className="text-sm text-muted-foreground text-center py-4">
-                          No se encontraron barrios
-                        </p>
-                      ) : (
-                        filteredPlaces.map((place) => (
-                          <div
-                            key={place.id}
-                            className="flex items-center justify-between p-2 hover:bg-muted rounded"
-                          >
-                            <div className="flex items-start gap-2 flex-1 min-w-0">
-                              <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                              <div className="flex-1 min-w-0">
-                                {place.barrio_principal && (
-                                  <p className="font-medium text-sm truncate">
-                                    {place.barrio_principal}
-                                  </p>
-                                )}
-                                <div className="flex flex-wrap gap-1 mt-1">
-                                  {place.comuna && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      {place.comuna}
-                                    </Badge>
-                                  )}
-                                  {place.provincia_principal && (
-                                    <Badge variant="outline" className="text-xs">
-                                      {place.provincia_principal}
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>
-                                    Agregar a Área
-                                  </DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-2">
-                                  {areas.map((area) => (
-                                    <Button
-                                      key={area.id}
-                                      variant="outline"
-                                      className="w-full justify-start"
-                                      onClick={() =>
-                                        handleAddPlaceToArea(place.id, area.id)
-                                      }
-                                    >
-                                      <div
-                                        className="w-3 h-3 rounded-full mr-2"
-                                        style={{
-                                          backgroundColor: area.color || "#3b82f6",
-                                        }}
-                                      />
-                                      {area.nombre}
-                                    </Button>
-                                  ))}
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </ScrollArea>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setPlaceSearchFilter("")}
+                    className="absolute right-1 top-1 h-8 w-8 p-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 )}
               </div>
+              {placeSearchFilter && (
+                <ScrollArea className="h-[200px] border rounded-lg p-2">
+                  <div className="space-y-2">
+                    {filteredPlaces.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No se encontraron barrios
+                      </p>
+                    ) : (
+                      filteredPlaces.map((place) => (
+                        <div
+                          key={place.id}
+                          className="flex items-center justify-between p-2 hover:bg-muted rounded"
+                        >
+                          <div className="flex items-start gap-2 flex-1 min-w-0">
+                            <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              {place.barrio_principal && (
+                                <p className="font-medium text-sm truncate">
+                                  {place.barrio_principal}
+                                </p>
+                              )}
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {place.comuna && (
+                                  <Badge variant="secondary" className="text-xs">
+                                    {place.comuna}
+                                  </Badge>
+                                )}
+                                {place.provincia_principal && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {place.provincia_principal}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader>
+                                <DialogTitle>
+                                  Agregar a Área
+                                </DialogTitle>
+                              </DialogHeader>
+                              <div className="space-y-2">
+                                {areas.map((area) => (
+                                  <Button
+                                    key={area.id}
+                                    variant="outline"
+                                    className="w-full justify-start"
+                                    onClick={() =>
+                                      handleAddPlaceToArea(place.id, area.id)
+                                    }
+                                  >
+                                    <div
+                                      className="w-3 h-3 rounded-full mr-2"
+                                      style={{
+                                        backgroundColor: area.color || "#3b82f6",
+                                      }}
+                                    />
+                                    {area.nombre}
+                                  </Button>
+                                ))}
+                              </div>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ScrollArea>
+              )}
             </div>
           </CardContent>
         </Card>
