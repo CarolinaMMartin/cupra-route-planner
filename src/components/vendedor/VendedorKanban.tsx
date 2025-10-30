@@ -57,6 +57,8 @@ interface ClienteAsignado {
   todos_vendedores?: string[];
   etiquetas?: string[];
   canal?: string;
+  // Link de Google Maps
+  google_maps_link?: string;
 }
 
 interface ClienteInfo {
@@ -554,13 +556,12 @@ const VendedorKanban = () => {
             <div className="space-y-6">
               {/* Botones de acción rápida */}
               <div className="flex flex-wrap gap-2">
-                {selectedCliente.direccion_principal && (
+                {selectedCliente.google_maps_link && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const address = `${selectedCliente.direccion_principal}, ${selectedCliente.ciudad_principa || ''}, ${selectedCliente.provincia_principal || ''}`;
-                      window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`, '_blank');
+                      window.open(selectedCliente.google_maps_link, '_blank');
                     }}
                   >
                     <Navigation className="w-4 h-4 mr-2" />
