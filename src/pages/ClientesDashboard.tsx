@@ -152,7 +152,9 @@ const ClientesDashboard = () => {
   const topBarrios = useMemo(() => {
     const barriosMap = new Map<string, number>();
     filteredData.forEach(cliente => {
-      const barrios = cliente.todos_barrios || [cliente.barrio_principal];
+      const barrios = (cliente.todos_barrios?.length > 0) 
+        ? cliente.todos_barrios 
+        : (cliente.barrio_principal ? [cliente.barrio_principal] : []);
       const monto = cliente.monto_total_historico || 0;
       barrios.forEach((barrio: string) => {
         if (barrio) {
