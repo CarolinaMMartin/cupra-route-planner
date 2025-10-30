@@ -192,7 +192,7 @@ export type Database = {
           client_id: string
           comuna: string | null
           created_at: string | null
-          direccion_principal: string
+          direccion_principal: string | null
           google_maps_link: string | null
           id: string
           is_primary: boolean | null
@@ -207,7 +207,7 @@ export type Database = {
           client_id: string
           comuna?: string | null
           created_at?: string | null
-          direccion_principal: string
+          direccion_principal?: string | null
           google_maps_link?: string | null
           id?: string
           is_primary?: boolean | null
@@ -222,7 +222,7 @@ export type Database = {
           client_id?: string
           comuna?: string | null
           created_at?: string | null
-          direccion_principal?: string
+          direccion_principal?: string | null
           google_maps_link?: string | null
           id?: string
           is_primary?: boolean | null
