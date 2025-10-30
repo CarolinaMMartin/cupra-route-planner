@@ -549,9 +549,15 @@ export default function AreasManager() {
             <div>
               <h1 className="text-3xl font-bold">Gestión de Áreas</h1>
               <p className="text-muted-foreground">
-                Organiza barrios por área y gestiona asignaciones
+                Organiza barrios por área
               </p>
             </div>
+            <Button
+              variant="outline"
+              onClick={() => navigate("/")}
+            >
+              Volver al Inicio
+            </Button>
           </div>
 
           {/* Search */}
@@ -803,8 +809,18 @@ export default function AreasManager() {
                     placeholder="Buscar barrios, comunas o provincias..."
                     value={placeSearchFilter}
                     onChange={(e) => setPlaceSearchFilter(e.target.value)}
-                    className="pl-9"
+                    className="pl-9 pr-9"
                   />
+                  {placeSearchFilter && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPlaceSearchFilter("")}
+                      className="absolute right-1 top-1 h-8 w-8 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
                 {placeSearchFilter && (
                   <ScrollArea className="h-[200px] border rounded-lg p-2">
