@@ -162,9 +162,11 @@ Deno.serve(async (req) => {
     
     // Aplicar filtro de barrios (case-insensitive, coincidencias parciales) en client_places
     if (barriosFinales.length > 0) {
-      // Crear condiciones OR para cada barrio
-      const barriosConditions = barriosFinales.map((b: string) => `client_places.barrio_principal.ilike.%${b}%`).join(',');
-      clientesQuery = clientesQuery.or(barriosConditions);
+      // Crear condiciones OR para cada barrio usando la sintaxis correcta de Supabase
+      const barriosConditions = barriosFinales
+        .map((b: string) => `barrio_principal.ilike.%${b}%`)
+        .join(',');
+      clientesQuery = clientesQuery.or(barriosConditions, { foreignTable: 'client_places' });
     }
 
     let { data: clientes, error: clientesError } = await clientesQuery;
