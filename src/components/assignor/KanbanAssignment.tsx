@@ -18,7 +18,6 @@ import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import ClientDetailCard from "./ClientDetailCard";
-import AutoAssignByZoneDialog from "./AutoAssignByZoneDialog";
 
 interface Vendedor {
   id: string;
@@ -376,12 +375,6 @@ const KanbanAssignment = ({
             <ArrowLeft className="w-4 h-4" />
             Volver a la preselección
           </Button>
-
-          <AutoAssignByZoneDialog
-            vendedores={vendedores}
-            recommendations={selectedRecommendations}
-            onApplyAssignment={handleAutoAssignByZone}
-          />
         </div>
 
         <Button onClick={handleSave} disabled={isLoading} size="lg" className="gap-2">

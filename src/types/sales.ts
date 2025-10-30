@@ -39,6 +39,16 @@ export interface Sucursal {
   requiere_visita?: string;
   canal?: string;
   etiquetas?: string[];
+  // Campos de IA
+  ai_reasoning?: string;
+  score_geografico?: number;
+  factores_ia?: {
+    score_comercial: number;
+    proximidad_geografica: number;
+    dias_sin_visita: number;
+    potencial_venta: number;
+  };
+  telefonos?: string[];
 }
 
 export interface Vendedor {

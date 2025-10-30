@@ -161,7 +161,41 @@ const ClientDetailCard = ({
           </div>
 
           {/* Justificación IA */}
-          {cliente.justificacion && (
+          {cliente.ai_reasoning && (
+            <div className="bg-gradient-to-r from-primary/10 to-secondary/10 p-3 rounded-md border border-primary/20">
+              <div className="flex gap-2 items-start">
+                <Lightbulb className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+                <div className="flex-1 space-y-2">
+                  <p className="text-sm font-medium text-foreground">Análisis de IA:</p>
+                  <p className="text-sm text-muted-foreground">{cliente.ai_reasoning}</p>
+                  
+                  {cliente.factores_ia && (
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-primary/10">
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Score Comercial:</span>
+                        <p className="font-semibold text-primary">{cliente.factores_ia.score_comercial}/100</p>
+                      </div>
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Proximidad:</span>
+                        <p className="font-semibold text-primary">{cliente.factores_ia.proximidad_geografica}/100</p>
+                      </div>
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Urgencia:</span>
+                        <p className="font-semibold text-primary">{cliente.factores_ia.dias_sin_visita}/100</p>
+                      </div>
+                      <div className="text-xs">
+                        <span className="text-muted-foreground">Potencial:</span>
+                        <p className="font-semibold text-primary">{cliente.factores_ia.potencial_venta}/100</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Justificación legacy (del sistema anterior) */}
+          {cliente.justificacion && !cliente.ai_reasoning && (
             <div className="bg-muted/50 p-3 rounded-md flex gap-2">
               <Lightbulb className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
               <p className="text-sm text-muted-foreground">{cliente.justificacion}</p>

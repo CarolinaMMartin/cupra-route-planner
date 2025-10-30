@@ -465,6 +465,7 @@ export type Database = {
       }
       recomendaciones_ia: {
         Row: {
+          ai_reasoning: string | null
           avg_ticket: number | null
           barrio_principal: string | null
           canal: string | null
@@ -477,6 +478,7 @@ export type Database = {
           direccion_principal: string | null
           estado: string | null
           etiquetas: string[] | null
+          factores_ia: Json | null
           first_purchase_at: string | null
           id: string
           justificacion: string | null
@@ -491,8 +493,10 @@ export type Database = {
           provincia_principal: string | null
           provincias: string[] | null
           razon_social: string | null
+          request_id: string | null
           requiere_visita: string | null
           score_comercial: string | null
+          score_geografico: number | null
           score_recencia: string | null
           score_recencia_num: number | null
           score_volumen: string | null
@@ -505,9 +509,11 @@ export type Database = {
           ultima_sugerencia: string | null
           ultima_visita: string | null
           vendedor_principal: string | null
+          vendedor_recomendado_id: string | null
           vendedores: string[] | null
         }
         Insert: {
+          ai_reasoning?: string | null
           avg_ticket?: number | null
           barrio_principal?: string | null
           canal?: string | null
@@ -520,6 +526,7 @@ export type Database = {
           direccion_principal?: string | null
           estado?: string | null
           etiquetas?: string[] | null
+          factores_ia?: Json | null
           first_purchase_at?: string | null
           id?: string
           justificacion?: string | null
@@ -534,8 +541,10 @@ export type Database = {
           provincia_principal?: string | null
           provincias?: string[] | null
           razon_social?: string | null
+          request_id?: string | null
           requiere_visita?: string | null
           score_comercial?: string | null
+          score_geografico?: number | null
           score_recencia?: string | null
           score_recencia_num?: number | null
           score_volumen?: string | null
@@ -548,9 +557,11 @@ export type Database = {
           ultima_sugerencia?: string | null
           ultima_visita?: string | null
           vendedor_principal?: string | null
+          vendedor_recomendado_id?: string | null
           vendedores?: string[] | null
         }
         Update: {
+          ai_reasoning?: string | null
           avg_ticket?: number | null
           barrio_principal?: string | null
           canal?: string | null
@@ -563,6 +574,7 @@ export type Database = {
           direccion_principal?: string | null
           estado?: string | null
           etiquetas?: string[] | null
+          factores_ia?: Json | null
           first_purchase_at?: string | null
           id?: string
           justificacion?: string | null
@@ -577,8 +589,10 @@ export type Database = {
           provincia_principal?: string | null
           provincias?: string[] | null
           razon_social?: string | null
+          request_id?: string | null
           requiere_visita?: string | null
           score_comercial?: string | null
+          score_geografico?: number | null
           score_recencia?: string | null
           score_recencia_num?: number | null
           score_volumen?: string | null
@@ -591,6 +605,7 @@ export type Database = {
           ultima_sugerencia?: string | null
           ultima_visita?: string | null
           vendedor_principal?: string | null
+          vendedor_recomendado_id?: string | null
           vendedores?: string[] | null
         }
         Relationships: [
@@ -792,6 +807,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      clean_old_recommendations: { Args: never; Returns: undefined }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
