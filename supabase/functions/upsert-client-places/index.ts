@@ -88,17 +88,17 @@ Deno.serve(async (req) => {
         return;
       }
 
-      // Mapear campos
+      // Mapear campos y limpiar espacios en client_id
       placesData.push({
-        client_id: place.client_id,
+        client_id: place.client_id.trim(), // Limpiar espacios en blanco
         lat: place.lat,
         long: place.lng, // Nota: columna se llama "long" no "lng"
-        direccion_principal: place.direccion || null,
-        barrio_principal: place.barrio || null,
-        comuna: place.comuna_distrito || null,
-        provincia_principal: place.provincia || null,
-        place_id: place.place_id || null,
-        google_maps_link: place.google_maps_link || null,
+        direccion_principal: place.direccion?.trim() || null,
+        barrio_principal: place.barrio?.trim() || null,
+        comuna: place.comuna_distrito?.trim() || null,
+        provincia_principal: place.provincia?.trim() || null,
+        place_id: place.place_id?.trim() || null,
+        google_maps_link: place.google_maps_link?.trim() || null,
         is_primary: place.is_primary !== undefined ? place.is_primary : true,
       });
     });
