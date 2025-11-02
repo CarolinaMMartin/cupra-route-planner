@@ -187,19 +187,19 @@ const ClientDetailCard = ({
                     <div className="grid grid-cols-2 gap-2 pt-2 border-t border-primary/20">
                       <div className="text-xs">
                         <span className="text-card-foreground/70">Score Comercial:</span>
-                        <p className="font-semibold text-primary">{cliente.factores_ia.score_comercial}/100</p>
+                        <p className="font-semibold text-accent">{cliente.factores_ia.score_comercial}/100</p>
                       </div>
                       <div className="text-xs">
                         <span className="text-card-foreground/70">Proximidad:</span>
-                        <p className="font-semibold text-primary">{cliente.factores_ia.proximidad_geografica}/100</p>
+                        <p className="font-semibold text-accent">{cliente.factores_ia.proximidad_geografica}/100</p>
                       </div>
                       <div className="text-xs">
                         <span className="text-card-foreground/70">Urgencia:</span>
-                        <p className="font-semibold text-primary">{cliente.factores_ia.dias_sin_visita}/100</p>
+                        <p className="font-semibold text-accent">{cliente.factores_ia.dias_sin_visita}/100</p>
                       </div>
                       <div className="text-xs">
-                        <span className="text-muted-foreground">Potencial:</span>
-                        <p className="font-semibold text-primary">{cliente.factores_ia.potencial_venta}/100</p>
+                        <span className="text-card-foreground/70">Potencial:</span>
+                        <p className="font-semibold text-accent">{cliente.factores_ia.potencial_venta}/100</p>
                       </div>
                     </div>
                   )}
