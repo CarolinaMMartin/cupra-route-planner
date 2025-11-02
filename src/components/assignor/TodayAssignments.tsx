@@ -101,7 +101,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
               .select('*')
               .eq('cuit_dni', assignment.cliente?.cuit_dni)
               .limit(1)
-              .single();
+              .maybeSingle();
 
             if (infoError) {
               console.error('Error fetching cliente info:', infoError);

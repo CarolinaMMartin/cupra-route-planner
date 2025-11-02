@@ -35,7 +35,7 @@ interface ClienteAsignado {
   barrio_principal?: string;
   dias_desde_ultima_compra?: number;
   // Información de contacto y ubicación
-  ciudad_principa?: string;
+  ciudad_principal?: string;
   provincia_principal?: string;
   direccion_principal?: string;
   todas_direcciones?: string[];
@@ -141,7 +141,7 @@ const VendedorKanban = () => {
             cuit_dni,
             barrio_principal,
             dias_desde_ultima_compra,
-            ciudad_principa,
+            ciudad_principal,
             provincia_principal,
             direccion_principal,
             todas_direcciones,
@@ -198,7 +198,7 @@ const VendedorKanban = () => {
           cuit_dni: asig.clientes?.cuit_dni || '',
           barrio_principal: asig.clientes?.barrio_principal,
           dias_desde_ultima_compra: asig.clientes?.dias_desde_ultima_compra,
-          ciudad_principa: asig.clientes?.ciudad_principa,
+          ciudad_principal: asig.clientes?.ciudad_principal,
           provincia_principal: asig.clientes?.provincia_principal,
           direccion_principal: asig.clientes?.direccion_principal,
           todas_direcciones: asig.clientes?.todas_direcciones,
@@ -652,9 +652,9 @@ const VendedorKanban = () => {
                         {selectedCliente.barrio_principal && (
                           <p className="text-xs text-muted-foreground">Barrio: {selectedCliente.barrio_principal}</p>
                         )}
-                        {selectedCliente.ciudad_principa && selectedCliente.provincia_principal && (
+                        {selectedCliente.ciudad_principal && selectedCliente.provincia_principal && (
                           <p className="text-xs text-muted-foreground">
-                            {selectedCliente.ciudad_principa}, {selectedCliente.provincia_principal}
+                            {selectedCliente.ciudad_principal}, {selectedCliente.provincia_principal}
                           </p>
                         )}
                       </div>
