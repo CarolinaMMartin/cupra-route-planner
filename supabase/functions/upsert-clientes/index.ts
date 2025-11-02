@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     
     // Filtrar campos que no existen en la tabla
     const clientesLimpios = body.clientes.map(cliente => {
-      const { comuna_principal, todas_comunas, ...rest } = cliente as any;
+      const { comuna_principal, todas_comunas, todas_provincias, ...rest } = cliente as any;
       return rest;
     });
     
