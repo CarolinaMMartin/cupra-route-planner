@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.upsert-ventas-cupra]
 verify_jwt = false
+
+[functions.upsert-clientes]
+verify_jwt = false
