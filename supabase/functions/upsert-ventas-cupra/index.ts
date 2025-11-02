@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
       const { error: ventasError } = await supabase
         .from('ventas_cupra')
         .upsert(body.ventas, {
-          onConflict: 'ticket,letra,fecha_emision,client_id',
+          onConflict: 'ticket,letra,fecha_emision,client_id,codigo_producto',
           ignoreDuplicates: false,
         });
 
