@@ -24,14 +24,12 @@ interface ClienteData {
   participacion_mercado?: number | null;
   ciudad_principal?: string | null;
   barrio_principal?: string | null;
-  comuna_principal?: string | null;
   direccion_principal?: string | null;
   provincia_principal?: string | null;
   vendedor_principal?: string | null;
   productos_comprados?: string[] | null;
   todas_ciudades?: string[] | null;
   todos_barrios?: string[] | null;
-  todas_comunas?: string[] | null;
   todas_direcciones?: string[] | null;
   todos_vendedores?: string[] | null;
   requiere_visita?: string | null;
