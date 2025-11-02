@@ -114,9 +114,16 @@ Deno.serve(async (req) => {
     if (body.ventas && body.ventas.length > 0) {
       console.log('💰 Procesando ventas...');
       
+      // Asegurarnos que client_id tenga un valor válido
+      const ventasConClientId = body.ventas.map(venta => ({
+        ...venta,
+        // Si client_id está vacío, usar CUIT como identificador
+        client_id: venta.client_id || venta.cuit_dni || 'UNKNOWN'
+      }));
+      
       const { error: ventasError } = await supabase
         .from('ventas_cupra')
-        .upsert(body.ventas, {
+        .upsert(ventasConClientId, {
           onConflict: 'ticket,letra,fecha_emision,client_id,codigo_producto',
           ignoreDuplicates: false,
         });
