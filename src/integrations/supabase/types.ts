@@ -293,7 +293,7 @@ export type Database = {
           cantidad_ordenes: number | null
           categoria_recencia: string | null
           categoria_volumen: string | null
-          ciudad_principa: string | null
+          ciudad_principal: string | null
           client_id: string
           created_at: string | null
           cuit_dni: string | null
@@ -329,7 +329,7 @@ export type Database = {
           cantidad_ordenes?: number | null
           categoria_recencia?: string | null
           categoria_volumen?: string | null
-          ciudad_principa?: string | null
+          ciudad_principal?: string | null
           client_id: string
           created_at?: string | null
           cuit_dni?: string | null
@@ -365,7 +365,7 @@ export type Database = {
           cantidad_ordenes?: number | null
           categoria_recencia?: string | null
           categoria_volumen?: string | null
-          ciudad_principa?: string | null
+          ciudad_principal?: string | null
           client_id?: string
           created_at?: string | null
           cuit_dni?: string | null

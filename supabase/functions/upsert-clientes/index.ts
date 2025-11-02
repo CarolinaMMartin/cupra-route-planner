@@ -22,7 +22,7 @@ interface ClienteData {
   score_volumen?: number | null;
   score_comercial?: number | null;
   participacion_mercado?: number | null;
-  ciudad_principa?: string | null;
+  ciudad_principal?: string | null;
   barrio_principal?: string | null;
   comuna_principal?: string | null;
   direccion_principal?: string | null;

@@ -26,7 +26,7 @@ export interface Sucursal {
   score_volumen?: number;
   score_comercial?: number;
   participacion_mercado?: number;
-  ciudad_principa?: string;
+  ciudad_principal?: string;
   barrio_principal?: string;
   direccion_principal?: string;
   provincia_principal?: string;

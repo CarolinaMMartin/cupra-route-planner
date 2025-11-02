@@ -323,10 +323,10 @@ const ClientDetailCard = ({
                       <p className="font-medium">{cliente.provincia_principal}</p>
                     </div>
                   )}
-                  {cliente.ciudad_principa && (
+                  {cliente.ciudad_principal && (
                     <div>
                       <span className="text-muted-foreground">Ciudad:</span>
-                      <p className="font-medium">{cliente.ciudad_principa}</p>
+                      <p className="font-medium">{cliente.ciudad_principal}</p>
                     </div>
                   )}
                   {cliente.barrio_principal && (
