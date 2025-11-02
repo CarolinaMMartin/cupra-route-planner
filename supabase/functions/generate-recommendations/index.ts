@@ -140,68 +140,69 @@ Deno.serve(async (req) => {
 
     console.log(`✅ Vendedores cargados: ${vendedoresData.length}`);
 
-    // 3. Construir query de clientes con filtros + JOIN con client_places para coordenadas
+    // 3. Cargar clientes de la tabla clientes
     let clientesQuery = supabaseClient
       .from('clientes')
-      .select(`
-        *,
-        client_places!inner(
-          lat, long, barrio_principal, comuna, 
-          provincia_principal, google_maps_link, direccion_principal
-        )
-      `)
-      .eq('client_places.is_primary', true)
+      .select('*')
       .not('monto_total_historico', 'is', null)
       .order('monto_total_historico', { ascending: false })
       .limit(200);
 
-    // Aplicar filtro de provincia (case-insensitive) en client_places
-    if (provincia && provincia !== 'all') {
-      clientesQuery = clientesQuery.ilike('client_places.provincia_principal', `%${provincia}%`);
-    }
-    
-    // Aplicar filtro de barrios (case-insensitive, coincidencias parciales) en client_places
-    if (barriosFinales.length > 0) {
-      // Crear condiciones OR para cada barrio usando la sintaxis correcta de Supabase
-      const barriosConditions = barriosFinales
-        .map((b: string) => `barrio_principal.ilike.%${b}%`)
-        .join(',');
-      clientesQuery = clientesQuery.or(barriosConditions, { foreignTable: 'client_places' });
-    }
-
     let { data: clientes, error: clientesError } = await clientesQuery;
     if (clientesError) throw clientesError;
 
-    console.log(`📊 Clientes cargados con filtros: ${clientes?.length || 0}`);
-    
-    // Si no se encontraron clientes con los filtros, intentar sin barrios
     if (!clientes || clientes.length === 0) {
-      console.log('⚠️ Sin resultados con filtros de barrio. Buscando clientes sin ese filtro...');
-      
-      const fallbackQuery = supabaseClient
-        .from('clientes')
-        .select(`
-          *,
-          client_places!inner(
-            lat, long, barrio_principal, comuna, 
-            provincia_principal, google_maps_link, direccion_principal
-          )
-        `)
-        .eq('client_places.is_primary', true)
-        .not('monto_total_historico', 'is', null)
-        .order('monto_total_historico', { ascending: false })
-        .limit(100);
-      
-      if (provincia && provincia !== 'all') {
-        fallbackQuery.ilike('client_places.provincia_principal', `%${provincia}%`);
-      }
-      
-      const { data: clientesFallback, error: errorFallback } = await fallbackQuery;
-      if (errorFallback) throw errorFallback;
-      
-      clientes = clientesFallback;
-      console.log(`📊 Clientes cargados (fallback): ${clientes?.length || 0}`);
+      return new Response(
+        JSON.stringify({
+          recomendaciones: [],
+          resumen: {
+            total_recomendaciones: 0,
+            descripcion: 'No se encontraron clientes',
+            distribucion_por_vendedor: {},
+            zonas_priorizadas: []
+          }
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
+
+    console.log(`📊 Clientes cargados: ${clientes.length}`);
+
+    // 4. Cargar ubicaciones de client_places
+    const clientIds = clientes.map(c => c.client_id);
+    let placesQuery = supabaseClient
+      .from('client_places')
+      .select('*')
+      .eq('is_primary', true)
+      .in('client_id', clientIds);
+
+    // Aplicar filtros de provincia
+    if (provincia && provincia !== 'all') {
+      placesQuery = placesQuery.ilike('provincia_principal', `%${provincia}%`);
+    }
+    
+    // Aplicar filtros de barrios
+    if (barriosFinales.length > 0) {
+      const barriosConditions = barriosFinales
+        .map((b: string) => `barrio_principal.ilike.%${b}%`)
+        .join(',');
+      placesQuery = placesQuery.or(barriosConditions);
+    }
+
+    const { data: clientPlaces, error: placesError } = await placesQuery;
+    if (placesError) throw placesError;
+
+    console.log(`📍 Ubicaciones cargadas: ${clientPlaces?.length || 0}`);
+
+    // 5. Mapear places a clientes
+    const placesMap = new Map();
+    clientPlaces?.forEach(place => {
+      placesMap.set(place.client_id, place);
+    });
+
+    // Filtrar clientes que tienen ubicación
+    clientes = clientes.filter(c => placesMap.has(c.client_id));
+    console.log(`✅ Clientes con ubicación: ${clientes.length}`);
 
     if (!clientes || clientes.length === 0) {
       return new Response(
@@ -226,7 +227,7 @@ Deno.serve(async (req) => {
     })) || [];
 
     const clientesContext = clientes.slice(0, 100).map(c => {
-      const place = Array.isArray(c.client_places) ? c.client_places[0] : c.client_places;
+      const place = placesMap.get(c.client_id);
       return {
         client_id: c.client_id,
         razon_social: c.razon_social,
@@ -370,10 +371,8 @@ Considera scores comerciales, recencia, proximidad geográfica y potencial de ve
       const clienteCompleto = clientes.find(c => c.client_id === rec.client_id);
       if (!clienteCompleto) continue;
 
-      // Extraer datos de client_places
-      const place = Array.isArray(clienteCompleto.client_places) 
-        ? clienteCompleto.client_places[0] 
-        : clienteCompleto.client_places;
+      // Extraer datos de client_places del Map
+      const place = placesMap.get(rec.client_id);
 
       enrichedRecommendations.push({
         request_id,
