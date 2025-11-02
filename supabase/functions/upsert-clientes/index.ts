@@ -82,9 +82,15 @@ Deno.serve(async (req) => {
 
     console.log('👥 Procesando clientes...');
     
+    // Filtrar campos que no existen en la tabla
+    const clientesLimpios = body.clientes.map(cliente => {
+      const { comuna_principal, todas_comunas, ...rest } = cliente as any;
+      return rest;
+    });
+    
     const { error: clientesError } = await supabase
       .from('clientes')
-      .upsert(body.clientes, {
+      .upsert(clientesLimpios, {
         onConflict: 'client_id',
         ignoreDuplicates: false,
       });
