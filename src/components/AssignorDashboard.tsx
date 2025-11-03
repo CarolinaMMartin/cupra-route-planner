@@ -338,6 +338,8 @@ const AssignorDashboard = () => {
                 onRequestRecommendations={handleRequestRecommendations}
                 isLoading={isLoading}
                 placesData={placesData}
+                instruccionesAdicionales={instruccionesAdicionales}
+                onInstruccionesChange={setInstruccionesAdicionales}
               />
             </CardContent>
           </Card>
@@ -380,17 +382,10 @@ const AssignorDashboard = () => {
       {flowStep === "preselection" && recommendations.length > 0 && (
         <>
           {aiInsights && vendedoresData.length > 0 && (
-            <>
-              <AIInsightsCard 
-                resumen={aiInsights} 
-                vendedores={vendedoresData} 
-              />
-              
-              <AdditionalInstructionsCard
-                value={instruccionesAdicionales}
-                onChange={setInstruccionesAdicionales}
-              />
-            </>
+            <AIInsightsCard 
+              resumen={aiInsights} 
+              vendedores={vendedoresData} 
+            />
           )}
           
           <Card className="shadow-medium">
@@ -402,7 +397,7 @@ const AssignorDashboard = () => {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={handleBackToRecommendations}>
-                    Nueva búsqueda
+                    ← Volver atrás
                   </Button>
                   <Button
                     variant={viewMode === "list" ? "default" : "outline"}

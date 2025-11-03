@@ -8,8 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Users, MapPin, X } from "lucide-react";
+import { Sparkles, Users, MapPin, X, Info } from "lucide-react";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 interface Vendedor {
   id: string;
   nombre: string;
@@ -27,11 +28,15 @@ interface FilterPanelProps {
   onRequestRecommendations: (filters: any, selectedVendedoresData: { ids: string[], nombres: string[] }, placesFilters: any) => void;
   isLoading: boolean;
   placesData: Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>;
+  instruccionesAdicionales: string;
+  onInstruccionesChange: (value: string) => void;
 }
 const FilterPanel = ({
   onRequestRecommendations,
   isLoading,
-  placesData
+  placesData,
+  instruccionesAdicionales,
+  onInstruccionesChange
 }: FilterPanelProps) => {
   const [cantidadVendedores, setCantidadVendedores] = useState('');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -392,6 +397,47 @@ const FilterPanel = ({
                 className="w-full"
               />
             </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card className="p-4 bg-gradient-to-br from-accent/5 to-primary/5 border-accent/20">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-accent" />
+            <div>
+              <h3 className="font-semibold">Criterios Complementarios para la IA</h3>
+              <p className="text-xs text-muted-foreground">Instrucciones adicionales que la IA considerará al generar las recomendaciones</p>
+            </div>
+          </div>
+          
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              <strong>Ejemplos de criterios:</strong>
+              <ul className="mt-2 space-y-1 list-disc list-inside">
+                <li>Priorizar clientes que compran productos específicos (ej: "clientes que compran Malbec")</li>
+                <li>Enfocarse en ciertos canales (ej: "solo restaurantes ON_TRADE")</li>
+                <li>Considerar etiquetas específicas (ej: "clientes VIP o Premium")</li>
+                <li>Evitar clientes con ciertos criterios (ej: "evitar clientes con pagos pendientes")</li>
+              </ul>
+            </AlertDescription>
+          </Alert>
+
+          <div className="space-y-2">
+            <Label htmlFor="additional-instructions">
+              Instrucciones libres para la IA
+            </Label>
+            <Textarea
+              id="additional-instructions"
+              placeholder="Ej: Priorizar clientes que compran Malbec Gran Reserva, enfocarse en restaurantes de alta gama del canal ON_TRADE..."
+              value={instruccionesAdicionales}
+              onChange={(e) => onInstruccionesChange(e.target.value)}
+              className="min-h-[120px] resize-none bg-background"
+            />
+            <p className="text-xs text-muted-foreground">
+              La IA buscará en la base de datos (productos, etiquetas, canales) para cumplir con tus instrucciones
+            </p>
           </div>
         </div>
       </Card>
