@@ -401,61 +401,79 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY no configurado');
 
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: RECOMMENDATION_SYSTEM_PROMPT },
-          { role: 'user', content: prompt }
-        ],
-        tools: [{
-          type: 'function',
-          function: {
-            name: 'generate_recommendations',
-            description: 'Genera recomendaciones estructuradas de clientes para visitar',
-            parameters: {
-              type: 'object',
-              properties: {
-                recomendaciones: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      client_id: { type: 'string' },
-                      vendedor_id: { type: 'string' },
-                      prioridad: { type: 'number', minimum: 1, maximum: 10 },
-                      justificacion: { type: 'string' },
-                      score_final: { type: 'number' },
-                      factores: {
-                        type: 'object',
-                        properties: {
-                          score_comercial: { type: 'number' },
-                          proximidad_geografica: { type: 'number' },
-                          dias_sin_visita: { type: 'number' },
-                          potencial_venta: { type: 'number' }
+    let aiResponse;
+    try {
+      console.log('🚀 Enviando request a Lovable AI...');
+      console.log('📏 Tamaño del prompt:', prompt.length, 'caracteres');
+      
+      aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: RECOMMENDATION_SYSTEM_PROMPT },
+            { role: 'user', content: prompt }
+          ],
+          tools: [{
+            type: 'function',
+            function: {
+              name: 'generate_recommendations',
+              description: 'Genera recomendaciones estructuradas de clientes para visitar',
+              parameters: {
+                type: 'object',
+                properties: {
+                  recomendaciones: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        client_id: { type: 'string' },
+                        vendedor_id: { type: 'string' },
+                        prioridad: { type: 'string', enum: ['alta', 'media', 'baja'] },
+                        justificacion: { type: 'string' },
+                        score_final: { type: 'number' },
+                        factores: {
+                          type: 'object',
+                          properties: {
+                            score_comercial: { type: 'number' },
+                            score_recencia: { type: 'number' },
+                            score_proximidad: { type: 'number' },
+                            distancia_km: { type: 'number' },
+                            potencial_venta: { type: 'number' }
+                          }
                         }
-                      }
-                    },
-                    required: ['client_id', 'vendedor_id', 'prioridad', 'justificacion', 'score_final', 'factores']
-                  }
+                      },
+                      required: ['client_id', 'vendedor_id', 'prioridad', 'justificacion', 'score_final', 'factores']
+                    }
+                  },
+                  resumen_analisis: { type: 'string' }
                 },
-                resumen_analisis: { type: 'string' }
-              },
-              required: ['recomendaciones', 'resumen_analisis']
+                required: ['recomendaciones', 'resumen_analisis']
+              }
             }
-          }
-        }],
-        tool_choice: { type: 'function', function: { name: 'generate_recommendations' } }
-      }),
-    });
+          }],
+          tool_choice: { type: 'function', function: { name: 'generate_recommendations' } }
+        }),
+      });
+
+      console.log('📨 Respuesta recibida. Status:', aiResponse.status);
+    } catch (fetchError) {
+      console.error('❌ Error en fetch a Lovable AI:', fetchError);
+      const errorMsg = fetchError instanceof Error ? fetchError.message : String(fetchError);
+      throw new Error(`Error al conectar con Lovable AI: ${errorMsg}`);
+    }
 
     if (!aiResponse.ok) {
-      const errorText = await aiResponse.text();
+      let errorText = 'No se pudo leer el error';
+      try {
+        errorText = await aiResponse.text();
+      } catch (readError) {
+        console.error('❌ Error leyendo respuesta de error:', readError);
+      }
       console.error('❌ Error de Lovable AI:', aiResponse.status, errorText);
       
       if (aiResponse.status === 429) {
@@ -465,11 +483,26 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
         );
       }
       
+      if (aiResponse.status === 402) {
+        return new Response(
+          JSON.stringify({ error: 'Créditos de IA agotados. Por favor recarga tu cuenta.' }),
+          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       throw new Error(`Lovable AI error: ${aiResponse.status} - ${errorText}`);
     }
 
-    const aiData = await aiResponse.json();
-    console.log('✅ Respuesta de IA recibida:', JSON.stringify(aiData).substring(0, 200));
+    let aiData;
+    try {
+      console.log('📖 Leyendo respuesta JSON...');
+      aiData = await aiResponse.json();
+      console.log('✅ Respuesta de IA recibida:', JSON.stringify(aiData).substring(0, 200));
+    } catch (jsonError) {
+      console.error('❌ Error parseando JSON de respuesta:', jsonError);
+      const errorMsg = jsonError instanceof Error ? jsonError.message : String(jsonError);
+      throw new Error(`Error leyendo respuesta de IA: ${errorMsg}`);
+    }
 
     // 6. Extraer recomendaciones del tool call
     const toolCall = aiData.choices[0]?.message?.tool_calls?.[0];
