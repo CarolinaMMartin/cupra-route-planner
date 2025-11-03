@@ -77,7 +77,7 @@ const AssignorDashboard = () => {
     try {
       toast({
         title: "🤖 Analizando con IA...",
-        description: "Lovable AI está generando recomendaciones inteligentes. Esto puede tomar unos segundos.",
+        description: "Estamos generando recomendaciones inteligentes. Esto puede tomar unos segundos.",
       });
 
       // Llamar al edge function de Lovable AI
