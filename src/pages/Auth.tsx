@@ -67,19 +67,42 @@ const Auth = () => {
 
       if (error) throw error;
 
+      // Verificar si el usuario ya existe
+      if (data?.user && !data.session) {
+        toast({
+          variant: "destructive",
+          title: "Usuario ya registrado",
+          description: "Este correo electrónico ya está registrado en el sistema. Por favor inicia sesión.",
+        });
+        return;
+      }
+
       toast({
-        title: "Cuenta creada",
-        description: "Por favor verifica tu correo electrónico",
+        title: "Cuenta creada exitosamente",
+        description: "Ya puedes iniciar sesión con tus credenciales",
       });
 
       setEmail("");
       setPassword("");
       setNombre("");
     } catch (error: any) {
+      let errorMessage = "Error al crear cuenta";
+      
+      // Mensajes de error específicos
+      if (error.message?.includes("already registered") || error.message?.includes("User already registered")) {
+        errorMessage = "Este correo electrónico ya está registrado. Por favor inicia sesión.";
+      } else if (error.message?.includes("Invalid email")) {
+        errorMessage = "El formato del correo electrónico no es válido.";
+      } else if (error.message?.includes("Password")) {
+        errorMessage = "La contraseña debe tener al menos 6 caracteres.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         variant: "destructive",
-        title: "Error",
-        description: error.message || "Error al crear cuenta",
+        title: "Error al registrarse",
+        description: errorMessage,
       });
     } finally {
       setIsLoading(false);
