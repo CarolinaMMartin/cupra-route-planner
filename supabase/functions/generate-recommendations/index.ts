@@ -27,6 +27,7 @@ CONTEXTO DEL NEGOCIO:
 
 TU TAREA:
 Analizar la cartera de clientes y recomendar visitas priorizadas SOLO para las zonas donde cada vendedor opera.
+DEBES generar EXACTAMENTE 8 RECOMENDACIONES POR VENDEDOR. Si no encuentras 8 clientes adecuados con los criterios establecidos, AVISA en el resumen_analisis indicando cuántos clientes encontraste y por qué no llegaste a 8.
 
 CRITERIOS DE SCORING:
 1. Score Comercial (40%):
@@ -52,8 +53,15 @@ CRITERIOS DE SCORING:
    - $200k-$500k: 70 pts
    - < $200k: 40 pts
 
+FEEDBACK DE VENDEDORES:
+- CONSIDERA el feedback previo de los vendedores sobre sus visitas a clientes
+- Si un cliente tiene feedback negativo reciente (no visitado, problemas), reduce su prioridad en 20 puntos
+- Si un cliente tiene feedback positivo (visita exitosa), considera mantenerlo en el circuito pero no priorizarlo sobre otros
+- El feedback es una señal importante de la relación real vendedor-cliente
+
 REGLAS DE DISTRIBUCIÓN:
-- PRIORIDAD #1: Respetar las zonas geográficas filtradas (barrios/comunas)
+- PRIORIDAD #1: Generar 8 recomendaciones por vendedor
+- PRIORIDAD #2: Respetar las zonas geográficas filtradas (barrios/comunas)
 - Distribuir equitativamente entre vendedores DENTRO de sus zonas
 - AGRUPAR clientes del MISMO barrio o barrios adyacentes para optimizar rutas
 - Si un cliente tiene "vendedor_principal", darle bonus +20 pts a ese vendedor
@@ -74,9 +82,9 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones = 10 } = await req.json();
+    const { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones = 8, instrucciones_adicionales } = await req.json();
 
-    console.log('📥 Request recibido:', { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones });
+    console.log('📥 Request recibido:', { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones, instrucciones_adicionales });
 
     // 1. Si hay area_id, cargar vendedores y barrios del área
     let vendedoresFinales = vendedores || [];
@@ -168,7 +176,28 @@ Deno.serve(async (req) => {
 
     console.log(`📊 Clientes cargados: ${clientes.length}`);
 
-    // 4. Cargar ubicaciones de client_places
+    // 4. Cargar feedback de vendedores
+    const { data: feedbacks, error: feedbacksError } = await supabaseClient
+      .from('cliente_feedbacks')
+      .select('client_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, created_at')
+      .order('created_at', { ascending: false });
+
+    if (feedbacksError) {
+      console.error('⚠️ Error cargando feedbacks:', feedbacksError);
+    }
+
+    console.log(`💬 Feedbacks cargados: ${feedbacks?.length || 0}`);
+
+    // Organizar feedbacks por client_id
+    const feedbacksMap = new Map();
+    feedbacks?.forEach(fb => {
+      if (!feedbacksMap.has(fb.client_id)) {
+        feedbacksMap.set(fb.client_id, []);
+      }
+      feedbacksMap.get(fb.client_id).push(fb);
+    });
+
+    // 5. Cargar ubicaciones de client_places
     const clientIds = clientes.map(c => c.client_id);
     let placesQuery = supabaseClient
       .from('client_places')
@@ -228,6 +257,8 @@ Deno.serve(async (req) => {
 
     const clientesContext = clientes.slice(0, 100).map(c => {
       const place = placesMap.get(c.client_id);
+      const clientFeedbacks = feedbacksMap.get(c.client_id) || [];
+      
       return {
         client_id: c.client_id,
         razon_social: c.razon_social,
@@ -244,7 +275,14 @@ Deno.serve(async (req) => {
         score_comercial: c.score_comercial,
         lat: place?.lat,
         long: place?.long,
-        direccion: place?.direccion_principal
+        direccion: place?.direccion_principal,
+        feedbacks_recientes: clientFeedbacks.slice(0, 3).map(fb => ({
+          visita_realizada: fb.visita_realizada,
+          feedback: fb.feedback,
+          motivo_no_visita: fb.motivo_no_visita,
+          tipo_interaccion: fb.tipo_interaccion,
+          fecha: fb.created_at
+        }))
       };
     });
 
@@ -258,10 +296,17 @@ ${JSON.stringify(clientesContext, null, 2)}
 FILTROS APLICADOS:
 - Provincia: ${provincia || 'Todas'}
 - Barrios: ${barriosFinales.length > 0 ? barriosFinales.join(', ') : 'Todos'}
-- Máximo por vendedor: ${max_recomendaciones}
+- Recomendaciones por vendedor: ${max_recomendaciones}
 
-ANALIZA y genera recomendaciones óptimas distribuyendo equitativamente entre los ${vendedoresContext.length} vendedores.
-Considera scores comerciales, recencia, proximidad geográfica y potencial de venta.
+${instrucciones_adicionales ? `INSTRUCCIONES ADICIONALES DEL ASIGNADOR:
+${instrucciones_adicionales}
+
+IMPORTANTE: Considera estas instrucciones adicionales al generar las recomendaciones y busca en los datos proporcionados para cumplir con ellas.
+` : ''}
+
+ANALIZA y genera EXACTAMENTE ${max_recomendaciones} recomendaciones por vendedor (total: ${vendedoresContext.length * max_recomendaciones} recomendaciones).
+Si no encuentras suficientes clientes que cumplan los criterios, menciona explícitamente en el resumen_analisis cuántos encontraste y por qué.
+Considera scores comerciales, recencia, proximidad geográfica, potencial de venta, y FEEDBACK PREVIO de vendedores.
 `;
 
     // 5. Llamar a Lovable AI con tool calling

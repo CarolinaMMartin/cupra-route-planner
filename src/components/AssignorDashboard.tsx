@@ -60,6 +60,7 @@ const AssignorDashboard = () => {
     filters: any,
     selectedVendedoresData: { ids: string[]; nombres: string[] },
     placesFilters: any,
+    instruccionesAdicionales?: string
   ) => {
     setIsLoading(true);
     setSelectedVendedoresIds(selectedVendedoresData.ids);
@@ -86,7 +87,8 @@ const AssignorDashboard = () => {
           comuna: placesFilters.comuna,
           barrio: placesFilters.barrio,
           area_id: filters.area_id,
-          max_recomendaciones: 10
+          max_recomendaciones: 8,
+          instrucciones_adicionales: instruccionesAdicionales || null
         }
       });
 
