@@ -25,7 +25,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 
 interface ClienteAsignado {
@@ -827,22 +826,15 @@ const VendedorKanban = () => {
           </DialogHeader>
           
           <div className="space-y-4">
-            <div className="space-y-3">
-              <label className="text-sm font-medium">Visita realizada:</label>
-              <RadioGroup 
-                value={visitaRealizada ? "si" : "no"} 
-                onValueChange={(value) => setVisitaRealizada(value === "si")}
-                className="flex gap-6"
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="si" id="visita-si" />
-                  <Label htmlFor="visita-si" className="cursor-pointer">Sí</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="no" id="visita-no" />
-                  <Label htmlFor="visita-no" className="cursor-pointer">No</Label>
-                </div>
-              </RadioGroup>
+            <div className="flex items-center space-x-3">
+              <Checkbox 
+                id="visita-realizada"
+                checked={visitaRealizada}
+                onCheckedChange={(checked) => setVisitaRealizada(checked === true)}
+              />
+              <Label htmlFor="visita-realizada" className="text-sm font-medium cursor-pointer">
+                Visita realizada
+              </Label>
             </div>
 
             {!visitaRealizada && (
