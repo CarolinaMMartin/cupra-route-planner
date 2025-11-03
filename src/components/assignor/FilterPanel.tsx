@@ -334,7 +334,10 @@ const FilterPanel = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MapPin className="w-5 h-5 text-accent" />
-              <h3 className="font-semibold">Filtros de Ubicación</h3>
+              <div>
+                <h3 className="font-semibold">Filtros Geográficos</h3>
+                <p className="text-xs text-muted-foreground">Define las zonas donde la IA buscará clientes</p>
+              </div>
             </div>
             {hasActiveFilters && (
               <Button
@@ -393,10 +396,15 @@ const FilterPanel = ({
         </div>
       </Card>
 
-      <Button type="submit" className="wine-button w-full md:w-auto" disabled={isLoading || selectedVendedores.length === 0}>
-        <Sparkles className="w-4 h-4 mr-2" />
-        {isLoading ? "Generando 8 recomendaciones..." : "Solicitar Recomendaciones IA"}
-      </Button>
+      <div className="flex flex-col gap-2">
+        <Button type="submit" className="wine-button w-full md:w-auto" disabled={isLoading || selectedVendedores.length === 0}>
+          <Sparkles className="w-4 h-4 mr-2" />
+          {isLoading ? "IA analizando base de datos..." : "Generar 8 Recomendaciones con IA"}
+        </Button>
+        <p className="text-xs text-muted-foreground text-center">
+          La IA analizará la base de datos usando los filtros y vendedores seleccionados
+        </p>
+      </div>
     </form>;
 };
 export default FilterPanel;
