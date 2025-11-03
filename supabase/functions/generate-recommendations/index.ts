@@ -23,7 +23,7 @@ CONTEXTO DEL NEGOCIO:
 - Vendemos vinos en canales ON_TRADE (restaurantes, bares) y OFF_TRADE (vinotecas, retailers)
 - Los clientes TOP_10 representan el 80% del volumen
 - Los vendedores tienen zonas de trabajo específicas (barrios/comunas asignadas)
-- Los vendedores deben mantener contacto regular (ideal: cada 30-45 días)
+- Los vendedores deben mantener contacto regular (ideal: cada 15-20 días)
 
 TU TAREA:
 Analizar la cartera de clientes y recomendar visitas priorizadas SOLO para las zonas donde cada vendedor opera.
@@ -64,10 +64,10 @@ CRITERIOS DE SCORING (EN ORDEN DE IMPORTANCIA):
    NOTA: El score comercial es importante pero NO debe descartar clientes cercanos o con vendedor asignado.
 
 4. Urgencia de Visita (15%):
-   - 30-60 días sin compra: 100 pts (ventana ideal)
-   - 60-90 días: 80 pts
-   - > 90 días: 60 pts (riesgo de pérdida)
-   - < 30 días: 40 pts (puede esperar)
+   - 15-30 días sin compra: 100 pts (ventana ideal)
+   - 30-45 días: 80 pts
+   - > 45 días: 60 pts (riesgo de pérdida)
+   - < 15 días: 40 pts (puede esperar)
    
    NOTA: La urgencia es un factor complementario, no excluyente.
 
