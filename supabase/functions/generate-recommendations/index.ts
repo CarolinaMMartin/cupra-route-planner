@@ -197,7 +197,57 @@ Deno.serve(async (req) => {
       feedbacksMap.get(fb.client_id).push(fb);
     });
 
-    // 5. Cargar ubicaciones de client_places
+    // 5. Cargar contexto adicional si hay instrucciones específicas
+    let contextoDatos: {
+      productos_disponibles?: string[];
+      marcas_disponibles?: string[];
+      etiquetas_disponibles?: string[];
+      productos_mas_vendidos?: string[];
+    } = {};
+    if (instrucciones_adicionales) {
+      console.log('🔍 Analizando instrucciones adicionales para obtener contexto...');
+      
+      // Obtener productos únicos
+      const { data: ventasData } = await supabaseClient
+        .from('ventas_cupra')
+        .select('nombre, marca, codigo_producto')
+        .limit(500);
+      
+      const productosUnicos = new Set<string>();
+      const marcasUnicas = new Set<string>();
+      ventasData?.forEach(v => {
+        if (v.nombre) productosUnicos.add(v.nombre);
+        if (v.marca) marcasUnicas.add(v.marca);
+      });
+
+      // Obtener etiquetas únicas de clientes
+      const { data: clientesEtiquetas } = await supabaseClient
+        .from('clientes')
+        .select('etiquetas, productos_comprados')
+        .not('etiquetas', 'is', null);
+      
+      const etiquetasUnicas = new Set<string>();
+      const productosCompradosUnicos = new Set<string>();
+      clientesEtiquetas?.forEach(c => {
+        c.etiquetas?.forEach((e: string) => etiquetasUnicas.add(e));
+        c.productos_comprados?.forEach((p: string) => productosCompradosUnicos.add(p));
+      });
+
+      contextoDatos = {
+        productos_disponibles: Array.from(productosUnicos).slice(0, 50),
+        marcas_disponibles: Array.from(marcasUnicas),
+        etiquetas_disponibles: Array.from(etiquetasUnicas),
+        productos_mas_vendidos: Array.from(productosCompradosUnicos).slice(0, 30)
+      };
+
+      console.log('📦 Contexto adicional cargado:', {
+        productos: contextoDatos.productos_disponibles?.length || 0,
+        marcas: contextoDatos.marcas_disponibles?.length || 0,
+        etiquetas: contextoDatos.etiquetas_disponibles?.length || 0
+      });
+    }
+
+    // 6. Cargar ubicaciones de client_places
     const clientIds = clientes.map(c => c.client_id);
     let placesQuery = supabaseClient
       .from('client_places')
@@ -276,7 +326,7 @@ Deno.serve(async (req) => {
         lat: place?.lat,
         long: place?.long,
         direccion: place?.direccion_principal,
-        feedbacks_recientes: clientFeedbacks.slice(0, 3).map(fb => ({
+        feedbacks_recientes: clientFeedbacks.slice(0, 3).map((fb: any) => ({
           visita_realizada: fb.visita_realizada,
           feedback: fb.feedback,
           motivo_no_visita: fb.motivo_no_visita,
@@ -301,12 +351,19 @@ FILTROS APLICADOS:
 ${instrucciones_adicionales ? `INSTRUCCIONES ADICIONALES DEL ASIGNADOR:
 ${instrucciones_adicionales}
 
-IMPORTANTE: Considera estas instrucciones adicionales al generar las recomendaciones y busca en los datos proporcionados para cumplir con ellas.
+CONTEXTO DE DATOS DISPONIBLES PARA TUS CRITERIOS:
+${JSON.stringify(contextoDatos, null, 2)}
+
+IMPORTANTE: Usa estos datos para filtrar y priorizar clientes según las instrucciones. Por ejemplo:
+- Si se menciona un producto específico, busca clientes en "productos_comprados" que incluyan ese producto
+- Si se menciona una etiqueta, filtra por clientes que tengan esa etiqueta
+- Si se menciona un canal, usa el campo "canal" de los clientes
+- Explica en tu justificación por qué cada cliente cumple con las instrucciones adicionales
 ` : ''}
 
 ANALIZA y genera EXACTAMENTE ${max_recomendaciones} recomendaciones por vendedor (total: ${vendedoresContext.length * max_recomendaciones} recomendaciones).
 Si no encuentras suficientes clientes que cumplan los criterios, menciona explícitamente en el resumen_analisis cuántos encontraste y por qué.
-Considera scores comerciales, recencia, proximidad geográfica, potencial de venta, y FEEDBACK PREVIO de vendedores.
+Considera scores comerciales, recencia, proximidad geográfica, potencial de venta, FEEDBACK PREVIO de vendedores, y las INSTRUCCIONES ADICIONALES.
 `;
 
     // 5. Llamar a Lovable AI con tool calling

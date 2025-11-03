@@ -24,7 +24,7 @@ interface Area {
 }
 
 interface FilterPanelProps {
-  onRequestRecommendations: (filters: any, selectedVendedoresData: { ids: string[], nombres: string[] }, placesFilters: any, instruccionesAdicionales?: string) => void;
+  onRequestRecommendations: (filters: any, selectedVendedoresData: { ids: string[], nombres: string[] }, placesFilters: any) => void;
   isLoading: boolean;
   placesData: Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>;
 }
@@ -43,7 +43,6 @@ const FilterPanel = ({
   const [areas, setAreas] = useState<Area[]>([]);
   const [selectedArea, setSelectedArea] = useState<string>('none');
   const [isLoadingAreas, setIsLoadingAreas] = useState(true);
-  const [instruccionesAdicionales, setInstruccionesAdicionales] = useState<string>('');
   const {
     toast
   } = useToast();
@@ -128,7 +127,7 @@ const FilterPanel = ({
         comuna: selectedComuna.length > 0 ? selectedComuna : null,
         barrio: area.barrios.length > 0 ? area.barrios : null,
         provincia: selectedProvincia !== 'all' ? selectedProvincia : null
-      }, instruccionesAdicionales);
+      });
     }, 100);
   };
 
@@ -137,7 +136,6 @@ const FilterPanel = ({
     setSelectedComuna([]);
     setSelectedBarrio([]);
     setSelectedArea('none');
-    setInstruccionesAdicionales('');
   };
 
   const hasActiveFilters = 
@@ -273,7 +271,7 @@ const FilterPanel = ({
       comuna: selectedComuna.length > 0 ? selectedComuna : null,
       barrio: selectedBarrio.length > 0 ? selectedBarrio : null,
       provincia: selectedProvincia !== 'all' ? selectedProvincia : null
-    }, instruccionesAdicionales);
+    });
   };
   return <form onSubmit={handleSubmit} className="space-y-6">
       <Card className="p-4 bg-accent/10 border-accent">
@@ -395,34 +393,9 @@ const FilterPanel = ({
         </div>
       </Card>
 
-      <Card className="p-4 bg-muted/50">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-accent" />
-            <h3 className="font-semibold">Instrucciones Adicionales para la IA</h3>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="instrucciones-adicionales">
-              Instrucciones libres (opcional)
-            </Label>
-            <Textarea
-              id="instrucciones-adicionales"
-              placeholder="Ej: Priorizar clientes del canal ON_TRADE, enfocarse en restaurantes de alta gama, evitar clientes con problemas de pago recientes..."
-              value={instruccionesAdicionales}
-              onChange={(e) => setInstruccionesAdicionales(e.target.value)}
-              className="min-h-[100px] resize-none"
-            />
-            <p className="text-xs text-muted-foreground">
-              La IA considerará estas instrucciones adicionales al generar las recomendaciones
-            </p>
-          </div>
-        </div>
-      </Card>
-
       <Button type="submit" className="wine-button w-full md:w-auto" disabled={isLoading || selectedVendedores.length === 0}>
         <Sparkles className="w-4 h-4 mr-2" />
-        {isLoading ? "Generar 8 Recomendaciones por Vendedor" : "Solicitar Recomendaciones IA"}
+        {isLoading ? "Generando 8 recomendaciones..." : "Solicitar Recomendaciones IA"}
       </Button>
     </form>;
 };

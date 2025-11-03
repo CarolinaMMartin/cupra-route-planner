@@ -11,6 +11,7 @@ import KanbanAssignment from "./assignor/KanbanAssignment";
 import RecommendationFilters from "./assignor/RecommendationFilters";
 import TodayAssignments from "./assignor/TodayAssignments";
 import AIInsightsCard from "./assignor/AIInsightsCard";
+import AdditionalInstructionsCard from "./assignor/AdditionalInstructionsCard";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
 import EditAssignmentsKanban from "./assignor/EditAssignmentsKanban";
 import { Sucursal } from "@/types/sales";
@@ -55,12 +56,12 @@ const AssignorDashboard = () => {
   const [aiInsights, setAiInsights] = useState<any>(null);
   const [vendedoresData, setVendedoresData] = useState<Array<{ id: string; nombre: string }>>([]);
   const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
+  const [instruccionesAdicionales, setInstruccionesAdicionales] = useState<string>('');
 
   const handleRequestRecommendations = async (
     filters: any,
     selectedVendedoresData: { ids: string[]; nombres: string[] },
-    placesFilters: any,
-    instruccionesAdicionales?: string
+    placesFilters: any
   ) => {
     setIsLoading(true);
     setSelectedVendedoresIds(selectedVendedoresData.ids);
@@ -379,10 +380,17 @@ const AssignorDashboard = () => {
       {flowStep === "preselection" && recommendations.length > 0 && (
         <>
           {aiInsights && vendedoresData.length > 0 && (
-            <AIInsightsCard 
-              resumen={aiInsights} 
-              vendedores={vendedoresData} 
-            />
+            <>
+              <AIInsightsCard 
+                resumen={aiInsights} 
+                vendedores={vendedoresData} 
+              />
+              
+              <AdditionalInstructionsCard
+                value={instruccionesAdicionales}
+                onChange={setInstruccionesAdicionales}
+              />
+            </>
           )}
           
           <Card className="shadow-medium">
