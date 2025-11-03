@@ -72,10 +72,17 @@ CRITERIOS DE SCORING (EN ORDEN DE IMPORTANCIA):
    NOTA: La urgencia es un factor complementario, no excluyente.
 
 FEEDBACK DE VENDEDORES:
-- CONSIDERA el feedback previo de los vendedores sobre sus visitas a clientes
-- Si un cliente tiene feedback negativo reciente (no visitado, problemas), reduce su prioridad en 20 puntos
-- Si un cliente tiene feedback positivo (visita exitosa), considera mantenerlo en el circuito pero no priorizarlo sobre otros
-- El feedback es una señal importante de la relación real vendedor-cliente
+- Cada cliente tiene un array "feedbacks_recientes" con sus propios feedbacks históricos
+- SOLO menciona feedbacks que EXISTEN en el array "feedbacks_recientes" del cliente específico
+- ⚠️ IMPORTANTE: NO inventes ni repitas feedbacks de otros clientes
+- ⚠️ CRÍTICO: Si un cliente tiene feedbacks_recientes vacío [], NO menciones ningún feedback para ese cliente
+- Si un cliente tiene feedback negativo específico (ej: "NO volver a recomendar", "Local Cerrado", etc.):
+  * EVITA recomendarlo a menos que las instrucciones adicionales lo requieran específicamente
+  * Si lo recomiendas, explica claramente por qué a pesar del feedback negativo
+- Si un cliente tiene feedback positivo (visita exitosa, venta concretada):
+  * Considera mantenerlo en el circuito de visitas regulares
+  * Menciona el feedback positivo en la justificación
+- El feedback es información específica de cada cliente, NO es genérica
 
 REGLAS DE DISTRIBUCIÓN:
 - ⚠️ OBLIGATORIO: Generar EXACTAMENTE 8 recomendaciones por vendedor (NO menos, NO más)
@@ -404,10 +411,13 @@ IMPORTANTE: Usa estos datos para filtrar y priorizar clientes según las instruc
 - Explica en tu justificación por qué cada cliente cumple con las instrucciones adicionales
 ` : ''}
 
-ANALIZA y genera EXACTAMENTE ${max_recomendaciones} recomendaciones por vendedor (total: ${vendedoresContext.length * max_recomendaciones} recomendaciones).
-ES OBLIGATORIO completar todas las recomendaciones. Si no hay suficientes clientes ideales, RELAJA los criterios pero COMPLETA las ${max_recomendaciones} recomendaciones por vendedor.
-En el resumen_analisis, menciona si tuviste que relajar criterios para completar las recomendaciones.
-Considera scores comerciales, recencia, proximidad geográfica, potencial de venta, FEEDBACK PREVIO de vendedores, y las INSTRUCCIONES ADICIONALES.
+ANALIZA y genera recomendaciones según las INSTRUCCIONES ADICIONALES.
+⚠️ REGLA CRÍTICA SOBRE FEEDBACKS:
+- Cada cliente tiene su propio array "feedbacks_recientes" con sus feedbacks específicos
+- NUNCA copies ni repitas feedbacks de un cliente a otro
+- Si un cliente no tiene feedbacks (array vacío []), NO menciones feedbacks en tu justificación
+- SOLO menciona feedbacks que realmente existen en el array del cliente específico
+Considera scores comerciales, recencia, proximidad geográfica, potencial de venta, y los FEEDBACKS ESPECÍFICOS de cada cliente individual.
 `;
 
     // 5. Llamar a Lovable AI con tool calling
