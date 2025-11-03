@@ -562,7 +562,6 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
 
       // Extraer datos de client_places del Map
       const place = placesMap.get(rec.client_id);
-      const clientFeedbacks = feedbacksMap.get(rec.client_id) || [];
 
       enrichedRecommendations.push({
         request_id,
@@ -575,13 +574,6 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
         ai_reasoning: rec.justificacion,
         factores_ia: rec.factores,
         justificacion: rec.justificacion,
-        feedbacks: clientFeedbacks.map((fb: any) => ({
-          visita_realizada: fb.visita_realizada,
-          feedback: fb.feedback,
-          motivo_no_visita: fb.motivo_no_visita,
-          tipo_interaccion: fb.tipo_interaccion,
-          created_at: fb.created_at
-        })),
         
         // Datos comerciales
         monto_total_vendido: clienteCompleto.monto_total_historico,
