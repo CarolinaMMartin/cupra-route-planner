@@ -55,22 +55,8 @@ const ClientDetailCard = ({
 
   const handleOpenGoogleMaps = (url: string) => {
     try {
-      // Asegurar que el URL tiene el protocolo correcto
       const validUrl = url.startsWith('http') ? url : `https://${url}`;
-      
-      // Intentar abrir desde la ventana principal (soluciona problemas con iframes)
-      if (window.top) {
-        window.top.location.href = validUrl;
-      } else {
-        // Fallback: crear un link temporal y hacer click
-        const link = document.createElement('a');
-        link.href = validUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
+      window.open(validUrl, '_blank');
     } catch (error) {
       console.error('Error al abrir Google Maps:', error);
       toast({
