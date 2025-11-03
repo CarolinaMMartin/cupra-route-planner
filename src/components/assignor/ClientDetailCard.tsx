@@ -4,6 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { toast } from "@/hooks/use-toast";
 import { 
   MapPin, 
   Star, 
@@ -50,6 +51,21 @@ const ClientDetailCard = ({
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('es-AR');
+  };
+
+  const handleOpenGoogleMaps = (url: string) => {
+    try {
+      // Asegurar que el URL tiene el protocolo correcto
+      const validUrl = url.startsWith('http') ? url : `https://${url}`;
+      window.open(validUrl, '_blank', 'noopener,noreferrer');
+    } catch (error) {
+      console.error('Error al abrir Google Maps:', error);
+      toast({
+        title: "Error",
+        description: "No se pudo abrir el enlace a Google Maps",
+        variant: "destructive"
+      });
+    }
   };
 
   // Versión compacta para Kanban
@@ -160,18 +176,20 @@ const ClientDetailCard = ({
             )}
           </div>
 
-          {/* Link a Google Maps */}
+          {/* Botón para Google Maps */}
           {cliente.google_maps_link && (
-            <a 
-              href={cliente.google_maps_link} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors"
-              onClick={(e) => e.stopPropagation()}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenGoogleMaps(cliente.google_maps_link);
+              }}
+              className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors h-auto p-2"
             >
               <MapPin className="w-4 h-4" />
               <span className="font-medium">📍 Ver ubicación en Google Maps</span>
-            </a>
+            </Button>
           )}
 
           {/* Justificación IA */}
