@@ -396,8 +396,8 @@ const AssignorDashboard = () => {
                   <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={handleBackToRecommendations}>
-                    ← Volver atrás
+                  <Button variant="secondary" onClick={handleBackToRecommendations} className="mr-auto">
+                    ← Volver al Panel Principal
                   </Button>
                   <Button
                     variant={viewMode === "list" ? "default" : "outline"}
