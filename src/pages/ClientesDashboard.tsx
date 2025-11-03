@@ -34,6 +34,7 @@ const ClientesDashboard = () => {
   // Filtros
   const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
   const [selectedCiudad, setSelectedCiudad] = useState<string>("all");
+  const [selectedBarrio, setSelectedBarrio] = useState<string>("all");
   const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedCanal, setSelectedCanal] = useState<string>("all");
@@ -97,14 +98,40 @@ const ClientesDashboard = () => {
     return Array.from(uniqueProvincias).sort();
   }, [clientesData]);
 
+  // Ciudades filtradas por provincia
   const ciudades = useMemo(() => {
     const uniqueCiudades = new Set<string>();
     clientesData.forEach(cliente => {
+      // Filtrar por provincia si está seleccionada
+      if (selectedProvincia !== "all" && cliente.provincia_principal !== selectedProvincia) {
+        return;
+      }
       const ciudadesList = cliente.todas_ciudades || [cliente.ciudad_principa];
       ciudadesList.forEach((c: string) => c && uniqueCiudades.add(c));
     });
     return Array.from(uniqueCiudades).sort();
-  }, [clientesData]);
+  }, [clientesData, selectedProvincia]);
+
+  // Barrios filtrados por provincia y ciudad
+  const barrios = useMemo(() => {
+    const uniqueBarrios = new Set<string>();
+    clientesData.forEach(cliente => {
+      // Filtrar por provincia si está seleccionada
+      if (selectedProvincia !== "all" && cliente.provincia_principal !== selectedProvincia) {
+        return;
+      }
+      // Filtrar por ciudad si está seleccionada
+      if (selectedCiudad !== "all") {
+        const ciudadesList = cliente.todas_ciudades || [cliente.ciudad_principa];
+        if (!ciudadesList.includes(selectedCiudad)) {
+          return;
+        }
+      }
+      const barriosList = cliente.todos_barrios || [cliente.barrio_principal];
+      barriosList.forEach((b: string) => b && uniqueBarrios.add(b));
+    });
+    return Array.from(uniqueBarrios).sort();
+  }, [clientesData, selectedProvincia, selectedCiudad]);
 
   const vendedores = useMemo(() => {
     const uniqueVendedores = new Set<string>();
@@ -128,15 +155,16 @@ const ClientesDashboard = () => {
     return clientesData.filter(cliente => {
       const matchProvincia = selectedProvincia === "all" || cliente.provincia_principal === selectedProvincia;
       const matchCiudad = selectedCiudad === "all" || (cliente.todas_ciudades || []).includes(selectedCiudad);
+      const matchBarrio = selectedBarrio === "all" || (cliente.todos_barrios || []).includes(selectedBarrio);
       const matchVendedor = selectedVendedor === "all" || (cliente.todos_vendedores || []).includes(selectedVendedor);
       const matchCanal = selectedCanal === "all" || cliente.canal === selectedCanal;
       const matchSearch = searchTerm === "" || 
         (cliente.razon_social || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (cliente.fantasia || "").toLowerCase().includes(searchTerm.toLowerCase());
       
-      return matchProvincia && matchCiudad && matchVendedor && matchCanal && matchSearch;
+      return matchProvincia && matchCiudad && matchBarrio && matchVendedor && matchCanal && matchSearch;
     });
-  }, [clientesData, selectedProvincia, selectedCiudad, selectedVendedor, selectedCanal, searchTerm]);
+  }, [clientesData, selectedProvincia, selectedCiudad, selectedBarrio, selectedVendedor, selectedCanal, searchTerm]);
 
   // KPIs calculados
   const kpis = useMemo(() => {
@@ -202,9 +230,23 @@ const ClientesDashboard = () => {
   const handleClearFilters = () => {
     setSelectedProvincia("all");
     setSelectedCiudad("all");
+    setSelectedBarrio("all");
     setSelectedVendedor("all");
     setSelectedCanal("all");
     setSearchTerm("");
+  };
+
+  // Manejar cambio de provincia (resetear ciudad y barrio)
+  const handleProvinciaChange = (value: string) => {
+    setSelectedProvincia(value);
+    setSelectedCiudad("all");
+    setSelectedBarrio("all");
+  };
+
+  // Manejar cambio de ciudad (resetear barrio)
+  const handleCiudadChange = (value: string) => {
+    setSelectedCiudad(value);
+    setSelectedBarrio("all");
   };
 
   const formatCurrency = (amount: number) => {
@@ -259,7 +301,7 @@ const ClientesDashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Buscar Cliente
@@ -276,7 +318,7 @@ const ClientesDashboard = () => {
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Provincia
                 </label>
-                <Select value={selectedProvincia} onValueChange={setSelectedProvincia}>
+                <Select value={selectedProvincia} onValueChange={handleProvinciaChange}>
                   <SelectTrigger className="bg-background/50">
                     <SelectValue placeholder="Todas" />
                   </SelectTrigger>
@@ -293,14 +335,39 @@ const ClientesDashboard = () => {
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Ciudad
                 </label>
-                <Select value={selectedCiudad} onValueChange={setSelectedCiudad}>
+                <Select 
+                  value={selectedCiudad} 
+                  onValueChange={handleCiudadChange}
+                  disabled={selectedProvincia === "all"}
+                >
                   <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Todas" />
+                    <SelectValue placeholder={selectedProvincia === "all" ? "Seleccione provincia" : "Todas"} />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
                     <SelectItem value="all">Todas</SelectItem>
                     {ciudades.map(c => (
                       <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Barrio
+                </label>
+                <Select 
+                  value={selectedBarrio} 
+                  onValueChange={setSelectedBarrio}
+                  disabled={selectedProvincia === "all"}
+                >
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder={selectedProvincia === "all" ? "Seleccione provincia" : "Todos"} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="all">Todos</SelectItem>
+                    {barrios.map(b => (
+                      <SelectItem key={b} value={b}>{b}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
