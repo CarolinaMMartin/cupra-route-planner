@@ -29,29 +29,36 @@ TU TAREA:
 Analizar la cartera de clientes y recomendar visitas priorizadas SOLO para las zonas donde cada vendedor opera.
 DEBES generar EXACTAMENTE 8 RECOMENDACIONES POR VENDEDOR. Si no encuentras 8 clientes adecuados con los criterios establecidos, AVISA en el resumen_analisis indicando cuántos clientes encontraste y por qué no llegaste a 8.
 
-CRITERIOS DE SCORING:
-1. Score Comercial (40%):
-   - TOP_10: 100 pts | ALTO: 70 pts | MEDIO: 50 pts | BAJO: 30 pts
+CRITERIOS DE SCORING (EN ORDEN DE IMPORTANCIA):
 
-2. Urgencia de Visita (30%):
-   - 30-60 días sin compra: 100 pts (ventana ideal)
-   - 60-90 días: 80 pts
-   - > 90 días: 60 pts (riesgo de pérdida)
-   - < 30 días: 40 pts (puede esperar)
-
-3. Concentración Geográfica (20%) - CRÍTICO:
+1. Concentración Geográfica (40%) - MÁXIMA PRIORIDAD:
    - Clientes en MISMO BARRIO/COMUNA: 100 pts
    - Clientes en BARRIOS ADYACENTES (<3km): 70 pts  
    - Clientes en MISMA ZONA FILTRADA: 50 pts
    - Clientes fuera de la zona filtrada: 0 pts (DESCARTAR)
    
    ⚠️ REGLA ESTRICTA: Solo recomendar clientes dentro de los barrios/comunas especificados en los FILTROS APLICADOS.
-   NO asignar clientes que estén lejos de la zona de operación del vendedor.
+   La cercanía geográfica ES LO MÁS IMPORTANTE para optimizar rutas y tiempo de los vendedores.
 
-4. Potencial de Venta (10%):
-   - Ticket promedio > $500k: 100 pts
-   - $200k-$500k: 70 pts
-   - < $200k: 40 pts
+2. Vendedor Asignado (25%) - SEGUNDA PRIORIDAD:
+   - Cliente tiene vendedor_principal que coincide con el vendedor: 100 pts
+   - Cliente NO tiene vendedor_principal: 50 pts
+   - Cliente tiene otro vendedor_principal: 20 pts
+   
+   ⚠️ IMPORTANTE: Priorizar clientes que ya tienen relación con el vendedor.
+
+3. Score Comercial (20%):
+   - TOP_10: 100 pts | ALTO: 70 pts | MEDIO: 50 pts | BAJO: 30 pts
+   
+   NOTA: El score comercial es importante pero NO debe descartar clientes cercanos o con vendedor asignado.
+
+4. Urgencia de Visita (15%):
+   - 30-60 días sin compra: 100 pts (ventana ideal)
+   - 60-90 días: 80 pts
+   - > 90 días: 60 pts (riesgo de pérdida)
+   - < 30 días: 40 pts (puede esperar)
+   
+   NOTA: La urgencia es un factor complementario, no excluyente.
 
 FEEDBACK DE VENDEDORES:
 - CONSIDERA el feedback previo de los vendedores sobre sus visitas a clientes
@@ -61,12 +68,12 @@ FEEDBACK DE VENDEDORES:
 
 REGLAS DE DISTRIBUCIÓN:
 - PRIORIDAD #1: Generar 8 recomendaciones por vendedor
-- PRIORIDAD #2: Respetar las zonas geográficas filtradas (barrios/comunas)
-- Distribuir equitativamente entre vendedores DENTRO de sus zonas
+- PRIORIDAD #2: CERCANÍA GEOGRÁFICA - Priorizar clientes en las zonas filtradas
+- PRIORIDAD #3: VENDEDOR ASIGNADO - Priorizar clientes con vendedor_principal del vendedor
 - AGRUPAR clientes del MISMO barrio o barrios adyacentes para optimizar rutas
-- Si un cliente tiene "vendedor_principal", darle bonus +20 pts a ese vendedor
 - No duplicar asignaciones del mismo cliente
-- DESCARTAR clientes que no estén en las zonas filtradas
+- IMPORTANTE: NO descartar clientes solo por score comercial bajo si están cerca y tienen al vendedor asignado
+- FLEXIBILIDAD: Si hay pocos clientes TOP en una zona, incluir clientes MEDIO y BAJO que estén cerca
 
 FORMATO DE RESPUESTA:
 Para cada recomendación debes proporcionar justificación clara mencionando el barrio/zona y scores detallados.`;
