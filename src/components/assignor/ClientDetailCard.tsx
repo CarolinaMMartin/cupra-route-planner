@@ -153,13 +153,15 @@ const ClientDetailCard = ({
 
           {/* Métricas principales */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            <div className="flex items-center gap-2">
-              <Star className="w-4 h-4 text-accent" />
-              <span>Score: {cliente.score}</span>
-            </div>
+            {cliente.score_comercial && (
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 text-accent" />
+                <span>Score: {cliente.score_comercial}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-accent" />
-              <span>{cliente.dias_sin_visita} días sin visita</span>
+              <span>{cliente.dias_sin_visita || cliente.dias_desde_ultima_compra} días</span>
             </div>
             {cliente.cantidad_ordenes !== undefined && (
               <div className="flex items-center gap-2">
@@ -299,20 +301,20 @@ const ClientDetailCard = ({
                 </div>
               </div>
 
-              {/* Scores */}
+              {/* Scores de Base de Datos */}
               <div className="space-y-2">
                 <h4 className="font-semibold text-sm flex items-center gap-2">
                   <Star className="w-4 h-4" />
-                  Scores de Evaluación
+                  Scores de Evaluación (Base de Datos)
                 </h4>
                 <div className="grid grid-cols-3 gap-2 text-xs pl-6">
                   <div>
                     <span className="text-muted-foreground">Recencia:</span>
-                    <p className="font-medium">{cliente.score_recencia || 'N/A'}</p>
+                    <p className="font-medium">{cliente.score_recencia_num || cliente.score_recencia || 'N/A'}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Volumen:</span>
-                    <p className="font-medium">{cliente.score_volumen || 'N/A'}</p>
+                    <p className="font-medium">{cliente.score_volumen_num || cliente.score_volumen || 'N/A'}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Comercial:</span>
@@ -326,6 +328,37 @@ const ClientDetailCard = ({
                   </div>
                 )}
               </div>
+
+              {/* Feedbacks de otros vendedores */}
+              {cliente.feedbacks && cliente.feedbacks.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    Feedbacks de Vendedores
+                  </h4>
+                  <div className="space-y-2 pl-6">
+                    {cliente.feedbacks.map((fb: any, idx: number) => (
+                      <div key={idx} className="bg-muted/50 p-2 rounded-md text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <Badge variant={fb.visita_realizada ? "default" : "secondary"} className="text-xs">
+                            {fb.visita_realizada ? "Visita realizada" : "No visitado"}
+                          </Badge>
+                          {fb.created_at && (
+                            <span className="text-muted-foreground">{formatDate(fb.created_at)}</span>
+                          )}
+                        </div>
+                        {fb.feedback && <p className="text-muted-foreground">{fb.feedback}</p>}
+                        {fb.motivo_no_visita && (
+                          <p className="text-muted-foreground italic">Motivo: {fb.motivo_no_visita}</p>
+                        )}
+                        {fb.tipo_interaccion && (
+                          <Badge variant="outline" className="text-xs">{fb.tipo_interaccion}</Badge>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Ubicación */}
               <div className="space-y-2">

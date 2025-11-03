@@ -25,6 +25,8 @@ export interface Sucursal {
   score_recencia?: number;
   score_volumen?: number;
   score_comercial?: number;
+  score_recencia_num?: number;
+  score_volumen_num?: number;
   participacion_mercado?: number;
   ciudad_principal?: string;
   barrio_principal?: string;
@@ -51,6 +53,14 @@ export interface Sucursal {
   telefonos?: string[];
   // Link a Google Maps
   google_maps_link?: string;
+  // Feedbacks de vendedores
+  feedbacks?: Array<{
+    visita_realizada: boolean;
+    feedback: string;
+    motivo_no_visita?: string;
+    tipo_interaccion?: string;
+    created_at?: string;
+  }>;
 }
 
 export interface Vendedor {

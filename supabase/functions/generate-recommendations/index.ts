@@ -119,6 +119,7 @@ Deno.serve(async (req) => {
     // 1. Si hay area_id, cargar vendedores y barrios del área
     let vendedoresFinales = vendedores || [];
     let barriosFinales = barrio || [];
+    let comunasFinales = comuna || [];
     
     if (area_id) {
       console.log('🗺️ Cargando datos del área:', area_id);
@@ -136,16 +137,19 @@ Deno.serve(async (req) => {
       // Cargar barrios del área
       const { data: areaPlaces } = await supabaseClient
         .from('areas_places')
-        .select('place_id, places(barrio_principal)')
+        .select('place_id, places(barrio_principal, comuna)')
         .eq('area_id', area_id);
       
       if (areaPlaces && areaPlaces.length > 0) {
         barriosFinales = areaPlaces
           .map((ap: any) => ap.places?.barrio_principal)
           .filter(Boolean);
+        comunasFinales = areaPlaces
+          .map((ap: any) => ap.places?.comuna)
+          .filter(Boolean);
       }
       
-      console.log('✅ Área procesada:', { vendedoresFinales, barriosFinales });
+      console.log('✅ Área procesada:', { vendedoresFinales, barriosFinales, comunasFinales });
     }
 
     // 2. Cargar datos de vendedores
@@ -290,6 +294,14 @@ Deno.serve(async (req) => {
       placesQuery = placesQuery.ilike('provincia_principal', `%${provincia}%`);
     }
     
+    // Aplicar filtros de comunas
+    if (comunasFinales.length > 0) {
+      const comunasConditions = comunasFinales
+        .map((c: string) => `comuna.ilike.%${c}%`)
+        .join(',');
+      placesQuery = placesQuery.or(comunasConditions);
+    }
+    
     // Aplicar filtros de barrios
     if (barriosFinales.length > 0) {
       const barriosConditions = barriosFinales
@@ -375,6 +387,7 @@ ${JSON.stringify(clientesContext, null, 2)}
 
 FILTROS APLICADOS:
 - Provincia: ${provincia || 'Todas'}
+- Comunas: ${comunasFinales.length > 0 ? comunasFinales.join(', ') : 'Todas'}
 - Barrios: ${barriosFinales.length > 0 ? barriosFinales.join(', ') : 'Todos'}
 - Recomendaciones por vendedor: ${max_recomendaciones}
 
@@ -539,6 +552,7 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
 
       // Extraer datos de client_places del Map
       const place = placesMap.get(rec.client_id);
+      const clientFeedbacks = feedbacksMap.get(rec.client_id) || [];
 
       enrichedRecommendations.push({
         request_id,
@@ -551,6 +565,13 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
         ai_reasoning: rec.justificacion,
         factores_ia: rec.factores,
         justificacion: rec.justificacion,
+        feedbacks: clientFeedbacks.map((fb: any) => ({
+          visita_realizada: fb.visita_realizada,
+          feedback: fb.feedback,
+          motivo_no_visita: fb.motivo_no_visita,
+          tipo_interaccion: fb.tipo_interaccion,
+          created_at: fb.created_at
+        })),
         
         // Datos comerciales
         monto_total_vendido: clienteCompleto.monto_total_historico,
