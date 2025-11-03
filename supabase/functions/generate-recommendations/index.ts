@@ -27,7 +27,18 @@ CONTEXTO DEL NEGOCIO:
 
 TU TAREA:
 Analizar la cartera de clientes y recomendar visitas priorizadas SOLO para las zonas donde cada vendedor opera.
-DEBES generar EXACTAMENTE 8 RECOMENDACIONES POR VENDEDOR. Si no encuentras 8 clientes adecuados con los criterios establecidos, AVISA en el resumen_analisis indicando cuántos clientes encontraste y por qué no llegaste a 8.
+
+⚠️ REGLA OBLIGATORIA: DEBES generar EXACTAMENTE 8 RECOMENDACIONES POR VENDEDOR. NO es opcional.
+- Si hay clientes ideales: úsalos
+- Si no hay suficientes clientes ideales: RELAJA los criterios y completa las 8 recomendaciones
+- NUNCA devuelvas menos de 8 recomendaciones por vendedor
+- En la justificación, EXPLICA DETALLADAMENTE por qué elegiste cada cliente, incluyendo:
+  * Su ubicación exacta (barrio/comuna)
+  * Su relación con el vendedor (si es su vendedor principal o no)
+  * Su score comercial y qué significa
+  * Días desde última compra
+  * Por qué es una buena opción para visitar AHORA
+  * Si no cumple todos los criterios ideales, explica qué criterios relajaste y por qué
 
 CRITERIOS DE SCORING (EN ORDEN DE IMPORTANCIA):
 
@@ -67,16 +78,28 @@ FEEDBACK DE VENDEDORES:
 - El feedback es una señal importante de la relación real vendedor-cliente
 
 REGLAS DE DISTRIBUCIÓN:
-- PRIORIDAD #1: Generar 8 recomendaciones por vendedor
-- PRIORIDAD #2: CERCANÍA GEOGRÁFICA - Priorizar clientes en las zonas filtradas
-- PRIORIDAD #3: VENDEDOR ASIGNADO - Priorizar clientes con vendedor_principal del vendedor
+- ⚠️ OBLIGATORIO: Generar EXACTAMENTE 8 recomendaciones por vendedor (NO menos, NO más)
+- PRIORIDAD #1: CERCANÍA GEOGRÁFICA - Priorizar clientes en las zonas filtradas
+- PRIORIDAD #2: VENDEDOR ASIGNADO - Priorizar clientes con vendedor_principal del vendedor
 - AGRUPAR clientes del MISMO barrio o barrios adyacentes para optimizar rutas
 - No duplicar asignaciones del mismo cliente
-- IMPORTANTE: NO descartar clientes solo por score comercial bajo si están cerca y tienen al vendedor asignado
-- FLEXIBILIDAD: Si hay pocos clientes TOP en una zona, incluir clientes MEDIO y BAJO que estén cerca
+- FLEXIBILIDAD PARA COMPLETAR 8: Si hay pocos clientes ideales:
+  * Incluir clientes con score comercial MEDIO o BAJO si están cerca
+  * Incluir clientes con más de 90 días sin visita si están en la zona
+  * Incluir clientes sin vendedor_principal asignado si están cerca
+  * SIEMPRE explica en la justificación por qué incluiste ese cliente
+- La justificación debe ser COMPLETA y DETALLADA (3-5 líneas mínimo por cliente)
 
 FORMATO DE RESPUESTA:
-Para cada recomendación debes proporcionar justificación clara mencionando el barrio/zona y scores detallados.`;
+Para cada recomendación debes proporcionar:
+- justificacion: MÍNIMO 3-5 líneas explicando DETALLADAMENTE:
+  * Ubicación exacta (barrio/comuna)
+  * Relación con el vendedor
+  * Score comercial y recencia
+  * Por qué es un buen momento para visitarlo
+  * Si relajaste algún criterio, explica cuál y por qué
+
+RECUERDA: SIEMPRE 8 recomendaciones por vendedor. Es obligatorio.`;
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -369,7 +392,8 @@ IMPORTANTE: Usa estos datos para filtrar y priorizar clientes según las instruc
 ` : ''}
 
 ANALIZA y genera EXACTAMENTE ${max_recomendaciones} recomendaciones por vendedor (total: ${vendedoresContext.length * max_recomendaciones} recomendaciones).
-Si no encuentras suficientes clientes que cumplan los criterios, menciona explícitamente en el resumen_analisis cuántos encontraste y por qué.
+ES OBLIGATORIO completar todas las recomendaciones. Si no hay suficientes clientes ideales, RELAJA los criterios pero COMPLETA las ${max_recomendaciones} recomendaciones por vendedor.
+En el resumen_analisis, menciona si tuviste que relajar criterios para completar las recomendaciones.
 Considera scores comerciales, recencia, proximidad geográfica, potencial de venta, FEEDBACK PREVIO de vendedores, y las INSTRUCCIONES ADICIONALES.
 `;
 
