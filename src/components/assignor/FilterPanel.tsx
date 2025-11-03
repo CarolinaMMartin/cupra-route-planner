@@ -8,9 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Users, MapPin, X, Info } from "lucide-react";
+import { Sparkles, Users, MapPin, X, Info, ChevronDown } from "lucide-react";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 interface Vendedor {
   id: string;
   nombre: string;
@@ -48,6 +49,7 @@ const FilterPanel = ({
   const [areas, setAreas] = useState<Area[]>([]);
   const [selectedArea, setSelectedArea] = useState<string>('none');
   const [isLoadingAreas, setIsLoadingAreas] = useState(true);
+  const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
   const {
     toast
   } = useToast();
@@ -279,168 +281,208 @@ const FilterPanel = ({
     });
   };
   return <form onSubmit={handleSubmit} className="space-y-6">
-      <Card className="p-4 bg-accent/10 border-accent">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-accent" />
-            <h3 className="font-semibold">Filtro Rápido por Área</h3>
+      {/* SECCIÓN 1: FILTRO RÁPIDO POR ÁREA */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 pb-2 border-b border-border">
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent/20 text-accent font-bold text-sm">
+            1
           </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="area-filter">Seleccionar Área</Label>
-            <Select value={selectedArea} onValueChange={handleAreaChange} disabled={isLoadingAreas}>
-              <SelectTrigger id="area-filter" className="bg-background">
-                <SelectValue placeholder="Selecciona un área" />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-50">
-                <SelectItem value="none">Sin área seleccionada</SelectItem>
-                {areas.map((area) => (
-                  <SelectItem key={area.id} value={area.id}>
-                    {area.nombre} ({area.vendedores.length} vendedores, {area.barrios.length} barrios)
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              ✨ Al seleccionar un área, se generarán automáticamente recomendaciones de IA que podrás modificar
-            </p>
-          </div>
+          <h2 className="text-lg font-bold">Filtro Rápido por Área</h2>
         </div>
-      </Card>
-
-      <Card className="p-4 bg-muted/50">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Users className="w-5 h-5 text-accent" />
-              <h3 className="font-semibold">
-                Vendedores Disponibles ({selectedVendedores.length} de {vendedores.length})
-              </h3>
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={toggleAllVendedores} disabled={isLoadingVendedores}>
-              {selectedVendedores.length === vendedores.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
-            </Button>
-          </div>
-
-          {isLoadingVendedores ? <div className="text-sm text-muted-foreground">Cargando vendedores...</div> : vendedores.length === 0 ? <div className="text-sm text-muted-foreground">No hay vendedores activos disponibles</div> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {vendedores.map(vendedor => <label key={vendedor.id} className="flex items-start gap-3 p-3 rounded-lg border bg-background cursor-pointer hover:bg-accent/5 transition-colors">
-                  <Checkbox checked={selectedVendedores.includes(vendedor.id)} onCheckedChange={() => toggleVendedor(vendedor.id)} className="mt-1" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{vendedor.nombre}</p>
-                    <p className="text-xs text-muted-foreground truncate">{vendedor.email}</p>
-                  </div>
-                </label>)}
-            </div>}
-        </div>
-      </Card>
-
-      <Card className="p-4 bg-muted/50">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-5 h-5 text-accent" />
-              <div>
-                <h3 className="font-semibold">Filtros Geográficos</h3>
-                <p className="text-xs text-muted-foreground">Define las zonas donde la IA buscará clientes</p>
-              </div>
-            </div>
-            {hasActiveFilters && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleClearFilters}
-                className="h-8 px-2"
-              >
-                <X className="w-4 h-4 mr-1" />
-                Limpiar filtros
-              </Button>
-            )}
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        <Card className="p-4 bg-accent/5 border-accent/30">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="provincia-filter">Provincia</Label>
-              <Select value={selectedProvincia} onValueChange={handleProvinciaChange}>
-                <SelectTrigger id="provincia-filter" className="bg-background">
-                  <SelectValue placeholder="Todas las provincias" />
+              <Label htmlFor="area-filter" className="text-base">Seleccionar Área</Label>
+              <Select value={selectedArea} onValueChange={handleAreaChange} disabled={isLoadingAreas}>
+                <SelectTrigger id="area-filter" className="bg-background">
+                  <SelectValue placeholder="Sin área seleccionada" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">Todas las provincias</SelectItem>
-                  {provincias.map((provincia) => (
-                    <SelectItem key={provincia} value={provincia}>
-                      {provincia}
+                  <SelectItem value="none">Sin área seleccionada</SelectItem>
+                  {areas.map((area) => (
+                    <SelectItem key={area.id} value={area.id}>
+                      {area.nombre} ({area.vendedores.length} vendedores, {area.barrios.length} barrios)
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="comuna-filter">Comuna / Distrito</Label>
-              <MultiSelect
-                options={comunas}
-                selected={selectedComuna}
-                onChange={setSelectedComuna}
-                placeholder="Todas las comunas"
-                className="w-full"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="barrio-filter">Barrio</Label>
-              <MultiSelect
-                options={barrios}
-                selected={selectedBarrio}
-                onChange={setSelectedBarrio}
-                placeholder="Todos los barrios"
-                className="w-full"
-              />
+              <p className="text-xs text-muted-foreground">
+                ✨ Al seleccionar un área, se generarán automáticamente recomendaciones de IA que podrás modificar
+              </p>
             </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
 
-      <Card className="p-4 bg-gradient-to-br from-accent/5 to-primary/5 border-accent/20">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-accent" />
-            <div>
-              <h3 className="font-semibold">Criterios Complementarios para la IA</h3>
-              <p className="text-xs text-muted-foreground">Instrucciones adicionales que la IA considerará al generar las recomendaciones</p>
+      {/* SECCIÓN 2: FILTROS */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 pb-2 border-b border-border">
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent/20 text-accent font-bold text-sm">
+            2
+          </div>
+          <h2 className="text-lg font-bold">Filtros de Selección</h2>
+        </div>
+
+        {/* Vendedores */}
+        <Card className="p-4 bg-muted/50">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-accent" />
+                <div>
+                  <h3 className="font-semibold">Vendedores</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedVendedores.length} de {vendedores.length} seleccionados
+                  </p>
+                </div>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={toggleAllVendedores} disabled={isLoadingVendedores}>
+                {selectedVendedores.length === vendedores.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+              </Button>
             </div>
+
+            {isLoadingVendedores ? (
+              <div className="text-sm text-muted-foreground">Cargando vendedores...</div>
+            ) : vendedores.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No hay vendedores activos disponibles</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {vendedores.map(vendedor => (
+                  <label key={vendedor.id} className="flex items-start gap-3 p-3 rounded-lg border bg-background cursor-pointer hover:bg-accent/5 transition-colors">
+                    <Checkbox checked={selectedVendedores.includes(vendedor.id)} onCheckedChange={() => toggleVendedor(vendedor.id)} className="mt-1" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{vendedor.nombre}</p>
+                      <p className="text-xs text-muted-foreground truncate">{vendedor.email}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        {/* Filtros Geográficos */}
+        <Card className="p-4 bg-muted/50">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-accent" />
+                <div>
+                  <h3 className="font-semibold">Filtros Geográficos</h3>
+                  <p className="text-xs text-muted-foreground">Define las zonas donde la IA buscará clientes</p>
+                </div>
+              </div>
+              {hasActiveFilters && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearFilters}
+                  className="h-8 px-2"
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Limpiar
+                </Button>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="provincia-filter">Provincia</Label>
+                <Select value={selectedProvincia} onValueChange={handleProvinciaChange}>
+                  <SelectTrigger id="provincia-filter" className="bg-background">
+                    <SelectValue placeholder="Todas las provincias" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="all">Todas las provincias</SelectItem>
+                    {provincias.map((provincia) => (
+                      <SelectItem key={provincia} value={provincia}>
+                        {provincia}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="comuna-filter">Comuna / Distrito</Label>
+                <MultiSelect
+                  options={comunas}
+                  selected={selectedComuna}
+                  onChange={setSelectedComuna}
+                  placeholder="Todas las comunas"
+                  className="w-full"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="barrio-filter">Barrio</Label>
+                <MultiSelect
+                  options={barrios}
+                  selected={selectedBarrio}
+                  onChange={setSelectedBarrio}
+                  placeholder="Todos los barrios"
+                  className="w-full"
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* SECCIÓN 3: INSTRUCCIONES ADICIONALES PARA IA (OPCIONAL) */}
+      <div className="space-y-3">
+        <Collapsible open={isAIInstructionsOpen} onOpenChange={setIsAIInstructionsOpen}>
+          <div className="flex items-center gap-2 pb-2 border-b border-border">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent/20 text-accent font-bold text-sm">
+              3
+            </div>
+            <h2 className="text-lg font-bold flex-1">Instrucciones Adicionales para la IA</h2>
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2">
+                <span className="text-xs text-muted-foreground">Opcional</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${isAIInstructionsOpen ? 'rotate-180' : ''}`} />
+              </Button>
+            </CollapsibleTrigger>
           </div>
           
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription className="text-xs">
-              <strong>Ejemplos de criterios:</strong>
-              <ul className="mt-2 space-y-1 list-disc list-inside">
-                <li>Priorizar clientes que compran productos específicos (ej: "clientes que compran Malbec")</li>
-                <li>Enfocarse en ciertos canales (ej: "solo restaurantes ON_TRADE")</li>
-                <li>Considerar etiquetas específicas (ej: "clientes VIP o Premium")</li>
-                <li>Evitar clientes con ciertos criterios (ej: "evitar clientes con pagos pendientes")</li>
-              </ul>
-            </AlertDescription>
-          </Alert>
+          <CollapsibleContent>
+            <Card className="p-4 bg-gradient-to-br from-accent/5 to-primary/5 border-accent/20">
+              <div className="space-y-4">
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription className="text-xs">
+                    <strong>Ejemplos de criterios:</strong>
+                    <ul className="mt-2 space-y-1 list-disc list-inside">
+                      <li>Priorizar clientes que compran productos específicos (ej: "clientes que compran Malbec")</li>
+                      <li>Enfocarse en ciertos canales (ej: "solo restaurantes ON_TRADE")</li>
+                      <li>Considerar etiquetas específicas (ej: "clientes VIP o Premium")</li>
+                      <li>Evitar clientes con ciertos criterios (ej: "evitar clientes con pagos pendientes")</li>
+                    </ul>
+                  </AlertDescription>
+                </Alert>
 
-          <div className="space-y-2">
-            <Label htmlFor="additional-instructions">
-              Instrucciones libres para la IA
-            </Label>
-            <Textarea
-              id="additional-instructions"
-              placeholder="Ej: Priorizar clientes que compran Malbec Gran Reserva, enfocarse en restaurantes de alta gama del canal ON_TRADE..."
-              value={instruccionesAdicionales}
-              onChange={(e) => onInstruccionesChange(e.target.value)}
-              className="min-h-[120px] resize-none bg-background"
-            />
-            <p className="text-xs text-muted-foreground">
-              La IA buscará en la base de datos (productos, etiquetas, canales) para cumplir con tus instrucciones
-            </p>
-          </div>
-        </div>
-      </Card>
+                <div className="space-y-2">
+                  <Label htmlFor="additional-instructions">
+                    Instrucciones libres para la IA
+                  </Label>
+                  <Textarea
+                    id="additional-instructions"
+                    placeholder="Ej: Priorizar clientes que compran Malbec Gran Reserva, enfocarse en restaurantes de alta gama del canal ON_TRADE..."
+                    value={instruccionesAdicionales}
+                    onChange={(e) => onInstruccionesChange(e.target.value)}
+                    className="min-h-[120px] resize-none bg-background"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    La IA buscará en la base de datos (productos, etiquetas, canales) para cumplir con tus instrucciones
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
 
       <div className="flex flex-col gap-2">
         <Button type="submit" className="wine-button w-full md:w-auto" disabled={isLoading || selectedVendedores.length === 0}>
