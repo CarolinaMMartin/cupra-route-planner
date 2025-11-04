@@ -448,6 +448,8 @@ Deno.serve(async (req) => {
       es_prospecto: true,
       tipo_negocio: p.tipo_principal,
       rating: p.rating,
+      website: p.website,
+      telefono: p.telefono,
       feedbacks_recientes: []
     }));
 
@@ -659,6 +661,11 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
           factores_ia: rec.factores,
           justificacion: rec.justificacion,
           es_prospecto: true,
+          
+          // Datos adicionales del prospecto
+          tipo_negocio: prospectoCompleto.tipo_principal,
+          rating: prospectoCompleto.rating,
+          website: prospectoCompleto.website,
           
           // Datos comerciales (vacíos para prospectos)
           monto_total_vendido: 0,

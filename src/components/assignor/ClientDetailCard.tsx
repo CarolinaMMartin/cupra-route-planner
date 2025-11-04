@@ -160,43 +160,87 @@ const ClientDetailCard = ({
             </div>
             <div className="flex flex-col gap-2 items-end">
               {/* Badge especial para prospectos nuevos */}
-              {(cliente.es_prospecto || cliente.etiquetas?.includes('NUEVO') || cliente.etiquetas?.includes('PROSPECTO')) && (
+              {(cliente.es_prospecto || cliente.etiquetas?.includes('NUEVO') || cliente.etiquetas?.includes('PROSPECTO')) ? (
                 <Badge className="bg-blue-500 text-white hover:bg-blue-600 font-semibold">
-                  🆕 NUEVO
+                  🆕 PROSPECTO NUEVO
                 </Badge>
-              )}
-              <Badge variant={cliente.tipo_cliente === 'Premium' ? 'default' : 'secondary'}>
-                {cliente.tipo_cliente}
-              </Badge>
-              {cliente.canal && (
-                <Badge variant="outline">{cliente.canal}</Badge>
+              ) : (
+                <>
+                  <Badge variant={cliente.tipo_cliente === 'Premium' ? 'default' : 'secondary'}>
+                    {cliente.tipo_cliente}
+                  </Badge>
+                  {cliente.canal && (
+                    <Badge variant="outline">{cliente.canal}</Badge>
+                  )}
+                </>
               )}
             </div>
           </div>
 
           {/* Métricas principales */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-            {cliente.score_comercial && (
-              <div className="flex items-center gap-2">
-                <Star className="w-4 h-4 text-accent" />
-                <span>Score: {cliente.score_comercial}</span>
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-accent" />
-              <span>{cliente.dias_sin_visita || cliente.dias_desde_ultima_compra} días</span>
-            </div>
-            {cliente.cantidad_ordenes !== undefined && (
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4 text-accent" />
-                <span>{cliente.cantidad_ordenes} órdenes</span>
-              </div>
-            )}
-            {cliente.ticket_promedio !== undefined && (
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-accent" />
-                <span>{formatCurrency(cliente.ticket_promedio)}</span>
-              </div>
+            {cliente.es_prospecto ? (
+              <>
+                {/* Métricas para prospectos */}
+                {cliente.tipo_negocio && (
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-accent" />
+                    <span>{cliente.tipo_negocio}</span>
+                  </div>
+                )}
+                {cliente.rating !== undefined && cliente.rating > 0 && (
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-accent" />
+                    <span>Rating: {cliente.rating.toFixed(1)}</span>
+                  </div>
+                )}
+                {cliente.barrio_principal && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-accent" />
+                    <span>{cliente.barrio_principal}</span>
+                  </div>
+                )}
+                {cliente.website && (
+                  <div className="flex items-center gap-2">
+                    <Tag className="w-4 h-4 text-accent" />
+                    <a 
+                      href={cliente.website} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-primary hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Ver sitio web
+                    </a>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Métricas para clientes existentes */}
+                {cliente.score_comercial && (
+                  <div className="flex items-center gap-2">
+                    <Star className="w-4 h-4 text-accent" />
+                    <span>Score: {cliente.score_comercial}</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-accent" />
+                  <span>{cliente.dias_sin_visita || cliente.dias_desde_ultima_compra} días</span>
+                </div>
+                {cliente.cantidad_ordenes !== undefined && (
+                  <div className="flex items-center gap-2">
+                    <ShoppingCart className="w-4 h-4 text-accent" />
+                    <span>{cliente.cantidad_ordenes} órdenes</span>
+                  </div>
+                )}
+                {cliente.ticket_promedio !== undefined && (
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-accent" />
+                    <span>{formatCurrency(cliente.ticket_promedio)}</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

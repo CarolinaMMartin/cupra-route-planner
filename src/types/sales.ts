@@ -47,6 +47,10 @@ export interface Sucursal {
   // Flag para indicar si es prospecto nuevo
   es_prospecto?: boolean;
   prospecto_place_id?: string;
+  // Campos adicionales para prospectos
+  tipo_negocio?: string;
+  rating?: number;
+  website?: string;
   factores_ia?: {
     score_comercial: number;
     proximidad_geografica: number;
