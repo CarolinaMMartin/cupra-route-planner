@@ -84,10 +84,13 @@ Deno.serve(async (req) => {
 
     console.log('👥 Procesando clientes...');
     
-    // Filtrar campos que no existen en la tabla
+    // Filtrar campos que no existen en la tabla y normalizar client_id a string
     const clientesLimpios = body.clientes.map(cliente => {
       const { comuna_principal, todas_comunas, todas_provincias, ...rest } = cliente as any;
-      return rest;
+      return {
+        ...rest,
+        client_id: String(rest.client_id), // Asegurar que client_id siempre sea string
+      };
     });
     
     // ESTRATEGIA DE PROTECCIÓN DE TRACKING:
@@ -115,7 +118,8 @@ Deno.serve(async (req) => {
     ];
 
     // PASO 1: Identificar clientes existentes
-    const clientIds = clientesLimpios.map(c => c.client_id);
+    // Asegurar que todos los client_id sean strings para la comparación
+    const clientIds = clientesLimpios.map(c => String(c.client_id));
     const { data: existingClients, error: fetchError } = await supabase
       .from('clientes')
       .select('client_id')
