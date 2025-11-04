@@ -550,6 +550,8 @@ const VendedorKanban = () => {
       transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
     } : undefined;
 
+    const esProspecto = cliente.razon_social.startsWith('🆕');
+
     return (
       <div ref={setNodeRef} style={style}>
         <Card 
@@ -559,39 +561,91 @@ const VendedorKanban = () => {
           <div className="space-y-2" {...listeners} {...attributes}>
             <div>
               <h4 className="font-semibold text-sm">{cliente.razon_social}</h4>
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Building className="w-3 h-3" />
-                {cliente.cuit_dni}
-              </p>
-              {cliente.telefonos && cliente.telefonos.length > 0 && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Phone className="w-3 h-3" />
-                  {cliente.telefonos[0]}
-                  {cliente.telefonos.length > 1 && (
-                    <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                      +{cliente.telefonos.length - 1}
-                    </Badge>
+              
+              {esProspecto ? (
+                // Card para prospectos
+                <>
+                  {cliente.canal && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Building className="w-3 h-3" />
+                      {cliente.canal}
+                    </p>
                   )}
-                </p>
-              )}
-              {cliente.emails && cliente.emails.length > 0 && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                  <Mail className="w-3 h-3 flex-shrink-0" />
-                  <span className="truncate">{cliente.emails[0]}</span>
-                </p>
-              )}
-            </div>
-            <div className="flex items-center justify-between pt-1">
-              {cliente.barrio_principal && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {cliente.barrio_principal}
-                </p>
-              )}
-              {cliente.dias_desde_ultima_compra !== undefined && (
-                <Badge variant="outline" className="text-xs">
-                  {cliente.dias_desde_ultima_compra} días sin compra
-                </Badge>
+                  {cliente.telefonos && cliente.telefonos.length > 0 && (
+                    <a 
+                      href={`tel:${cliente.telefonos[0]}`}
+                      className="text-xs text-primary flex items-center gap-1 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Phone className="w-3 h-3" />
+                      {cliente.telefonos[0]}
+                    </a>
+                  )}
+                  {cliente.direccion_principal && (
+                    <p className="text-xs text-muted-foreground flex items-start gap-1">
+                      <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">{cliente.direccion_principal}</span>
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between pt-1">
+                    {cliente.google_maps_link && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(cliente.google_maps_link, '_blank');
+                        }}
+                      >
+                        <Navigation className="w-3 h-3 mr-1" />
+                        Ver ubicación
+                      </Button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                // Card para clientes existentes
+                <>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Building className="w-3 h-3" />
+                    {cliente.cuit_dni}
+                  </p>
+                  {cliente.telefonos && cliente.telefonos.length > 0 && (
+                    <a 
+                      href={`tel:${cliente.telefonos[0]}`}
+                      className="text-xs text-primary flex items-center gap-1 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Phone className="w-3 h-3" />
+                      {cliente.telefonos[0]}
+                      {cliente.telefonos.length > 1 && (
+                        <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                          +{cliente.telefonos.length - 1}
+                        </Badge>
+                      )}
+                    </a>
+                  )}
+                  {cliente.emails && cliente.emails.length > 0 && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                      <Mail className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{cliente.emails[0]}</span>
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between pt-1">
+                    {cliente.barrio_principal && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {cliente.barrio_principal}
+                      </p>
+                    )}
+                    {cliente.dias_desde_ultima_compra !== undefined && (
+                      <Badge variant="outline" className="text-xs">
+                        {cliente.dias_desde_ultima_compra} días sin compra
+                      </Badge>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -601,44 +655,72 @@ const VendedorKanban = () => {
   };
 
   const ClientCard = ({ cliente }: { cliente: ClienteAsignado }) => {
+    const esProspecto = cliente.razon_social.startsWith('🆕');
+
     return (
       <Card className="p-3">
         <div className="space-y-2">
           <div>
             <h4 className="font-semibold text-sm">{cliente.razon_social}</h4>
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Building className="w-3 h-3" />
-              {cliente.cuit_dni}
-            </p>
-            {cliente.telefonos && cliente.telefonos.length > 0 && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <Phone className="w-3 h-3" />
-                {cliente.telefonos[0]}
-                {cliente.telefonos.length > 1 && (
-                  <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                    +{cliente.telefonos.length - 1}
-                  </Badge>
+            
+            {esProspecto ? (
+              <>
+                {cliente.canal && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Building className="w-3 h-3" />
+                    {cliente.canal}
+                  </p>
                 )}
-              </p>
-            )}
-            {cliente.emails && cliente.emails.length > 0 && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                <Mail className="w-3 h-3 flex-shrink-0" />
-                <span className="truncate">{cliente.emails[0]}</span>
-              </p>
-            )}
-          </div>
-          <div className="flex items-center justify-between pt-1">
-            {cliente.barrio_principal && (
-              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {cliente.barrio_principal}
-              </p>
-            )}
-            {cliente.dias_desde_ultima_compra !== undefined && (
-              <Badge variant="outline" className="text-xs">
-                {cliente.dias_desde_ultima_compra} días sin compra
-              </Badge>
+                {cliente.telefonos && cliente.telefonos.length > 0 && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Phone className="w-3 h-3" />
+                    {cliente.telefonos[0]}
+                  </p>
+                )}
+                {cliente.direccion_principal && (
+                  <p className="text-xs text-muted-foreground flex items-start gap-1">
+                    <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                    <span className="line-clamp-2">{cliente.direccion_principal}</span>
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Building className="w-3 h-3" />
+                  {cliente.cuit_dni}
+                </p>
+                {cliente.telefonos && cliente.telefonos.length > 0 && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Phone className="w-3 h-3" />
+                    {cliente.telefonos[0]}
+                    {cliente.telefonos.length > 1 && (
+                      <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                        +{cliente.telefonos.length - 1}
+                      </Badge>
+                    )}
+                  </p>
+                )}
+                {cliente.emails && cliente.emails.length > 0 && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                    <Mail className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate">{cliente.emails[0]}</span>
+                  </p>
+                )}
+                <div className="flex items-center justify-between pt-1">
+                  {cliente.barrio_principal && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      {cliente.barrio_principal}
+                    </p>
+                  )}
+                  {cliente.dias_desde_ultima_compra !== undefined && (
+                    <Badge variant="outline" className="text-xs">
+                      {cliente.dias_desde_ultima_compra} días sin compra
+                    </Badge>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>
