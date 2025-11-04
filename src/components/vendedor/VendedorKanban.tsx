@@ -877,13 +877,15 @@ const VendedorKanban = () => {
               <div>
                 <h3 className="text-sm font-semibold mb-3">Información de Contacto</h3>
                 <div className="grid gap-3">
-                  <div className="flex items-start gap-2">
-                    <Building className="w-4 h-4 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">CUIT/DNI</p>
-                      <p className="text-sm font-medium">{selectedCliente.cuit_dni}</p>
+                  {selectedCliente.cuit_dni && (
+                    <div className="flex items-start gap-2">
+                      <Building className="w-4 h-4 text-muted-foreground mt-0.5" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">CUIT/DNI</p>
+                        <p className="text-sm font-medium">{selectedCliente.cuit_dni}</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {selectedCliente.direccion_principal && (
                     <div className="flex items-start gap-2">
@@ -919,7 +921,44 @@ const VendedorKanban = () => {
                        <Phone className="w-4 h-4 text-muted-foreground mt-0.5" />
                        <div>
                          <p className="text-xs text-muted-foreground">Teléfonos</p>
-                         <p className="text-sm font-medium">{selectedCliente.telefonos.join(', ')}</p>
+                         <div className="space-y-1">
+                           {selectedCliente.telefonos.map((tel, idx) => (
+                             <a 
+                               key={idx}
+                               href={`tel:${tel}`}
+                               className="text-sm font-medium text-primary hover:underline block"
+                             >
+                               {tel}
+                             </a>
+                           ))}
+                         </div>
+                       </div>
+                     </div>
+                   )}
+
+                   {selectedCliente.website && (
+                     <div className="flex items-start gap-2">
+                       <span className="text-base mt-0.5">🌐</span>
+                       <div>
+                         <p className="text-xs text-muted-foreground">Sitio Web</p>
+                         <a 
+                           href={selectedCliente.website.startsWith('http') ? selectedCliente.website : `https://${selectedCliente.website}`}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           className="text-sm font-medium text-primary hover:underline"
+                         >
+                           {selectedCliente.website}
+                         </a>
+                       </div>
+                     </div>
+                   )}
+
+                   {selectedCliente.rating && selectedCliente.rating > 0 && (
+                     <div className="flex items-start gap-2">
+                       <span className="text-base mt-0.5">⭐</span>
+                       <div>
+                         <p className="text-xs text-muted-foreground">Valoración en Google</p>
+                         <p className="text-sm font-medium">{selectedCliente.rating.toFixed(1)} estrellas</p>
                        </div>
                      </div>
                    )}
@@ -936,7 +975,9 @@ const VendedorKanban = () => {
                  </div>
                </div>
 
-               {/* Información comercial */}
+               {/* Información comercial - solo mostrar si hay datos reales */}
+              {(selectedCliente.cantidad_ordenes && selectedCliente.cantidad_ordenes > 0) || 
+               (selectedCliente.monto_total_historico && selectedCliente.monto_total_historico > 0) ? (
               <div>
                 <h3 className="text-sm font-semibold mb-3">Información Comercial</h3>
                 <div className="grid grid-cols-2 gap-4">
@@ -991,10 +1032,11 @@ const VendedorKanban = () => {
                       </p>
                     </div>
                   )}
-                </div>
-              </div>
+                 </div>
+               </div>
+              ) : null}
 
-              {/* Scores */}
+               {/* Scores */}
               {(selectedCliente.categoria_recencia || selectedCliente.categoria_volumen || selectedCliente.score_comercial) && (
                 <div>
                   <h3 className="text-sm font-semibold mb-2">Scores</h3>
