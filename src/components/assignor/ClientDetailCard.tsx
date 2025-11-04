@@ -17,6 +17,7 @@ import {
   TrendingUp,
   Tag,
   Phone,
+  Mail,
   Building2,
   AlertCircle
 } from "lucide-react";
@@ -147,6 +148,12 @@ const ClientDetailCard = ({
                   <p className="text-sm text-muted-foreground flex items-center gap-1">
                     <Phone className="w-3 h-3" />
                     {cliente.telefonos.join(', ')}
+                  </p>
+                )}
+                {cliente.emails && cliente.emails.length > 0 && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Mail className="w-3 h-3" />
+                    {cliente.emails.join(', ')}
                   </p>
                 )}
               </div>
