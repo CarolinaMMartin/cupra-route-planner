@@ -88,22 +88,42 @@ Deno.serve(async (req) => {
       return rest;
     });
     
-    const { error: clientesError } = await supabase
-      .from('clientes')
-      .upsert(clientesLimpios, {
-        onConflict: 'client_id',
-        ignoreDuplicates: false,
-      });
+    // ESTRATEGIA DE PROTECCIÓN DE TRACKING:
+    // Separamos la lógica en dos pasos para proteger campos de gestión interna
+    // que NO deben sobreescribirse con datos de n8n
+    
+    // CAMPOS PROTEGIDOS (NO se actualizan desde n8n):
+    // - last_recommendation_at: Lo actualiza generate-recommendations
+    // - excluir_recomendaciones: Lo actualiza el usuario manualmente
+    // - ultima_visita: Lo actualiza el sistema de visitas
+    // - id, created_at, updated_at: Gestión automática de Supabase
+    
+    // CAMPOS ACTUALIZABLES (vienen de n8n):
+    const camposVentas = [
+      'razon_social', 'cuit_dni', 'fantasia',
+      'primera_compra', 'ultima_compra', 'dias_desde_ultima_compra',
+      'cantidad_ordenes', 'monto_total_historico', 'ticket_promedio',
+      'categoria_recencia', 'categoria_volumen',
+      'score_recencia', 'score_volumen', 'score_comercial',
+      'participacion_mercado', 'ciudad_principal', 'barrio_principal',
+      'direccion_principal', 'provincia_principal', 'vendedor_principal',
+      'productos_comprados', 'todas_ciudades', 'todos_barrios',
+      'todas_direcciones', 'todos_vendedores', 'requiere_visita', 'canal', 'etiquetas'
+    ];
 
-    if (clientesError) {
-      console.error('❌ Error en clientes:', clientesError);
-      results.errors = body.clientes.length;
-      
+    // PASO 1: Identificar clientes existentes
+    const clientIds = clientesLimpios.map(c => c.client_id);
+    const { data: existingClients, error: fetchError } = await supabase
+      .from('clientes')
+      .select('client_id')
+      .in('client_id', clientIds);
+
+    if (fetchError) {
+      console.error('❌ Error al verificar clientes existentes:', fetchError);
       return new Response(
         JSON.stringify({
           success: false,
-          error: clientesError.message,
-          results,
+          error: fetchError.message,
         }),
         {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -112,8 +132,64 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('✅ Clientes procesados exitosamente');
-    results.inserted = body.clientes.length;
+    const existingClientIds = new Set(existingClients?.map(c => c.client_id) || []);
+    const clientesNuevos = clientesLimpios.filter(c => !existingClientIds.has(c.client_id));
+    const clientesExistentes = clientesLimpios.filter(c => existingClientIds.has(c.client_id));
+
+    console.log(`📊 Estadísticas: ${clientesNuevos.length} nuevos, ${clientesExistentes.length} existentes`);
+
+    // PASO 2: Insertar clientes nuevos con valores por defecto para campos protegidos
+    if (clientesNuevos.length > 0) {
+      const clientesParaInsert = clientesNuevos.map(cliente => ({
+        ...cliente,
+        last_recommendation_at: null,
+        excluir_recomendaciones: false,
+      }));
+
+      const { error: insertError } = await supabase
+        .from('clientes')
+        .insert(clientesParaInsert);
+
+      if (insertError) {
+        console.error('❌ Error insertando clientes nuevos:', insertError);
+        results.errors += clientesNuevos.length;
+      } else {
+        console.log(`✅ ${clientesNuevos.length} clientes nuevos insertados`);
+        results.inserted = clientesNuevos.length;
+      }
+    }
+
+    // PASO 3: Actualizar clientes existentes SOLO con campos de ventas
+    if (clientesExistentes.length > 0) {
+      let updateSuccessCount = 0;
+      let updateErrorCount = 0;
+
+      for (const cliente of clientesExistentes) {
+        // Construir objeto con solo los campos de ventas
+        const updateData: any = { updated_at: new Date().toISOString() };
+        camposVentas.forEach(campo => {
+          if (cliente[campo] !== undefined) {
+            updateData[campo] = cliente[campo];
+          }
+        });
+
+        const { error: updateError } = await supabase
+          .from('clientes')
+          .update(updateData)
+          .eq('client_id', cliente.client_id);
+
+        if (updateError) {
+          console.error(`❌ Error actualizando cliente ${cliente.client_id}:`, updateError);
+          updateErrorCount++;
+        } else {
+          updateSuccessCount++;
+        }
+      }
+
+      console.log(`✅ ${updateSuccessCount} clientes existentes actualizados (solo campos de ventas)`);
+      results.updated = updateSuccessCount;
+      results.errors += updateErrorCount;
+    }
 
     console.log('🎉 Proceso completado:', results);
 
