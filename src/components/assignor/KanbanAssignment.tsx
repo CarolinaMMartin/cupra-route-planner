@@ -220,33 +220,40 @@ const KanbanAssignment = ({
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      // Mapear recomendaciones a cliente_id usando cuit_dni
+      // Mapear recomendaciones a cliente_id o prospecto_place_id
       const cuitDniMap = new Map<string, string>();
+      const prospectoMap = new Map<string, string>(); // recomendacion_id -> prospecto_place_id
+      
       selectedRecommendations.forEach((rec) => {
-        if (rec.cuit_dni) {
+        if (rec.es_prospecto && rec.prospecto_place_id) {
+          prospectoMap.set(rec.id, rec.prospecto_place_id);
+        } else if (rec.cuit_dni) {
           cuitDniMap.set(rec.id, rec.cuit_dni);
         }
       });
 
-      // Buscar los client_id correspondientes en la tabla clientes
+      // Buscar los client_id correspondientes para clientes normales
       const cuitDnis = Array.from(cuitDniMap.values());
-      const { data: clientes, error: clientesError } = await supabase
-        .from("clientes")
-        .select("client_id, cuit_dni")
-        .in("cuit_dni", cuitDnis);
+      let clienteIdMap = new Map<string, string>();
+      
+      if (cuitDnis.length > 0) {
+        const { data: clientes, error: clientesError } = await supabase
+          .from("clientes")
+          .select("client_id, cuit_dni")
+          .in("cuit_dni", cuitDnis);
 
-      if (clientesError) throw clientesError;
+        if (clientesError) throw clientesError;
 
-      // Crear mapa de cuit_dni a client_id
-      const clienteIdMap = new Map<string, string>();
-      (clientes || []).forEach((cliente) => {
-        clienteIdMap.set(cliente.cuit_dni, cliente.client_id);
-      });
+        // Crear mapa de cuit_dni a client_id
+        (clientes || []).forEach((cliente) => {
+          clienteIdMap.set(cliente.cuit_dni, cliente.client_id);
+        });
+      }
 
       // Mapear recomendacion_id a cliente_id
       const recomendacionToClienteMap = new Map<string, string>();
       selectedRecommendations.forEach((rec) => {
-        if (rec.cuit_dni) {
+        if (!rec.es_prospecto && rec.cuit_dni) {
           const clienteId = clienteIdMap.get(rec.cuit_dni);
           if (clienteId) {
             recomendacionToClienteMap.set(rec.id, clienteId);
@@ -254,10 +261,11 @@ const KanbanAssignment = ({
         }
       });
 
-      // Obtener cliente_ids válidos
+      // Obtener IDs válidos para eliminar asignaciones previas
       const validClienteIds = Array.from(recomendacionToClienteMap.values());
+      const validProspectoIds = Array.from(prospectoMap.values());
 
-      // Primero eliminamos TODAS las asignaciones de estos clientes
+      // Eliminar asignaciones previas de clientes y prospectos
       if (validClienteIds.length > 0) {
         const { error: deleteError } = await supabase
           .from("asignaciones_vendedores_clientes")
@@ -267,22 +275,50 @@ const KanbanAssignment = ({
         if (deleteError) throw deleteError;
       }
 
-      // Crear nuevas asignaciones únicas
+      if (validProspectoIds.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("asignaciones_vendedores_clientes")
+          .delete()
+          .in("prospecto_place_id", validProspectoIds);
+
+        if (deleteError) throw deleteError;
+      }
+
+      // Crear nuevas asignaciones
       const newAssignments = [];
       const assignedPairs = new Set<string>();
 
       for (const [vendedorId, recomendacionIds] of Object.entries(assignments)) {
         if (vendedorId !== "unassigned") {
           for (const recomendacionId of recomendacionIds) {
-            const clienteId = recomendacionToClienteMap.get(recomendacionId);
-            if (clienteId) {
-              const pairKey = `${vendedorId}-${clienteId}`;
+            const rec = selectedRecommendations.find(r => r.id === recomendacionId);
+            
+            if (rec?.es_prospecto && rec.prospecto_place_id) {
+              // Asignación de prospecto
+              const pairKey = `${vendedorId}-prospecto-${rec.prospecto_place_id}`;
               if (!assignedPairs.has(pairKey)) {
                 assignedPairs.add(pairKey);
                 newAssignments.push({
                   vendedor_id: vendedorId,
-                  client_id: clienteId,
+                  prospecto_place_id: rec.prospecto_place_id,
+                  es_prospecto: true,
+                  client_id: null,
                 });
+              }
+            } else {
+              // Asignación de cliente normal
+              const clienteId = recomendacionToClienteMap.get(recomendacionId);
+              if (clienteId) {
+                const pairKey = `${vendedorId}-cliente-${clienteId}`;
+                if (!assignedPairs.has(pairKey)) {
+                  assignedPairs.add(pairKey);
+                  newAssignments.push({
+                    vendedor_id: vendedorId,
+                    client_id: clienteId,
+                    es_prospecto: false,
+                    prospecto_place_id: null,
+                  });
+                }
               }
             }
           }
@@ -297,7 +333,7 @@ const KanbanAssignment = ({
 
       toast({
         title: "Asignaciones guardadas",
-        description: `Se asignaron ${newAssignments.length} clientes exitosamente`,
+        description: `Se asignaron ${newAssignments.length} clientes y prospectos exitosamente`,
       });
 
       if (onComplete) {

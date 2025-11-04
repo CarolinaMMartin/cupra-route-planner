@@ -134,14 +134,26 @@ const VendedorKanban = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Obtener asignaciones del vendedor con información completa del cliente
+      // Obtener asignaciones del vendedor
       const { data: asignaciones, error } = await supabase
         .from('asignaciones_vendedores_clientes')
-        .select(`
-          id,
-          client_id,
-          estado,
-          clientes (
+        .select('*')
+        .eq('vendedor_id', user.id);
+
+      if (error) throw error;
+
+      // Separar clientes y prospectos
+      const clienteAsignaciones = asignaciones?.filter(a => !a.es_prospecto) || [];
+      const prospectoAsignaciones = asignaciones?.filter(a => a.es_prospecto) || [];
+
+      // Obtener información de clientes
+      const clientIds = [...new Set(clienteAsignaciones.map(a => a.client_id))];
+      let clientesData: any[] = [];
+      
+      if (clientIds.length > 0) {
+        const { data, error: clientesError } = await supabase
+          .from('clientes')
+          .select(`
             razon_social,
             cuit_dni,
             barrio_principal,
@@ -168,15 +180,30 @@ const VendedorKanban = () => {
             etiquetas,
             canal,
             telefonos,
-            emails
-          )
-        `)
-        .eq('vendedor_id', user.id);
+            emails,
+            client_id
+          `)
+          .in('client_id', clientIds);
 
-      if (error) throw error;
+        if (clientesError) throw clientesError;
+        clientesData = data || [];
+      }
 
-      // Obtener google_maps_link de client_places para cada cliente
-      const clientIds = [...new Set((asignaciones || []).map((a: any) => a.client_id))];
+      // Obtener información de prospectos
+      const prospectoIds = [...new Set(prospectoAsignaciones.map(a => a.prospecto_place_id))];
+      let prospectosData: any[] = [];
+      
+      if (prospectoIds.length > 0) {
+        const { data, error: prospectosError } = await supabase
+          .from('prospectos')
+          .select('*')
+          .in('place_id', prospectoIds);
+
+        if (prospectosError) throw prospectosError;
+        prospectosData = data || [];
+      }
+
+      // Obtener google_maps_link de client_places para clientes
       const { data: placesData } = await supabase
         .from('client_places')
         .select('client_id, google_maps_link')
@@ -187,50 +214,103 @@ const VendedorKanban = () => {
         (placesData || []).map(p => [p.client_id, p.google_maps_link])
       );
 
+      // Crear mapas para acceso rápido
+      const clientesMap = new Map(clientesData.map(c => [c.client_id, c]));
+      const prospectosMap = new Map(prospectosData.map(p => [p.place_id, p]));
+
       // Agrupar por estado
       const grouped: Record<string, ClienteAsignado[]> = {
         'Por visitar': [],
         'Visitado': [],
       };
 
-      (asignaciones || []).forEach((asig: any) => {
-        // Convertir "Asignado" a "Por visitar"
+      // Procesar clientes
+      clienteAsignaciones.forEach((asig: any) => {
+        const clienteData = clientesMap.get(asig.client_id);
+        if (!clienteData) return;
+
         const estado = asig.estado === 'Asignado' ? 'Por visitar' : asig.estado;
         
         const cliente: ClienteAsignado = {
           id: asig.id,
           client_id: asig.client_id,
           estado: estado as 'Por visitar' | 'Visitado',
-          razon_social: asig.clientes?.razon_social || 'Sin nombre',
-          cuit_dni: asig.clientes?.cuit_dni || '',
-          barrio_principal: asig.clientes?.barrio_principal,
-          dias_desde_ultima_compra: asig.clientes?.dias_desde_ultima_compra,
-          ciudad_principal: asig.clientes?.ciudad_principal,
-          provincia_principal: asig.clientes?.provincia_principal,
-          direccion_principal: asig.clientes?.direccion_principal,
-          todas_direcciones: asig.clientes?.todas_direcciones,
-          todas_ciudades: asig.clientes?.todas_ciudades,
-          todos_barrios: asig.clientes?.todos_barrios,
-          primera_compra: asig.clientes?.primera_compra,
-          ultima_compra: asig.clientes?.ultima_compra,
-          cantidad_ordenes: asig.clientes?.cantidad_ordenes,
-          monto_total_historico: asig.clientes?.monto_total_historico,
-          ticket_promedio: asig.clientes?.ticket_promedio,
-          categoria_recencia: asig.clientes?.categoria_recencia,
-          categoria_volumen: asig.clientes?.categoria_volumen,
-          score_recencia: asig.clientes?.score_recencia,
-          score_volumen: asig.clientes?.score_volumen,
-          score_comercial: asig.clientes?.score_comercial,
-          participacion_mercado: asig.clientes?.participacion_mercado,
-          productos_comprados: asig.clientes?.productos_comprados,
-          todos_vendedores: asig.clientes?.todos_vendedores,
-          etiquetas: asig.clientes?.etiquetas,
-          canal: asig.clientes?.canal,
-          telefonos: asig.clientes?.telefonos,
-          emails: asig.clientes?.emails,
+          razon_social: clienteData.razon_social || 'Sin nombre',
+          cuit_dni: clienteData.cuit_dni || '',
+          barrio_principal: clienteData.barrio_principal,
+          dias_desde_ultima_compra: clienteData.dias_desde_ultima_compra,
+          ciudad_principal: clienteData.ciudad_principal,
+          provincia_principal: clienteData.provincia_principal,
+          direccion_principal: clienteData.direccion_principal,
+          todas_direcciones: clienteData.todas_direcciones,
+          todas_ciudades: clienteData.todas_ciudades,
+          todos_barrios: clienteData.todos_barrios,
+          primera_compra: clienteData.primera_compra,
+          ultima_compra: clienteData.ultima_compra,
+          cantidad_ordenes: clienteData.cantidad_ordenes,
+          monto_total_historico: clienteData.monto_total_historico,
+          ticket_promedio: clienteData.ticket_promedio,
+          categoria_recencia: clienteData.categoria_recencia,
+          categoria_volumen: clienteData.categoria_volumen,
+          score_recencia: clienteData.score_recencia,
+          score_volumen: clienteData.score_volumen,
+          score_comercial: clienteData.score_comercial,
+          participacion_mercado: clienteData.participacion_mercado,
+          productos_comprados: clienteData.productos_comprados,
+          todos_vendedores: clienteData.todos_vendedores,
+          etiquetas: clienteData.etiquetas,
+          canal: clienteData.canal,
+          telefonos: clienteData.telefonos,
+          emails: clienteData.emails,
           google_maps_link: placesMap.get(asig.client_id) || undefined,
         };
         grouped[estado].push(cliente);
+      });
+
+      // Procesar prospectos
+      prospectoAsignaciones.forEach((asig: any) => {
+        const prospectoData = prospectosMap.get(asig.prospecto_place_id);
+        if (!prospectoData) return;
+
+        const estado = asig.estado === 'Asignado' ? 'Por visitar' : asig.estado;
+        
+        // Crear google maps link para prospectos
+        const googleMapsLink = `https://www.google.com/maps/place/?q=place_id:${prospectoData.place_id}`;
+        
+        const prospecto: ClienteAsignado = {
+          id: asig.id,
+          client_id: `prospecto-${asig.prospecto_place_id}`, // ID único para prospectos
+          estado: estado as 'Por visitar' | 'Visitado',
+          razon_social: `🆕 ${prospectoData.nombre}` || 'Prospecto sin nombre',
+          cuit_dni: '',
+          barrio_principal: prospectoData.barrio || prospectoData.comuna,
+          dias_desde_ultima_compra: undefined,
+          ciudad_principal: prospectoData.ciudad,
+          provincia_principal: prospectoData.provincia,
+          direccion_principal: prospectoData.direccion,
+          todas_direcciones: [prospectoData.direccion],
+          todas_ciudades: [prospectoData.ciudad],
+          todos_barrios: prospectoData.barrio ? [prospectoData.barrio] : [],
+          primera_compra: undefined,
+          ultima_compra: undefined,
+          cantidad_ordenes: 0,
+          monto_total_historico: 0,
+          ticket_promedio: 0,
+          categoria_recencia: 'Prospecto Nuevo',
+          categoria_volumen: 'Prospecto',
+          score_recencia: 0,
+          score_volumen: 0,
+          score_comercial: 0,
+          participacion_mercado: 0,
+          productos_comprados: [],
+          todos_vendedores: [],
+          etiquetas: ['Prospecto'],
+          canal: prospectoData.tipo_principal || 'Prospecto',
+          telefonos: prospectoData.telefono ? [prospectoData.telefono] : [],
+          emails: [],
+          google_maps_link: googleMapsLink,
+        };
+        grouped[estado].push(prospecto);
       });
 
       setAssignments(grouped);

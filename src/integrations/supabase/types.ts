@@ -149,24 +149,30 @@ export type Database = {
       }
       asignaciones_vendedores_clientes: {
         Row: {
-          client_id: string
+          client_id: string | null
           created_at: string
+          es_prospecto: boolean
           estado: Database["public"]["Enums"]["estado_asignacion"]
           id: string
+          prospecto_place_id: string | null
           vendedor_id: string
         }
         Insert: {
-          client_id: string
+          client_id?: string | null
           created_at?: string
+          es_prospecto?: boolean
           estado?: Database["public"]["Enums"]["estado_asignacion"]
           id?: string
+          prospecto_place_id?: string | null
           vendedor_id: string
         }
         Update: {
-          client_id?: string
+          client_id?: string | null
           created_at?: string
+          es_prospecto?: boolean
           estado?: Database["public"]["Enums"]["estado_asignacion"]
           id?: string
+          prospecto_place_id?: string | null
           vendedor_id?: string
         }
         Relationships: [
@@ -183,6 +189,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "fk_prospecto"
+            columns: ["prospecto_place_id"]
+            isOneToOne: false
+            referencedRelation: "prospectos"
+            referencedColumns: ["place_id"]
           },
         ]
       }
