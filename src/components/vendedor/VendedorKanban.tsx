@@ -879,7 +879,7 @@ const VendedorKanban = () => {
                              <a 
                                key={idx}
                                href={`tel:${tel}`}
-                               className="text-sm font-medium text-primary hover:underline block"
+                               className="text-sm font-medium text-blue-400 hover:text-blue-300 hover:underline block"
                              >
                                {tel}
                              </a>
@@ -898,7 +898,7 @@ const VendedorKanban = () => {
                            href={selectedCliente.website.startsWith('http') ? selectedCliente.website : `https://${selectedCliente.website}`}
                            target="_blank"
                            rel="noopener noreferrer"
-                           className="text-sm font-medium text-primary hover:underline"
+                           className="text-sm font-medium text-blue-400 hover:text-blue-300 hover:underline"
                          >
                            {selectedCliente.website}
                          </a>
