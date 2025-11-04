@@ -60,6 +60,9 @@ interface ClienteAsignado {
   todos_vendedores?: string[];
   etiquetas?: string[];
   canal?: string;
+  // Información de contacto adicional
+  telefonos?: string[];
+  emails?: string[];
   // Link de Google Maps
   google_maps_link?: string;
 }
@@ -163,7 +166,9 @@ const VendedorKanban = () => {
             productos_comprados,
             todos_vendedores,
             etiquetas,
-            canal
+            canal,
+            telefonos,
+            emails
           )
         `)
         .eq('vendedor_id', user.id);
@@ -221,6 +226,8 @@ const VendedorKanban = () => {
           todos_vendedores: asig.clientes?.todos_vendedores,
           etiquetas: asig.clientes?.etiquetas,
           canal: asig.clientes?.canal,
+          telefonos: asig.clientes?.telefonos,
+          emails: asig.clientes?.emails,
           google_maps_link: placesMap.get(asig.client_id) || undefined,
         };
         grouped[estado].push(cliente);
@@ -671,12 +678,32 @@ const VendedorKanban = () => {
                           <p key={idx} className="text-xs">{dir}</p>
                         ))}
                       </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+                     </div>
+                   )}
 
-              {/* Información comercial */}
+                   {selectedCliente.telefonos && selectedCliente.telefonos.length > 0 && (
+                     <div className="flex items-start gap-2">
+                       <Phone className="w-4 h-4 text-muted-foreground mt-0.5" />
+                       <div>
+                         <p className="text-xs text-muted-foreground">Teléfonos</p>
+                         <p className="text-sm font-medium">{selectedCliente.telefonos.join(', ')}</p>
+                       </div>
+                     </div>
+                   )}
+
+                   {selectedCliente.emails && selectedCliente.emails.length > 0 && (
+                     <div className="flex items-start gap-2">
+                       <Mail className="w-4 h-4 text-muted-foreground mt-0.5" />
+                       <div>
+                         <p className="text-xs text-muted-foreground">Emails</p>
+                         <p className="text-sm font-medium">{selectedCliente.emails.join(', ')}</p>
+                       </div>
+                     </div>
+                   )}
+                 </div>
+               </div>
+
+               {/* Información comercial */}
               <div>
                 <h3 className="text-sm font-semibold mb-3">Información Comercial</h3>
                 <div className="grid grid-cols-2 gap-4">
