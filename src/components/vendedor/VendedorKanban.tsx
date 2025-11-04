@@ -65,6 +65,10 @@ interface ClienteAsignado {
   emails?: string[];
   // Link de Google Maps
   google_maps_link?: string;
+  // Información de prospectos
+  website?: string;
+  rating?: number;
+  nivel_precio?: string;
 }
 
 interface ClienteInfo {
@@ -309,6 +313,9 @@ const VendedorKanban = () => {
           telefonos: prospectoData.telefono ? [prospectoData.telefono] : [],
           emails: [],
           google_maps_link: googleMapsLink,
+          website: prospectoData.website,
+          rating: prospectoData.rating,
+          nivel_precio: prospectoData.nivel_precio,
         };
         grouped[estado].push(prospecto);
       });
@@ -581,13 +588,27 @@ const VendedorKanban = () => {
                       {cliente.telefonos[0]}
                     </a>
                   )}
+                  {cliente.website && (
+                    <a 
+                      href={cliente.website.startsWith('http') ? cliente.website : `https://${cliente.website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary flex items-center gap-1 hover:underline truncate"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      🌐 {cliente.website}
+                    </a>
+                  )}
                   {cliente.direccion_principal && (
                     <p className="text-xs text-muted-foreground flex items-start gap-1">
                       <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5" />
                       <span className="line-clamp-2">{cliente.direccion_principal}</span>
                     </p>
                   )}
-                  <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center justify-between pt-1 flex-wrap gap-1">
+                    {cliente.rating && cliente.rating > 0 && (
+                      <span className="text-xs text-muted-foreground">⭐ {cliente.rating.toFixed(1)}</span>
+                    )}
                     {cliente.google_maps_link && (
                       <Button
                         variant="outline"
@@ -677,10 +698,26 @@ const VendedorKanban = () => {
                     {cliente.telefonos[0]}
                   </p>
                 )}
+                {cliente.website && (
+                  <a 
+                    href={cliente.website.startsWith('http') ? cliente.website : `https://${cliente.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary flex items-center gap-1 hover:underline truncate"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    🌐 {cliente.website}
+                  </a>
+                )}
                 {cliente.direccion_principal && (
                   <p className="text-xs text-muted-foreground flex items-start gap-1">
                     <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5" />
                     <span className="line-clamp-2">{cliente.direccion_principal}</span>
+                  </p>
+                )}
+                {cliente.rating && cliente.rating > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    ⭐ {cliente.rating.toFixed(1)}
                   </p>
                 )}
               </>
