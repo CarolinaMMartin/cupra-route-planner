@@ -832,9 +832,9 @@ const VendedorKanban = () => {
                 <div className="grid gap-3">
                   {selectedCliente.cuit_dni && (
                     <div className="flex items-start gap-2">
-                      <Building className="w-4 h-4 text-muted-foreground mt-0.5" />
+                      <Building className="w-4 h-4 mt-0.5" />
                       <div>
-                        <p className="text-xs text-muted-foreground">CUIT/DNI</p>
+                        <p className="text-xs opacity-70">CUIT/DNI</p>
                         <p className="text-sm font-medium">{selectedCliente.cuit_dni}</p>
                       </div>
                     </div>
@@ -842,15 +842,15 @@ const VendedorKanban = () => {
 
                   {selectedCliente.direccion_principal && (
                     <div className="flex items-start gap-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground mt-0.5" />
+                      <MapPin className="w-4 h-4 mt-0.5" />
                       <div>
-                        <p className="text-xs text-muted-foreground">Dirección Principal</p>
+                        <p className="text-xs opacity-70">Dirección Principal</p>
                         <p className="text-sm font-medium">{selectedCliente.direccion_principal}</p>
                         {selectedCliente.barrio_principal && (
-                          <p className="text-xs text-muted-foreground">Barrio: {selectedCliente.barrio_principal}</p>
+                          <p className="text-xs opacity-70">Barrio: {selectedCliente.barrio_principal}</p>
                         )}
                         {selectedCliente.ciudad_principal && selectedCliente.provincia_principal && (
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs opacity-70">
                             {selectedCliente.ciudad_principal}, {selectedCliente.provincia_principal}
                           </p>
                         )}
@@ -860,7 +860,7 @@ const VendedorKanban = () => {
 
                   {selectedCliente.todas_direcciones && selectedCliente.todas_direcciones.length > 1 && (
                     <div className="pl-6">
-                      <p className="text-xs font-medium text-muted-foreground mb-1">Otras direcciones:</p>
+                      <p className="text-xs font-medium opacity-70 mb-1">Otras direcciones:</p>
                       <div className="space-y-1">
                         {selectedCliente.todas_direcciones.slice(0, 3).map((dir, idx) => (
                           <p key={idx} className="text-xs">{dir}</p>
@@ -871,9 +871,9 @@ const VendedorKanban = () => {
 
                    {selectedCliente.telefonos && selectedCliente.telefonos.length > 0 && (
                      <div className="flex items-start gap-2">
-                       <Phone className="w-4 h-4 text-muted-foreground mt-0.5" />
+                       <Phone className="w-4 h-4 mt-0.5" />
                        <div>
-                         <p className="text-xs text-muted-foreground">Teléfonos</p>
+                         <p className="text-xs opacity-70">Teléfonos</p>
                          <div className="space-y-1">
                            {selectedCliente.telefonos.map((tel, idx) => (
                              <a 
@@ -893,7 +893,7 @@ const VendedorKanban = () => {
                      <div className="flex items-start gap-2">
                        <span className="text-base mt-0.5">🌐</span>
                        <div>
-                         <p className="text-xs text-muted-foreground">Sitio Web</p>
+                         <p className="text-xs opacity-70">Sitio Web</p>
                          <a 
                            href={selectedCliente.website.startsWith('http') ? selectedCliente.website : `https://${selectedCliente.website}`}
                            target="_blank"
@@ -910,7 +910,7 @@ const VendedorKanban = () => {
                      <div className="flex items-start gap-2">
                        <span className="text-base mt-0.5">⭐</span>
                        <div>
-                         <p className="text-xs text-muted-foreground">Valoración en Google</p>
+                         <p className="text-xs opacity-70">Valoración en Google</p>
                          <p className="text-sm font-medium">{selectedCliente.rating.toFixed(1)} estrellas</p>
                        </div>
                      </div>
@@ -920,7 +920,7 @@ const VendedorKanban = () => {
                      <div className="flex items-start gap-2">
                        <span className="text-base mt-0.5">💰</span>
                        <div>
-                         <p className="text-xs text-muted-foreground">Nivel de Precio</p>
+                         <p className="text-xs opacity-70">Nivel de Precio</p>
                          <p className="text-sm font-medium">{selectedCliente.nivel_precio}</p>
                        </div>
                      </div>
@@ -928,9 +928,9 @@ const VendedorKanban = () => {
 
                    {selectedCliente.canal && selectedCliente.etiquetas?.includes('Prospecto') && (
                      <div className="flex items-start gap-2">
-                       <Building className="w-4 h-4 text-muted-foreground mt-0.5" />
+                       <Building className="w-4 h-4 mt-0.5" />
                        <div>
-                         <p className="text-xs text-muted-foreground">Tipo de Negocio</p>
+                         <p className="text-xs opacity-70">Tipo de Negocio</p>
                          <p className="text-sm font-medium">{selectedCliente.canal}</p>
                        </div>
                      </div>
@@ -938,9 +938,9 @@ const VendedorKanban = () => {
 
                    {selectedCliente.emails && selectedCliente.emails.length > 0 && (
                      <div className="flex items-start gap-2">
-                       <Mail className="w-4 h-4 text-muted-foreground mt-0.5" />
+                       <Mail className="w-4 h-4 mt-0.5" />
                        <div>
-                         <p className="text-xs text-muted-foreground">Emails</p>
+                         <p className="text-xs opacity-70">Emails</p>
                          <p className="text-sm font-medium">{selectedCliente.emails.join(', ')}</p>
                        </div>
                      </div>
