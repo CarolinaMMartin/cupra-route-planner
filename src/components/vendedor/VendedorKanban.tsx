@@ -489,14 +489,19 @@ const VendedorKanban = () => {
 
       if (feedbackError) throw feedbackError;
 
-      // Si se realizó la visita, actualizar ultima_visita en clientes
-      if (visitaRealizada) {
+      // Si se realizó la visita, actualizar ultima_visita solo para clientes existentes (no prospectos)
+      const esProspecto = selectedCliente.etiquetas?.includes('Prospecto') || selectedCliente.client_id.startsWith('prospecto-');
+      
+      if (visitaRealizada && !esProspecto) {
         const { error: clienteUpdateError } = await supabase
           .from('clientes')
           .update({ ultima_visita: new Date().toISOString() })
           .eq('client_id', selectedCliente.client_id);
 
-        if (clienteUpdateError) throw clienteUpdateError;
+        if (clienteUpdateError) {
+          console.error('Error updating cliente:', clienteUpdateError);
+          // No lanzamos el error para que el feedback se guarde de todos modos
+        }
       }
 
       // Actualizar estado a "Visitado"
