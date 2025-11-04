@@ -291,6 +291,7 @@ export type Database = {
           cuit_dni: string | null
           dias_desde_ultima_compra: number | null
           direccion_principal: string | null
+          emails: string[] | null
           etiquetas: string[] | null
           excluir_recomendaciones: boolean | null
           fantasia: string | null
@@ -306,6 +307,7 @@ export type Database = {
           score_comercial: number | null
           score_recencia: number | null
           score_volumen: number | null
+          telefonos: string[] | null
           ticket_promedio: number | null
           todas_ciudades: string[] | null
           todas_direcciones: string[] | null
@@ -328,6 +330,7 @@ export type Database = {
           cuit_dni?: string | null
           dias_desde_ultima_compra?: number | null
           direccion_principal?: string | null
+          emails?: string[] | null
           etiquetas?: string[] | null
           excluir_recomendaciones?: boolean | null
           fantasia?: string | null
@@ -343,6 +346,7 @@ export type Database = {
           score_comercial?: number | null
           score_recencia?: number | null
           score_volumen?: number | null
+          telefonos?: string[] | null
           ticket_promedio?: number | null
           todas_ciudades?: string[] | null
           todas_direcciones?: string[] | null
@@ -365,6 +369,7 @@ export type Database = {
           cuit_dni?: string | null
           dias_desde_ultima_compra?: number | null
           direccion_principal?: string | null
+          emails?: string[] | null
           etiquetas?: string[] | null
           excluir_recomendaciones?: boolean | null
           fantasia?: string | null
@@ -380,6 +385,7 @@ export type Database = {
           score_comercial?: number | null
           score_recencia?: number | null
           score_volumen?: number | null
+          telefonos?: string[] | null
           ticket_promedio?: number | null
           todas_ciudades?: string[] | null
           todas_direcciones?: string[] | null
@@ -529,6 +535,87 @@ export type Database = {
         }
         Relationships: []
       }
+      prospectos: {
+        Row: {
+          barrio: string | null
+          ciudad: string
+          client_id: string | null
+          comuna: string | null
+          created_at: string
+          direccion: string
+          es_cliente_cupra: boolean | null
+          estado_negocio: string | null
+          id: string
+          last_recommendation_at: string | null
+          latitud: number
+          longitud: number
+          nivel_precio: string | null
+          nombre: string
+          place_id: string
+          provincia: string
+          rating: number | null
+          sirve_vinos: boolean | null
+          telefono: string | null
+          tipo_principal: string | null
+          tipos: string[] | null
+          total_ratings: number | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          barrio?: string | null
+          ciudad: string
+          client_id?: string | null
+          comuna?: string | null
+          created_at?: string
+          direccion: string
+          es_cliente_cupra?: boolean | null
+          estado_negocio?: string | null
+          id?: string
+          last_recommendation_at?: string | null
+          latitud: number
+          longitud: number
+          nivel_precio?: string | null
+          nombre: string
+          place_id: string
+          provincia: string
+          rating?: number | null
+          sirve_vinos?: boolean | null
+          telefono?: string | null
+          tipo_principal?: string | null
+          tipos?: string[] | null
+          total_ratings?: number | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          barrio?: string | null
+          ciudad?: string
+          client_id?: string | null
+          comuna?: string | null
+          created_at?: string
+          direccion?: string
+          es_cliente_cupra?: boolean | null
+          estado_negocio?: string | null
+          id?: string
+          last_recommendation_at?: string | null
+          latitud?: number
+          longitud?: number
+          nivel_precio?: string | null
+          nombre?: string
+          place_id?: string
+          provincia?: string
+          rating?: number | null
+          sirve_vinos?: boolean | null
+          telefono?: string | null
+          tipo_principal?: string | null
+          tipos?: string[] | null
+          total_ratings?: number | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
       recomendaciones_ia: {
         Row: {
           ai_reasoning: string | null
@@ -542,6 +629,7 @@ export type Database = {
           cuit_dni: string | null
           days_since_last_purchase: number | null
           direccion_principal: string | null
+          es_prospecto: boolean | null
           estado: string | null
           etiquetas: string[] | null
           factores_ia: Json | null
@@ -557,6 +645,7 @@ export type Database = {
           participacion: number | null
           priority_score: number | null
           productos_comprados: string[] | null
+          prospecto_place_id: string | null
           provincia_principal: string | null
           provincias: string[] | null
           razon_social: string | null
@@ -591,6 +680,7 @@ export type Database = {
           cuit_dni?: string | null
           days_since_last_purchase?: number | null
           direccion_principal?: string | null
+          es_prospecto?: boolean | null
           estado?: string | null
           etiquetas?: string[] | null
           factores_ia?: Json | null
@@ -606,6 +696,7 @@ export type Database = {
           participacion?: number | null
           priority_score?: number | null
           productos_comprados?: string[] | null
+          prospecto_place_id?: string | null
           provincia_principal?: string | null
           provincias?: string[] | null
           razon_social?: string | null
@@ -640,6 +731,7 @@ export type Database = {
           cuit_dni?: string | null
           days_since_last_purchase?: number | null
           direccion_principal?: string | null
+          es_prospecto?: boolean | null
           estado?: string | null
           etiquetas?: string[] | null
           factores_ia?: Json | null
@@ -655,6 +747,7 @@ export type Database = {
           participacion?: number | null
           priority_score?: number | null
           productos_comprados?: string[] | null
+          prospecto_place_id?: string | null
           provincia_principal?: string | null
           provincias?: string[] | null
           razon_social?: string | null

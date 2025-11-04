@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.upsert-client-places]
 verify_jwt = false
+
+[functions.upsert-prospectos]
+verify_jwt = false
