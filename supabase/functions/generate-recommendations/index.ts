@@ -658,14 +658,15 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: rec.factores,
+          // Incluir datos adicionales del prospecto en factores_ia
+          factores_ia: {
+            ...rec.factores,
+            tipo_negocio: prospectoCompleto.tipo_principal,
+            rating: prospectoCompleto.rating,
+            website: prospectoCompleto.website
+          },
           justificacion: rec.justificacion,
           es_prospecto: true,
-          
-          // Datos adicionales del prospecto
-          tipo_negocio: prospectoCompleto.tipo_principal,
-          rating: prospectoCompleto.rating,
-          website: prospectoCompleto.website,
           
           // Datos comerciales (vacíos para prospectos)
           monto_total_vendido: 0,

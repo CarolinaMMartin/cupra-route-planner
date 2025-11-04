@@ -114,7 +114,7 @@ const AssignorDashboard = () => {
 
       // Mapear los datos al formato Sucursal
       const mappedRecommendations: Sucursal[] = (data.recomendaciones || []).map((rec: any) => ({
-        id: rec.request_id + '-' + rec.client_id, // ID único combinado
+        id: rec.request_id + '-' + (rec.client_id || rec.prospecto_place_id), // ID único combinado
         nombre: rec.razon_social,
         direccion: rec.ciudades?.[0] || "Sin dirección",
         zona: rec.provincias?.[0] || "Sin zona",
@@ -127,6 +127,13 @@ const AssignorDashboard = () => {
         cuit_dni: rec.cuit_dni,
         vendedores: rec.vendedores || [],
         client_id: rec.client_id,
+        
+        // Campos específicos de prospectos
+        es_prospecto: rec.es_prospecto || false,
+        prospecto_place_id: rec.prospecto_place_id,
+        tipo_negocio: rec.factores_ia?.tipo_negocio,
+        rating: rec.factores_ia?.rating,
+        website: rec.factores_ia?.website,
         
         // Campos completos de clientes
         fantasia: rec.razon_social,
@@ -150,6 +157,8 @@ const AssignorDashboard = () => {
         etiquetas: rec.etiquetas || [],
         telefonos: rec.telefonos || [],
         barrio_principal: rec.barrio_principal,
+        direccion_principal: rec.direccion_principal,
+        google_maps_link: rec.google_maps_link,
         
         // Campos de IA
         ai_reasoning: rec.ai_reasoning,
