@@ -6,6 +6,99 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Función auxiliar para procesar en batches
+async function processBatch(supabase: any, prospectos: any[], batchSize: number = 50) {
+  const results = [];
+  const errors = [];
+
+  // Dividir en batches
+  for (let i = 0; i < prospectos.length; i += batchSize) {
+    const batch = prospectos.slice(i, i + batchSize);
+    console.log(`Procesando batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(prospectos.length/batchSize)}`);
+
+    // Preparar datos del batch
+    const batchData = [];
+    
+    for (const prospecto of batch) {
+      try {
+        // Validar campos requeridos
+        if (!prospecto.place_id || !prospecto.nombre || !prospecto.direccion) {
+          errors.push({
+            prospecto: prospecto.nombre || 'sin nombre',
+            error: 'Faltan campos requeridos (place_id, nombre, direccion)'
+          });
+          continue;
+        }
+
+        // Verificar si ya es cliente (solo por teléfono para optimizar)
+        let esClienteCupra = false;
+        if (prospecto.telefono) {
+          const { data: clienteByPhone } = await supabase
+            .from('clientes')
+            .select('client_id')
+            .contains('telefonos', [prospecto.telefono])
+            .limit(1)
+            .maybeSingle();
+          
+          esClienteCupra = !!clienteByPhone;
+        }
+
+        batchData.push({
+          place_id: prospecto.place_id,
+          nombre: prospecto.nombre,
+          telefono: prospecto.telefono || null,
+          direccion: prospecto.direccion,
+          barrio: prospecto.barrio || null,
+          comuna: prospecto.comuna || null,
+          ciudad: prospecto.ciudad || 'Buenos Aires',
+          provincia: prospecto.provincia || 'Ciudad Autónoma de Buenos Aires',
+          latitud: prospecto.latitud || 0,
+          longitud: prospecto.longitud || 0,
+          rating: prospecto.rating || 0,
+          total_ratings: prospecto.total_ratings || 0,
+          nivel_precio: prospecto.nivel_precio || null,
+          tipo_principal: prospecto.tipo_principal || null,
+          tipos: prospecto.tipos || [],
+          sirve_vinos: prospecto.sirve_vinos || false,
+          website: prospecto.website || null,
+          estado_negocio: prospecto.estado_negocio || null,
+          es_cliente_cupra: esClienteCupra,
+          updated_at: new Date().toISOString()
+        });
+
+      } catch (error) {
+        errors.push({
+          prospecto: prospecto.nombre || 'desconocido',
+          error: error instanceof Error ? error.message : 'Error desconocido'
+        });
+      }
+    }
+
+    // Upsert del batch completo
+    if (batchData.length > 0) {
+      const { data, error } = await supabase
+        .from('prospectos')
+        .upsert(batchData, { 
+          onConflict: 'place_id',
+          ignoreDuplicates: false 
+        })
+        .select('place_id, nombre, es_cliente_cupra');
+
+      if (error) {
+        console.error(`Error en batch:`, error);
+        errors.push({
+          batch: `Batch ${Math.floor(i/batchSize) + 1}`,
+          error: error.message
+        });
+      } else {
+        results.push(...(data || []));
+      }
+    }
+  }
+
+  return { results, errors };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -28,106 +121,8 @@ serve(async (req) => {
 
     console.log(`Procesando ${prospectos.length} prospectos desde n8n`);
 
-    const results = [];
-    const errors = [];
-
-    for (const prospecto of prospectos) {
-      try {
-        // Validar campos requeridos
-        if (!prospecto.place_id || !prospecto.nombre || !prospecto.direccion) {
-          errors.push({
-            prospecto: prospecto.nombre || 'sin nombre',
-            error: 'Faltan campos requeridos (place_id, nombre, direccion)'
-          });
-          continue;
-        }
-
-        // Verificar si ya es cliente de Cupra buscando por teléfono o nombre
-        let esClienteCupra = false;
-        
-        if (prospecto.telefono) {
-          const { data: clienteByPhone } = await supabase
-            .from('clientes')
-            .select('client_id')
-            .contains('telefonos', [prospecto.telefono])
-            .maybeSingle();
-          
-          if (clienteByPhone) {
-            esClienteCupra = true;
-            console.log(`Prospecto ${prospecto.nombre} ya es cliente (por teléfono)`);
-          }
-        }
-
-        // Si no se encontró por teléfono, buscar por nombre
-        if (!esClienteCupra && prospecto.nombre) {
-          const { data: clienteByName } = await supabase
-            .from('clientes')
-            .select('client_id')
-            .ilike('razon_social', `%${prospecto.nombre}%`)
-            .maybeSingle();
-          
-          if (clienteByName) {
-            esClienteCupra = true;
-            console.log(`Prospecto ${prospecto.nombre} ya es cliente (por nombre)`);
-          }
-        }
-
-        // Preparar datos para insertar/actualizar
-        const prospectoData = {
-          place_id: prospecto.place_id,
-          nombre: prospecto.nombre,
-          telefono: prospecto.telefono || null,
-          direccion: prospecto.direccion,
-          barrio: prospecto.barrio || null,
-          comuna: prospecto.comuna || null,
-          ciudad: prospecto.ciudad || 'Buenos Aires',
-          provincia: prospecto.provincia || 'Ciudad Autónoma de Buenos Aires',
-          latitud: prospecto.latitud || 0,
-          longitud: prospecto.longitud || 0,
-          rating: prospecto.rating || 0,
-          total_ratings: prospecto.total_ratings || 0,
-          nivel_precio: prospecto.nivel_precio || null,
-          tipo_principal: prospecto.tipo_principal || null,
-          tipos: prospecto.tipos || [],
-          sirve_vinos: prospecto.sirve_vinos || false,
-          website: prospecto.website || null,
-          estado_negocio: prospecto.estado_negocio || null,
-          es_cliente_cupra: esClienteCupra,
-          updated_at: new Date().toISOString()
-        };
-
-        // Upsert en la tabla prospectos (actualiza si existe, inserta si no)
-        const { data, error } = await supabase
-          .from('prospectos')
-          .upsert(prospectoData, { 
-            onConflict: 'place_id',
-            ignoreDuplicates: false 
-          })
-          .select()
-          .single();
-
-        if (error) {
-          console.error(`Error al procesar prospecto ${prospecto.nombre}:`, error);
-          errors.push({
-            prospecto: prospecto.nombre,
-            error: error.message
-          });
-        } else {
-          results.push({
-            place_id: data.place_id,
-            nombre: data.nombre,
-            es_cliente_cupra: data.es_cliente_cupra
-          });
-        }
-
-      } catch (error) {
-        console.error(`Error inesperado al procesar prospecto:`, error);
-        errors.push({
-          prospecto: prospecto.nombre || 'desconocido',
-          error: error instanceof Error ? error.message : 'Error desconocido'
-        });
-      }
-    }
+    // Procesar en batches de 50
+    const { results, errors } = await processBatch(supabase, prospectos, 50);
 
     console.log(`Procesamiento completo. Éxitos: ${results.length}, Errores: ${errors.length}`);
 
@@ -137,8 +132,8 @@ serve(async (req) => {
         processed: prospectos.length,
         inserted: results.length,
         errorsCount: errors.length,
-        results,
-        errors: errors.length > 0 ? errors : undefined
+        results: results.slice(0, 100), // Limitar respuesta a primeros 100
+        errors: errors.length > 0 ? errors.slice(0, 50) : undefined
       }),
       { 
         status: 200, 
