@@ -109,17 +109,27 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { prospectos } = await req.json();
+    const body = await req.json();
     
-    if (!prospectos || !Array.isArray(prospectos)) {
-      console.error('Invalid payload: prospectos debe ser un array');
+    // Aceptar tanto { prospectos: [...] } como un objeto individual
+    let prospectos: any[];
+    
+    if (Array.isArray(body.prospectos)) {
+      prospectos = body.prospectos;
+    } else if (body.prospectos) {
+      prospectos = [body.prospectos];
+    } else if (body.place_id) {
+      // Si viene un prospecto individual directamente
+      prospectos = [body];
+    } else {
+      console.error('Invalid payload: debe enviar prospectos o un prospecto individual');
       return new Response(
-        JSON.stringify({ error: 'prospectos debe ser un array' }),
+        JSON.stringify({ error: 'Formato inválido. Envíe { prospectos: [...] } o un prospecto individual' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Procesando ${prospectos.length} prospectos desde n8n`);
+    console.log(`Procesando ${prospectos.length} prospecto(s) desde n8n`);
 
     // Procesar en batches de 50
     const { results, errors } = await processBatch(supabase, prospectos, 50);
