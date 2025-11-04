@@ -35,6 +35,8 @@ interface ClienteData {
   requiere_visita?: string | null;
   canal?: string | null;
   etiquetas?: string[] | null;
+  telefonos?: string[] | null;
+  emails?: string[] | null;
 }
 
 interface RequestBody {
@@ -108,7 +110,8 @@ Deno.serve(async (req) => {
       'participacion_mercado', 'ciudad_principal', 'barrio_principal',
       'direccion_principal', 'provincia_principal', 'vendedor_principal',
       'productos_comprados', 'todas_ciudades', 'todos_barrios',
-      'todas_direcciones', 'todos_vendedores', 'requiere_visita', 'canal', 'etiquetas'
+      'todas_direcciones', 'todos_vendedores', 'requiere_visita', 'canal', 'etiquetas',
+      'telefonos', 'emails'
     ];
 
     // PASO 1: Identificar clientes existentes

@@ -61,6 +61,8 @@ interface ClienteData {
   requiere_visita?: boolean | string | null;
   canal?: string | null;
   etiquetas?: string[] | null;
+  telefonos?: string[] | null;
+  emails?: string[] | null;
 }
 
 interface PlaceData {
