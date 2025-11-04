@@ -250,33 +250,36 @@ export type Database = {
       cliente_feedbacks: {
         Row: {
           actualizar_etiqueta_wa: string | null
-          client_id: string
+          client_id: string | null
           created_at: string
           feedback: string
           id: string
           motivo_no_visita: string | null
+          prospecto_place_id: string | null
           tipo_interaccion: string | null
           vendedor_id: string
           visita_realizada: boolean
         }
         Insert: {
           actualizar_etiqueta_wa?: string | null
-          client_id: string
+          client_id?: string | null
           created_at?: string
           feedback: string
           id?: string
           motivo_no_visita?: string | null
+          prospecto_place_id?: string | null
           tipo_interaccion?: string | null
           vendedor_id: string
           visita_realizada?: boolean
         }
         Update: {
           actualizar_etiqueta_wa?: string | null
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           feedback?: string
           id?: string
           motivo_no_visita?: string | null
+          prospecto_place_id?: string | null
           tipo_interaccion?: string | null
           vendedor_id?: string
           visita_realizada?: boolean
@@ -288,6 +291,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clientes"
             referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "cliente_feedbacks_prospecto_place_id_fkey"
+            columns: ["prospecto_place_id"]
+            isOneToOne: false
+            referencedRelation: "prospectos"
+            referencedColumns: ["place_id"]
           },
         ]
       }

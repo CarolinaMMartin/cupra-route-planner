@@ -474,23 +474,34 @@ const VendedorKanban = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
-      // Guardar feedback con todos los campos
+      // Determinar si es prospecto y preparar datos para feedback
+      const esProspecto = selectedCliente.etiquetas?.includes('Prospecto') || selectedCliente.client_id.startsWith('prospecto-');
+      
+      // Preparar el objeto de feedback según si es cliente o prospecto
+      const feedbackData: any = {
+        vendedor_id: user.id,
+        feedback: feedback.trim(),
+        visita_realizada: visitaRealizada,
+        motivo_no_visita: !visitaRealizada ? motivoNoVisita : null,
+        tipo_interaccion: visitaRealizada ? tipoInteraccion : null,
+        actualizar_etiqueta_wa: actualizarEtiquetaWa || null,
+      };
+
+      // Agregar el campo correcto según si es prospecto o cliente
+      if (esProspecto) {
+        // Extraer el place_id del client_id (formato: prospecto-{place_id})
+        const placeId = selectedCliente.client_id.replace('prospecto-', '');
+        feedbackData.prospecto_place_id = placeId;
+      } else {
+        feedbackData.client_id = selectedCliente.client_id;
+      }
+
+      // Guardar feedback
       const { error: feedbackError } = await supabase
         .from('cliente_feedbacks')
-        .insert({
-          client_id: selectedCliente.client_id,
-          vendedor_id: user.id,
-          feedback: feedback.trim(),
-          visita_realizada: visitaRealizada,
-          motivo_no_visita: !visitaRealizada ? motivoNoVisita : null,
-          tipo_interaccion: visitaRealizada ? tipoInteraccion : null,
-          actualizar_etiqueta_wa: actualizarEtiquetaWa || null,
-        });
+        .insert(feedbackData);
 
       if (feedbackError) throw feedbackError;
-
-      // Si se realizó la visita, actualizar ultima_visita solo para clientes existentes (no prospectos)
-      const esProspecto = selectedCliente.etiquetas?.includes('Prospecto') || selectedCliente.client_id.startsWith('prospecto-');
       
       if (visitaRealizada && !esProspecto) {
         const { error: clienteUpdateError } = await supabase
