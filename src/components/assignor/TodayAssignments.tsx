@@ -19,13 +19,20 @@ import {
 
 interface Assignment {
   id: string;
+  es_prospecto: boolean;
   vendedor: {
     nombre: string;
     email: string;
   };
-  cliente: {
+  cliente?: {
     razon_social: string;
     cuit_dni: string;
+  };
+  prospecto?: {
+    nombre: string;
+    telefono: string;
+    direccion: string;
+    barrio: string;
   };
   created_at: string;
   cliente_info?: {
@@ -82,6 +89,8 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
         .select(`
           id,
           created_at,
+          es_prospecto,
+          prospecto_place_id,
           vendedor:profiles!asignaciones_vendedores_clientes_vendedor_id_fkey(nombre, email),
           cliente:clientes!asignaciones_vendedores_clientes_client_id_fkey(razon_social, cuit_dni)
         `)
@@ -92,28 +101,56 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
 
       if (error) throw error;
 
-      // Enriquecer con información adicional de clientes_recomendaciones_temporal
+      // Obtener place_ids de prospectos
+      const prospectoPlaceIds = (data || [])
+        .filter((a: any) => a.es_prospecto && a.prospecto_place_id)
+        .map((a: any) => a.prospecto_place_id);
+
+      let prospectosMap = new Map();
+      if (prospectoPlaceIds.length > 0) {
+        const { data: prospectosData, error: prospectosError } = await supabase
+          .from('prospectos')
+          .select('place_id, nombre, telefono, direccion, barrio')
+          .in('place_id', prospectoPlaceIds);
+
+        if (!prospectosError && prospectosData) {
+          prospectosMap = new Map(prospectosData.map(p => [p.place_id, p]));
+        }
+      }
+
+      // Enriquecer con información adicional de clientes_recomendaciones_temporal y prospectos
       const assignmentsWithInfo = await Promise.all(
         (data || []).map(async (assignment: any) => {
           try {
-            const { data: clienteInfo, error: infoError } = await supabase
-              .from('clientes_recomendaciones_temporal')
-              .select('*')
-              .eq('cuit_dni', assignment.cliente?.cuit_dni)
-              .limit(1)
-              .maybeSingle();
+            if (assignment.es_prospecto && assignment.prospecto_place_id) {
+              // Para prospectos
+              const prospectoData = prospectosMap.get(assignment.prospecto_place_id);
+              return {
+                ...assignment,
+                prospecto: prospectoData || null,
+                cliente_info: { etiquetas: ['Prospecto'] },
+              };
+            } else {
+              // Para clientes existentes
+              const { data: clienteInfo, error: infoError } = await supabase
+                .from('clientes_recomendaciones_temporal')
+                .select('*')
+                .eq('cuit_dni', assignment.cliente?.cuit_dni)
+                .limit(1)
+                .maybeSingle();
 
-            if (infoError) {
-              console.error('Error fetching cliente info:', infoError);
-              return assignment;
+              if (infoError) {
+                console.error('Error fetching cliente info:', infoError);
+                return assignment;
+              }
+
+              return {
+                ...assignment,
+                cliente_info: clienteInfo,
+              };
             }
-
-            return {
-              ...assignment,
-              cliente_info: clienteInfo,
-            };
           } catch (err) {
-            console.error('Error processing cliente:', err);
+            console.error('Error processing assignment:', err);
             return assignment;
           }
         })
@@ -274,8 +311,25 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <p className="font-semibold text-base">{assignment.cliente?.razon_social || 'Cliente desconocido'}</p>
-                      <p className="text-xs text-muted-foreground mt-1">CUIT: {assignment.cliente?.cuit_dni}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-base">
+                          {assignment.es_prospecto 
+                            ? (assignment.prospecto?.nombre || 'Prospecto sin nombre')
+                            : (assignment.cliente?.razon_social || 'Cliente desconocido')
+                          }
+                        </p>
+                        {assignment.es_prospecto && (
+                          <Badge variant="secondary" className="text-xs">NUEVO</Badge>
+                        )}
+                      </div>
+                      {assignment.es_prospecto ? (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {assignment.prospecto?.direccion || 'Sin dirección'}
+                          {assignment.prospecto?.barrio && ` • ${assignment.prospecto.barrio}`}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground mt-1">CUIT: {assignment.cliente?.cuit_dni}</p>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {new Date(assignment.created_at).toLocaleTimeString('es-AR', {
@@ -285,92 +339,113 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                     </p>
                   </div>
 
-                  {assignment.cliente_info && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                      {assignment.cliente_info.ciudades && assignment.cliente_info.ciudades.length > 0 && (
-                        <div>
-                          <span className="font-medium">Ciudad:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.ciudades.join(', ')}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.provincias && assignment.cliente_info.provincias.length > 0 && (
-                        <div>
-                          <span className="font-medium">Provincia:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.provincias.join(', ')}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.telefonos && assignment.cliente_info.telefonos.length > 0 && (
-                        <div>
-                          <span className="font-medium">Teléfono:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.telefonos.join(', ')}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.score_comercial && (
-                        <div>
-                          <span className="font-medium">Score:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.score_comercial}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.monto_total_vendido && (
-                        <div>
-                          <span className="font-medium">Total vendido:</span>{' '}
-                          <span className="text-muted-foreground">
-                            ${assignment.cliente_info.monto_total_vendido.toLocaleString('es-AR')}
-                          </span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.orders_count && (
-                        <div>
-                          <span className="font-medium">Órdenes:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.orders_count}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.avg_ticket && (
-                        <div>
-                          <span className="font-medium">Ticket promedio:</span>{' '}
-                          <span className="text-muted-foreground">
-                            ${assignment.cliente_info.avg_ticket.toLocaleString('es-AR')}
-                          </span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.participacion !== null && (
-                        <div>
-                          <span className="font-medium">Participación:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.participacion}%</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.days_since_last_purchase !== null && (
-                        <div>
-                          <span className="font-medium">Última compra:</span>{' '}
-                          <span className="text-muted-foreground">
-                            hace {assignment.cliente_info.days_since_last_purchase} días
-                          </span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.first_purchase_at && (
-                        <div>
-                          <span className="font-medium">Primera compra:</span>{' '}
-                          <span className="text-muted-foreground">
-                            {new Date(assignment.cliente_info.first_purchase_at).toLocaleDateString('es-AR')}
-                          </span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.vendedores && assignment.cliente_info.vendedores.length > 0 && (
-                        <div className="md:col-span-2">
-                          <span className="font-medium">Vendedores previos:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.vendedores.join(', ')}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.etiquetas && assignment.cliente_info.etiquetas.length > 0 && (
-                        <div className="md:col-span-2">
-                          <span className="font-medium">Productos:</span>{' '}
-                          <span className="text-muted-foreground text-xs">
-                            {assignment.cliente_info.etiquetas.slice(0, 3).join(', ')}
-                            {assignment.cliente_info.etiquetas.length > 3 && ` +${assignment.cliente_info.etiquetas.length - 3} más`}
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                  {assignment.es_prospecto ? (
+                    // Información de prospecto
+                    assignment.prospecto && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                        {assignment.prospecto.telefono && (
+                          <div>
+                            <span className="font-medium">Teléfono:</span>{' '}
+                            <span className="text-muted-foreground">{assignment.prospecto.telefono}</span>
+                          </div>
+                        )}
+                        {assignment.prospecto.barrio && (
+                          <div>
+                            <span className="font-medium">Barrio:</span>{' '}
+                            <span className="text-muted-foreground">{assignment.prospecto.barrio}</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  ) : (
+                    // Información de cliente
+                    assignment.cliente_info && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                        {assignment.cliente_info.ciudades && assignment.cliente_info.ciudades.length > 0 && (
+                          <div>
+                            <span className="font-medium">Ciudad:</span>{' '}
+                            <span className="text-muted-foreground">{assignment.cliente_info.ciudades.join(', ')}</span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.provincias && assignment.cliente_info.provincias.length > 0 && (
+                          <div>
+                            <span className="font-medium">Provincia:</span>{' '}
+                            <span className="text-muted-foreground">{assignment.cliente_info.provincias.join(', ')}</span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.telefonos && assignment.cliente_info.telefonos.length > 0 && (
+                          <div>
+                            <span className="font-medium">Teléfono:</span>{' '}
+                            <span className="text-muted-foreground">{assignment.cliente_info.telefonos.join(', ')}</span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.score_comercial && (
+                          <div>
+                            <span className="font-medium">Score:</span>{' '}
+                            <span className="text-muted-foreground">{assignment.cliente_info.score_comercial}</span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.monto_total_vendido && (
+                          <div>
+                            <span className="font-medium">Total vendido:</span>{' '}
+                            <span className="text-muted-foreground">
+                              ${assignment.cliente_info.monto_total_vendido.toLocaleString('es-AR')}
+                            </span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.orders_count && (
+                          <div>
+                            <span className="font-medium">Órdenes:</span>{' '}
+                            <span className="text-muted-foreground">{assignment.cliente_info.orders_count}</span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.avg_ticket && (
+                          <div>
+                            <span className="font-medium">Ticket promedio:</span>{' '}
+                            <span className="text-muted-foreground">
+                              ${assignment.cliente_info.avg_ticket.toLocaleString('es-AR')}
+                            </span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.participacion !== null && (
+                          <div>
+                            <span className="font-medium">Participación:</span>{' '}
+                            <span className="text-muted-foreground">{assignment.cliente_info.participacion}%</span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.days_since_last_purchase !== null && (
+                          <div>
+                            <span className="font-medium">Última compra:</span>{' '}
+                            <span className="text-muted-foreground">
+                              hace {assignment.cliente_info.days_since_last_purchase} días
+                            </span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.first_purchase_at && (
+                          <div>
+                            <span className="font-medium">Primera compra:</span>{' '}
+                            <span className="text-muted-foreground">
+                              {new Date(assignment.cliente_info.first_purchase_at).toLocaleDateString('es-AR')}
+                            </span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.vendedores && assignment.cliente_info.vendedores.length > 0 && (
+                          <div className="md:col-span-2">
+                            <span className="font-medium">Vendedores previos:</span>{' '}
+                            <span className="text-muted-foreground">{assignment.cliente_info.vendedores.join(', ')}</span>
+                          </div>
+                        )}
+                        {assignment.cliente_info.etiquetas && assignment.cliente_info.etiquetas.length > 0 && (
+                          <div className="md:col-span-2">
+                            <span className="font-medium">Productos:</span>{' '}
+                            <span className="text-muted-foreground text-xs">
+                              {assignment.cliente_info.etiquetas.slice(0, 3).join(', ')}
+                              {assignment.cliente_info.etiquetas.length > 3 && ` +${assignment.cliente_info.etiquetas.length - 3} más`}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )
                   )}
                 </div>
               ))}
