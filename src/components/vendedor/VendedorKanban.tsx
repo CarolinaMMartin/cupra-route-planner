@@ -570,7 +570,7 @@ const VendedorKanban = () => {
               <h4 className="font-semibold text-sm">{cliente.razon_social}</h4>
               
               {esProspecto ? (
-                // Card para prospectos
+                // Card para prospectos - vista simple
                 <>
                   {cliente.canal && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -578,52 +578,12 @@ const VendedorKanban = () => {
                       {cliente.canal}
                     </p>
                   )}
-                  {cliente.telefonos && cliente.telefonos.length > 0 && (
-                    <a 
-                      href={`tel:${cliente.telefonos[0]}`}
-                      className="text-xs text-primary flex items-center gap-1 hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Phone className="w-3 h-3" />
-                      {cliente.telefonos[0]}
-                    </a>
-                  )}
-                  {cliente.website && (
-                    <a 
-                      href={cliente.website.startsWith('http') ? cliente.website : `https://${cliente.website}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary flex items-center gap-1 hover:underline truncate"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      🌐 {cliente.website}
-                    </a>
-                  )}
-                  {cliente.direccion_principal && (
-                    <p className="text-xs text-muted-foreground flex items-start gap-1">
-                      <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                      <span className="line-clamp-2">{cliente.direccion_principal}</span>
+                  {cliente.barrio_principal && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      {cliente.barrio_principal}
                     </p>
                   )}
-                  <div className="flex items-center justify-between pt-1 flex-wrap gap-1">
-                    {cliente.rating && cliente.rating > 0 && (
-                      <span className="text-xs text-muted-foreground">⭐ {cliente.rating.toFixed(1)}</span>
-                    )}
-                    {cliente.google_maps_link && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-6 text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          window.open(cliente.google_maps_link, '_blank');
-                        }}
-                      >
-                        <Navigation className="w-3 h-3 mr-1" />
-                        Ver ubicación
-                      </Button>
-                    )}
-                  </div>
                 </>
               ) : (
                 // Card para clientes existentes
@@ -692,32 +652,10 @@ const VendedorKanban = () => {
                     {cliente.canal}
                   </p>
                 )}
-                {cliente.telefonos && cliente.telefonos.length > 0 && (
+                {cliente.barrio_principal && (
                   <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Phone className="w-3 h-3" />
-                    {cliente.telefonos[0]}
-                  </p>
-                )}
-                {cliente.website && (
-                  <a 
-                    href={cliente.website.startsWith('http') ? cliente.website : `https://${cliente.website}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-primary flex items-center gap-1 hover:underline truncate"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    🌐 {cliente.website}
-                  </a>
-                )}
-                {cliente.direccion_principal && (
-                  <p className="text-xs text-muted-foreground flex items-start gap-1">
-                    <MapPin className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                    <span className="line-clamp-2">{cliente.direccion_principal}</span>
-                  </p>
-                )}
-                {cliente.rating && cliente.rating > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    ⭐ {cliente.rating.toFixed(1)}
+                    <MapPin className="w-3 h-3" />
+                    {cliente.barrio_principal}
                   </p>
                 )}
               </>
