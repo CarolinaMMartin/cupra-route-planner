@@ -285,7 +285,7 @@ const VendedorKanban = () => {
           id: asig.id,
           client_id: `prospecto-${asig.prospecto_place_id}`, // ID único para prospectos
           estado: estado as 'Por visitar' | 'Visitado',
-          razon_social: `🆕 ${prospectoData.nombre}` || 'Prospecto sin nombre',
+          razon_social: prospectoData.nombre || 'Prospecto sin nombre',
           cuit_dni: '',
           barrio_principal: prospectoData.barrio || prospectoData.comuna,
           dias_desde_ultima_compra: undefined,
@@ -557,7 +557,7 @@ const VendedorKanban = () => {
       transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
     } : undefined;
 
-    const esProspecto = cliente.razon_social.startsWith('🆕');
+    const esProspecto = cliente.etiquetas?.includes('Prospecto');
 
     return (
       <div ref={setNodeRef} style={style}>
@@ -567,7 +567,12 @@ const VendedorKanban = () => {
         >
           <div className="space-y-2" {...listeners} {...attributes}>
             <div>
-              <h4 className="font-semibold text-sm">{cliente.razon_social}</h4>
+              <div className="flex items-center gap-2 mb-1">
+                <h4 className="font-semibold text-sm flex-1">{cliente.razon_social}</h4>
+                {esProspecto && (
+                  <Badge variant="secondary" className="text-xs">NUEVO</Badge>
+                )}
+              </div>
               
               {esProspecto ? (
                 // Card para prospectos - vista simple
@@ -636,13 +641,18 @@ const VendedorKanban = () => {
   };
 
   const ClientCard = ({ cliente }: { cliente: ClienteAsignado }) => {
-    const esProspecto = cliente.razon_social.startsWith('🆕');
+    const esProspecto = cliente.etiquetas?.includes('Prospecto');
 
     return (
       <Card className="p-3">
         <div className="space-y-2">
           <div>
-            <h4 className="font-semibold text-sm">{cliente.razon_social}</h4>
+            <div className="flex items-center gap-2 mb-1">
+              <h4 className="font-semibold text-sm flex-1">{cliente.razon_social}</h4>
+              {esProspecto && (
+                <Badge variant="secondary" className="text-xs">NUEVO</Badge>
+              )}
+            </div>
             
             {esProspecto ? (
               <>
@@ -789,7 +799,12 @@ const VendedorKanban = () => {
       <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{selectedCliente?.razon_social}</DialogTitle>
+            <div className="flex items-center gap-2">
+              <DialogTitle className="flex-1">{selectedCliente?.razon_social}</DialogTitle>
+              {selectedCliente?.etiquetas?.includes('Prospecto') && (
+                <Badge variant="default" className="text-xs">NUEVO</Badge>
+              )}
+            </div>
             <DialogDescription>Información completa del cliente y contacto</DialogDescription>
           </DialogHeader>
           
@@ -897,6 +912,26 @@ const VendedorKanban = () => {
                        <div>
                          <p className="text-xs text-muted-foreground">Valoración en Google</p>
                          <p className="text-sm font-medium">{selectedCliente.rating.toFixed(1)} estrellas</p>
+                       </div>
+                     </div>
+                   )}
+
+                   {selectedCliente.nivel_precio && (
+                     <div className="flex items-start gap-2">
+                       <span className="text-base mt-0.5">💰</span>
+                       <div>
+                         <p className="text-xs text-muted-foreground">Nivel de Precio</p>
+                         <p className="text-sm font-medium">{selectedCliente.nivel_precio}</p>
+                       </div>
+                     </div>
+                   )}
+
+                   {selectedCliente.canal && selectedCliente.etiquetas?.includes('Prospecto') && (
+                     <div className="flex items-start gap-2">
+                       <Building className="w-4 h-4 text-muted-foreground mt-0.5" />
+                       <div>
+                         <p className="text-xs text-muted-foreground">Tipo de Negocio</p>
+                         <p className="text-sm font-medium">{selectedCliente.canal}</p>
                        </div>
                      </div>
                    )}
