@@ -159,6 +159,12 @@ const ClientDetailCard = ({
               </div>
             </div>
             <div className="flex flex-col gap-2 items-end">
+              {/* Badge especial para prospectos nuevos */}
+              {(cliente.es_prospecto || cliente.etiquetas?.includes('NUEVO') || cliente.etiquetas?.includes('PROSPECTO')) && (
+                <Badge className="bg-blue-500 text-white hover:bg-blue-600 font-semibold">
+                  🆕 NUEVO
+                </Badge>
+              )}
               <Badge variant={cliente.tipo_cliente === 'Premium' ? 'default' : 'secondary'}>
                 {cliente.tipo_cliente}
               </Badge>

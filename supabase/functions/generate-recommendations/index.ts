@@ -205,13 +205,48 @@ Deno.serve(async (req) => {
     let { data: clientes, error: clientesError } = await clientesQuery;
     if (clientesError) throw clientesError;
 
-    if (!clientes || clientes.length === 0) {
+    console.log(`📊 Clientes cargados: ${clientes?.length || 0}`);
+
+    // 3b. Cargar prospectos nuevos (últimos 30 días)
+    const treintaDiasAtras = new Date();
+    treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30);
+
+    let prospectosQuery = supabaseClient
+      .from('prospectos')
+      .select('*')
+      .gte('created_at', treintaDiasAtras.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    // Aplicar mismos filtros geográficos a prospectos
+    if (provincia && provincia !== 'all') {
+      prospectosQuery = prospectosQuery.ilike('provincia', `%${provincia}%`);
+    }
+    if (comunasFinales.length > 0) {
+      const comunasConditions = comunasFinales
+        .map((c: string) => `comuna.ilike.%${c}%`)
+        .join(',');
+      prospectosQuery = prospectosQuery.or(comunasConditions);
+    }
+    if (barriosFinales.length > 0) {
+      const barriosConditions = barriosFinales
+        .map((b: string) => `barrio.ilike.%${b}%`)
+        .join(',');
+      prospectosQuery = prospectosQuery.or(barriosConditions);
+    }
+
+    let { data: prospectos, error: prospectosError } = await prospectosQuery;
+    if (prospectosError) throw prospectosError;
+
+    console.log(`🆕 Prospectos nuevos cargados: ${prospectos?.length || 0}`);
+
+    if ((!clientes || clientes.length === 0) && (!prospectos || prospectos.length === 0)) {
       return new Response(
         JSON.stringify({
           recomendaciones: [],
           resumen: {
             total_recomendaciones: 0,
-            descripcion: 'No se encontraron clientes',
+            descripcion: 'No se encontraron clientes ni prospectos',
             distribucion_por_vendedor: {},
             zonas_priorizadas: []
           }
@@ -220,7 +255,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`📊 Clientes cargados: ${clientes.length}`);
+    clientes = clientes || [];
+    prospectos = prospectos || [];
 
     // 4. Cargar feedback de vendedores
     const { data: feedbacks, error: feedbacksError } = await supabaseClient
@@ -380,6 +416,7 @@ Deno.serve(async (req) => {
         lat: place?.lat,
         long: place?.long,
         direccion: place?.direccion_principal,
+        es_prospecto: false,
         feedbacks_recientes: clientFeedbacks.slice(0, 3).map((fb: any) => ({
           visita_realizada: fb.visita_realizada,
           feedback: fb.feedback,
@@ -390,12 +427,42 @@ Deno.serve(async (req) => {
       };
     });
 
+    // Agregar prospectos al contexto
+    const prospectosContext = prospectos.slice(0, 50).map(p => ({
+      client_id: p.place_id, // Usar place_id como identificador
+      razon_social: p.nombre,
+      categoria_volumen: 'NUEVO',
+      categoria_recencia: 'NUEVO',
+      dias_desde_ultima_compra: null,
+      ticket_promedio: 0,
+      barrio: p.barrio,
+      ciudad: p.ciudad,
+      provincia: p.provincia,
+      vendedor_principal: null,
+      score_volumen: 'NUEVO',
+      score_recencia: 'NUEVO', 
+      score_comercial: 'NUEVO',
+      lat: p.latitud,
+      long: p.longitud,
+      direccion: p.direccion,
+      es_prospecto: true,
+      tipo_negocio: p.tipo_principal,
+      rating: p.rating,
+      feedbacks_recientes: []
+    }));
+
+    const todosContext = [...clientesContext, ...prospectosContext];
+
     const prompt = `
 VENDEDORES DISPONIBLES:
 ${JSON.stringify(vendedoresContext, null, 2)}
 
-CLIENTES CANDIDATOS (top 100 por volumen):
-${JSON.stringify(clientesContext, null, 2)}
+CLIENTES Y PROSPECTOS CANDIDATOS:
+NOTA: Los registros con "es_prospecto": true son nuevos negocios descubiertos que AÚN NO SON CLIENTES.
+Para prospectos, el "client_id" es en realidad el "place_id" de Google Maps.
+Prospectos tienen etiqueta especial "NUEVO" y merecen alta prioridad para convertirlos en clientes.
+
+${JSON.stringify(todosContext, null, 2)}
 
 FILTROS APLICADOS:
 - Provincia: ${provincia || 'Todas'}
@@ -557,60 +624,121 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
     }
     console.log(`🎯 IA generó ${aiRecommendations.recomendaciones.length} recomendaciones`);
 
-    // 7. Enriquecer con datos completos de clientes
+    // 7. Enriquecer con datos completos de clientes y prospectos
     const request_id = crypto.randomUUID();
     const enrichedRecommendations = [];
 
     for (const rec of aiRecommendations.recomendaciones) {
-      const clienteCompleto = clientes.find(c => c.client_id === rec.client_id);
-      if (!clienteCompleto) continue;
+      // Buscar primero en clientes
+      let clienteCompleto = clientes.find(c => c.client_id === rec.client_id);
+      let prospectoCompleto = null;
+      let esProspecto = false;
 
-      // Extraer datos de client_places del Map
-      const place = placesMap.get(rec.client_id);
+      // Si no se encuentra en clientes, buscar en prospectos (por place_id)
+      if (!clienteCompleto) {
+        prospectoCompleto = prospectos.find(p => p.place_id === rec.client_id);
+        if (!prospectoCompleto) continue;
+        esProspecto = true;
+      }
 
-      enrichedRecommendations.push({
-        request_id,
-        client_id: rec.client_id,
-        vendedor_recomendado_id: rec.vendedor_id,
-        razon_social: clienteCompleto.razon_social,
-        cuit_dni: clienteCompleto.cuit_dni,
-        priority_score: Math.round(rec.score_final),
-        score_geografico: Math.round(rec.factores.proximidad_geografica),
-        ai_reasoning: rec.justificacion,
-        factores_ia: rec.factores,
-        justificacion: rec.justificacion,
-        
-        // Datos comerciales
-        monto_total_vendido: clienteCompleto.monto_total_historico,
-        orders_count: clienteCompleto.cantidad_ordenes,
-        avg_ticket: clienteCompleto.ticket_promedio,
-        first_purchase_at: clienteCompleto.primera_compra,
-        last_purchase_at: clienteCompleto.ultima_compra,
-        days_since_last_purchase: clienteCompleto.dias_desde_ultima_compra,
-        participacion: clienteCompleto.participacion_mercado,
-        
-        // Scores
-        score_volumen_num: clienteCompleto.score_volumen,
-        score_recencia_num: clienteCompleto.score_recencia,
-        score_volumen: clienteCompleto.categoria_volumen,
-        score_recencia: clienteCompleto.categoria_recencia,
-        score_comercial: clienteCompleto.score_comercial,
-        
-        // Ubicación con datos de client_places
-        ciudades: clienteCompleto.todas_ciudades || [clienteCompleto.ciudad_principa],
-        provincias: [place?.provincia_principal || clienteCompleto.provincia_principal],
-        barrio_principal: place?.barrio_principal || clienteCompleto.barrio_principal,
-        direccion_principal: place?.direccion_principal || clienteCompleto.direccion_principal,
-        google_maps_link: place?.google_maps_link || null,
-        
-        // Otros
-        vendedores: clienteCompleto.todos_vendedores || [],
-        etiquetas: clienteCompleto.etiquetas || [],
-        telefonos: [],
-        created_at: new Date().toISOString(),
-        last_recomendation: new Date().toISOString(), // Timestamp de última recomendación
-        ultima_sugerencia: new Date().toISOString()
-      });
+      // Extraer datos de client_places del Map (solo para clientes)
+      const place = !esProspecto ? placesMap.get(rec.client_id) : null;
+
+      if (esProspecto && prospectoCompleto) {
+        // Enriquecer con datos de prospecto
+        enrichedRecommendations.push({
+          request_id,
+          client_id: null, // No tiene client_id porque no es cliente aún
+          prospecto_place_id: prospectoCompleto.place_id,
+          vendedor_recomendado_id: rec.vendedor_id,
+          razon_social: prospectoCompleto.nombre,
+          cuit_dni: null,
+          priority_score: Math.round(rec.score_final),
+          score_geografico: Math.round(rec.factores.score_proximidad || 0),
+          ai_reasoning: rec.justificacion,
+          factores_ia: rec.factores,
+          justificacion: rec.justificacion,
+          es_prospecto: true,
+          
+          // Datos comerciales (vacíos para prospectos)
+          monto_total_vendido: 0,
+          orders_count: 0,
+          avg_ticket: 0,
+          first_purchase_at: null,
+          last_purchase_at: null,
+          days_since_last_purchase: null,
+          participacion: 0,
+          
+          // Scores especiales para prospectos
+          score_volumen_num: null,
+          score_recencia_num: null,
+          score_volumen: 'NUEVO',
+          score_recencia: 'NUEVO',
+          score_comercial: 'NUEVO',
+          
+          // Ubicación del prospecto
+          ciudades: [prospectoCompleto.ciudad],
+          provincias: [prospectoCompleto.provincia],
+          barrio_principal: prospectoCompleto.barrio,
+          direccion_principal: prospectoCompleto.direccion,
+          google_maps_link: `https://www.google.com/maps/search/?api=1&query=${prospectoCompleto.latitud},${prospectoCompleto.longitud}&query_place_id=${prospectoCompleto.place_id}`,
+          
+          // Otros
+          vendedores: [],
+          etiquetas: ['NUEVO', 'PROSPECTO'],
+          telefonos: prospectoCompleto.telefono ? [prospectoCompleto.telefono] : [],
+          created_at: new Date().toISOString(),
+          last_recomendation: new Date().toISOString(),
+          ultima_sugerencia: new Date().toISOString()
+        });
+      } else if (clienteCompleto) {
+        // Enriquecer con datos de cliente
+        enrichedRecommendations.push({
+          request_id,
+          client_id: rec.client_id,
+          prospecto_place_id: null,
+          vendedor_recomendado_id: rec.vendedor_id,
+          razon_social: clienteCompleto.razon_social,
+          cuit_dni: clienteCompleto.cuit_dni,
+          priority_score: Math.round(rec.score_final),
+          score_geografico: Math.round(rec.factores.score_proximidad || 0),
+          ai_reasoning: rec.justificacion,
+          factores_ia: rec.factores,
+          justificacion: rec.justificacion,
+          es_prospecto: false,
+          
+          // Datos comerciales
+          monto_total_vendido: clienteCompleto.monto_total_historico,
+          orders_count: clienteCompleto.cantidad_ordenes,
+          avg_ticket: clienteCompleto.ticket_promedio,
+          first_purchase_at: clienteCompleto.primera_compra,
+          last_purchase_at: clienteCompleto.ultima_compra,
+          days_since_last_purchase: clienteCompleto.dias_desde_ultima_compra,
+          participacion: clienteCompleto.participacion_mercado,
+          
+          // Scores
+          score_volumen_num: clienteCompleto.score_volumen,
+          score_recencia_num: clienteCompleto.score_recencia,
+          score_volumen: clienteCompleto.categoria_volumen,
+          score_recencia: clienteCompleto.categoria_recencia,
+          score_comercial: clienteCompleto.score_comercial,
+          
+          // Ubicación con datos de client_places
+          ciudades: clienteCompleto.todas_ciudades || [clienteCompleto.ciudad_principa],
+          provincias: [place?.provincia_principal || clienteCompleto.provincia_principal],
+          barrio_principal: place?.barrio_principal || clienteCompleto.barrio_principal,
+          direccion_principal: place?.direccion_principal || clienteCompleto.direccion_principal,
+          google_maps_link: place?.google_maps_link || null,
+          
+          // Otros
+          vendedores: clienteCompleto.todos_vendedores || [],
+          etiquetas: clienteCompleto.etiquetas || [],
+          telefonos: [],
+          created_at: new Date().toISOString(),
+          last_recomendation: new Date().toISOString(),
+          ultima_sugerencia: new Date().toISOString()
+        });
+      }
     }
 
     // 8. Guardar en base de datos

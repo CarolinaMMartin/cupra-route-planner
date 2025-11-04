@@ -44,6 +44,9 @@ export interface Sucursal {
   // Campos de IA
   ai_reasoning?: string;
   score_geografico?: number;
+  // Flag para indicar si es prospecto nuevo
+  es_prospecto?: boolean;
+  prospecto_place_id?: string;
   factores_ia?: {
     score_comercial: number;
     proximidad_geografica: number;
