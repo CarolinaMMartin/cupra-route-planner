@@ -26,6 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 
 interface ClienteAsignado {
   id: string;
@@ -810,6 +811,20 @@ const VendedorKanban = () => {
                   </div>
                 </div>
               )}
+
+              {/* Botón de exclusión */}
+              <div className="pt-4 border-t">
+                <ExcludeClientButton 
+                  clientId={selectedCliente.client_id}
+                  clientName={selectedCliente.razon_social}
+                  onSuccess={() => {
+                    setShowInfoDialog(false);
+                    fetchAsignaciones();
+                  }}
+                  variant="destructive"
+                  size="default"
+                />
+              </div>
             </div>
           )}
         </DialogContent>

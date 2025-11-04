@@ -42,14 +42,18 @@ Analizar la cartera de clientes y recomendar visitas priorizadas SOLO para las z
 
 CRITERIOS DE SCORING (EN ORDEN DE IMPORTANCIA):
 
-1. Concentración Geográfica (40%) - MÁXIMA PRIORIDAD:
+1. Concentración Geográfica (50%) - MÁXIMA PRIORIDAD ABSOLUTA:
+   - ⚠️ CRÍTICO: Las 8 recomendaciones DEBEN estar en el MISMO BARRIO o BARRIOS MUY CERCANOS (< 2km)
    - Clientes en MISMO BARRIO/COMUNA: 100 pts
-   - Clientes en BARRIOS ADYACENTES (<3km): 70 pts  
-   - Clientes en MISMA ZONA FILTRADA: 50 pts
-   - Clientes fuera de la zona filtrada: 0 pts (DESCARTAR)
+   - Clientes en BARRIOS ADYACENTES (<2km): 50 pts  
+   - Clientes en BARRIOS LEJANOS (>2km): 0 pts (DESCARTAR SIEMPRE)
    
-   ⚠️ REGLA ESTRICTA: Solo recomendar clientes dentro de los barrios/comunas especificados en los FILTROS APLICADOS.
-   La cercanía geográfica ES LO MÁS IMPORTANTE para optimizar rutas y tiempo de los vendedores.
+   ⚠️ REGLA ESTRICTA NUEVA: 
+   - El vendedor NO puede trasladarse largas distancias en un día
+   - TODAS las recomendaciones deben formar un cluster geográfico compacto
+   - Prioriza AGRUPAR clientes del mismo barrio antes que dispersarlos
+   - Si un barrio tiene suficientes clientes (6-8), recomienda SOLO ese barrio
+   - Solo incluye un segundo barrio si el primero tiene menos de 4 clientes y está a menos de 2km
 
 2. Vendedor Asignado (25%) - SEGUNDA PRIORIDAD:
    - Cliente tiene vendedor_principal que coincide con el vendedor: 100 pts
@@ -194,6 +198,7 @@ Deno.serve(async (req) => {
       .from('clientes')
       .select('*')
       .not('monto_total_historico', 'is', null)
+      .or('excluir_recomendaciones.is.null,excluir_recomendaciones.eq.false') // Filtrar clientes excluidos
       .order('monto_total_historico', { ascending: false })
       .limit(200);
 
@@ -602,7 +607,9 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
         vendedores: clienteCompleto.todos_vendedores || [],
         etiquetas: clienteCompleto.etiquetas || [],
         telefonos: [],
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        last_recomendation: new Date().toISOString(), // Timestamp de última recomendación
+        ultima_sugerencia: new Date().toISOString()
       });
     }
 

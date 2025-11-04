@@ -21,6 +21,7 @@ import {
   AlertCircle
 } from "lucide-react";
 import { Sucursal } from "@/types/sales";
+import ExcludeClientButton from "./ExcludeClientButton";
 
 interface ClientDetailCardProps {
   cliente: Sucursal;
@@ -128,7 +129,7 @@ const ClientDetailCard = ({
         <div className="flex-1 space-y-3">
           {/* Header básico */}
           <div className="flex items-start justify-between gap-2">
-            <div>
+            <div className="flex-1">
               <h3 className="font-serif font-semibold text-lg">{cliente.nombre}</h3>
               {cliente.fantasia && cliente.fantasia !== cliente.nombre && (
                 <p className="text-sm text-muted-foreground">({cliente.fantasia})</p>
@@ -140,6 +141,15 @@ const ClientDetailCard = ({
               {cliente.cuit_dni && (
                 <p className="text-xs text-muted-foreground">CUIT/DNI: {cliente.cuit_dni}</p>
               )}
+              {/* Información de contacto */}
+              <div className="mt-2 space-y-1">
+                {cliente.telefonos && cliente.telefonos.length > 0 && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Phone className="w-3 h-3" />
+                    {cliente.telefonos.join(', ')}
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex flex-col gap-2 items-end">
               <Badge variant={cliente.tipo_cliente === 'Premium' ? 'default' : 'secondary'}>
@@ -193,35 +203,22 @@ const ClientDetailCard = ({
             </Button>
           )}
 
+          {/* Botón de exclusión */}
+          <ExcludeClientButton 
+            clientId={cliente.client_id || cliente.id}
+            clientName={cliente.nombre}
+            variant="outline"
+            size="sm"
+          />
+
           {/* Justificación IA */}
           {cliente.ai_reasoning && (
             <div className="bg-card/50 backdrop-blur-sm p-3 rounded-md border border-primary/30">
               <div className="flex gap-2 items-start">
                 <Lightbulb className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-                <div className="flex-1 space-y-2">
-                  <p className="text-sm font-medium text-card-foreground">Análisis de IA:</p>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-card-foreground mb-2">Análisis de IA:</p>
                   <p className="text-sm text-card-foreground/80">{cliente.ai_reasoning}</p>
-                  
-                  {cliente.factores_ia && (
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-primary/20">
-                      <div className="text-xs">
-                        <span className="text-card-foreground/70">Score Comercial:</span>
-                        <p className="font-semibold text-accent">{cliente.factores_ia.score_comercial}/100</p>
-                      </div>
-                      <div className="text-xs">
-                        <span className="text-card-foreground/70">Proximidad:</span>
-                        <p className="font-semibold text-accent">{cliente.factores_ia.proximidad_geografica}/100</p>
-                      </div>
-                      <div className="text-xs">
-                        <span className="text-card-foreground/70">Urgencia:</span>
-                        <p className="font-semibold text-accent">{cliente.factores_ia.dias_sin_visita}/100</p>
-                      </div>
-                      <div className="text-xs">
-                        <span className="text-card-foreground/70">Potencial:</span>
-                        <p className="font-semibold text-accent">{cliente.factores_ia.potencial_venta}/100</p>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

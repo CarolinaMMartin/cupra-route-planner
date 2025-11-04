@@ -292,6 +292,7 @@ export type Database = {
           dias_desde_ultima_compra: number | null
           direccion_principal: string | null
           etiquetas: string[] | null
+          excluir_recomendaciones: boolean | null
           fantasia: string | null
           id: string
           last_recommendation_at: string | null
@@ -328,6 +329,7 @@ export type Database = {
           dias_desde_ultima_compra?: number | null
           direccion_principal?: string | null
           etiquetas?: string[] | null
+          excluir_recomendaciones?: boolean | null
           fantasia?: string | null
           id?: string
           last_recommendation_at?: string | null
@@ -364,6 +366,7 @@ export type Database = {
           dias_desde_ultima_compra?: number | null
           direccion_principal?: string | null
           etiquetas?: string[] | null
+          excluir_recomendaciones?: boolean | null
           fantasia?: string | null
           id?: string
           last_recommendation_at?: string | null
