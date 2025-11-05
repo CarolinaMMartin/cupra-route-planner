@@ -258,10 +258,10 @@ Deno.serve(async (req) => {
     clientes = clientes || [];
     prospectos = prospectos || [];
 
-    // 4. Cargar feedback de vendedores
+    // 4. Cargar feedback de vendedores (tanto de clientes como de prospectos)
     const { data: feedbacks, error: feedbacksError } = await supabaseClient
       .from('cliente_feedbacks')
-      .select('client_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, created_at')
+      .select('client_id, prospecto_place_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, created_at')
       .order('created_at', { ascending: false });
 
     if (feedbacksError) {
@@ -270,13 +270,24 @@ Deno.serve(async (req) => {
 
     console.log(`💬 Feedbacks cargados: ${feedbacks?.length || 0}`);
 
-    // Organizar feedbacks por client_id
-    const feedbacksMap = new Map();
+    // Organizar feedbacks por client_id y prospecto_place_id
+    const feedbacksMapClientes = new Map();
+    const feedbacksMapProspectos = new Map();
     feedbacks?.forEach(fb => {
-      if (!feedbacksMap.has(fb.client_id)) {
-        feedbacksMap.set(fb.client_id, []);
+      // Feedbacks de clientes
+      if (fb.client_id) {
+        if (!feedbacksMapClientes.has(fb.client_id)) {
+          feedbacksMapClientes.set(fb.client_id, []);
+        }
+        feedbacksMapClientes.get(fb.client_id).push(fb);
       }
-      feedbacksMap.get(fb.client_id).push(fb);
+      // Feedbacks de prospectos
+      if (fb.prospecto_place_id) {
+        if (!feedbacksMapProspectos.has(fb.prospecto_place_id)) {
+          feedbacksMapProspectos.set(fb.prospecto_place_id, []);
+        }
+        feedbacksMapProspectos.get(fb.prospecto_place_id).push(fb);
+      }
     });
 
     // 5. Cargar contexto adicional si hay instrucciones específicas
@@ -397,7 +408,7 @@ Deno.serve(async (req) => {
 
     const clientesContext = clientes.slice(0, 100).map(c => {
       const place = placesMap.get(c.client_id);
-      const clientFeedbacks = feedbacksMap.get(c.client_id) || [];
+      const clientFeedbacks = feedbacksMapClientes.get(c.client_id) || [];
       
       return {
         client_id: c.client_id,
@@ -428,30 +439,40 @@ Deno.serve(async (req) => {
     });
 
     // Agregar prospectos al contexto
-    const prospectosContext = prospectos.slice(0, 50).map(p => ({
-      client_id: p.place_id, // Usar place_id como identificador
-      razon_social: p.nombre,
-      categoria_volumen: 'NUEVO',
-      categoria_recencia: 'NUEVO',
-      dias_desde_ultima_compra: null,
-      ticket_promedio: 0,
-      barrio: p.barrio,
-      ciudad: p.ciudad,
-      provincia: p.provincia,
-      vendedor_principal: null,
-      score_volumen: 'NUEVO',
-      score_recencia: 'NUEVO', 
-      score_comercial: 'NUEVO',
-      lat: p.latitud,
-      long: p.longitud,
-      direccion: p.direccion,
-      es_prospecto: true,
-      tipo_negocio: p.tipo_principal,
-      rating: p.rating,
-      website: p.website,
-      telefono: p.telefono,
-      feedbacks_recientes: []
-    }));
+    const prospectosContext = prospectos.slice(0, 50).map(p => {
+      const prospectoFeedbacks = feedbacksMapProspectos.get(p.place_id) || [];
+      
+      return {
+        client_id: p.place_id, // Usar place_id como identificador
+        razon_social: p.nombre,
+        categoria_volumen: 'NUEVO',
+        categoria_recencia: 'NUEVO',
+        dias_desde_ultima_compra: null,
+        ticket_promedio: 0,
+        barrio: p.barrio,
+        ciudad: p.ciudad,
+        provincia: p.provincia,
+        vendedor_principal: null,
+        score_volumen: 'NUEVO',
+        score_recencia: 'NUEVO', 
+        score_comercial: 'NUEVO',
+        lat: p.latitud,
+        long: p.longitud,
+        direccion: p.direccion,
+        es_prospecto: true,
+        tipo_negocio: p.tipo_principal,
+        rating: p.rating,
+        website: p.website,
+        telefono: p.telefono,
+        feedbacks_recientes: prospectoFeedbacks.slice(0, 3).map((fb: any) => ({
+          visita_realizada: fb.visita_realizada,
+          feedback: fb.feedback,
+          motivo_no_visita: fb.motivo_no_visita,
+          tipo_interaccion: fb.tipo_interaccion,
+          fecha: fb.created_at
+        }))
+      };
+    });
 
     const todosContext = [...clientesContext, ...prospectosContext];
 
