@@ -370,17 +370,15 @@ const KanbanAssignment = ({
         ref={setNodeRef} 
         {...listeners} 
         {...attributes}
-        className={isDragging ? "opacity-0" : ""}
+        className={isDragging ? "opacity-50" : ""}
       >
-        <div className="cursor-move">
-          <ClientDetailCard
-            cliente={recomendacion}
-            isSelected={false}
-            onToggle={() => {}}
-            showCheckbox={false}
-            compact={true}
-          />
-        </div>
+        <ClientDetailCard
+          cliente={recomendacion}
+          isSelected={false}
+          onToggle={() => {}}
+          showCheckbox={false}
+          compact={true}
+        />
       </div>
     );
   };
@@ -474,8 +472,11 @@ const KanbanAssignment = ({
 
           {/* Contenedor con scroll horizontal para vendedores */}
           <div 
-            className="flex gap-4 overflow-x-scroll overflow-y-hidden pb-2 flex-1" 
-            style={{ scrollbarWidth: 'thin' }}
+            className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 flex-1" 
+            style={{ 
+              scrollbarWidth: 'auto',
+              scrollbarColor: 'hsl(var(--muted-foreground)) hsl(var(--muted))'
+            }}
           >
             {vendedores.map((vendedor) => (
               <DroppableColumn
@@ -488,9 +489,9 @@ const KanbanAssignment = ({
           </div>
         </div>
 
-        <DragOverlay dropAnimation={null}>
+        <DragOverlay>
           {activeId ? (
-            <div className="cursor-grabbing rotate-3 scale-105">
+            <div className="cursor-grabbing">
               <ClientCard id={activeId} />
             </div>
           ) : null}
