@@ -253,10 +253,10 @@ const ClientDetailCard = ({
                 e.stopPropagation();
                 handleOpenGoogleMaps(cliente.google_maps_link);
               }}
-              className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors h-auto p-2"
+              className="inline-flex items-center gap-2 text-sm text-accent hover:text-accent/80 transition-colors h-auto p-2"
             >
               <MapPin className="w-4 h-4" />
-              <span className="font-medium">📍 Ver ubicación en Google Maps</span>
+              <span className="font-medium">Ver ubicación en Google Maps</span>
             </Button>
           )}
 
