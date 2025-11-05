@@ -403,7 +403,17 @@ const KanbanAssignment = ({
     );
   };
 
-  const DroppableColumn = ({ id, title, count }: { id: string; title: string; count: number }) => {
+  const DroppableColumn = ({ 
+    id, 
+    title, 
+    count, 
+    isUnassigned = false 
+  }: { 
+    id: string; 
+    title: string; 
+    count: number;
+    isUnassigned?: boolean;
+  }) => {
     const { setNodeRef, isOver } = useDroppable({
       id: id,
     });
@@ -411,16 +421,16 @@ const KanbanAssignment = ({
     const items = assignments[id] || [];
 
     return (
-      <Card className="flex-1 min-w-[280px]">
+      <Card className={isUnassigned ? "w-80 flex-shrink-0" : "w-80 flex-shrink-0"}>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center justify-between">
-            <span>{title}</span>
-            <Badge variant="secondary">{count}</Badge>
+            <span className="truncate">{title}</span>
+            <Badge variant="secondary" className="ml-2">{count} cliente{count !== 1 ? 's' : ''}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent
           ref={setNodeRef}
-          className={`space-y-2 min-h-[400px] max-h-[600px] overflow-y-auto transition-colors ${
+          className={`space-y-2 min-h-[500px] max-h-[calc(100vh-280px)] overflow-y-auto transition-colors ${
             isOver ? "bg-accent/10" : ""
           }`}
         >
@@ -454,17 +464,26 @@ const KanbanAssignment = ({
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          <DroppableColumn id="unassigned" title="Sin asignar" count={assignments.unassigned?.length || 0} />
+        <div className="flex gap-4 h-[calc(100vh-220px)]">
+          {/* Columna fija de "Sin asignar" */}
+          <DroppableColumn 
+            id="unassigned" 
+            title="Sin asignar" 
+            count={assignments.unassigned?.length || 0}
+            isUnassigned={true}
+          />
 
-          {vendedores.map((vendedor) => (
-            <DroppableColumn
-              key={vendedor.id}
-              id={vendedor.id}
-              title={vendedor.nombre}
-              count={assignments[vendedor.id]?.length || 0}
-            />
-          ))}
+          {/* Contenedor con scroll horizontal para vendedores */}
+          <div className="flex gap-4 overflow-x-auto pb-4 flex-1">
+            {vendedores.map((vendedor) => (
+              <DroppableColumn
+                key={vendedor.id}
+                id={vendedor.id}
+                title={vendedor.nombre}
+                count={assignments[vendedor.id]?.length || 0}
+              />
+            ))}
+          </div>
         </div>
 
         <DragOverlay>{activeId ? <ClientCard id={activeId} /> : null}</DragOverlay>
