@@ -19,8 +19,8 @@ interface ResultsMapProps {
 
 const ResultsMap = ({ sucursales }: ResultsMapProps) => {
   return (
-    <div className="h-[600px] w-full rounded-lg overflow-hidden shadow-medium">
-      <p className="p-4 text-muted-foreground text-center">Vista de mapa disponible próximamente</p>
+    <div className="h-[600px] w-full rounded-lg overflow-hidden shadow-medium bg-card">
+      <p className="p-4 text-foreground text-center">Vista de mapa disponible próximamente</p>
     </div>
   );
 };
