@@ -489,9 +489,9 @@ const KanbanAssignment = ({
           </div>
         </div>
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={null}>
           {activeId ? (
-            <div className="cursor-grabbing">
+            <div className="cursor-grabbing" style={{ transform: 'translate(-50%, -50%)' }}>
               <ClientCard id={activeId} />
             </div>
           ) : null}
