@@ -362,20 +362,20 @@ const KanbanAssignment = ({
       id: id,
     });
 
-    const style = transform
-      ? {
-          transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-        }
-      : undefined;
-
     const recomendacion = getRecommendation(id);
     if (!recomendacion) return null;
 
-    console.log("RECOMENDACION", recomendacion);
-
     return (
-      <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
-        <div className={`cursor-move transition-all ${isDragging ? "opacity-50" : ""}`}>
+      <div 
+        ref={setNodeRef} 
+        style={{
+          transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+        }}
+        {...listeners} 
+        {...attributes}
+        className={`transition-opacity ${isDragging ? "opacity-30" : ""}`}
+      >
+        <div className="cursor-move">
           <ClientDetailCard
             cliente={recomendacion}
             isSelected={false}
@@ -464,17 +464,19 @@ const KanbanAssignment = ({
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-4 h-[calc(100vh-220px)]">
+        <div className="flex gap-4 overflow-hidden h-[calc(100vh-220px)]">
           {/* Columna fija de "Sin asignar" */}
-          <DroppableColumn 
-            id="unassigned" 
-            title="Sin asignar" 
-            count={assignments.unassigned?.length || 0}
-            isUnassigned={true}
-          />
+          <div className="flex-shrink-0">
+            <DroppableColumn 
+              id="unassigned" 
+              title="Sin asignar" 
+              count={assignments.unassigned?.length || 0}
+              isUnassigned={true}
+            />
+          </div>
 
           {/* Contenedor con scroll horizontal para vendedores */}
-          <div className="flex gap-4 overflow-x-auto pb-4 flex-1">
+          <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 flex-1">
             {vendedores.map((vendedor) => (
               <DroppableColumn
                 key={vendedor.id}
@@ -486,7 +488,13 @@ const KanbanAssignment = ({
           </div>
         </div>
 
-        <DragOverlay>{activeId ? <ClientCard id={activeId} /> : null}</DragOverlay>
+        <DragOverlay>
+          {activeId ? (
+            <div className="cursor-grabbing opacity-80">
+              <ClientCard id={activeId} />
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
     </div>
   );
