@@ -358,7 +358,7 @@ const KanbanAssignment = ({
   };
 
   const DraggableCard = ({ id }: { id: string }) => {
-    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
       id: id,
     });
 
@@ -368,12 +368,9 @@ const KanbanAssignment = ({
     return (
       <div 
         ref={setNodeRef} 
-        style={{
-          transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        }}
         {...listeners} 
         {...attributes}
-        className={`transition-opacity ${isDragging ? "opacity-30" : ""}`}
+        className={isDragging ? "opacity-0" : ""}
       >
         <div className="cursor-move">
           <ClientDetailCard
@@ -421,8 +418,8 @@ const KanbanAssignment = ({
     const items = assignments[id] || [];
 
     return (
-      <Card className={isUnassigned ? "w-80 flex-shrink-0" : "w-80 flex-shrink-0"}>
-        <CardHeader className="pb-3">
+      <Card className="w-80 flex-shrink-0 h-[calc(100vh-280px)] flex flex-col">
+        <CardHeader className="pb-3 flex-shrink-0">
           <CardTitle className="text-base flex items-center justify-between">
             <span className="truncate">{title}</span>
             <Badge variant="secondary" className="ml-2">{count} cliente{count !== 1 ? 's' : ''}</Badge>
@@ -430,7 +427,7 @@ const KanbanAssignment = ({
         </CardHeader>
         <CardContent
           ref={setNodeRef}
-          className={`space-y-2 min-h-[500px] max-h-[calc(100vh-280px)] overflow-y-auto transition-colors ${
+          className={`space-y-2 flex-1 overflow-y-auto transition-colors ${
             isOver ? "bg-accent/10" : ""
           }`}
         >
@@ -464,7 +461,7 @@ const KanbanAssignment = ({
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-4 overflow-hidden h-[calc(100vh-220px)]">
+        <div className="flex gap-4 h-[calc(100vh-220px)]">
           {/* Columna fija de "Sin asignar" */}
           <div className="flex-shrink-0">
             <DroppableColumn 
@@ -476,7 +473,10 @@ const KanbanAssignment = ({
           </div>
 
           {/* Contenedor con scroll horizontal para vendedores */}
-          <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 flex-1">
+          <div 
+            className="flex gap-4 overflow-x-scroll overflow-y-hidden pb-2 flex-1" 
+            style={{ scrollbarWidth: 'thin' }}
+          >
             {vendedores.map((vendedor) => (
               <DroppableColumn
                 key={vendedor.id}
@@ -488,9 +488,9 @@ const KanbanAssignment = ({
           </div>
         </div>
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={null}>
           {activeId ? (
-            <div className="cursor-grabbing opacity-80">
+            <div className="cursor-grabbing rotate-3 scale-105">
               <ClientCard id={activeId} />
             </div>
           ) : null}
