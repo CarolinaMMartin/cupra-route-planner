@@ -289,6 +289,9 @@ Deno.serve(async (req) => {
         feedbacksMapProspectos.get(fb.prospecto_place_id).push(fb);
       }
     });
+    
+    console.log(`📝 Feedbacks de clientes mapeados: ${feedbacksMapClientes.size}`);
+    console.log(`📝 Feedbacks de prospectos mapeados: ${feedbacksMapProspectos.size}`);
 
     // 5. Cargar contexto adicional si hay instrucciones específicas
     let contextoDatos: {
@@ -441,6 +444,11 @@ Deno.serve(async (req) => {
     // Agregar prospectos al contexto
     const prospectosContext = prospectos.slice(0, 50).map(p => {
       const prospectoFeedbacks = feedbacksMapProspectos.get(p.place_id) || [];
+      
+      // Debug: loggear cuando un prospecto tiene feedbacks
+      if (prospectoFeedbacks.length > 0) {
+        console.log(`🎯 Prospecto con feedback: ${p.nombre} (${p.place_id}) - ${prospectoFeedbacks.length} feedbacks`);
+      }
       
       return {
         client_id: p.place_id, // Usar place_id como identificador
