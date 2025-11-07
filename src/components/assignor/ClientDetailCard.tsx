@@ -4,7 +4,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { toast } from "@/hooks/use-toast";
 import { 
   MapPin, 
   Star, 
@@ -55,19 +54,6 @@ const ClientDetailCard = ({
     return new Date(dateString).toLocaleDateString('es-AR');
   };
 
-  const handleOpenGoogleMaps = (url: string) => {
-    try {
-      const validUrl = url.startsWith('http') ? url : `https://${url}`;
-      window.open(validUrl, '_blank');
-    } catch (error) {
-      console.error('Error al abrir Google Maps:', error);
-      toast({
-        title: "Error",
-        description: "No se pudo abrir el enlace a Google Maps",
-        variant: "destructive"
-      });
-    }
-  };
 
   // Versión compacta para Kanban
   if (compact) {
@@ -246,18 +232,16 @@ const ClientDetailCard = ({
 
           {/* Botón para Google Maps */}
           {cliente.google_maps_link && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleOpenGoogleMaps(cliente.google_maps_link);
-              }}
-              className="inline-flex items-center gap-2 text-sm text-accent hover:text-accent/80 transition-colors h-auto p-2"
+            <a
+              href={cliente.google_maps_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-2 text-sm text-accent hover:text-accent/80 transition-colors h-auto p-2 rounded-md hover:bg-accent/10"
             >
               <MapPin className="w-4 h-4" />
               <span className="font-medium">Ver ubicación en Google Maps</span>
-            </Button>
+            </a>
           )}
 
           {/* Botón de exclusión */}
