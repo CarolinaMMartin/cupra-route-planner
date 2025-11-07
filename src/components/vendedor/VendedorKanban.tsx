@@ -503,6 +503,19 @@ const VendedorKanban = () => {
 
       if (feedbackError) throw feedbackError;
       
+      // Si es prospecto y se concretó una venta, marcarlo como cliente
+      if (visitaRealizada && esProspecto && tipoInteraccion === "Venta Concretada") {
+        const placeId = selectedCliente.client_id.replace('prospecto-', '');
+        const { error: prospectoUpdateError } = await supabase
+          .from('prospectos')
+          .update({ es_cliente_cupra: true })
+          .eq('place_id', placeId);
+
+        if (prospectoUpdateError) {
+          console.error('Error actualizando prospecto:', prospectoUpdateError);
+        }
+      }
+      
       if (visitaRealizada && !esProspecto) {
         const { error: clienteUpdateError } = await supabase
           .from('clientes')
@@ -541,7 +554,9 @@ const VendedorKanban = () => {
       toast({
         title: "Feedback guardado",
         description: visitaRealizada 
-          ? "El feedback ha sido guardado y la visita registrada. El cliente será recomendado en 15 días."
+          ? (esProspecto && tipoInteraccion === "Venta Concretada" 
+            ? "¡Venta concretada! El prospecto ha sido marcado como cliente y no volverá a aparecer en recomendaciones."
+            : "El feedback ha sido guardado y la visita registrada. El cliente será recomendado en 15 días.")
           : "El feedback ha sido guardado. El cliente será recomendado nuevamente mañana.",
       });
 
@@ -1180,6 +1195,7 @@ const VendedorKanban = () => {
                   <option value="Presentación de Muestras">Presentación de Muestras</option>
                   <option value="Gestión de Problemas (Entrega / Cobranza)">Gestión de Problemas (Entrega / Cobranza)</option>
                   <option value="Prospección (Visita inicial)">Prospección (Visita inicial)</option>
+                  <option value="Venta Concretada">💰 Venta Concretada</option>
                 </select>
               </div>
             )}
