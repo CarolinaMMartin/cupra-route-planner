@@ -356,9 +356,13 @@ const KanbanAssignment = ({
   };
 
   const DraggableCard = ({ id }: { id: string }) => {
-    const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({
       id: id,
     });
+
+    const style = transform ? {
+      transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    } : undefined;
 
     const recomendacion = getRecommendation(id);
     if (!recomendacion) return null;
@@ -366,19 +370,18 @@ const KanbanAssignment = ({
     return (
       <div 
         ref={setNodeRef} 
+        style={style}
         {...listeners} 
         {...attributes}
-        className={isDragging ? "opacity-50" : "cursor-grab active:cursor-grabbing"}
+        className={`cursor-grab active:cursor-grabbing ${isDragging ? "opacity-50" : ""}`}
       >
-        <div className="pointer-events-none">
-          <ClientDetailCard
-            cliente={recomendacion}
-            isSelected={false}
-            onToggle={() => {}}
-            showCheckbox={false}
-            compact={true}
-          />
-        </div>
+        <ClientDetailCard
+          cliente={recomendacion}
+          isSelected={false}
+          onToggle={() => {}}
+          showCheckbox={false}
+          compact={true}
+        />
       </div>
     );
   };

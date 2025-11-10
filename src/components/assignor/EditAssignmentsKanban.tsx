@@ -110,9 +110,9 @@ const EditAssignmentsKanban = ({
         newAssignments[v.id] = [];
       });
 
-      // Distribuir clientes en sus columnas actuales
+      // Distribuir clientes en sus columnas actuales (filtrar nulls)
       selectedAssignments.forEach((assignment) => {
-        if (newAssignments[assignment.vendedor_id]) {
+        if (assignment.client_id && newAssignments[assignment.vendedor_id]) {
           newAssignments[assignment.vendedor_id].push(assignment.client_id);
         }
       });
@@ -183,6 +183,9 @@ const EditAssignmentsKanban = ({
 
       for (const [vendedorId, clientIds] of Object.entries(assignments)) {
         for (const clientId of clientIds) {
+          // Filtrar client_id null o undefined
+          if (!clientId) continue;
+          
           const pairKey = `${vendedorId}-${clientId}`;
           if (!assignedPairs.has(pairKey)) {
             assignedPairs.add(pairKey);
@@ -240,25 +243,29 @@ const EditAssignmentsKanban = ({
     if (!cliente) return null;
 
     return (
-      <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
-        <div className={`cursor-move transition-all ${isDragging ? "opacity-50" : ""}`}>
-          <Card className="p-3">
-            <div className="space-y-2">
-              <div>
-                <p className="font-semibold text-sm">{cliente.razon_social}</p>
-                <p className="text-xs text-muted-foreground">CUIT: {cliente.cuit_dni}</p>
-              </div>
-              {cliente.barrio_principal && (
-                <p className="text-xs text-muted-foreground">📍 {cliente.barrio_principal}</p>
-              )}
-              {cliente.categoria_volumen && (
-                <Badge variant="secondary" className="text-xs">
-                  {cliente.categoria_volumen}
-                </Badge>
-              )}
+      <div 
+        ref={setNodeRef} 
+        style={style} 
+        {...listeners} 
+        {...attributes}
+        className={`cursor-grab active:cursor-grabbing ${isDragging ? "opacity-50" : ""}`}
+      >
+        <Card className="p-3">
+          <div className="space-y-2">
+            <div>
+              <p className="font-semibold text-sm">{cliente.razon_social}</p>
+              <p className="text-xs text-muted-foreground">CUIT: {cliente.cuit_dni}</p>
             </div>
-          </Card>
-        </div>
+            {cliente.barrio_principal && (
+              <p className="text-xs text-muted-foreground">📍 {cliente.barrio_principal}</p>
+            )}
+            {cliente.categoria_volumen && (
+              <Badge variant="secondary" className="text-xs">
+                {cliente.categoria_volumen}
+              </Badge>
+            )}
+          </div>
+        </Card>
       </div>
     );
   };
