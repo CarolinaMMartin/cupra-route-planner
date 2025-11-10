@@ -126,15 +126,26 @@ const Index = () => {
                 </>
               )}
               {profile.rol === 'vendedor' && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => navigate("/vendedor-dashboard")}
-                  className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
-                >
-                  <BarChart3 className="w-4 h-4" />
-                  <span className="text-sm tracking-wide">Mi Dashboard</span>
-                </Button>
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate("/vendedor-dashboard")}
+                    className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    <span className="text-sm tracking-wide">Mi Dashboard</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate("/")}
+                    className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
+                  >
+                    <Layers className="w-4 h-4" />
+                    <span className="text-sm tracking-wide">Mis Asignaciones</span>
+                  </Button>
+                </>
               )}
               <div className="text-right">
                 <p className="font-medium flex items-center gap-2 text-sm">
