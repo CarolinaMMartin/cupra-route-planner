@@ -189,6 +189,7 @@ const EditAssignmentsKanban = ({
             newAssignments.push({
               vendedor_id: vendedorId,
               client_id: clientId,
+              es_prospecto: false,
             });
           }
         }

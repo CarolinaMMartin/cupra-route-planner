@@ -302,7 +302,6 @@ const KanbanAssignment = ({
                   vendedor_id: vendedorId,
                   prospecto_place_id: rec.prospecto_place_id,
                   es_prospecto: true,
-                  client_id: null,
                 });
               }
             } else {
@@ -316,7 +315,6 @@ const KanbanAssignment = ({
                     vendedor_id: vendedorId,
                     client_id: clienteId,
                     es_prospecto: false,
-                    prospecto_place_id: null,
                   });
                 }
               }
