@@ -370,15 +370,17 @@ const KanbanAssignment = ({
         ref={setNodeRef} 
         {...listeners} 
         {...attributes}
-        className={isDragging ? "opacity-50" : ""}
+        className={isDragging ? "opacity-50" : "cursor-grab active:cursor-grabbing"}
       >
-        <ClientDetailCard
-          cliente={recomendacion}
-          isSelected={false}
-          onToggle={() => {}}
-          showCheckbox={false}
-          compact={true}
-        />
+        <div className="pointer-events-none">
+          <ClientDetailCard
+            cliente={recomendacion}
+            isSelected={false}
+            onToggle={() => {}}
+            showCheckbox={false}
+            compact={true}
+          />
+        </div>
       </div>
     );
   };
