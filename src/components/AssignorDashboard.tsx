@@ -80,8 +80,6 @@ const AssignorDashboard = () => {
         description: "Estamos generando recomendaciones inteligentes. Esto puede tomar unos segundos.",
       });
 
-      console.log("");
-
       const payload = {
         vendedores: selectedVendedoresData.ids,
         provincia: placesFilters.provincia !== "all" ? placesFilters.provincia : undefined,
