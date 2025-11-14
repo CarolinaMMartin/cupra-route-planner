@@ -90,7 +90,7 @@ const AssignorDashboard = () => {
         instrucciones_adicionales: instruccionesAdicionales || null,
       };
 
-      console.log("Payload enviado a Supabase [generate-recommendations]:", JSON.stringify(payload, null, 2));
+      console.log("Payload enviado a Supabase:", JSON.stringify(payload, null, 2));
 
       // Llamar al edge function de Lovable AI
       const { data, error } = await supabase.functions.invoke("generate-recommendations", {
@@ -98,7 +98,7 @@ const AssignorDashboard = () => {
       });
 
       if (error) {
-        console.error("Error from edge function [generate-recommendations]:", error);
+        console.error("Error from edge function:", error);
         throw error;
       }
 
