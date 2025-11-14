@@ -733,7 +733,6 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
           barrio_principal: prospectoCompleto.barrio,
           direccion_principal: prospectoCompleto.direccion,
           google_maps_link: `https://www.google.com/maps/search/?api=1&query=${prospectoCompleto.latitud},${prospectoCompleto.longitud}&query_place_id=${prospectoCompleto.place_id}`,
-          place_id: prospectoCompleto.place_id,
 
           // Otros
           vendedores: [],
@@ -758,7 +757,6 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
           factores_ia: rec.factores,
           justificacion: rec.justificacion,
           es_prospecto: false,
-          place_id: place?.place_id || null,
 
           // Datos comerciales
           monto_total_vendido: clienteCompleto.monto_total_historico,
