@@ -37,6 +37,26 @@ const AssignorDashboard = () => {
   >([]);
   const { toast } = useToast();
 
+  // funcion para obtener el place id desde un url
+  const getPlaceIdFromUrl = (url) => {
+    try {
+      const parsed = new URL(url);
+
+      // Buscar en query param "q"
+      const q = parsed.searchParams.get("q");
+      if (q && q.startsWith("place_id:")) {
+        return q.replace("place_id:", "");
+      }
+
+      // Buscar en todo el URL por si viene incrustado
+      const match = url.match(/place_id:([^&]+)/);
+      return match ? match[1] : null;
+    } catch (err) {
+      console.error("URL inválida:", err);
+      return null;
+    }
+  };
+
   // Cargar datos de places al montar el componente
   useEffect(() => {
     const loadPlacesData = async () => {
@@ -165,6 +185,7 @@ const AssignorDashboard = () => {
         barrio_principal: rec.barrio_principal,
         direccion_principal: rec.direccion_principal,
         google_maps_link: rec.google_maps_link,
+        place_id: getPlaceIdFromUrl(rec.google_maps_link),
 
         // Campos de IA
         ai_reasoning: rec.ai_reasoning,
