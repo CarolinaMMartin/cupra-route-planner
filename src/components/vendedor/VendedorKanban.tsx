@@ -12,6 +12,7 @@ import {
 } from "@dnd-kit/core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { getGoogleMapsUrl } from "@/lib/utils";
 import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -65,6 +66,7 @@ interface ClienteAsignado {
   emails?: string[];
   // Link de Google Maps
   google_maps_link?: string;
+  prospecto_place_id?: string;
   // Información de prospectos
   website?: string;
   rating?: number;
@@ -278,9 +280,6 @@ const VendedorKanban = () => {
 
         const estado = asig.estado === 'Asignado' ? 'Por visitar' : asig.estado;
         
-        // Crear google maps link para prospectos
-        const googleMapsLink = `https://www.google.com/maps/place/?q=place_id:${prospectoData.place_id}`;
-        
         const prospecto: ClienteAsignado = {
           id: asig.id,
           client_id: `prospecto-${asig.prospecto_place_id}`, // ID único para prospectos
@@ -312,7 +311,7 @@ const VendedorKanban = () => {
           canal: prospectoData.tipo_principal || 'Prospecto',
           telefonos: prospectoData.telefono ? [prospectoData.telefono] : [],
           emails: [],
-          google_maps_link: googleMapsLink,
+          prospecto_place_id: prospectoData.place_id,
           website: prospectoData.website,
           rating: prospectoData.rating,
           nivel_precio: prospectoData.nivel_precio,
@@ -843,12 +842,13 @@ const VendedorKanban = () => {
             <div className="space-y-6">
               {/* Botones de acción rápida */}
               <div className="flex flex-wrap gap-2">
-                {selectedCliente.google_maps_link && (
+                {getGoogleMapsUrl(selectedCliente.prospecto_place_id) && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      window.open(selectedCliente.google_maps_link, '_blank');
+                      const url = getGoogleMapsUrl(selectedCliente.prospecto_place_id);
+                      if (url) window.open(url, '_blank');
                     }}
                   >
                     <Navigation className="w-4 h-4 mr-2" />

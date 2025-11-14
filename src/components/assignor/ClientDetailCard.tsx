@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Sucursal } from "@/types/sales";
 import ExcludeClientButton from "./ExcludeClientButton";
+import { getGoogleMapsUrl } from "@/lib/utils";
 
 interface ClientDetailCardProps {
   cliente: Sucursal;
@@ -231,9 +232,9 @@ const ClientDetailCard = ({
           </div>
 
           {/* Botón para Google Maps */}
-          {cliente.google_maps_link && (
+          {getGoogleMapsUrl(cliente.place_id || cliente.prospecto_place_id) && (
             <a
-              href={cliente.google_maps_link}
+              href={getGoogleMapsUrl(cliente.place_id || cliente.prospecto_place_id)!}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
