@@ -61,6 +61,7 @@ export interface Sucursal {
   emails?: string[];
   // Link a Google Maps
   google_maps_link?: string;
+  place_id?: string;
   // Feedbacks de vendedores
   feedbacks?: Array<{
     visita_realizada: boolean;
