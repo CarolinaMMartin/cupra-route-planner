@@ -56,22 +56,22 @@ const AssignorDashboard = () => {
   const [aiInsights, setAiInsights] = useState<any>(null);
   const [vendedoresData, setVendedoresData] = useState<Array<{ id: string; nombre: string }>>([]);
   const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
-  const [instruccionesAdicionales, setInstruccionesAdicionales] = useState<string>('');
+  const [instruccionesAdicionales, setInstruccionesAdicionales] = useState<string>("");
 
   const handleRequestRecommendations = async (
     filters: any,
     selectedVendedoresData: { ids: string[]; nombres: string[] },
-    placesFilters: any
+    placesFilters: any,
   ) => {
     setIsLoading(true);
     setSelectedVendedoresIds(selectedVendedoresData.ids);
-    
+
     // Guardar datos de vendedores para el insights card
     setVendedoresData(
       selectedVendedoresData.ids.map((id, idx) => ({
         id,
-        nombre: selectedVendedoresData.nombres[idx] || `Vendedor ${id.substring(0, 8)}`
-      }))
+        nombre: selectedVendedoresData.nombres[idx] || `Vendedor ${id.substring(0, 8)}`,
+      })),
     );
 
     try {
@@ -80,32 +80,52 @@ const AssignorDashboard = () => {
         description: "Estamos generando recomendaciones inteligentes. Esto puede tomar unos segundos.",
       });
 
+      console.log("");
+
+      const payload = {
+        vendedores: selectedVendedoresData.ids,
+        provincia: placesFilters.provincia !== "all" ? placesFilters.provincia : undefined,
+        comuna: placesFilters.comuna,
+        barrio: placesFilters.barrio,
+        area_id: filters.area_id,
+        max_recomendaciones: 8,
+        instrucciones_adicionales: instruccionesAdicionales || null,
+      };
+
+      console.log("Payload enviado a Supabase:", JSON.stringify(payload, null, 2));
+
       // Llamar al edge function de Lovable AI
-      const { data, error } = await supabase.functions.invoke('generate-recommendations', {
-        body: {
-          vendedores: selectedVendedoresData.ids,
-          provincia: placesFilters.provincia !== 'all' ? placesFilters.provincia : undefined,
-          comuna: placesFilters.comuna,
-          barrio: placesFilters.barrio,
-          area_id: filters.area_id,
-          max_recomendaciones: 8,
-          instrucciones_adicionales: instruccionesAdicionales || null
-        }
+      const { data, error } = await supabase.functions.invoke("generate-recommendations", {
+        body: payload,
       });
 
+      // const { data, error } = await supabase.functions.invoke('generate-recommendations', {
+      //   body: {
+      //     vendedores: selectedVendedoresData.ids,
+      //     provincia: placesFilters.provincia !== 'all' ? placesFilters.provincia : undefined,
+      //     comuna: placesFilters.comuna,
+      //     barrio: placesFilters.barrio,
+      //     area_id: filters.area_id,
+      //     max_recomendaciones: 8,
+      //     instrucciones_adicionales: instruccionesAdicionales || null
+      //   }
+      // });
+
       if (error) {
-        console.error('Error from edge function:', error);
+        console.error("Error from edge function:", error);
         throw error;
       }
 
-      console.log('✅ Respuesta del edge function:', data);
+      console.log("✅ Respuesta del edge function:", data);
 
       // Verificar si no hay recomendaciones
       if (!data.recomendaciones || data.recomendaciones.length === 0) {
         toast({
           variant: "destructive",
           title: "❌ Sin recomendaciones",
-          description: data.resumen?.descripcion || "No se encontraron recomendaciones para los filtros seleccionados. Intenta con otros criterios.",
+          description:
+            data.resumen?.descripcion ||
+            "No se encontraron recomendaciones para los filtros seleccionados. Intenta con otros criterios.",
           duration: 5000,
         });
         setIsLoading(false);
@@ -114,7 +134,7 @@ const AssignorDashboard = () => {
 
       // Mapear los datos al formato Sucursal
       const mappedRecommendations: Sucursal[] = (data.recomendaciones || []).map((rec: any) => ({
-        id: rec.request_id + '-' + (rec.client_id || rec.prospecto_place_id), // ID único combinado
+        id: rec.request_id + "-" + (rec.client_id || rec.prospecto_place_id), // ID único combinado
         nombre: rec.razon_social,
         direccion: rec.ciudades?.[0] || "Sin dirección",
         zona: rec.provincias?.[0] || "Sin zona",
@@ -127,14 +147,14 @@ const AssignorDashboard = () => {
         cuit_dni: rec.cuit_dni,
         vendedores: rec.vendedores || [],
         client_id: rec.client_id,
-        
+
         // Campos específicos de prospectos
         es_prospecto: rec.es_prospecto || false,
         prospecto_place_id: rec.prospecto_place_id,
         tipo_negocio: rec.factores_ia?.tipo_negocio,
         rating: rec.factores_ia?.rating,
         website: rec.factores_ia?.website,
-        
+
         // Campos completos de clientes
         fantasia: rec.razon_social,
         primera_compra: rec.first_purchase_at,
@@ -159,34 +179,33 @@ const AssignorDashboard = () => {
         barrio_principal: rec.barrio_principal,
         direccion_principal: rec.direccion_principal,
         google_maps_link: rec.google_maps_link,
-        
+
         // Campos de IA
         ai_reasoning: rec.ai_reasoning,
         score_geografico: rec.score_geografico,
-        factores_ia: rec.factores_ia
+        factores_ia: rec.factores_ia,
       }));
 
       setRecommendations(mappedRecommendations);
       setAiInsights(data.resumen);
       setFlowStep("preselection");
       setSelectedSucursales([]);
-      
+
       toast({
         title: "✨ Recomendaciones generadas por IA",
         description: data.resumen?.descripcion || `Se generaron ${mappedRecommendations.length} recomendaciones`,
       });
-      
     } catch (error: any) {
       console.error("Error:", error);
-      
+
       let errorMessage = "Error al solicitar recomendaciones";
-      
-      if (error.message?.includes('429')) {
+
+      if (error.message?.includes("429")) {
         errorMessage = "Límite de consultas IA alcanzado. Reintenta en unos minutos.";
-      } else if (error.message?.includes('402')) {
+      } else if (error.message?.includes("402")) {
         errorMessage = "Créditos de IA agotados. Agrega créditos en Settings → Usage.";
       }
-      
+
       toast({
         variant: "destructive",
         title: "Error",
@@ -340,7 +359,9 @@ const AssignorDashboard = () => {
           <Card className="shadow-medium">
             <CardHeader>
               <CardTitle className="font-serif tracking-wide">Panel de Asignación</CardTitle>
-              <CardDescription>Selecciona un área o aplica filtros para solicitar recomendaciones inteligentes</CardDescription>
+              <CardDescription>
+                Selecciona un área o aplica filtros para solicitar recomendaciones inteligentes
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <FilterPanel
@@ -364,10 +385,7 @@ const AssignorDashboard = () => {
             <CardDescription>Selecciona las asignaciones que deseas modificar</CardDescription>
           </CardHeader>
           <CardContent>
-            <AssignmentsSelector
-              onContinue={handleContinueToEditKanban}
-              onBack={handleBackToRecommendations}
-            />
+            <AssignmentsSelector onContinue={handleContinueToEditKanban} onBack={handleBackToRecommendations} />
           </CardContent>
         </Card>
       )}
@@ -391,12 +409,9 @@ const AssignorDashboard = () => {
       {flowStep === "preselection" && recommendations.length > 0 && (
         <>
           {aiInsights && vendedoresData.length > 0 && (
-            <AIInsightsCard 
-              resumen={aiInsights} 
-              vendedores={vendedoresData} 
-            />
+            <AIInsightsCard resumen={aiInsights} vendedores={vendedoresData} />
           )}
-          
+
           <Card className="shadow-medium">
             <CardHeader>
               <div className="flex justify-between items-center">

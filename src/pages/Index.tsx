@@ -7,7 +7,7 @@ import cupraLogo from "@/assets/cupra-logo.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import VendedorKanban from "@/components/vendedor/VendedorKanban";
 import { useToast } from "@/hooks/use-toast";
-
+Filtro Rápido por Área
 const Index = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
