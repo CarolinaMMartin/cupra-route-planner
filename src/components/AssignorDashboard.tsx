@@ -114,7 +114,7 @@ const AssignorDashboard = () => {
         throw error;
       }
 
-      console.log("✅ Respuesta del edge function:", data);
+      console.log("✅✅ Respuesta del edge function:", data);
 
       // Verificar si no hay recomendaciones
       if (!data.recomendaciones || data.recomendaciones.length === 0) {
