@@ -193,6 +193,8 @@ const AssignorDashboard = () => {
         factores_ia: rec.factores_ia,
       }));
 
+      console.log("mapped", mappedRecommendations);
+
       setRecommendations(mappedRecommendations);
       setAiInsights(data.resumen);
       setFlowStep("preselection");
