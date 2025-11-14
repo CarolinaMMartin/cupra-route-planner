@@ -210,9 +210,9 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
   }
 
   return (
-    <div className="flex h-[600px] w-full rounded-lg overflow-hidden border border-border bg-card">
+    <div className="flex flex-col md:flex-row h-[600px] w-full rounded-lg overflow-hidden border border-border bg-card">
       {/* Sidebar */}
-      <div className="w-[300px] border-r border-border bg-card flex flex-col">
+      <div className="w-full md:w-1/4 md:border-r border-border bg-card flex flex-col md:max-h-[600px]">
         <div className="p-4 border-b border-border">
           <h3 className="font-semibold text-foreground flex items-center gap-2">
             <MapPin className="h-4 w-4" />
