@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
-import { Sucursal } from '@/types/sales';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card } from '@/components/ui/card';
-import { MapPin, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from "react";
+import { Sucursal } from "@/types/sales";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card } from "@/components/ui/card";
+import { MapPin, Loader2 } from "lucide-react";
 
 interface ResultsMapProps {
   sucursales: Sucursal[];
@@ -22,17 +22,19 @@ interface ClientLocation {
 // Load Google Maps Script
 const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
   return new Promise((resolve, reject) => {
-    if (typeof window.google !== 'undefined') {
+    if (typeof window.google !== "undefined") {
       resolve();
       return;
     }
 
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    const script = document.createElement("script");
+    // script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    // AIzaSyDquPNeKSTkoP1njQ9xgPd4Noom1a3CvqI
+    script.src = `https://maps.googleapis.com/maps/api/js?key=AIzaSyDquPNeKSTkoP1njQ9xgPd4Noom1a3CvqI&libraries=places`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Google Maps script'));
+    script.onerror = () => reject(new Error("Failed to load Google Maps script"));
     document.head.appendChild(script);
   });
 };
@@ -48,9 +50,9 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
   // Initialize Google Maps
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-    
-    if (!apiKey || apiKey === 'your_google_maps_api_key_here') {
-      setError('Por favor, configura VITE_GOOGLE_MAPS_API_KEY en tu archivo .env');
+
+    if (!apiKey || apiKey === "your_google_maps_api_key_here") {
+      setError("Por favor, configura VITE_GOOGLE_MAPS_API_KEY en tu archivo .env");
       setLoading(false);
       return;
     }
@@ -70,7 +72,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
         setMap(mapInstance);
       })
       .catch((err) => {
-        setError('Error al cargar Google Maps: ' + err.message);
+        setError("Error al cargar Google Maps: " + err.message);
         setLoading(false);
       });
   }, []);
@@ -90,32 +92,29 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
           if (sucursal.latitud && sucursal.longitud) {
             return {
               id: sucursal.id,
-              name: sucursal.nombre || sucursal.fantasia || 'Sin nombre',
+              name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
               lat: sucursal.latitud,
               lng: sucursal.longitud,
-              direccion: sucursal.direccion || sucursal.direccion_principal || '',
+              direccion: sucursal.direccion || sucursal.direccion_principal || "",
             };
           }
 
           // If we have place_id, fetch from Places API
           if (sucursal.prospecto_place_id) {
             return new Promise<ClientLocation>((resolve, reject) => {
-              service.getDetails(
-                { placeId: sucursal.prospecto_place_id! },
-                (place, status) => {
-                  if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-                    resolve({
-                      id: sucursal.id,
-                      name: place.name || sucursal.nombre || 'Sin nombre',
-                      lat: place.geometry.location.lat(),
-                      lng: place.geometry.location.lng(),
-                      direccion: place.formatted_address || sucursal.direccion || '',
-                    });
-                  } else {
-                    reject(new Error(`No se pudo obtener ubicación para ${sucursal.nombre}`));
-                  }
+              service.getDetails({ placeId: sucursal.prospecto_place_id! }, (place, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+                  resolve({
+                    id: sucursal.id,
+                    name: place.name || sucursal.nombre || "Sin nombre",
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    direccion: place.formatted_address || sucursal.direccion || "",
+                  });
+                } else {
+                  reject(new Error(`No se pudo obtener ubicación para ${sucursal.nombre}`));
                 }
-              );
+              });
             });
           }
 
@@ -127,9 +126,9 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
       });
 
       const results = await Promise.allSettled(promises);
-      
+
       results.forEach((result) => {
-        if (result.status === 'fulfilled' && result.value) {
+        if (result.status === "fulfilled" && result.value) {
           fetchedLocations.push(result.value);
         }
       });
@@ -177,7 +176,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
             `,
           });
 
-          marker.addListener('click', () => {
+          marker.addListener("click", () => {
             infoWindow.open(map, marker);
           });
 
@@ -222,13 +221,13 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
             Clientes ({selectedIds.length}/{sucursales.length})
           </h3>
         </div>
-        
+
         <ScrollArea className="flex-1">
           <div className="p-2">
             {locations.map((location) => {
-              const sucursal = sucursales.find(s => s.id === location.id);
+              const sucursal = sucursales.find((s) => s.id === location.id);
               const isSelected = selectedIds.includes(location.id);
-              
+
               return (
                 <div
                   key={location.id}
@@ -240,26 +239,17 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
                     onCheckedChange={() => handleToggle(location.id)}
                     className="mt-1"
                   />
-                  <label
-                    htmlFor={location.id}
-                    className="flex-1 cursor-pointer text-sm"
-                  >
-                    <div className="font-medium text-foreground">
-                      {location.name}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {location.direccion}
-                    </div>
+                  <label htmlFor={location.id} className="flex-1 cursor-pointer text-sm">
+                    <div className="font-medium text-foreground">{location.name}</div>
+                    <div className="text-xs text-muted-foreground mt-1">{location.direccion}</div>
                     {sucursal?.score && (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        Score: {sucursal.score}
-                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">Score: {sucursal.score}</div>
                     )}
                   </label>
                 </div>
               );
             })}
-            
+
             {locations.length === 0 && !loading && (
               <div className="text-center text-muted-foreground p-4">
                 <MapPin className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -273,7 +263,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
       {/* Map */}
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
-        
+
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80">
             <div className="text-center">
