@@ -97,18 +97,6 @@ const AssignorDashboard = () => {
         body: payload,
       });
 
-      // const { data, error } = await supabase.functions.invoke('generate-recommendations', {
-      //   body: {
-      //     vendedores: selectedVendedoresData.ids,
-      //     provincia: placesFilters.provincia !== 'all' ? placesFilters.provincia : undefined,
-      //     comuna: placesFilters.comuna,
-      //     barrio: placesFilters.barrio,
-      //     area_id: filters.area_id,
-      //     max_recomendaciones: 8,
-      //     instrucciones_adicionales: instruccionesAdicionales || null
-      //   }
-      // });
-
       if (error) {
         console.error("Error from edge function:", error);
         throw error;
