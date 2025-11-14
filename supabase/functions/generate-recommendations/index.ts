@@ -758,6 +758,7 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
           factores_ia: rec.factores,
           justificacion: rec.justificacion,
           es_prospecto: false,
+          place_id: place?.place_id || null,
 
           // Datos comerciales
           monto_total_vendido: clienteCompleto.monto_total_historico,
