@@ -2,8 +2,18 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Wine, LogOut, User, ArrowLeft, Pencil, Filter } from "lucide-react";
+import { Wine, LogOut, User, ArrowLeft, Pencil, Filter, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -39,6 +49,8 @@ const Profiles = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<any>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [profileToDelete, setProfileToDelete] = useState<any>(null);
   const [formData, setFormData] = useState<{
     nombre: string;
     email: string;
@@ -179,6 +191,48 @@ const Profiles = () => {
         variant: "destructive",
         title: "Error",
         description: "Error al cambiar estado del perfil",
+      });
+    }
+  };
+
+  const handleDeleteClick = (profileItem: any) => {
+    if (profileItem.user_id === session?.user?.id) {
+      toast({
+        variant: "destructive",
+        title: "Acción no permitida",
+        description: "No puedes eliminar tu propio perfil",
+      });
+      return;
+    }
+    setProfileToDelete(profileItem);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!profileToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', profileToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Perfil eliminado",
+        description: "El perfil se eliminó correctamente",
+      });
+
+      setDeleteDialogOpen(false);
+      setProfileToDelete(null);
+      fetchProfiles();
+    } catch (error) {
+      console.error('Error deleting profile:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al eliminar el perfil",
       });
     }
   };
@@ -338,6 +392,14 @@ const Profiles = () => {
                           onCheckedChange={() => toggleActivo(profileItem)}
                         />
                       )}
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDeleteClick(profileItem)}
+                        disabled={profileItem.user_id === session?.user?.id}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -409,6 +471,28 @@ const Profiles = () => {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Dialog de confirmación de eliminación */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción no se puede deshacer. Se eliminará permanentemente el perfil de{" "}
+                <span className="font-semibold">{profileToDelete?.nombre}</span>.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Eliminar
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </main>
     </div>
   );
