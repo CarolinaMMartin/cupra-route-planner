@@ -18,6 +18,16 @@ import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import ClientDetailCard from "./ClientDetailCard";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Vendedor {
   id: string;
@@ -44,6 +54,7 @@ const KanbanAssignment = ({
   });
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showExitDialog, setShowExitDialog] = useState(false);
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -446,20 +457,39 @@ const KanbanAssignment = ({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onBack} className="gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Volver a la preselección
+    <>
+      <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro de que quieres salir?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Si sales de esta pantalla, se perderán todas las asignaciones que hayas realizado.
+              Deberás solicitar nuevas recomendaciones con IA si deseas continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Quedarme aquí</AlertDialogCancel>
+            <AlertDialogAction onClick={onBack}>
+              Salir de todas formas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowExitDialog(true)} className="gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Volver a la preselección
+            </Button>
+          </div>
+
+          <Button onClick={handleSave} disabled={isLoading} size="lg" className="gap-2">
+            <Save className="w-4 h-4" />
+            Guardar asignaciones
           </Button>
         </div>
-
-        <Button onClick={handleSave} disabled={isLoading} size="lg" className="gap-2">
-          <Save className="w-4 h-4" />
-          Guardar asignaciones
-        </Button>
-      </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex gap-4 h-[calc(100vh-220px)]">
@@ -500,7 +530,8 @@ const KanbanAssignment = ({
           ) : null}
         </DragOverlay>
       </DndContext>
-    </div>
+      </div>
+    </>
   );
 };
 
