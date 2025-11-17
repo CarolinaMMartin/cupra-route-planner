@@ -1,6 +1,16 @@
 import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { MapPin, List } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FilterPanel from "./assignor/FilterPanel";
@@ -77,6 +87,7 @@ const AssignorDashboard = () => {
   const [vendedoresData, setVendedoresData] = useState<Array<{ id: string; nombre: string }>>([]);
   const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
   const [instruccionesAdicionales, setInstruccionesAdicionales] = useState<string>("");
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   const handleRequestRecommendations = async (
     filters: any,
@@ -246,6 +257,7 @@ const AssignorDashboard = () => {
   };
 
   const handleBackToRecommendations = () => {
+    setShowExitDialog(false);
     setFlowStep("recommendations");
     setRecommendations([]);
     setSelectedSucursales([]);
@@ -363,6 +375,24 @@ const AssignorDashboard = () => {
 
   return (
     <div className="space-y-6">
+      <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro de que quieres salir?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Si vuelves al panel principal, se perderán todas las recomendaciones y selecciones que hayas realizado.
+              Deberás solicitar nuevas recomendaciones con IA si deseas continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Quedarme aquí</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBackToRecommendations}>
+              Volver de todas formas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {flowStep === "recommendations" && (
         <>
           <Card className="shadow-medium">
@@ -429,7 +459,7 @@ const AssignorDashboard = () => {
                   <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="secondary" onClick={handleBackToRecommendations} className="mr-auto">
+                  <Button variant="secondary" onClick={() => setShowExitDialog(true)} className="mr-auto">
                     ← Volver al Panel Principal
                   </Button>
                   <Button

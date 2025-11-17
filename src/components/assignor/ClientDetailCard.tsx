@@ -194,7 +194,7 @@ const ClientDetailCard = ({
                       href={cliente.website} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      className="text-primary hover:underline"
+                      className="text-accent hover:text-accent/80 hover:underline transition-colors"
                       onClick={(e) => e.stopPropagation()}
                     >
                       Ver sitio web
