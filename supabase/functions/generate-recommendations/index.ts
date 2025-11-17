@@ -661,19 +661,58 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
     let aiRecommendations;
     try {
       aiRecommendations = JSON.parse(toolCall.function.arguments);
+      console.log(`🎯 IA generó ${aiRecommendations.recomendaciones.length} recomendaciones`);
+      
+      // Logging detallado para debugging
+      aiRecommendations.recomendaciones.forEach((rec: any, idx: number) => {
+        console.log(`📝 Rec ${idx + 1}: client_id=${rec.client_id?.substring(0, 20)}..., vendedor_id=${rec.vendedor_id}`);
+      });
     } catch (parseError) {
       console.error("❌ Error parseando arguments:", parseError);
       console.error("Arguments recibidos:", toolCall.function.arguments);
       const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
       throw new Error(`Error parseando respuesta de IA: ${errorMsg}`);
     }
-    console.log(`🎯 IA generó ${aiRecommendations.recomendaciones.length} recomendaciones`);
 
     // 7. Enriquecer con datos completos de clientes y prospectos
     const request_id = crypto.randomUUID();
     const enrichedRecommendations = [];
+    
+    // Crear un Set de vendedor IDs válidos para validación rápida
+    const validVendedorIds = new Set(vendedoresData.map(v => v.user_id));
+    
+    // Función para validar y obtener un vendedor_id válido
+    const getValidVendedorId = (vendedorId: string): string | null => {
+      // Verificar si el vendedor_id es válido (UUID correcto y existe en la lista)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      
+      if (!vendedorId || !uuidRegex.test(vendedorId)) {
+        console.error(`❌ UUID inválido detectado: ${vendedorId}`);
+        return null;
+      }
+      
+      if (!validVendedorIds.has(vendedorId)) {
+        console.error(`❌ Vendedor ID no encontrado en lista válida: ${vendedorId}`);
+        return null;
+      }
+      
+      return vendedorId;
+    };
 
     for (const rec of aiRecommendations.recomendaciones) {
+      // Validar vendedor_id antes de procesar
+      const validVendedorId = getValidVendedorId(rec.vendedor_id);
+      if (!validVendedorId) {
+        // Si el vendedor_id es inválido, usar el primer vendedor disponible como fallback
+        const fallbackVendedorId = vendedoresData[0]?.user_id;
+        if (!fallbackVendedorId) {
+          console.error(`❌ No hay vendedores disponibles para fallback. Saltando recomendación.`);
+          continue;
+        }
+        console.log(`⚠️ Usando vendedor fallback ${fallbackVendedorId} para rec ${rec.client_id}`);
+        rec.vendedor_id = fallbackVendedorId;
+      }
+      
       // Buscar primero en clientes
       let clienteCompleto = clientes.find((c) => c.client_id === rec.client_id);
       let prospectoCompleto = null;
