@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -562,11 +563,14 @@ export default function AreasManager() {
         {/* Header */}
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold">Gestión de Áreas</h1>
-              <p className="text-muted-foreground">
-                Organiza barrios por área
-              </p>
+            <div className="flex items-center gap-3">
+              <img src={cupraLogo} alt="Cupra Wines" className="h-12 w-auto" />
+              <div>
+                <h1 className="text-3xl font-bold">Gestión de Áreas</h1>
+                <p className="text-muted-foreground">
+                  Organiza barrios por área
+                </p>
+              </div>
             </div>
             <Button
               variant="outline"

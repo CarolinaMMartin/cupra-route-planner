@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -237,9 +238,12 @@ const VendedorDashboard = () => {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Mi Dashboard</h1>
-          <p className="text-muted-foreground">Resumen de todas tus asignaciones y actividad</p>
+        <div className="flex items-center gap-3">
+          <img src={cupraLogo} alt="Cupra Wines" className="h-12 w-auto" />
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Mi Dashboard</h1>
+            <p className="text-muted-foreground">Resumen de todas tus asignaciones y actividad</p>
+          </div>
         </div>
         <Button variant="outline" onClick={() => navigate("/")} className="gap-2">
           <ArrowLeft className="w-4 h-4" />

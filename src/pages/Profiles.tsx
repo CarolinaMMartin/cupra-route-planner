@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Wine, LogOut, User, ArrowLeft, Pencil, Filter, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import cupraLogo from "@/assets/cupra-logo-new.png";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -273,7 +274,7 @@ const Profiles = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-subtle">
         <div className="text-center">
-          <Wine className="w-16 h-16 text-primary mx-auto animate-pulse" />
+          <img src={cupraLogo} alt="Cupra Wines" className="w-32 h-auto mx-auto opacity-50 animate-pulse" />
           <p className="mt-4 text-muted-foreground">Cargando...</p>
         </div>
       </div>
@@ -286,9 +287,7 @@ const Profiles = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-primary rounded-full">
-                <Wine className="w-6 h-6 text-primary-foreground" />
-              </div>
+              <img src={cupraLogo} alt="Cupra Wines" className="h-12 w-auto" />
               <div>
                 <h1 className="text-2xl font-serif font-bold">Cupra Wines</h1>
                 <p className="text-sm text-muted-foreground">Gestión de Perfiles</p>
