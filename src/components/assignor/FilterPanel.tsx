@@ -50,6 +50,7 @@ const FilterPanel = ({
   const [selectedArea, setSelectedArea] = useState<string>('none');
   const [isLoadingAreas, setIsLoadingAreas] = useState(true);
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
+  const [pendingAreaGeneration, setPendingAreaGeneration] = useState(false);
   const {
     toast
   } = useToast();
@@ -102,6 +103,7 @@ const FilterPanel = ({
       // Limpiar selecciones
       setSelectedVendedores(vendedores.map(v => v.id));
       setSelectedBarrio([]);
+      setPendingAreaGeneration(false);
       return;
     }
 
@@ -111,10 +113,21 @@ const FilterPanel = ({
     // Llenar automáticamente los filtros con el contenido del área
     setSelectedVendedores(area.vendedores);
     setSelectedBarrio(area.barrios);
+    setPendingAreaGeneration(true);
     
     toast({
+      title: "✅ Área seleccionada",
+      description: `"${area.nombre}" cargada con ${area.vendedores.length} vendedores y ${area.barrios.length} barrios. Presiona "Generar Recomendaciones" para continuar.`
+    });
+  };
+
+  const handleGenerateFromArea = () => {
+    const area = areas.find(a => a.id === selectedArea);
+    if (!area) return;
+
+    toast({
       title: "⏳ Generando recomendaciones...",
-      description: `Área "${area.nombre}" cargada. La IA está analizando ${area.barrios.length} barrios...`
+      description: `La IA está analizando el área "${area.nombre}"...`
     });
 
     // Obtener nombres de los vendedores seleccionados
@@ -122,10 +135,10 @@ const FilterPanel = ({
       .filter(v => area.vendedores.includes(v.id))
       .map(v => v.nombre);
 
-    // Generar automáticamente recomendaciones para el área
+    // Generar recomendaciones para el área
     setTimeout(() => {
       onRequestRecommendations({
-        area_id: areaId,
+        area_id: selectedArea,
         cantidad_vendedores: area.vendedores.length
       }, {
         ids: area.vendedores,
@@ -135,6 +148,7 @@ const FilterPanel = ({
         barrio: area.barrios.length > 0 ? area.barrios : null,
         provincia: selectedProvincia !== 'all' ? selectedProvincia : null
       });
+      setPendingAreaGeneration(false);
     }, 100);
   };
 
@@ -143,6 +157,7 @@ const FilterPanel = ({
     setSelectedComuna([]);
     setSelectedBarrio([]);
     setSelectedArea('none');
+    setPendingAreaGeneration(false);
   };
 
   const hasActiveFilters = 
@@ -308,9 +323,22 @@ const FilterPanel = ({
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                ✨ Al seleccionar un área, se generarán automáticamente recomendaciones de IA que podrás modificar
+                ✨ Selecciona un área predefinida para cargar vendedores y barrios automáticamente
               </p>
             </div>
+            
+            {pendingAreaGeneration && selectedArea !== 'none' && (
+              <Button
+                type="button"
+                onClick={handleGenerateFromArea}
+                disabled={isLoading}
+                className="w-full"
+                variant="default"
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                Generar Recomendaciones con IA
+              </Button>
+            )}
           </div>
         </Card>
       </div>
