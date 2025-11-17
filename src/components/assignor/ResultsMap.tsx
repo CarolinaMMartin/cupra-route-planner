@@ -3,12 +3,15 @@ import { Sucursal } from "@/types/sales";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
-import { MapPin, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { MapPin, Loader2, ArrowRight } from "lucide-react";
 
 interface ResultsMapProps {
   sucursales: Sucursal[];
   selectedIds: string[];
   onToggle: (id: string) => void;
+  onContinue?: () => void;
 }
 
 interface ClientLocation {
@@ -37,7 +40,7 @@ const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
   });
 };
 
-const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
+const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMapProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [markers, setMarkers] = useState<Map<string, google.maps.Marker>>(new Map());
@@ -210,15 +213,35 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-[600px] w-full rounded-lg overflow-hidden border border-border bg-card">
-      {/* Sidebar */}
-      <div className="w-full md:w-1/4 md:border-r border-border bg-card flex flex-col md:max-h-[600px]">
-        <div className="p-4 border-b border-border">
-          <h3 className="font-semibold text-foreground flex items-center gap-2">
-            <MapPin className="h-4 w-4" />
-            Clientes ({selectedIds.length}/{sucursales.length})
-          </h3>
+    <div className="space-y-4">
+      {onContinue && (
+        <div className="flex items-center justify-end">
+          <Button 
+            onClick={onContinue} 
+            disabled={selectedIds.length === 0}
+            size="lg"
+            className="gap-2"
+          >
+            Continuar a la Asignación
+            <ArrowRight className="w-4 h-4" />
+          </Button>
         </div>
+      )}
+      
+      <div className="flex flex-col md:flex-row h-[600px] w-full rounded-lg overflow-hidden border border-border bg-card">
+        {/* Sidebar */}
+        <div className="w-full md:w-1/4 md:border-r border-border bg-card flex flex-col md:max-h-[600px]">
+          <div className="p-4 border-b border-border">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-foreground flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Clientes
+              </h3>
+              <Badge variant="secondary">
+                {selectedIds.length} de {sucursales.length}
+              </Badge>
+            </div>
+          </div>
 
         <ScrollArea className="flex-1">
           <div className="p-2">
@@ -270,6 +293,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle }: ResultsMapProps) => {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

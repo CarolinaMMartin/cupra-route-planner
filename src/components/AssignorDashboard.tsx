@@ -465,6 +465,7 @@ const AssignorDashboard = () => {
                   sucursales={filteredRecommendations}
                   selectedIds={selectedSucursales}
                   onToggle={toggleSucursal}
+                  onContinue={handleContinueToAssignment}
                 />
               )}
             </CardContent>
