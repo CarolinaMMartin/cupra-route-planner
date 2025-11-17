@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, TrendingUp, Users, MapPin, DollarSign, ShoppingCart, Filter, Download, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import cupraLogo from "@/assets/cupra-logo.png";
+import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";

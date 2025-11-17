@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, UserCog, BarChart3, Layers } from "lucide-react";
-import cupraLogo from "@/assets/cupra-logo.png";
+import cupraLogo from "@/assets/cupra-logo-new.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import VendedorKanban from "@/components/vendedor/VendedorKanban";
 import { useToast } from "@/hooks/use-toast";
