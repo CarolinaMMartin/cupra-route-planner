@@ -261,7 +261,7 @@ const ClientesDashboard = () => {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <img src={cupraLogo} alt="Cupra Logo" className="w-64 animate-pulse" />
+        <img src={cupraLogo} alt="Cupra Logo" className="w-32 animate-pulse" />
       </div>
     );
   }
@@ -289,7 +289,7 @@ const ClientesDashboard = () => {
               </p>
             </div>
           </div>
-          <img src={cupraLogo} alt="Cupra Logo" className="h-12 md:h-16" />
+          <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
         </div>
 
         {/* Panel de Filtros */}
