@@ -3,6 +3,8 @@ import { ClienteAsignado } from "./VendedorKanban";
 import { getGoogleMapsUrl } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { MapPin } from "lucide-react";
 
 interface VendedorAssignmentsMapProps {
@@ -35,6 +37,7 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
   const [markers, setMarkers] = useState<google.maps.Marker[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [filterEstado, setFilterEstado] = useState<"all" | "por_visitar" | "visitado">("all");
 
   // Inicializar el mapa
   useEffect(() => {
@@ -59,7 +62,7 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
       });
   }, [map]);
 
-  // Actualizar marcadores cuando cambien las asignaciones
+  // Actualizar marcadores cuando cambien las asignaciones o el filtro
   useEffect(() => {
     if (!map || !assignments) return;
 
@@ -71,8 +74,19 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
     const bounds = new google.maps.LatLngBounds();
     let markersCount = 0;
 
-    // Procesar todos los clientes de todas las columnas
-    Object.entries(assignments).forEach(([estado, clientes]) => {
+    // Filtrar clientes según el estado seleccionado
+    const filteredAssignments: Record<string, ClienteAsignado[]> = {};
+    
+    if (filterEstado === "all") {
+      Object.assign(filteredAssignments, assignments);
+    } else if (filterEstado === "por_visitar") {
+      filteredAssignments["Por visitar"] = assignments["Por visitar"] || [];
+    } else if (filterEstado === "visitado") {
+      filteredAssignments["Visitado"] = assignments["Visitado"] || [];
+    }
+
+    // Procesar clientes filtrados
+    Object.entries(filteredAssignments).forEach(([estado, clientes]) => {
       clientes.forEach((cliente) => {
         // Solo procesar si tiene place_id (para obtener ubicación)
         const placeId = cliente.prospecto_place_id || cliente.google_maps_link?.match(/place_id[:=]([^&]+)/)?.[1];
@@ -87,16 +101,12 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
             },
             (place, status) => {
               if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-                // Color del marcador según estado
-                const markerColor = estado === "Visitado" 
-                  ? "https://maps.google.com/mapfiles/ms/icons/green-dot.png"
-                  : "https://maps.google.com/mapfiles/ms/icons/blue-dot.png";
-
+                // Todos los marcadores en rojo (default de Google Maps)
                 const marker = new google.maps.Marker({
                   position: place.geometry.location,
                   map: map,
                   title: cliente.razon_social,
-                  icon: markerColor,
+                  icon: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
                 });
 
                 // InfoWindow con información del cliente
@@ -108,7 +118,7 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
                       </h3>
                       <div style="margin-bottom: 8px;">
                         <span style="display: inline-block; padding: 2px 8px; background: ${
-                          estado === "Visitado" ? "#22c55e" : "#3b82f6"
+                          estado === "Visitado" ? "#22c55e" : "#ef4444"
                         }; color: white; border-radius: 4px; font-size: 12px;">
                           ${estado}
                         </span>
@@ -161,7 +171,7 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
     });
 
     setMarkers(newMarkers);
-  }, [map, assignments]);
+  }, [map, assignments, filterEstado]);
 
   if (error) {
     return (
@@ -185,17 +195,23 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
         )}
         <div ref={mapRef} className="w-full h-full rounded-lg" />
         
-        {/* Leyenda */}
-        <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm p-3 rounded-lg shadow-lg border z-10">
-          <p className="text-xs font-medium mb-2">Leyenda</p>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-            <span className="text-xs">Por visitar</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <span className="text-xs">Visitado</span>
-          </div>
+        {/* Filtro de estado */}
+        <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm p-4 rounded-lg shadow-lg border z-10">
+          <p className="text-sm font-medium mb-3">Filtrar clientes</p>
+          <RadioGroup value={filterEstado} onValueChange={(value) => setFilterEstado(value as any)}>
+            <div className="flex items-center space-x-2 mb-2">
+              <RadioGroupItem value="all" id="all" />
+              <Label htmlFor="all" className="text-sm cursor-pointer">Mostrar ambos</Label>
+            </div>
+            <div className="flex items-center space-x-2 mb-2">
+              <RadioGroupItem value="por_visitar" id="por_visitar" />
+              <Label htmlFor="por_visitar" className="text-sm cursor-pointer">Solo Por visitar</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <RadioGroupItem value="visitado" id="visitado" />
+              <Label htmlFor="visitado" className="text-sm cursor-pointer">Solo Visitados</Label>
+            </div>
+          </RadioGroup>
         </div>
       </div>
     </Card>
