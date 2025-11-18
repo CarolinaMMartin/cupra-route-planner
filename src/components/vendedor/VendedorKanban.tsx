@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getGoogleMapsUrl } from "@/lib/utils";
-import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation } from "lucide-react";
+import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -28,8 +28,9 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
+import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
 
-interface ClienteAsignado {
+export interface ClienteAsignado {
   id: string;
   client_id: string;
   estado: 'Por visitar' | 'Visitado';
@@ -104,6 +105,7 @@ interface ClienteInfo {
 }
 
 const VendedorKanban = () => {
+  const [viewMode, setViewMode] = useState<'kanban' | 'map'>('kanban');
   const [assignments, setAssignments] = useState<Record<string, ClienteAsignado[]>>({
     'Por visitar': [],
     'Visitado': [],
@@ -216,13 +218,19 @@ const VendedorKanban = () => {
         .in('client_id', clientIds)
         .eq('is_primary', true);
 
-      const placesMap = new Map(
-        (placesData || []).map(p => [p.client_id, p.google_maps_link])
-      );
+      const placesMap = new Map<string, string | null>();
+      (placesData || []).forEach(p => {
+        if (p.google_maps_link) {
+          placesMap.set(p.client_id, p.google_maps_link);
+        }
+      });
 
       // Crear mapas para acceso rápido
-      const clientesMap = new Map(clientesData.map(c => [c.client_id, c]));
-      const prospectosMap = new Map(prospectosData.map(p => [p.place_id, p]));
+      const clientesMap = new Map<string, any>();
+      clientesData.forEach(c => clientesMap.set(c.client_id, c));
+      
+      const prospectosMap = new Map<string, any>();
+      prospectosData.forEach(p => prospectosMap.set(p.place_id, p));
 
       // Agrupar por estado
       const grouped: Record<string, ClienteAsignado[]> = {
@@ -797,33 +805,64 @@ const VendedorKanban = () => {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-2xl font-bold">Mis Clientes Asignados</h2>
-        <p className="text-muted-foreground">Haz clic en un cliente para ver detalles. Arrastra entre columnas para actualizar su estado</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Mis Clientes Asignados</h2>
+          <p className="text-muted-foreground">
+            {viewMode === 'kanban' 
+              ? 'Haz clic en un cliente para ver detalles. Arrastra entre columnas para actualizar su estado'
+              : 'Visualiza la ubicación de todos tus clientes asignados'}
+          </p>
+        </div>
+        
+        {/* Toggle de vistas */}
+        <div className="flex gap-2">
+          <Button
+            variant={viewMode === 'kanban' ? 'default' : 'outline'}
+            onClick={() => setViewMode('kanban')}
+            className="gap-2"
+          >
+            <Columns className="w-4 h-4" />
+            Vista Kanban
+          </Button>
+          <Button
+            variant={viewMode === 'map' ? 'default' : 'outline'}
+            onClick={() => setViewMode('map')}
+            className="gap-2"
+          >
+            <MapIcon className="w-4 h-4" />
+            Vista Mapa
+          </Button>
+        </div>
       </div>
 
-      <DndContext 
-        sensors={sensors} 
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <DroppableColumn 
-            id="Por visitar" 
-            title="Por visitar" 
-            clientes={assignments['Por visitar']} 
-          />
-          <DroppableColumn 
-            id="Visitado" 
-            title="Visitado" 
-            clientes={assignments['Visitado']} 
-          />
-        </div>
+      {/* Renderizar Kanban o Mapa según viewMode */}
+      {viewMode === 'kanban' ? (
+        <DndContext 
+          sensors={sensors} 
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <DroppableColumn 
+              id="Por visitar" 
+              title="Por visitar" 
+              clientes={assignments['Por visitar']} 
+            />
+            <DroppableColumn 
+              id="Visitado" 
+              title="Visitado" 
+              clientes={assignments['Visitado']} 
+            />
+          </div>
 
-        <DragOverlay>
-          {activeCliente ? <ClientCard cliente={activeCliente} /> : null}
-        </DragOverlay>
-      </DndContext>
+          <DragOverlay>
+            {activeCliente ? <ClientCard cliente={activeCliente} /> : null}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        <VendedorAssignmentsMap assignments={assignments} />
+      )}
 
       {/* Dialog de información del cliente */}
       <Dialog open={showInfoDialog} onOpenChange={setShowInfoDialog}>
