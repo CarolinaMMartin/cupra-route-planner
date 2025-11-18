@@ -102,12 +102,11 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
             },
             (place, status) => {
               if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-                // Todos los marcadores en rojo (default de Google Maps)
+                // Usar marcador default de Google Maps (sin especificar icon)
                 const marker = new google.maps.Marker({
                   position: place.geometry.location,
                   map: map,
                   title: cliente.razon_social,
-                  icon: "https://maps.google.com/mapfiles/ms/icons/red-dot.png",
                 });
 
                 // InfoWindow con información del cliente
