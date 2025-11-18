@@ -12,7 +12,7 @@ import {
 } from "@dnd-kit/core";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getGoogleMapsUrlPor visitar } from "@/lib/utils";
+import { getGoogleMapsUrl } from "@/lib/utils";
 import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
