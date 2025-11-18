@@ -196,7 +196,7 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
         <div ref={mapRef} className="w-full h-full rounded-lg" />
         
         {/* Filtros con checkboxes */}
-        <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm p-4 rounded-lg shadow-lg border z-10">
+        <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm p-4 rounded-lg shadow-lg border z-10">
           <p className="text-sm font-medium mb-3">Filtrar clientes</p>
           <div className="space-y-3">
             <div className="flex items-center space-x-2">
