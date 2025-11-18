@@ -75,7 +75,7 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
     Object.entries(assignments).forEach(([estado, clientes]) => {
       clientes.forEach((cliente) => {
         // Solo procesar si tiene place_id (para obtener ubicación)
-        const placeId = cliente.prospecto_place_id || cliente.google_maps_link?.match(/place_id=([^&]+)/)?.[1];
+        const placeId = cliente.prospecto_place_id || cliente.google_maps_link?.match(/place_id[:=]([^&]+)/)?.[1];
         
         if (placeId) {
           const placesService = new google.maps.places.PlacesService(map);
