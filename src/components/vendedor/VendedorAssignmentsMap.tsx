@@ -3,7 +3,7 @@ import { ClienteAsignado } from "./VendedorKanban";
 import { getGoogleMapsUrl } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { MapPin } from "lucide-react";
 
@@ -37,7 +37,8 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
   const [markers, setMarkers] = useState<google.maps.Marker[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [filterEstado, setFilterEstado] = useState<"all" | "por_visitar" | "visitado">("all");
+  const [showPorVisitar, setShowPorVisitar] = useState(true);
+  const [showVisitado, setShowVisitado] = useState(true);
 
   // Inicializar el mapa
   useEffect(() => {
@@ -62,7 +63,7 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
       });
   }, [map]);
 
-  // Actualizar marcadores cuando cambien las asignaciones o el filtro
+  // Actualizar marcadores cuando cambien las asignaciones o los filtros
   useEffect(() => {
     if (!map || !assignments) return;
 
@@ -74,15 +75,15 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
     const bounds = new google.maps.LatLngBounds();
     let markersCount = 0;
 
-    // Filtrar clientes según el estado seleccionado
+    // Filtrar clientes según los checkboxes activos
     const filteredAssignments: Record<string, ClienteAsignado[]> = {};
     
-    if (filterEstado === "all") {
-      Object.assign(filteredAssignments, assignments);
-    } else if (filterEstado === "por_visitar") {
-      filteredAssignments["Por visitar"] = assignments["Por visitar"] || [];
-    } else if (filterEstado === "visitado") {
-      filteredAssignments["Visitado"] = assignments["Visitado"] || [];
+    if (showPorVisitar && assignments["Por visitar"]) {
+      filteredAssignments["Por visitar"] = assignments["Por visitar"];
+    }
+    
+    if (showVisitado && assignments["Visitado"]) {
+      filteredAssignments["Visitado"] = assignments["Visitado"];
     }
 
     // Procesar clientes filtrados
@@ -171,7 +172,7 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
     });
 
     setMarkers(newMarkers);
-  }, [map, assignments, filterEstado]);
+  }, [map, assignments, showPorVisitar, showVisitado]);
 
   if (error) {
     return (
@@ -195,23 +196,27 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
         )}
         <div ref={mapRef} className="w-full h-full rounded-lg" />
         
-        {/* Filtro de estado */}
+        {/* Filtros con checkboxes */}
         <div className="absolute top-4 left-4 bg-background/95 backdrop-blur-sm p-4 rounded-lg shadow-lg border z-10">
           <p className="text-sm font-medium mb-3">Filtrar clientes</p>
-          <RadioGroup value={filterEstado} onValueChange={(value) => setFilterEstado(value as any)}>
-            <div className="flex items-center space-x-2 mb-2">
-              <RadioGroupItem value="all" id="all" />
-              <Label htmlFor="all" className="text-sm cursor-pointer">Mostrar ambos</Label>
-            </div>
-            <div className="flex items-center space-x-2 mb-2">
-              <RadioGroupItem value="por_visitar" id="por_visitar" />
-              <Label htmlFor="por_visitar" className="text-sm cursor-pointer">Solo Por visitar</Label>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="por_visitar" 
+                checked={showPorVisitar}
+                onCheckedChange={(checked) => setShowPorVisitar(checked as boolean)}
+              />
+              <Label htmlFor="por_visitar" className="text-sm cursor-pointer">Por visitar</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="visitado" id="visitado" />
-              <Label htmlFor="visitado" className="text-sm cursor-pointer">Solo Visitados</Label>
+              <Checkbox 
+                id="visitado" 
+                checked={showVisitado}
+                onCheckedChange={(checked) => setShowVisitado(checked as boolean)}
+              />
+              <Label htmlFor="visitado" className="text-sm cursor-pointer">Visitados</Label>
             </div>
-          </RadioGroup>
+          </div>
         </div>
       </div>
     </Card>
