@@ -113,7 +113,7 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
                 const infoWindow = new google.maps.InfoWindow({
                   content: `
                     <div style="padding: 8px; max-width: 250px;">
-                      <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px;">
+                      <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px; color: #000;">
                         ${cliente.razon_social}
                       </h3>
                       <div style="margin-bottom: 8px;">
@@ -123,9 +123,9 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
                           ${estado}
                         </span>
                       </div>
-                      ${cliente.ciudad_principal ? `<p style="margin: 4px 0; font-size: 13px;">📍 ${cliente.ciudad_principal}</p>` : ""}
-                      ${cliente.barrio_principal ? `<p style="margin: 4px 0; font-size: 13px;">🏘️ ${cliente.barrio_principal}</p>` : ""}
-                      ${cliente.telefonos && cliente.telefonos.length > 0 ? `<p style="margin: 4px 0; font-size: 13px;">📞 ${cliente.telefonos[0]}</p>` : ""}
+                      ${cliente.ciudad_principal ? `<p style="margin: 4px 0; font-size: 13px; color: #000;">📍 ${cliente.ciudad_principal}</p>` : ""}
+                      ${cliente.barrio_principal ? `<p style="margin: 4px 0; font-size: 13px; color: #000;">🏘️ ${cliente.barrio_principal}</p>` : ""}
+                      ${cliente.telefonos && cliente.telefonos.length > 0 ? `<p style="margin: 4px 0; font-size: 13px; color: #000;">📞 ${cliente.telefonos[0]}</p>` : ""}
                       <button 
                         onclick="window.open('${getGoogleMapsUrl(placeId)}', '_blank')"
                         style="
