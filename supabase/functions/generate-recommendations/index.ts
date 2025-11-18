@@ -390,9 +390,19 @@ Deno.serve(async (req) => {
       placesMap.set(place.client_id, place);
     });
 
-    // Filtrar clientes que tienen ubicación
-    clientes = clientes.filter((c) => placesMap.has(c.client_id));
-    console.log(`✅ Clientes con ubicación: ${clientes.length}`);
+    // Incluir clientes con ubicación en client_places O con datos geográficos en la tabla clientes
+    // Priorizar clientes con ubicación verificada, pero incluir también los demás
+    const clientesConUbicacion = clientes.filter((c) => placesMap.has(c.client_id));
+    const clientesSinUbicacionVerificada = clientes.filter((c) => 
+      !placesMap.has(c.client_id) && 
+      (c.barrio_principal || c.ciudad_principal)
+    );
+    
+    // Combinar: primero los que tienen ubicación verificada, luego los demás
+    clientes = [...clientesConUbicacion, ...clientesSinUbicacionVerificada];
+    console.log(`✅ Clientes con ubicación verificada: ${clientesConUbicacion.length}`);
+    console.log(`📍 Clientes con datos geográficos: ${clientesSinUbicacionVerificada.length}`);
+    console.log(`📊 Total clientes disponibles: ${clientes.length}`);
 
     if (!clientes || clientes.length === 0) {
       return new Response(
@@ -417,7 +427,9 @@ Deno.serve(async (req) => {
         email: v.email,
       })) || [];
 
-    const clientesContext = clientes.slice(0, 100).map((c) => {
+    // Tomar MÁS clientes que prospectos para priorizar clientes existentes
+    // Límite: 80 clientes y 20 prospectos para balance correcto
+    const clientesContext = clientes.slice(0, 80).map((c) => {
       const place = placesMap.get(c.client_id);
       const clientFeedbacks = feedbacksMapClientes.get(c.client_id) || [];
 
@@ -449,8 +461,8 @@ Deno.serve(async (req) => {
       };
     });
 
-    // Agregar prospectos al contexto
-    const prospectosContext = prospectos.slice(0, 50).map((p) => {
+    // Agregar menos prospectos al contexto (máximo 20 para complementar)
+    const prospectosContext = prospectos.slice(0, 20).map((p) => {
       const prospectoFeedbacks = feedbacksMapProspectos.get(p.place_id) || [];
 
       // Debug: loggear cuando un prospecto tiene feedbacks
@@ -497,9 +509,13 @@ VENDEDORES DISPONIBLES:
 ${JSON.stringify(vendedoresContext, null, 2)}
 
 CLIENTES Y PROSPECTOS CANDIDATOS:
-NOTA: Los registros con "es_prospecto": true son nuevos negocios descubiertos que AÚN NO SON CLIENTES.
-Para prospectos, el "client_id" es en realidad el "place_id" de Google Maps.
-Prospectos tienen etiqueta especial "NUEVO" y merecen alta prioridad para convertirlos en clientes.
+⚠️ REGLA CRÍTICA DE PRIORIZACIÓN:
+- Los registros con "es_prospecto": false son CLIENTES EXISTENTES de CUPRA (ya compraron)
+- Los registros con "es_prospecto": true son PROSPECTOS NUEVOS (negocios potenciales que AÚN NO son clientes)
+- DEBES PRIORIZAR CLIENTES EXISTENTES sobre prospectos nuevos
+- OBJETIVO: Incluir principalmente clientes existentes (5-6 de cada 8) y solo 2-3 prospectos nuevos para expansión
+- Solo incluye más prospectos si NO hay suficientes clientes existentes en la zona
+- Para prospectos, el "client_id" es en realidad el "place_id" de Google Maps
 
 ${JSON.stringify(todosContext, null, 2)}
 
