@@ -39,11 +39,20 @@ interface Assignment {
   id: string;
   vendedor_id: string;
   client_id: string;
+  prospecto_place_id?: string;
+  es_prospecto: boolean;
   vendedor: {
     nombre: string;
     email: string;
   };
   cliente: Cliente;
+  prospecto?: {
+    nombre: string;
+    telefono?: string;
+    barrio?: string;
+    provincia?: string;
+    direccion?: string;
+  };
 }
 
 interface EditAssignmentsKanbanProps {
@@ -95,10 +104,13 @@ const EditAssignmentsKanban = ({
 
       setVendedores(mappedVendedores);
 
-      // Crear mapa de clientes
+      // Crear mapa de clientes - usar la clave correcta según si es prospecto o no
       const clientMap = new Map<string, Cliente>();
       selectedAssignments.forEach(assignment => {
-        clientMap.set(assignment.client_id, assignment.cliente);
+        const key = assignment.es_prospecto ? assignment.prospecto_place_id : assignment.client_id;
+        if (key) {
+          clientMap.set(key, assignment.cliente);
+        }
       });
       setClientesMap(clientMap);
 
@@ -112,8 +124,9 @@ const EditAssignmentsKanban = ({
 
       // Distribuir clientes en sus columnas actuales (filtrar nulls)
       selectedAssignments.forEach((assignment) => {
-        if (assignment.client_id && newAssignments[assignment.vendedor_id]) {
-          newAssignments[assignment.vendedor_id].push(assignment.client_id);
+        const key = assignment.es_prospecto ? assignment.prospecto_place_id : assignment.client_id;
+        if (key && newAssignments[assignment.vendedor_id]) {
+          newAssignments[assignment.vendedor_id].push(key);
         }
       });
 
@@ -166,16 +179,41 @@ const EditAssignmentsKanban = ({
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      // Recolectar todas las asignaciones actuales para estos clientes
-      const allClientIds = Array.from(clientesMap.keys());
+      // Identificar todas las asignaciones a eliminar (clientes y prospectos)
+      const deletePromises = [];
+      
+      // Separar clientes de prospectos
+      const clientIds = selectedAssignments
+        .filter(a => !a.es_prospecto && a.client_id)
+        .map(a => a.client_id);
+      
+      const prospectoPlaceIds = selectedAssignments
+        .filter(a => a.es_prospecto && a.prospecto_place_id)
+        .map(a => a.prospecto_place_id!);
 
-      // Primero, eliminar todas las asignaciones existentes de estos clientes
-      const { error: deleteError } = await supabase
-        .from("asignaciones_vendedores_clientes")
-        .delete()
-        .in("client_id", allClientIds);
+      // Eliminar asignaciones de clientes
+      if (clientIds.length > 0) {
+        deletePromises.push(
+          supabase
+            .from("asignaciones_vendedores_clientes")
+            .delete()
+            .in("client_id", clientIds)
+        );
+      }
 
-      if (deleteError) throw deleteError;
+      // Eliminar asignaciones de prospectos
+      if (prospectoPlaceIds.length > 0) {
+        deletePromises.push(
+          supabase
+            .from("asignaciones_vendedores_clientes")
+            .delete()
+            .in("prospecto_place_id", prospectoPlaceIds)
+        );
+      }
+
+      const deleteResults = await Promise.all(deletePromises);
+      const deleteError = deleteResults.find(r => r.error);
+      if (deleteError?.error) throw deleteError.error;
 
       // Crear nuevas asignaciones
       const newAssignments = [];
@@ -189,10 +227,19 @@ const EditAssignmentsKanban = ({
           const pairKey = `${vendedorId}-${clientId}`;
           if (!assignedPairs.has(pairKey)) {
             assignedPairs.add(pairKey);
+            
+            // Encontrar la asignación original para determinar si es prospecto
+            const originalAssignment = selectedAssignments.find(a => 
+              a.es_prospecto 
+                ? a.prospecto_place_id === clientId 
+                : a.client_id === clientId
+            );
+            
             newAssignments.push({
               vendedor_id: vendedorId,
-              client_id: clientId,
-              es_prospecto: false,
+              client_id: originalAssignment?.es_prospecto ? null : clientId,
+              prospecto_place_id: originalAssignment?.es_prospecto ? clientId : null,
+              es_prospecto: originalAssignment?.es_prospecto || false,
             });
           }
         }
