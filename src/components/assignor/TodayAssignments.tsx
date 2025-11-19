@@ -27,6 +27,8 @@ import AssignorTodayAssignmentsMap from "./AssignorTodayAssignmentsMap";
 interface Assignment {
   id: string;
   es_prospecto: boolean;
+  client_id?: string;
+  prospecto_place_id?: string;
   vendedor: {
     nombre: string;
     email: string;
@@ -99,6 +101,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
           id,
           created_at,
           es_prospecto,
+          client_id,
           prospecto_place_id,
           vendedor:profiles!asignaciones_vendedores_clientes_vendedor_id_fkey(nombre, email),
           cliente:clientes!asignaciones_vendedores_clientes_client_id_fkey(razon_social, cuit_dni)
