@@ -5,9 +5,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, ArrowRight, Filter } from "lucide-react";
+import { ArrowLeft, ArrowRight, Filter, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Assignment {
   id: string;
@@ -47,6 +57,8 @@ const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) =
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterVendedor, setFilterVendedor] = useState<string>("all");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [assignmentToDelete, setAssignmentToDelete] = useState<Assignment | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -129,6 +141,46 @@ const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) =
   const handleContinue = () => {
     const selected = assignments.filter(a => selectedIds.includes(a.id));
     onContinue(selected);
+  };
+
+  const handleDeleteClick = (assignment: Assignment, event: React.MouseEvent) => {
+    event.stopPropagation(); // Evitar que active el checkbox
+    setAssignmentToDelete(assignment);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!assignmentToDelete) return;
+
+    try {
+      const { error } = await supabase
+        .from('asignaciones_vendedores_clientes')
+        .delete()
+        .eq('id', assignmentToDelete.id);
+
+      if (error) throw error;
+
+      // Actualizar lista local removiendo la asignación eliminada
+      setAssignments(prev => prev.filter(a => a.id !== assignmentToDelete.id));
+      
+      // Si estaba seleccionada, quitarla de la selección
+      setSelectedIds(prev => prev.filter(id => id !== assignmentToDelete.id));
+
+      toast({
+        title: "Asignación eliminada",
+        description: `Se eliminó la asignación de ${assignmentToDelete.cliente?.razon_social || 'Cliente desconocido'}`,
+      });
+    } catch (error) {
+      console.error('Error deleting assignment:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al eliminar la asignación",
+      });
+    } finally {
+      setDeleteDialogOpen(false);
+      setAssignmentToDelete(null);
+    }
   };
 
   // Obtener vendedores únicos para el filtro
@@ -234,15 +286,18 @@ const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) =
                   {vendedorAssignments.map(assignment => (
                     <div
                       key={assignment.id}
-                      className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => toggleAssignment(assignment.id)}
+                      className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
                     >
                       <Checkbox
                         checked={selectedIds.includes(assignment.id)}
                         onCheckedChange={() => toggleAssignment(assignment.id)}
                         className="mt-1"
+                        onClick={(e) => e.stopPropagation()}
                       />
-                      <div className="flex-1">
+                      <div 
+                        className="flex-1 cursor-pointer"
+                        onClick={() => toggleAssignment(assignment.id)}
+                      >
                         <p className="font-medium">{assignment.cliente?.razon_social || 'Cliente desconocido'}</p>
                         <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
                           {assignment.cliente?.cuit_dni && (
@@ -259,6 +314,15 @@ const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) =
                           Asignado: {new Date(assignment.created_at).toLocaleDateString('es-AR')}
                         </p>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => handleDeleteClick(assignment, e)}
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        title="Eliminar asignación"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -273,6 +337,29 @@ const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) =
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar asignación?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se eliminará la asignación de <strong>{assignmentToDelete?.cliente?.razon_social || 'Cliente desconocido'}</strong> 
+              {' '}al vendedor <strong>{assignmentToDelete?.vendedor?.nombre}</strong>.
+              <br /><br />
+              Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
