@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Calendar, Edit, Trash2 } from "lucide-react";
+import { Users, Calendar, Edit, Trash2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -16,6 +16,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import AssignorTodayAssignmentsMap from "./AssignorTodayAssignmentsMap";
 
 interface Assignment {
   id: string;
@@ -66,6 +73,8 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showMapAll, setShowMapAll] = useState(false);
+  const [showMapVendedor, setShowMapVendedor] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -256,6 +265,10 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
             </CardDescription>
           </div>
           <div className="flex gap-2">
+            <Button onClick={() => setShowMapAll(true)} variant="outline" className="gap-2">
+              <MapPin className="w-4 h-4" />
+              Ver todas en mapa
+            </Button>
             {onEditAssignments && (
               <Button onClick={onEditAssignments} variant="outline" className="gap-2">
                 <Edit className="w-4 h-4" />
@@ -292,16 +305,27 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
         {Object.entries(assignmentsByVendedor).map(([vendedorNombre, data]) => (
           <div key={vendedorNombre} className="border rounded-lg p-4 bg-muted/30">
             <div className="flex items-start justify-between mb-3">
-              <div>
+              <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-accent" />
                   <h3 className="font-semibold">{vendedorNombre}</h3>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">{data.email}</p>
               </div>
-              <Badge variant="secondary">
-                {data.clientes.length} cliente{data.clientes.length !== 1 ? 's' : ''}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Button 
+                  onClick={() => setShowMapVendedor(vendedorNombre)} 
+                  variant="outline" 
+                  size="sm" 
+                  className="gap-2"
+                >
+                  <MapPin className="w-4 h-4" />
+                  Ver en mapa
+                </Button>
+                <Badge variant="secondary">
+                  {data.clientes.length} cliente{data.clientes.length !== 1 ? 's' : ''}
+                </Badge>
+              </div>
             </div>
             <div className="space-y-2">
               {data.clientes.map((assignment) => (
@@ -453,6 +477,29 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
           </div>
         ))}
       </CardContent>
+
+      {/* Dialog para ver todas las asignaciones en mapa */}
+      <Dialog open={showMapAll} onOpenChange={setShowMapAll}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Todas las asignaciones de hoy</DialogTitle>
+          </DialogHeader>
+          <AssignorTodayAssignmentsMap assignments={assignments} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para ver asignaciones de un vendedor específico */}
+      <Dialog open={!!showMapVendedor} onOpenChange={(open) => !open && setShowMapVendedor(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Asignaciones de {showMapVendedor}</DialogTitle>
+          </DialogHeader>
+          <AssignorTodayAssignmentsMap 
+            assignments={assignments} 
+            vendedorFilter={showMapVendedor || undefined}
+          />
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
