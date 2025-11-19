@@ -67,6 +67,21 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
       : assignments;
   }, [assignments, vendedorFilter]);
 
+  // Validar que las coordenadas sean válidas para Argentina
+  const isValidClientLatLng = (lat: number | null, lng: number | null): boolean => {
+    if (lat === null || lng === null) return false;
+    if (isNaN(lat) || isNaN(lng)) return false;
+    if (lat === 0 && lng === 0) return false;
+    
+    // Rango razonable para Argentina
+    // Lat: -55 (Ushuaia) a -22 (Jujuy)
+    // Lng: -73 (Mendoza) a -53 (Buenos Aires costa)
+    if (lat < -60 || lat > -20) return false;
+    if (lng < -80 || lng > -40) return false;
+    
+    return true;
+  };
+
   // Inicializar el mapa
   useEffect(() => {
     if (!mapRef.current || map) return;
@@ -99,14 +114,33 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
 
   // Actualizar marcadores cuando cambien las asignaciones
   useEffect(() => {
-    if (!map || !isMapReady || filteredAssignments.length === 0) {
+    if (!map || !isMapReady) {
       console.log('[Map] Esperando condiciones:', { 
         map: !!map, 
-        isMapReady, 
-        assignments: filteredAssignments.length 
+        isMapReady
       });
       return;
     }
+
+    // Manejo explícito de caso sin asignaciones
+    if (filteredAssignments.length === 0) {
+      console.log('[Map] ⚠️ No hay asignaciones para mostrar', {
+        vendedorFilter,
+        totalAssignments: assignments.length
+      });
+      
+      // Limpiar marcadores anteriores
+      markers.forEach((marker) => marker.setMap(null));
+      setMarkers([]);
+      
+      // Centrar en CABA como fallback
+      map.setCenter({ lat: -34.6037, lng: -58.3816 });
+      map.setZoom(12);
+      return;
+    }
+
+    // Flag para detectar si el effect fue limpiado
+    let isCancelled = false;
 
     const loadMarkers = async () => {
       console.log('[Map] === INICIANDO CARGA DE MARCADORES ===');
@@ -116,19 +150,41 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
         filteredCount: filteredAssignments.length 
       });
 
-      // Limpiar marcadores anteriores
+      // ========================================
+      // 🔄 RESET COMPLETO: NO persistir datos de render anterior
+      // ========================================
+      console.log('[Map] 🔄 RESET: Limpiando marcadores del mapa');
       markers.forEach((marker) => marker.setMap(null));
       setMarkers([]);
 
-      const newMarkers: google.maps.Marker[] = [];
-      const bounds = new google.maps.LatLngBounds();
+      console.log('[Map] 🔄 RESET: Inicializando estructuras internas desde cero');
+      
+      // Estructuras que se deben resetear completamente:
+      const newMarkers: google.maps.Marker[] = [];                    // Lista de marcadores nuevos
+      const bounds = new google.maps.LatLngBounds();                  // Bounds para fitBounds
+      const clientPlacesMap = new Map<string, {                       // Mapa de lugares de clientes
+        lat: number; 
+        lng: number; 
+        googleMapsLink: string | null;
+      }>();
+      
+      // Contadores para tracking
+      let clientsWithValidCoords = 0;
+      let clientsWithInvalidCoords = 0;
+      let clientsWithoutPlaceData = 0;
+      
+      // NO hay caché, NO hay datos derivados persistentes
+      // TODO se reconstruye desde filteredAssignments
+      
+      console.log('[Map] ✅ Reset completo. Iniciando construcción de marcadores...');
+
+      // Crear PlacesService UNA SOLA VEZ
+      const placesService = new google.maps.places.PlacesService(map);
 
       // Obtener coordenadas y links para clientes desde client_places
       const clientIds = filteredAssignments
         .filter(a => !a.es_prospecto && a.client_id)
         .map(a => a.client_id!);
-
-      let clientPlacesMap = new Map<string, { lat: number; lng: number; googleMapsLink: string | null }>();
       
       console.log('[Map] Total assignments:', filteredAssignments.length);
       console.log('[Map] Client IDs to fetch:', clientIds.length, clientIds);
@@ -142,9 +198,16 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
         if (placesData) {
           // Agrupar por client_id y priorizar is_primary = true
           placesData.forEach(p => {
-            // Validar que tenga coordenadas válidas
-            if (p.lat == null || p.long == null) {
-              return; // Saltar filas sin coordenadas
+            // Validar coordenadas con la función isValidClientLatLng
+            if (!isValidClientLatLng(p.lat, p.long)) {
+              console.warn(`[Map] Cliente con coordenadas inválidas:`, {
+                client_id: p.client_id,
+                lat: p.lat,
+                lng: p.long,
+                is_primary: p.is_primary
+              });
+              clientsWithInvalidCoords++;
+              return; // Saltar filas con coordenadas inválidas
             }
 
             const existing = clientPlacesMap.get(p.client_id);
@@ -152,32 +215,42 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
             // Si no hay nada para este client_id, usar esta fila
             if (!existing) {
               clientPlacesMap.set(p.client_id, {
-                lat: p.lat,
-                lng: p.long,
+                lat: p.lat!,
+                lng: p.long!,
                 googleMapsLink: p.google_maps_link,
               });
+              clientsWithValidCoords++;
             } 
             // Si esta fila tiene is_primary = true, reemplazar la existente
             else if (p.is_primary === true) {
               clientPlacesMap.set(p.client_id, {
-                lat: p.lat,
-                lng: p.long,
+                lat: p.lat!,
+                lng: p.long!,
                 googleMapsLink: p.google_maps_link,
               });
             }
           });
         }
-        
+
+        // Contar clientes sin place data
+        clientsWithoutPlaceData = clientIds.filter(id => !clientPlacesMap.has(id)).length;
+
+        console.log('[Map] 📊 Resumen de clientes:');
+        console.log(`  ✅ Con coordenadas válidas: ${clientsWithValidCoords}`);
+        console.log(`  ❌ Con coordenadas inválidas: ${clientsWithInvalidCoords}`);
+        console.log(`  ⚠️  Sin datos de ubicación: ${clientsWithoutPlaceData}`);
         console.log('[Map] Client places found:', clientPlacesMap.size, 'out of', clientIds.length, 'clients');
-        console.log('[Map] Clients without locations:', 
-          clientIds.filter(id => !clientPlacesMap.has(id))
-        );
+
+        if (clientsWithoutPlaceData > 0) {
+          console.log('[Map] Clients without locations:', 
+            clientIds.filter(id => !clientPlacesMap.has(id))
+          );
+        }
       }
 
-      // Función para convertir getDetails en Promise
+      // Función para convertir getDetails en Promise (usando placesService compartido)
       const getPlaceDetails = (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
         return new Promise((resolve) => {
-          const placesService = new google.maps.places.PlacesService(map);
           placesService.getDetails(
             {
               placeId: placeId,
@@ -208,6 +281,12 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
               position: position,
               map: map,
               title: assignment.cliente?.razon_social || 'Cliente',
+            });
+
+            console.log(`[Map] ✅ Marcador CLIENTE creado:`, {
+              client_id: assignment.client_id,
+              razon_social: assignment.cliente?.razon_social,
+              coords: position
             });
 
             bounds.extend(position);
@@ -241,7 +320,11 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
 
             newMarkers.push(marker);
           } else {
-            console.warn(`[Map] Cliente sin ubicación: ${assignment.cliente?.razon_social}`);
+            console.warn(`[Map] ⚠️ Cliente sin client_place válido:`, {
+              client_id: assignment.client_id,
+              razon_social: assignment.cliente?.razon_social,
+              tiene_datos: !!assignment.cliente
+            });
           }
         }
       }
@@ -263,6 +346,12 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
 
       // Esperar a que TODAS las llamadas a Places API terminen
       const prospectoResults = await Promise.all(prospectoDetailsPromises);
+
+      // Verificar si fue cancelado después de operación asíncrona
+      if (isCancelled) {
+        console.log('[Map] ⚠️ Ejecución cancelada después de obtener prospectos, descartando resultados');
+        return;
+      }
       
       console.log('[Map] Detalles de prospectos obtenidos:', prospectoResults.length);
 
@@ -314,22 +403,52 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
       console.log('[Map] Marcadores totales creados:', newMarkers.length);
       console.log('[Map] Todos los marcadores listos para fitBounds');
 
+      // Verificar cancelación antes de actualizar estado
+      if (isCancelled) {
+        console.log('[Map] ⚠️ Ejecución cancelada antes de actualizar estado, descartando resultados');
+        // Limpiar los marcadores que ya creamos
+        newMarkers.forEach(marker => marker.setMap(null));
+        return;
+      }
+
       // Actualizar estado con todos los marcadores
       setMarkers(newMarkers);
 
       // FINALMENTE: Ajustar el mapa SOLO cuando TODOS los marcadores estén listos
       if (newMarkers.length > 0) {
+        const boundsPointsCount = clientsWithValidCoords + prospectoResults.filter(r => r.place?.geometry?.location).length;
+        
+        console.log(`[Map] 🗺️ fitBounds con ${newMarkers.length} marcadores`);
+        console.log(`[Map] Bounds incluye ${boundsPointsCount} puntos válidos`);
+        
         requestAnimationFrame(() => {
-          console.log('[Map] Ejecutando fitBounds con', newMarkers.length, 'marcadores');
-          map.fitBounds(bounds);
-          if (newMarkers.length === 1) {
-            map.setZoom(15);
+          if (!isCancelled) {
+            console.log('[Map] Ejecutando fitBounds');
+            map.fitBounds(bounds);
+            if (newMarkers.length === 1) {
+              map.setZoom(15);
+            }
+          } else {
+            console.log('[Map] ⚠️ fitBounds cancelado');
           }
         });
+      } else {
+        console.warn('[Map] ⚠️ No hay marcadores válidos para mostrar');
+        console.log('[Map] 🏙️ Aplicando fallback: Centrando en CABA');
+        
+        // Fallback: Centrar en CABA si no hay markers
+        map.setCenter({ lat: -34.6037, lng: -58.3816 });
+        map.setZoom(12);
       }
     };
 
     loadMarkers();
+
+    // Cleanup function
+    return () => {
+      console.log('[Map] 🧹 CLEANUP: Cancelando ejecución anterior');
+      isCancelled = true;
+    };
   }, [map, isMapReady, filteredAssignments]);
 
   if (error) {
