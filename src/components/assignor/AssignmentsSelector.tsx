@@ -13,6 +13,8 @@ interface Assignment {
   id: string;
   vendedor_id: string;
   client_id: string;
+  prospecto_place_id?: string;
+  es_prospecto: boolean;
   vendedor: {
     nombre: string;
     email: string;
@@ -23,6 +25,13 @@ interface Assignment {
     barrio_principal?: string;
     provincia_principal?: string;
     vendedor_principal?: string;
+  };
+  prospecto?: {
+    nombre: string;
+    telefono?: string;
+    barrio?: string;
+    provincia?: string;
+    direccion?: string;
   };
   created_at: string;
 }
@@ -53,6 +62,8 @@ const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) =
           id,
           vendedor_id,
           client_id,
+          prospecto_place_id,
+          es_prospecto,
           created_at,
           vendedor:profiles!asignaciones_vendedores_clientes_vendedor_id_fkey(nombre, email),
           cliente:clientes!asignaciones_vendedores_clientes_client_id_fkey(
@@ -61,13 +72,34 @@ const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) =
             barrio_principal,
             provincia_principal,
             vendedor_principal
+          ),
+          prospecto:prospectos!fk_prospecto(
+            nombre,
+            telefono,
+            barrio,
+            provincia,
+            direccion
           )
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      setAssignments(data as any || []);
+      // Normalizar los datos para que todos tengan la misma estructura
+      const normalizedData = (data || []).map(item => ({
+        ...item,
+        cliente: item.es_prospecto 
+          ? {
+              razon_social: item.prospecto?.nombre || 'Prospecto sin nombre',
+              cuit_dni: item.prospecto?.telefono || 'Sin teléfono',
+              barrio_principal: item.prospecto?.barrio,
+              provincia_principal: item.prospecto?.provincia,
+              vendedor_principal: null
+            }
+          : item.cliente
+      }));
+
+      setAssignments(normalizedData as any || []);
     } catch (error) {
       console.error('Error fetching assignments:', error);
       toast({
