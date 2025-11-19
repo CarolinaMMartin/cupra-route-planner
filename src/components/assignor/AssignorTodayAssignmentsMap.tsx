@@ -106,22 +106,49 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
 
       let clientPlacesMap = new Map<string, { lat: number; lng: number; googleMapsLink: string | null }>();
       
+      console.log('[Map] Total assignments:', filteredAssignments.length);
+      console.log('[Map] Client IDs to fetch:', clientIds.length, clientIds);
+      
       if (clientIds.length > 0) {
         const { data: placesData } = await supabase
           .from('client_places')
-          .select('client_id, lat, long, google_maps_link')
-          .in('client_id', clientIds)
-          .eq('is_primary', true);
+          .select('client_id, lat, long, google_maps_link, is_primary')
+          .in('client_id', clientIds);
 
         if (placesData) {
+          // Agrupar por client_id y priorizar is_primary = true
           placesData.forEach(p => {
-            clientPlacesMap.set(p.client_id, {
-              lat: p.lat,
-              lng: p.long,
-              googleMapsLink: p.google_maps_link
-            });
+            // Validar que tenga coordenadas válidas
+            if (p.lat == null || p.long == null) {
+              return; // Saltar filas sin coordenadas
+            }
+
+            const existing = clientPlacesMap.get(p.client_id);
+            
+            // Si no hay nada para este client_id, usar esta fila
+            if (!existing) {
+              clientPlacesMap.set(p.client_id, {
+                lat: p.lat,
+                lng: p.long,
+                googleMapsLink: p.google_maps_link,
+              });
+            } 
+            // Si esta fila tiene is_primary = true, reemplazar la existente
+            else if (p.is_primary === true) {
+              clientPlacesMap.set(p.client_id, {
+                lat: p.lat,
+                lng: p.long,
+                googleMapsLink: p.google_maps_link,
+              });
+            }
+            // Si la fila existente no es primary y esta tampoco, mantener la primera
           });
         }
+        
+        console.log('[Map] Client places found:', clientPlacesMap.size, 'out of', clientIds.length, 'clients');
+        console.log('[Map] Clients without locations:', 
+          clientIds.filter(id => !clientPlacesMap.has(id))
+        );
       }
 
       // Crear marcadores para cada asignación usando Places API solo para prospectos
