@@ -99,48 +99,40 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
       const newMarkers: google.maps.Marker[] = [];
       const bounds = new google.maps.LatLngBounds();
 
-      // Obtener place_ids para clientes desde client_places
+      // Obtener coordenadas y links para clientes desde client_places
       const clientIds = filteredAssignments
         .filter(a => !a.es_prospecto && a.client_id)
         .map(a => a.client_id!);
 
-      let clientPlacesMap = new Map<string, string>();
+      let clientPlacesMap = new Map<string, { lat: number; lng: number; googleMapsLink: string | null }>();
       
       if (clientIds.length > 0) {
         const { data: placesData } = await supabase
           .from('client_places')
-          .select('client_id, google_maps_link')
+          .select('client_id, lat, long, google_maps_link')
           .in('client_id', clientIds)
           .eq('is_primary', true);
 
         if (placesData) {
           placesData.forEach(p => {
-            if (p.google_maps_link) {
-              const placeIdMatch = p.google_maps_link.match(/query_place_id=([^&]+)/);
-              if (placeIdMatch) {
-                clientPlacesMap.set(p.client_id, placeIdMatch[1]);
-              }
-            }
+            clientPlacesMap.set(p.client_id, {
+              lat: p.lat,
+              lng: p.long,
+              googleMapsLink: p.google_maps_link
+            });
           });
         }
       }
 
-      // Crear marcadores para cada asignación
+      // Crear marcadores para cada asignación usando Places API solo para prospectos
       const placesService = new google.maps.places.PlacesService(map);
 
       for (const assignment of filteredAssignments) {
-        let placeId: string | null = null;
-
-        if (assignment.es_prospecto) {
-          placeId = assignment.prospecto_place_id || null;
-        } else if (assignment.client_id) {
-          placeId = clientPlacesMap.get(assignment.client_id) || null;
-        }
-
-        if (placeId) {
+        if (assignment.es_prospecto && assignment.prospecto_place_id) {
+          // Para prospectos, usar Places API
           placesService.getDetails(
             {
-              placeId: placeId,
+              placeId: assignment.prospecto_place_id,
               fields: ["geometry", "name"],
             },
             (place, status) => {
@@ -148,9 +140,7 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
                 const marker = new google.maps.Marker({
                   position: place.geometry.location,
                   map: map,
-                  title: assignment.es_prospecto 
-                    ? (assignment.prospecto?.nombre || 'Prospecto')
-                    : (assignment.cliente?.razon_social || 'Cliente'),
+                  title: assignment.prospecto?.nombre || 'Prospecto',
                 });
 
                 bounds.extend(place.geometry.location);
@@ -159,28 +149,19 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
                   <div style="padding: 8px; min-width: 200px; color: black;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                       <strong style="font-size: 14px;">
-                        ${assignment.es_prospecto 
-                          ? (assignment.prospecto?.nombre || 'Prospecto sin nombre')
-                          : (assignment.cliente?.razon_social || 'Cliente desconocido')
-                        }
+                        ${assignment.prospecto?.nombre || 'Prospecto sin nombre'}
                       </strong>
-                      ${assignment.es_prospecto 
-                        ? '<span style="background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">NUEVO</span>'
-                        : ''
-                      }
+                      <span style="background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">NUEVO</span>
                     </div>
                     <p style="font-size: 13px; margin: 4px 0; color: #666;">
                       <strong>Vendedor:</strong> ${assignment.vendedor.nombre}
                     </p>
-                    ${placeId 
-                      ? `<a href="${getGoogleMapsUrl(placeId)}" target="_blank" rel="noopener noreferrer" 
-                           style="display: inline-block; margin-top: 8px; padding: 6px 12px; 
-                                  background-color: #1a73e8; color: white; text-decoration: none; 
-                                  border-radius: 4px; font-size: 12px; font-weight: 500;">
-                          Abrir en Google Maps
-                        </a>`
-                      : ''
-                    }
+                    <a href="${getGoogleMapsUrl(assignment.prospecto_place_id)}" target="_blank" rel="noopener noreferrer" 
+                       style="display: inline-block; margin-top: 8px; padding: 6px 12px; 
+                              background-color: #1a73e8; color: white; text-decoration: none; 
+                              border-radius: 4px; font-size: 12px; font-weight: 500;">
+                      Abrir en Google Maps
+                    </a>
                   </div>
                 `;
 
@@ -196,6 +177,53 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
               }
             }
           );
+        } else if (!assignment.es_prospecto && assignment.client_id) {
+          // Para clientes, usar coordenadas directas de client_places
+          const clientPlace = clientPlacesMap.get(assignment.client_id);
+          
+          if (clientPlace) {
+            const position = { lat: clientPlace.lat, lng: clientPlace.lng };
+            
+            const marker = new google.maps.Marker({
+              position: position,
+              map: map,
+              title: assignment.cliente?.razon_social || 'Cliente',
+            });
+
+            bounds.extend(position);
+
+            const infoWindowContent = `
+              <div style="padding: 8px; min-width: 200px; color: black;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                  <strong style="font-size: 14px;">
+                    ${assignment.cliente?.razon_social || 'Cliente desconocido'}
+                  </strong>
+                </div>
+                <p style="font-size: 13px; margin: 4px 0; color: #666;">
+                  <strong>Vendedor:</strong> ${assignment.vendedor.nombre}
+                </p>
+                ${clientPlace.googleMapsLink 
+                  ? `<a href="${clientPlace.googleMapsLink}" target="_blank" rel="noopener noreferrer" 
+                       style="display: inline-block; margin-top: 8px; padding: 6px 12px; 
+                              background-color: #1a73e8; color: white; text-decoration: none; 
+                              border-radius: 4px; font-size: 12px; font-weight: 500;">
+                      Abrir en Google Maps
+                    </a>`
+                  : ''
+                }
+              </div>
+            `;
+
+            const infoWindow = new google.maps.InfoWindow({
+              content: infoWindowContent,
+            });
+
+            marker.addListener("click", () => {
+              infoWindow.open(map, marker);
+            });
+
+            newMarkers.push(marker);
+          }
         }
       }
 
