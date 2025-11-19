@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { getGoogleMapsUrl } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -58,11 +58,14 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
   const [markers, setMarkers] = useState<google.maps.Marker[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMapReady, setIsMapReady] = useState(false);
 
   // Filtrar asignaciones si hay filtro de vendedor
-  const filteredAssignments = vendedorFilter
-    ? assignments.filter(a => a.vendedor.nombre === vendedorFilter)
-    : assignments;
+  const filteredAssignments = useMemo(() => {
+    return vendedorFilter
+      ? assignments.filter(a => a.vendedor.nombre === vendedorFilter)
+      : assignments;
+  }, [assignments, vendedorFilter]);
 
   // Inicializar el mapa
   useEffect(() => {
@@ -77,6 +80,13 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
           streetViewControl: false,
           fullscreenControl: true,
         });
+
+        // Esperar a que el mapa termine de cargar completamente
+        google.maps.event.addListenerOnce(mapInstance, 'idle', () => {
+          console.log('[Map] Google Maps completamente cargado');
+          setIsMapReady(true);
+        });
+
         setMap(mapInstance);
         setIsLoading(false);
       })
@@ -89,9 +99,23 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
 
   // Actualizar marcadores cuando cambien las asignaciones
   useEffect(() => {
-    if (!map || filteredAssignments.length === 0) return;
+    if (!map || !isMapReady || filteredAssignments.length === 0) {
+      console.log('[Map] Esperando condiciones:', { 
+        map: !!map, 
+        isMapReady, 
+        assignments: filteredAssignments.length 
+      });
+      return;
+    }
 
     const loadMarkers = async () => {
+      console.log('[Map] === INICIANDO CARGA DE MARCADORES ===');
+      console.log('[Map] Estado del mapa:', { 
+        mapExists: !!map, 
+        isMapReady,
+        filteredCount: filteredAssignments.length 
+      });
+
       // Limpiar marcadores anteriores
       markers.forEach((marker) => marker.setMap(null));
       setMarkers([]);
@@ -258,17 +282,17 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
 
       // Ajustar el mapa para mostrar todos los marcadores
       if (newMarkers.length > 0) {
-        setTimeout(() => {
+        requestAnimationFrame(() => {
           map.fitBounds(bounds);
           if (newMarkers.length === 1) {
             map.setZoom(15);
           }
-        }, 500);
+        });
       }
     };
 
     loadMarkers();
-  }, [map, filteredAssignments]);
+  }, [map, isMapReady, filteredAssignments]);
 
   if (error) {
     return (
