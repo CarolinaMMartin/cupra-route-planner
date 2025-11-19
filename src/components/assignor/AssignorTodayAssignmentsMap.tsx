@@ -165,7 +165,6 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
                 googleMapsLink: p.google_maps_link,
               });
             }
-            // Si la fila existente no es primary y esta tampoco, mantener la primera
           });
         }
         
@@ -175,65 +174,35 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
         );
       }
 
-      // Crear marcadores para cada asignación usando Places API solo para prospectos
-      const placesService = new google.maps.places.PlacesService(map);
-
-      for (const assignment of filteredAssignments) {
-        if (assignment.es_prospecto && assignment.prospecto_place_id) {
-          // Para prospectos, usar Places API
+      // Función para convertir getDetails en Promise
+      const getPlaceDetails = (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
+        return new Promise((resolve) => {
+          const placesService = new google.maps.places.PlacesService(map);
           placesService.getDetails(
             {
-              placeId: assignment.prospecto_place_id,
+              placeId: placeId,
               fields: ["geometry", "name"],
             },
             (place, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-                const marker = new google.maps.Marker({
-                  position: place.geometry.location,
-                  map: map,
-                  title: assignment.prospecto?.nombre || 'Prospecto',
-                });
-
-                bounds.extend(place.geometry.location);
-
-                const infoWindowContent = `
-                  <div style="padding: 8px; min-width: 200px; color: black;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                      <strong style="font-size: 14px;">
-                        ${assignment.prospecto?.nombre || 'Prospecto sin nombre'}
-                      </strong>
-                      <span style="background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">NUEVO</span>
-                    </div>
-                    <p style="font-size: 13px; margin: 4px 0; color: #666;">
-                      <strong>Vendedor:</strong> ${assignment.vendedor.nombre}
-                    </p>
-                    <a href="${getGoogleMapsUrl(assignment.prospecto_place_id)}" target="_blank" rel="noopener noreferrer" 
-                       style="display: inline-block; margin-top: 8px; padding: 6px 12px; 
-                              background-color: #1a73e8; color: white; text-decoration: none; 
-                              border-radius: 4px; font-size: 12px; font-weight: 500;">
-                      Abrir en Google Maps
-                    </a>
-                  </div>
-                `;
-
-                const infoWindow = new google.maps.InfoWindow({
-                  content: infoWindowContent,
-                });
-
-                marker.addListener("click", () => {
-                  infoWindow.open(map, marker);
-                });
-
-                newMarkers.push(marker);
+              if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+                resolve(place);
+              } else {
+                console.warn(`[Map] Error obteniendo detalles del place_id ${placeId}:`, status);
+                resolve(null);
               }
             }
           );
-        } else if (!assignment.es_prospecto && assignment.client_id) {
-          // Para clientes, usar coordenadas directas de client_places
-          const clientPlace = clientPlacesMap.get(assignment.client_id);
+        });
+      };
+
+      // Primero, crear todos los marcadores de CLIENTES (síncronos)
+      console.log('[Map] Creando marcadores de clientes...');
+      for (const assignment of filteredAssignments) {
+        if (!assignment.es_prospecto && assignment.client_id) {
+          const placeData = clientPlacesMap.get(assignment.client_id);
           
-          if (clientPlace) {
-            const position = { lat: clientPlace.lat, lng: clientPlace.lng };
+          if (placeData) {
+            const position = { lat: placeData.lat, lng: placeData.lng };
             
             const marker = new google.maps.Marker({
               position: position,
@@ -243,25 +212,22 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
 
             bounds.extend(position);
 
+            const mapsUrl = placeData.googleMapsLink || '#';
+            
             const infoWindowContent = `
               <div style="padding: 8px; min-width: 200px; color: black;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                  <strong style="font-size: 14px;">
-                    ${assignment.cliente?.razon_social || 'Cliente desconocido'}
-                  </strong>
-                </div>
+                <strong style="font-size: 14px;">
+                  ${assignment.cliente?.razon_social || 'Cliente sin nombre'}
+                </strong>
                 <p style="font-size: 13px; margin: 4px 0; color: #666;">
                   <strong>Vendedor:</strong> ${assignment.vendedor.nombre}
                 </p>
-                ${clientPlace.googleMapsLink 
-                  ? `<a href="${clientPlace.googleMapsLink}" target="_blank" rel="noopener noreferrer" 
-                       style="display: inline-block; margin-top: 8px; padding: 6px 12px; 
-                              background-color: #1a73e8; color: white; text-decoration: none; 
-                              border-radius: 4px; font-size: 12px; font-weight: 500;">
-                      Abrir en Google Maps
-                    </a>`
-                  : ''
-                }
+                <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" 
+                   style="display: inline-block; margin-top: 8px; padding: 6px 12px; 
+                          background-color: #1a73e8; color: white; text-decoration: none; 
+                          border-radius: 4px; font-size: 12px; font-weight: 500;">
+                  Abrir en Google Maps
+                </a>
               </div>
             `;
 
@@ -274,15 +240,87 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
             });
 
             newMarkers.push(marker);
+          } else {
+            console.warn(`[Map] Cliente sin ubicación: ${assignment.cliente?.razon_social}`);
           }
         }
       }
+      
+      console.log('[Map] Marcadores de clientes creados:', newMarkers.length);
 
+      // Segundo, obtener TODOS los detalles de PROSPECTOS usando Promises
+      console.log('[Map] Obteniendo detalles de prospectos...');
+      const prospectoAssignments = filteredAssignments.filter(
+        a => a.es_prospecto && a.prospecto_place_id
+      );
+      
+      const prospectoDetailsPromises = prospectoAssignments.map(assignment =>
+        getPlaceDetails(assignment.prospecto_place_id!).then(place => ({
+          assignment,
+          place
+        }))
+      );
+
+      // Esperar a que TODAS las llamadas a Places API terminen
+      const prospectoResults = await Promise.all(prospectoDetailsPromises);
+      
+      console.log('[Map] Detalles de prospectos obtenidos:', prospectoResults.length);
+
+      // Tercero, crear marcadores de PROSPECTOS con los resultados
+      prospectoResults.forEach(({ assignment, place }) => {
+        if (place?.geometry?.location) {
+          const marker = new google.maps.Marker({
+            position: place.geometry.location,
+            map: map,
+            title: assignment.prospecto?.nombre || 'Prospecto',
+          });
+
+          bounds.extend(place.geometry.location);
+
+          const infoWindowContent = `
+            <div style="padding: 8px; min-width: 200px; color: black;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <strong style="font-size: 14px;">
+                  ${assignment.prospecto?.nombre || 'Prospecto sin nombre'}
+                </strong>
+                <span style="background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">NUEVO</span>
+              </div>
+              <p style="font-size: 13px; margin: 4px 0; color: #666;">
+                <strong>Vendedor:</strong> ${assignment.vendedor.nombre}
+              </p>
+              <a href="${getGoogleMapsUrl(assignment.prospecto_place_id!)}" target="_blank" rel="noopener noreferrer" 
+                 style="display: inline-block; margin-top: 8px; padding: 6px 12px; 
+                        background-color: #1a73e8; color: white; text-decoration: none; 
+                        border-radius: 4px; font-size: 12px; font-weight: 500;">
+                Abrir en Google Maps
+              </a>
+            </div>
+          `;
+
+          const infoWindow = new google.maps.InfoWindow({
+            content: infoWindowContent,
+          });
+
+          marker.addListener("click", () => {
+            infoWindow.open(map, marker);
+          });
+
+          newMarkers.push(marker);
+        } else {
+          console.warn(`[Map] No se pudo obtener ubicación para el prospecto ${assignment.prospecto?.nombre}`);
+        }
+      });
+
+      console.log('[Map] Marcadores totales creados:', newMarkers.length);
+      console.log('[Map] Todos los marcadores listos para fitBounds');
+
+      // Actualizar estado con todos los marcadores
       setMarkers(newMarkers);
 
-      // Ajustar el mapa para mostrar todos los marcadores
+      // FINALMENTE: Ajustar el mapa SOLO cuando TODOS los marcadores estén listos
       if (newMarkers.length > 0) {
         requestAnimationFrame(() => {
+          console.log('[Map] Ejecutando fitBounds con', newMarkers.length, 'marcadores');
           map.fitBounds(bounds);
           if (newMarkers.length === 1) {
             map.setZoom(15);
@@ -303,14 +341,17 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
   }
 
   return (
-    <div className="relative h-[600px] w-full">
+    <Card className="w-full h-[600px] relative overflow-hidden">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
-          <p className="text-muted-foreground">Cargando mapa...</p>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-sm text-muted-foreground">Cargando mapa...</p>
+          </div>
         </div>
       )}
-      <div ref={mapRef} className="w-full h-full rounded-lg" />
-    </div>
+      <div ref={mapRef} className="w-full h-full" />
+    </Card>
   );
 };
 
