@@ -147,24 +147,9 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
         throw new Error("Error al guardar el prospecto");
       }
 
-      // Crear asignación automática al vendedor
-      const { error: asignacionError } = await supabase
-        .from("asignaciones_vendedores_clientes")
-        .insert({
-          vendedor_id: userData.user.id,
-          prospecto_place_id: placeId,
-          es_prospecto: true,
-          estado: "Por visitar",
-        });
-
-      if (asignacionError) {
-        console.error("Error al crear asignación:", asignacionError);
-        // No es crítico, el prospecto ya se guardó
-      }
-
       toast({
         title: "Prospecto creado",
-        description: `"${formData.nombre}" fue agregado y asignado correctamente.`,
+        description: `"${formData.nombre}" fue agregado correctamente.`,
       });
 
       onSuccess();
