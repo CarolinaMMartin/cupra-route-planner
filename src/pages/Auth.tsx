@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,81 @@ const Auth = () => {
   const [nombre, setNombre] = useState("");
   const [rol, setRol] = useState<'asignador' | 'vendedor'>('vendedor');
   const [showResetPassword, setShowResetPassword] = useState(false);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Detectar evento PASSWORD_RECOVERY cuando el usuario llega desde el enlace de email
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsRecoveryMode(true);
+        }
+      }
+    );
+
+    // También verificar hash de la URL al cargar
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    if (hashParams.get('type') === 'recovery') {
+      setIsRecoveryMode(true);
+    }
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Las contraseñas no coinciden",
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "La contraseña debe tener al menos 6 caracteres",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Contraseña actualizada",
+        description: "Tu contraseña ha sido cambiada exitosamente. Ya puedes iniciar sesión.",
+      });
+
+      // Cerrar sesión temporal y volver al login
+      await supabase.auth.signOut();
+      setIsRecoveryMode(false);
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || "No se pudo actualizar la contraseña",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,6 +211,73 @@ const Auth = () => {
       setIsLoading(false);
     }
   };
+
+  // Si está en modo recuperación, mostrar formulario de nueva contraseña
+  if (isRecoveryMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
+        {/* Marca de agua del ángel */}
+        <div 
+          className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none"
+          style={{
+            backgroundImage: `url(${angelLogo})`,
+            backgroundSize: '50%',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+        
+        <Card className="w-full max-w-md matte-card shadow-large relative z-10">
+          <CardHeader className="text-center space-y-6 pt-8">
+            <div className="flex justify-center">
+              <img src={cupraLogo} alt="Cupra Wines" className="h-20 w-auto" />
+            </div>
+            <div className="space-y-2">
+              <CardTitle className="text-2xl font-serif tracking-wide">Nueva Contraseña</CardTitle>
+              <CardDescription className="text-sm tracking-wider">
+                Ingresa tu nueva contraseña
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Nueva contraseña</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirmar contraseña</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+              </div>
+              <Button
+                type="submit"
+                className="w-full wine-button"
+                disabled={isLoading}
+              >
+                {isLoading ? "Guardando..." : "Guardar nueva contraseña"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
