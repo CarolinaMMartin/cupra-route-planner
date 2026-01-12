@@ -89,15 +89,26 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
 
       const promises = sucursales.map(async (sucursal) => {
         try {
-          // If we have lat/lng, use them directly
+          // If we have lat/lng, validate and use them directly
           if (sucursal.latitud && sucursal.longitud) {
-            return {
-              id: sucursal.id,
-              name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
-              lat: sucursal.latitud,
-              lng: sucursal.longitud,
-              direccion: sucursal.direccion || sucursal.direccion_principal || "",
-            };
+            const lat = sucursal.latitud;
+            const lng = sucursal.longitud;
+            
+            // Validate coordinates are within Argentina's range
+            const isValidLat = lat >= -60 && lat <= -20;
+            const isValidLng = lng >= -80 && lng <= -40;
+            
+            if (isValidLat && isValidLng) {
+              return {
+                id: sucursal.id,
+                name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
+                lat: lat,
+                lng: lng,
+                direccion: sucursal.direccion || sucursal.direccion_principal || "",
+              };
+            } else {
+              console.warn(`[ResultsMap] Coordenadas fuera de rango Argentina:`, { id: sucursal.id, lat, lng });
+            }
           }
 
           // If we have place_id, fetch from Places API
