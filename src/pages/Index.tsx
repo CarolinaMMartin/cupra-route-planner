@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, UserCog, BarChart3, Layers } from "lucide-react";
+import { LogOut, User, UserCog, BarChart3, Layers, ClipboardList } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import VendedorKanban from "@/components/vendedor/VendedorKanban";
@@ -113,6 +113,15 @@ const Index = () => {
                   >
                     <Layers className="w-4 h-4" />
                     <span className="text-sm tracking-wide">Asignaciones de Áreas</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate("/supervision-vendedores")}
+                    className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
+                  >
+                    <ClipboardList className="w-4 h-4" />
+                    <span className="text-sm tracking-wide">Supervisión Vendedores</span>
                   </Button>
                   <Button
                     variant="ghost"

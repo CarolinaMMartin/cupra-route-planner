@@ -545,10 +545,13 @@ const VendedorKanban = () => {
         }
       }
 
-      // Actualizar estado a "Visitado"
+      // Actualizar estado a "Visitado" y registrar momento de visita
       const { error: updateError } = await supabase
         .from('asignaciones_vendedores_clientes')
-        .update({ estado: 'Visitado' })
+        .update({ 
+          estado: 'Visitado',
+          visited_at: new Date().toISOString()
+        })
         .eq('id', selectedCliente.id);
 
       if (updateError) throw updateError;
