@@ -169,6 +169,7 @@ const AutoAsignarDialog = ({
         // Usar null explícito, NUNCA string vacío
         client_id: item.entityType === "cliente" ? item.client_id : null,
         prospecto_place_id: item.entityType === "prospecto" ? item.place_id : null,
+        origen_asignacion: 'auto' as const, // Marca que fue auto-asignado por el vendedor
       };
 
       const { error } = await supabase
