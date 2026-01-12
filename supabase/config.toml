@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.upsert-prospectos]
 verify_jwt = false
+
+[functions.cleanup-visited-assignments]
+verify_jwt = false
