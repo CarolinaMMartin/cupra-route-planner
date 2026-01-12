@@ -783,6 +783,8 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
           score_comercial: "NUEVO",
 
           // Ubicación del prospecto
+          lat: prospectoCompleto.latitud || null,
+          long: prospectoCompleto.longitud || null,
           ciudades: [prospectoCompleto.ciudad],
           provincias: [prospectoCompleto.provincia],
           barrio_principal: prospectoCompleto.barrio,
@@ -830,6 +832,8 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
           score_comercial: clienteCompleto.score_comercial,
 
           // Ubicación con datos de client_places
+          lat: place?.lat || null,
+          long: place?.long || null,
           ciudades: clienteCompleto.todas_ciudades || [clienteCompleto.ciudad_principa],
           provincias: [place?.provincia_principal || clienteCompleto.provincia_principal],
           barrio_principal: place?.barrio_principal || clienteCompleto.barrio_principal,
