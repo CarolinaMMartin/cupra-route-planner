@@ -851,8 +851,9 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
       }
     }
 
-    // 8. Guardar en base de datos
-    const { error: insertError } = await supabaseClient.from("recomendaciones_ia").insert(enrichedRecommendations);
+    // 8. Guardar en base de datos (excluir lat/long que no existen en la tabla)
+    const recommendationsForDb = enrichedRecommendations.map(({ lat, long, ...rest }) => rest);
+    const { error: insertError } = await supabaseClient.from("recomendaciones_ia").insert(recommendationsForDb);
 
     if (insertError) {
       console.error("❌ Error insertando recomendaciones:", insertError);
