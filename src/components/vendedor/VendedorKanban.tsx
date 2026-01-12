@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getGoogleMapsUrl } from "@/lib/utils";
-import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns } from "lucide-react";
+import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -29,6 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
+import AgregarProspectoForm from "./AgregarProspectoForm";
 
 export interface ClienteAsignado {
   id: string;
@@ -122,6 +123,7 @@ const VendedorKanban = () => {
   const [motivoNoVisita, setMotivoNoVisita] = useState("");
   const [tipoInteraccion, setTipoInteraccion] = useState("");
   const [actualizarEtiquetaWa, setActualizarEtiquetaWa] = useState("");
+  const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -817,8 +819,16 @@ const VendedorKanban = () => {
           </p>
         </div>
         
-        {/* Toggle de vistas */}
+        {/* Acciones */}
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowAgregarProspecto(true)}
+            className="gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar Prospecto
+          </Button>
           <Button
             variant={viewMode === 'kanban' ? 'default' : 'outline'}
             onClick={() => setViewMode('kanban')}
@@ -1300,6 +1310,25 @@ const VendedorKanban = () => {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para agregar prospecto */}
+      <Dialog open={showAgregarProspecto} onOpenChange={setShowAgregarProspecto}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Agregar Nuevo Prospecto</DialogTitle>
+            <DialogDescription>
+              Ingresá los datos del establecimiento. La dirección será validada automáticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <AgregarProspectoForm
+            onSuccess={() => {
+              setShowAgregarProspecto(false);
+              fetchAsignaciones();
+            }}
+            onCancel={() => setShowAgregarProspecto(false)}
+          />
         </DialogContent>
       </Dialog>
     </div>
