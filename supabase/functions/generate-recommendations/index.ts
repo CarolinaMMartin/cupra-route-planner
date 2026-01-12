@@ -207,18 +207,49 @@ Deno.serve(async (req) => {
     console.log(`✅ Vendedores cargados: ${vendedoresData.length}`);
 
     // 3. Cargar clientes de la tabla clientes
+    // Calcular fecha límite de 15 días para rotación
+    const quinceDiasAtras = new Date();
+    quinceDiasAtras.setDate(quinceDiasAtras.getDate() - 15);
+    const quinceDiasAtrasISO = quinceDiasAtras.toISOString();
+    const quinceDiasAtrasDate = quinceDiasAtrasISO.split('T')[0]; // Solo fecha para ventas
+
     let clientesQuery = supabaseClient
       .from("clientes")
       .select("*")
       .not("monto_total_historico", "is", null)
       .or("excluir_recomendaciones.is.null,excluir_recomendaciones.eq.false") // Filtrar clientes excluidos
+      .or(`last_recommendation_at.is.null,last_recommendation_at.lt.${quinceDiasAtrasISO}`) // Filtrar recomendados en últimos 15 días
       .order("monto_total_historico", { ascending: false })
       .limit(200);
 
     let { data: clientes, error: clientesError } = await clientesQuery;
     if (clientesError) throw clientesError;
 
-    console.log(`📊 Clientes cargados: ${clientes?.length || 0}`);
+    console.log(`📊 Clientes después de filtro de rotación (15 días): ${clientes?.length || 0}`);
+
+    // 3a. Cargar client_ids con ventas en últimos 15 días para excluirlos
+    const { data: ventasRecientes, error: ventasError } = await supabaseClient
+      .from("ventas_cupra")
+      .select("client_id")
+      .gte("fecha_emision", quinceDiasAtrasDate);
+
+    if (ventasError) {
+      console.error("⚠️ Error cargando ventas recientes:", ventasError);
+    }
+
+    // Crear set de client_ids con ventas recientes para excluir
+    const clientsConVentasRecientes = new Set(
+      ventasRecientes?.map(v => v.client_id).filter(Boolean) || []
+    );
+
+    console.log(`💰 Clientes con ventas en últimos 15 días: ${clientsConVentasRecientes.size}`);
+
+    // Filtrar clientes que tienen ventas recientes
+    if (clientes && clientsConVentasRecientes.size > 0) {
+      const clientesAntes = clientes.length;
+      clientes = clientes.filter(c => !clientsConVentasRecientes.has(c.client_id));
+      console.log(`📊 Clientes después de filtrar ventas recientes: ${clientes.length} (excluidos: ${clientesAntes - clientes.length})`)
+    }
 
     // 3b. Cargar prospectos nuevos (últimos 30 días)
     const treintaDiasAtras = new Date();
@@ -228,6 +259,7 @@ Deno.serve(async (req) => {
       .from("prospectos")
       .select("*")
       .gte("created_at", treintaDiasAtras.toISOString())
+      .or(`last_recommendation_at.is.null,last_recommendation_at.lt.${quinceDiasAtrasISO}`) // Filtrar recomendados en últimos 15 días
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -861,6 +893,42 @@ Considera scores comerciales, recencia, proximidad geográfica, potencial de ven
     }
 
     console.log("✅ Recomendaciones guardadas en BD");
+
+    // 8a. Actualizar last_recommendation_at para clientes recomendados
+    const clientIdsRecomendados = enrichedRecommendations
+      .filter(rec => !rec.es_prospecto && rec.client_id)
+      .map(rec => rec.client_id);
+
+    if (clientIdsRecomendados.length > 0) {
+      const { error: updateClientesError } = await supabaseClient
+        .from("clientes")
+        .update({ last_recommendation_at: new Date().toISOString() })
+        .in("client_id", clientIdsRecomendados);
+      
+      if (updateClientesError) {
+        console.warn("⚠️ Error actualizando last_recommendation_at en clientes:", updateClientesError);
+      } else {
+        console.log(`✅ Actualizado last_recommendation_at para ${clientIdsRecomendados.length} clientes`);
+      }
+    }
+
+    // 8b. Actualizar last_recommendation_at para prospectos recomendados
+    const prospectPlaceIds = enrichedRecommendations
+      .filter(rec => rec.es_prospecto && rec.prospecto_place_id)
+      .map(rec => rec.prospecto_place_id);
+
+    if (prospectPlaceIds.length > 0) {
+      const { error: updateProspectosError } = await supabaseClient
+        .from("prospectos")
+        .update({ last_recommendation_at: new Date().toISOString() })
+        .in("place_id", prospectPlaceIds);
+      
+      if (updateProspectosError) {
+        console.warn("⚠️ Error actualizando last_recommendation_at en prospectos:", updateProspectosError);
+      } else {
+        console.log(`✅ Actualizado last_recommendation_at para ${prospectPlaceIds.length} prospectos`);
+      }
+    }
 
     // 9. Calcular distribución por vendedor
     const distribucion: Record<string, number> = {};
