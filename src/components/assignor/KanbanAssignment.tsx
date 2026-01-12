@@ -304,7 +304,7 @@ const KanbanAssignment = ({
           for (const recomendacionId of recomendacionIds) {
             const rec = selectedRecommendations.find(r => r.id === recomendacionId);
             
-            if (rec?.es_prospecto && rec.prospecto_place_id) {
+              if (rec?.es_prospecto && rec.prospecto_place_id) {
               // Asignación de prospecto
               const pairKey = `${vendedorId}-prospecto-${rec.prospecto_place_id}`;
               if (!assignedPairs.has(pairKey)) {
@@ -313,6 +313,7 @@ const KanbanAssignment = ({
                   vendedor_id: vendedorId,
                   prospecto_place_id: rec.prospecto_place_id,
                   es_prospecto: true,
+                  origen_asignacion: 'asignador', // Marca que fue asignado por el asignador
                 });
               }
             } else {
@@ -326,6 +327,7 @@ const KanbanAssignment = ({
                     vendedor_id: vendedorId,
                     client_id: clienteId,
                     es_prospecto: false,
+                    origen_asignacion: 'asignador', // Marca que fue asignado por el asignador
                   });
                 }
               }

@@ -154,6 +154,7 @@ export type Database = {
           es_prospecto: boolean
           estado: Database["public"]["Enums"]["estado_asignacion"]
           id: string
+          origen_asignacion: string
           prospecto_place_id: string | null
           vendedor_id: string
         }
@@ -163,6 +164,7 @@ export type Database = {
           es_prospecto?: boolean
           estado?: Database["public"]["Enums"]["estado_asignacion"]
           id?: string
+          origen_asignacion?: string
           prospecto_place_id?: string | null
           vendedor_id: string
         }
@@ -172,6 +174,7 @@ export type Database = {
           es_prospecto?: boolean
           estado?: Database["public"]["Enums"]["estado_asignacion"]
           id?: string
+          origen_asignacion?: string
           prospecto_place_id?: string | null
           vendedor_id?: string
         }

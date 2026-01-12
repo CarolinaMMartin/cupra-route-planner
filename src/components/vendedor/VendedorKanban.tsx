@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getGoogleMapsUrl } from "@/lib/utils";
-import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus } from "lucide-react";
+import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -74,6 +74,8 @@ export interface ClienteAsignado {
   website?: string;
   rating?: number;
   nivel_precio?: string;
+  // Origen de la asignación
+  origen_asignacion: 'auto' | 'asignador';
 }
 
 interface ClienteInfo {
@@ -281,6 +283,7 @@ const VendedorKanban = () => {
           telefonos: clienteData.telefonos,
           emails: clienteData.emails,
           google_maps_link: placesMap.get(asig.client_id) || undefined,
+          origen_asignacion: asig.origen_asignacion || 'asignador',
         };
         grouped[estado].push(cliente);
       });
@@ -327,6 +330,7 @@ const VendedorKanban = () => {
           website: prospectoData.website,
           rating: prospectoData.rating,
           nivel_precio: prospectoData.nivel_precio,
+          origen_asignacion: asig.origen_asignacion || 'asignador',
         };
         grouped[estado].push(prospecto);
       });
@@ -592,6 +596,31 @@ const VendedorKanban = () => {
     }
   };
 
+  const handleDesasignar = async (asignacion: ClienteAsignado) => {
+    try {
+      const { error } = await supabase
+        .from('asignaciones_vendedores_clientes')
+        .delete()
+        .eq('id', asignacion.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Asignación eliminada",
+        description: `"${asignacion.razon_social}" fue quitado de tu lista`,
+      });
+
+      fetchAsignaciones();
+    } catch (error) {
+      console.error('Error al des-asignar:', error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo eliminar la asignación",
+      });
+    }
+  };
+
   const DraggableCard = ({ cliente }: { cliente: ClienteAsignado }) => {
     const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
       id: cliente.id,
@@ -602,9 +631,26 @@ const VendedorKanban = () => {
     } : undefined;
 
     const esProspecto = cliente.etiquetas?.includes('Prospecto');
+    const puedeDesasignar = cliente.origen_asignacion === 'auto' && cliente.estado !== 'Visitado';
 
     return (
-      <div ref={setNodeRef} style={style}>
+      <div ref={setNodeRef} style={style} className="relative">
+        {/* Botón de des-asignar solo para auto-asignaciones que no están visitadas */}
+        {puedeDesasignar && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute -top-1 -right-1 h-5 w-5 p-0 z-10 rounded-full bg-background border shadow-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (window.confirm(`¿Quitar "${cliente.razon_social}" de tu lista?`)) {
+                handleDesasignar(cliente);
+              }
+            }}
+          >
+            <X className="w-3 h-3" />
+          </Button>
+        )}
         <Card 
           className={`p-3 cursor-move transition-all ${isDragging ? 'opacity-50' : 'hover-lift'}`}
           onClick={() => handleCardClick(cliente)}
