@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingUp, Users, MapPin, DollarSign, ShoppingCart, Filter, Download, RefreshCw } from "lucide-react";
+import { ArrowLeft, TrendingUp, Users, MapPin, DollarSign, ShoppingCart, Filter, Download, RefreshCw, ClipboardList } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -289,7 +289,17 @@ const ClientesDashboard = () => {
               </p>
             </div>
           </div>
-          <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              onClick={() => navigate('/supervision-vendedores')}
+              className="gap-2"
+            >
+              <ClipboardList className="h-4 w-4" />
+              Supervisión
+            </Button>
+            <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
+          </div>
         </div>
 
         {/* Panel de Filtros */}

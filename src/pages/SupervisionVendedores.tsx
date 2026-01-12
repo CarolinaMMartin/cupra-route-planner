@@ -1,0 +1,646 @@
+import { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { 
+  ArrowLeft, 
+  Users, 
+  CheckCircle2, 
+  Clock, 
+  TrendingUp, 
+  Filter,
+  RefreshCw 
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import cupraLogo from "@/assets/cupra-logo-new.png";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+interface VendedorStats {
+  vendedor_id: string;
+  nombre: string;
+  email: string;
+  total: number;
+  pendientes: number;
+  visitadas: number;
+  tasa: number;
+}
+
+interface AsignacionDetalle {
+  id: string;
+  estado: string;
+  created_at: string;
+  visited_at: string | null;
+  es_prospecto: boolean;
+  origen_asignacion: string;
+  vendedor_nombre: string;
+  cliente_nombre: string;
+  direccion: string;
+}
+
+interface Filters {
+  asignadoDesde: string;
+  asignadoHasta: string;
+  visitadoDesde: string;
+  visitadoHasta: string;
+  vendedorId: string;
+  estado: string;
+}
+
+const SupervisionVendedores = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [vendedores, setVendedores] = useState<{ id: string; nombre: string }[]>([]);
+  const [vendedorStats, setVendedorStats] = useState<VendedorStats[]>([]);
+  const [asignaciones, setAsignaciones] = useState<AsignacionDetalle[]>([]);
+  
+  const [filters, setFilters] = useState<Filters>({
+    asignadoDesde: "",
+    asignadoHasta: "",
+    visitadoDesde: "",
+    visitadoHasta: "",
+    vendedorId: "all",
+    estado: "all"
+  });
+
+  // Verificar acceso - solo asignadores
+  useEffect(() => {
+    const checkAccess = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("rol")
+        .eq("user_id", user.id)
+        .single();
+
+      if (profile?.rol !== "asignador") {
+        toast({
+          variant: "destructive",
+          title: "Acceso denegado",
+          description: "Solo los asignadores pueden acceder a esta página"
+        });
+        navigate("/");
+      }
+    };
+    checkAccess();
+  }, [navigate, toast]);
+
+  // Cargar lista de vendedores
+  useEffect(() => {
+    const fetchVendedores = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, nombre")
+        .eq("rol", "vendedor")
+        .eq("activo", true);
+
+      if (data) {
+        setVendedores(data.map(v => ({ id: v.user_id, nombre: v.nombre })));
+      }
+    };
+    fetchVendedores();
+  }, []);
+
+  // Lógica inteligente de filtros
+  const handleFilterChange = (key: keyof Filters, value: string) => {
+    setFilters(prev => {
+      const newFilters = { ...prev, [key]: value };
+      
+      // Si se selecciona fecha de visita, auto-ajustar estado a "Visitado"
+      if ((key === "visitadoDesde" || key === "visitadoHasta") && value) {
+        newFilters.estado = "Visitado";
+      }
+      
+      // Si se selecciona estado "Por visitar", limpiar filtros de fecha visita
+      if (key === "estado" && value === "Por visitar") {
+        newFilters.visitadoDesde = "";
+        newFilters.visitadoHasta = "";
+      }
+      
+      return newFilters;
+    });
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      asignadoDesde: "",
+      asignadoHasta: "",
+      visitadoDesde: "",
+      visitadoHasta: "",
+      vendedorId: "all",
+      estado: "all"
+    });
+  };
+
+  // Fetch data
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // Query base para asignaciones
+      let query = supabase
+        .from("asignaciones_vendedores_clientes")
+        .select(`
+          id,
+          estado,
+          created_at,
+          visited_at,
+          es_prospecto,
+          origen_asignacion,
+          vendedor_id,
+          client_id,
+          prospecto_place_id
+        `);
+
+      // Aplicar filtros de fecha de asignación
+      if (filters.asignadoDesde) {
+        query = query.gte("created_at", filters.asignadoDesde);
+      }
+      if (filters.asignadoHasta) {
+        query = query.lte("created_at", filters.asignadoHasta + "T23:59:59");
+      }
+
+      // Aplicar filtros de fecha de visita
+      if (filters.visitadoDesde) {
+        query = query.gte("visited_at", filters.visitadoDesde);
+      }
+      if (filters.visitadoHasta) {
+        query = query.lte("visited_at", filters.visitadoHasta + "T23:59:59");
+      }
+
+      // Aplicar filtro de vendedor
+      if (filters.vendedorId !== "all") {
+        query = query.eq("vendedor_id", filters.vendedorId);
+      }
+
+      // Aplicar filtro de estado
+      if (filters.estado !== "all") {
+        query = query.eq("estado", filters.estado as "Asignado" | "Por visitar" | "Visitado");
+      }
+
+      const { data: asignacionesData, error } = await query.order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      // Obtener datos de vendedores, clientes y prospectos
+      const vendedorIds = [...new Set(asignacionesData?.map(a => a.vendedor_id) || [])];
+      const clientIds = [...new Set(asignacionesData?.filter(a => a.client_id).map(a => a.client_id) || [])];
+      const prospectoPlaceIds = [...new Set(asignacionesData?.filter(a => a.prospecto_place_id).map(a => a.prospecto_place_id) || [])];
+
+      const [vendedoresRes, clientesRes, prospectosRes] = await Promise.all([
+        supabase.from("profiles").select("user_id, nombre, email").in("user_id", vendedorIds),
+        clientIds.length > 0 
+          ? supabase.from("clientes").select("client_id, razon_social, direccion_principal").in("client_id", clientIds)
+          : Promise.resolve({ data: [] as { client_id: string; razon_social: string | null; direccion_principal: string | null }[] }),
+        prospectoPlaceIds.length > 0 
+          ? supabase.from("prospectos").select("place_id, nombre, direccion").in("place_id", prospectoPlaceIds)
+          : Promise.resolve({ data: [] as { place_id: string; nombre: string; direccion: string }[] })
+      ]);
+
+      const vendedoresMap = new Map(vendedoresRes.data?.map(v => [v.user_id, v] as const) || []);
+      const clientesMap = new Map((clientesRes.data || []).map(c => [c.client_id, c] as const));
+      const prospectosMap = new Map((prospectosRes.data || []).map(p => [p.place_id, p] as const));
+
+      // Calcular estadísticas por vendedor
+      const statsMap = new Map<string, VendedorStats>();
+      
+      asignacionesData?.forEach(a => {
+        const vendedor = vendedoresMap.get(a.vendedor_id);
+        if (!vendedor) return;
+
+        if (!statsMap.has(a.vendedor_id)) {
+          statsMap.set(a.vendedor_id, {
+            vendedor_id: a.vendedor_id,
+            nombre: vendedor.nombre,
+            email: vendedor.email,
+            total: 0,
+            pendientes: 0,
+            visitadas: 0,
+            tasa: 0
+          });
+        }
+
+        const stats = statsMap.get(a.vendedor_id)!;
+        stats.total++;
+        if (a.estado === "Visitado") {
+          stats.visitadas++;
+        } else {
+          stats.pendientes++;
+        }
+      });
+
+      // Calcular tasas
+      statsMap.forEach(stats => {
+        stats.tasa = stats.total > 0 ? (stats.visitadas / stats.total) * 100 : 0;
+      });
+
+      setVendedorStats(Array.from(statsMap.values()).sort((a, b) => b.total - a.total));
+
+      // Mapear asignaciones con detalles
+      const detalleAsignaciones: AsignacionDetalle[] = (asignacionesData || []).map(a => {
+        const vendedor = vendedoresMap.get(a.vendedor_id);
+        let clienteNombre = "";
+        let direccion = "";
+
+        if (a.es_prospecto && a.prospecto_place_id) {
+          const prospecto = prospectosMap.get(a.prospecto_place_id);
+          clienteNombre = prospecto?.nombre || "Prospecto desconocido";
+          direccion = prospecto?.direccion || "";
+        } else if (a.client_id) {
+          const cliente = clientesMap.get(a.client_id);
+          clienteNombre = cliente?.razon_social || "Cliente desconocido";
+          direccion = cliente?.direccion_principal || "";
+        }
+
+        return {
+          id: a.id,
+          estado: a.estado,
+          created_at: a.created_at,
+          visited_at: a.visited_at,
+          es_prospecto: a.es_prospecto,
+          origen_asignacion: a.origen_asignacion,
+          vendedor_nombre: vendedor?.nombre || "Desconocido",
+          cliente_nombre: clienteNombre,
+          direccion
+        };
+      });
+
+      setAsignaciones(detalleAsignaciones.slice(0, 100)); // Limitar a 100 resultados
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudieron cargar los datos"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [filters]);
+
+  // KPIs globales
+  const kpis = useMemo(() => {
+    const total = vendedorStats.reduce((sum, v) => sum + v.total, 0);
+    const pendientes = vendedorStats.reduce((sum, v) => sum + v.pendientes, 0);
+    const visitadas = vendedorStats.reduce((sum, v) => sum + v.visitadas, 0);
+    const tasa = total > 0 ? (visitadas / total) * 100 : 0;
+    return { total, pendientes, visitadas, tasa };
+  }, [vendedorStats]);
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleDateString("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit"
+    });
+  };
+
+  // Determinar si los filtros de fecha de visita deben estar deshabilitados
+  const visitaFiltersDisabled = filters.estado === "Por visitar";
+
+  return (
+    <div className="min-h-screen bg-background p-4 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/")}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-foreground">
+                Supervisión de Vendedores
+              </h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Monitoreo de asignaciones y cumplimiento de visitas
+              </p>
+            </div>
+          </div>
+          <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
+        </div>
+
+        {/* Panel de Filtros */}
+        <Card className="matte-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Filter className="h-5 w-5" />
+              Filtros
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Fecha de Asignación */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Fecha Asignación (Desde)
+                </label>
+                <Input
+                  type="date"
+                  value={filters.asignadoDesde}
+                  onChange={(e) => handleFilterChange("asignadoDesde", e.target.value)}
+                  className="bg-card"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Fecha Asignación (Hasta)
+                </label>
+                <Input
+                  type="date"
+                  value={filters.asignadoHasta}
+                  onChange={(e) => handleFilterChange("asignadoHasta", e.target.value)}
+                  className="bg-card"
+                />
+              </div>
+
+              {/* Fecha de Visita */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Fecha Visita (Desde)
+                </label>
+                <Input
+                  type="date"
+                  value={filters.visitadoDesde}
+                  onChange={(e) => handleFilterChange("visitadoDesde", e.target.value)}
+                  className="bg-card"
+                  disabled={visitaFiltersDisabled}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Fecha Visita (Hasta)
+                </label>
+                <Input
+                  type="date"
+                  value={filters.visitadoHasta}
+                  onChange={(e) => handleFilterChange("visitadoHasta", e.target.value)}
+                  className="bg-card"
+                  disabled={visitaFiltersDisabled}
+                />
+              </div>
+
+              {/* Vendedor */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Vendedor
+                </label>
+                <Select
+                  value={filters.vendedorId}
+                  onValueChange={(value) => handleFilterChange("vendedorId", value)}
+                >
+                  <SelectTrigger className="bg-card">
+                    <SelectValue placeholder="Todos los vendedores" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los vendedores</SelectItem>
+                    {vendedores.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.nombre}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Estado */}
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Estado
+                </label>
+                <Select
+                  value={filters.estado}
+                  onValueChange={(value) => handleFilterChange("estado", value)}
+                >
+                  <SelectTrigger className="bg-card">
+                    <SelectValue placeholder="Todos los estados" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los estados</SelectItem>
+                    <SelectItem value="Asignado">Asignado</SelectItem>
+                    <SelectItem value="Por visitar">Por visitar</SelectItem>
+                    <SelectItem value="Visitado">Visitado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Botones */}
+              <div className="flex items-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={clearFilters}
+                  className="flex-1"
+                >
+                  Limpiar filtros
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={fetchData}
+                  disabled={loading}
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPIs Globales */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Asignadas</p>
+                  <p className="text-3xl font-bold text-foreground">{kpis.total}</p>
+                </div>
+                <Users className="h-8 w-8 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Pendientes</p>
+                  <p className="text-3xl font-bold text-amber-500">{kpis.pendientes}</p>
+                </div>
+                <Clock className="h-8 w-8 text-amber-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Visitadas</p>
+                  <p className="text-3xl font-bold text-emerald-500">{kpis.visitadas}</p>
+                </div>
+                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Tasa Cumplimiento</p>
+                  <p className="text-3xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Resumen por Vendedor */}
+        <Card className="matte-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="h-5 w-5" />
+              Resumen por Vendedor
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Vendedor</TableHead>
+                  <TableHead className="text-center">Asignadas</TableHead>
+                  <TableHead className="text-center">Pendientes</TableHead>
+                  <TableHead className="text-center">Visitadas</TableHead>
+                  <TableHead className="text-center">Tasa %</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {vendedorStats.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                      No hay datos para los filtros seleccionados
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  vendedorStats.map((stat) => (
+                    <TableRow
+                      key={stat.vendedor_id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleFilterChange("vendedorId", stat.vendedor_id)}
+                    >
+                      <TableCell className="font-medium">{stat.nombre}</TableCell>
+                      <TableCell className="text-center">{stat.total}</TableCell>
+                      <TableCell className="text-center text-amber-500">{stat.pendientes}</TableCell>
+                      <TableCell className="text-center text-emerald-500">{stat.visitadas}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant={stat.tasa >= 70 ? "default" : stat.tasa >= 40 ? "secondary" : "destructive"}>
+                          {stat.tasa.toFixed(1)}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        {/* Detalle de Asignaciones */}
+        <Card className="matte-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <CheckCircle2 className="h-5 w-5" />
+              Detalle de Asignaciones
+              <span className="text-sm font-normal text-muted-foreground">
+                (Mostrando {asignaciones.length} registros)
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Cliente/Prospecto</TableHead>
+                  <TableHead>Vendedor</TableHead>
+                  <TableHead className="text-center">F. Asignación</TableHead>
+                  <TableHead className="text-center">F. Visita</TableHead>
+                  <TableHead className="text-center">Estado</TableHead>
+                  <TableHead className="text-center">Origen</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {asignaciones.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                      No hay asignaciones para los filtros seleccionados
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  asignaciones.map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={a.es_prospecto ? "outline" : "secondary"} className="text-xs">
+                            {a.es_prospecto ? "P" : "C"}
+                          </Badge>
+                          <div>
+                            <p className="font-medium text-sm">{a.cliente_nombre}</p>
+                            <p className="text-xs text-muted-foreground truncate max-w-[200px]">{a.direccion}</p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm">{a.vendedor_nombre}</TableCell>
+                      <TableCell className="text-center text-sm">{formatDate(a.created_at)}</TableCell>
+                      <TableCell className="text-center text-sm">{formatDate(a.visited_at)}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge 
+                          variant={a.estado === "Visitado" ? "default" : a.estado === "Por visitar" ? "secondary" : "outline"}
+                          className={a.estado === "Visitado" ? "bg-emerald-500/20 text-emerald-500" : ""}
+                        >
+                          {a.estado === "Visitado" ? "✓" : a.estado === "Por visitar" ? "⏳" : "○"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge variant="outline" className="text-xs">
+                          {a.origen_asignacion === "auto" ? "Auto" : "Asig."}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default SupervisionVendedores;

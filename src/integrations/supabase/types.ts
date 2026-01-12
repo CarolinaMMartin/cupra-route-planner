@@ -157,6 +157,7 @@ export type Database = {
           origen_asignacion: string
           prospecto_place_id: string | null
           vendedor_id: string
+          visited_at: string | null
         }
         Insert: {
           client_id?: string | null
@@ -167,6 +168,7 @@ export type Database = {
           origen_asignacion?: string
           prospecto_place_id?: string | null
           vendedor_id: string
+          visited_at?: string | null
         }
         Update: {
           client_id?: string | null
@@ -177,6 +179,7 @@ export type Database = {
           origen_asignacion?: string
           prospecto_place_id?: string | null
           vendedor_id?: string
+          visited_at?: string | null
         }
         Relationships: [
           {
