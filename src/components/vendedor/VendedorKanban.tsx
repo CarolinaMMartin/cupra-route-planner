@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getGoogleMapsUrl } from "@/lib/utils";
-import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus } from "lucide-react";
+import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -30,6 +30,7 @@ import { Label } from "@/components/ui/label";
 import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
 import AgregarProspectoForm from "./AgregarProspectoForm";
+import AutoAsignarDialog from "./AutoAsignarDialog";
 
 export interface ClienteAsignado {
   id: string;
@@ -124,6 +125,7 @@ const VendedorKanban = () => {
   const [tipoInteraccion, setTipoInteraccion] = useState("");
   const [actualizarEtiquetaWa, setActualizarEtiquetaWa] = useState("");
   const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
+  const [showAutoAsignar, setShowAutoAsignar] = useState(false);
   const { toast } = useToast();
 
   const sensors = useSensors(
@@ -823,6 +825,14 @@ const VendedorKanban = () => {
         <div className="flex gap-2">
           <Button
             variant="outline"
+            onClick={() => setShowAutoAsignar(true)}
+            className="gap-2"
+          >
+            <UserPlus className="w-4 h-4" />
+            Auto-asignar
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => setShowAgregarProspecto(true)}
             className="gap-2"
           >
@@ -1331,6 +1341,13 @@ const VendedorKanban = () => {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Dialog para auto-asignar cliente/prospecto */}
+      <AutoAsignarDialog
+        open={showAutoAsignar}
+        onOpenChange={setShowAutoAsignar}
+        onSuccess={fetchAsignaciones}
+      />
     </div>
   );
 };
