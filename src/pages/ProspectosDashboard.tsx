@@ -18,6 +18,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { MultiSelect } from "@/components/ui/multi-select";
@@ -464,40 +465,34 @@ const ProspectosDashboard = () => {
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Comuna
                 </label>
-                <Select 
-                  value={selectedComuna} 
+                <SearchableSelect
+                  options={[
+                    { label: "Todas", value: "all" },
+                    ...comunas.map(c => ({ label: `Comuna ${c}`, value: c }))
+                  ]}
+                  value={selectedComuna}
                   onValueChange={handleComunaChange}
-                >
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Todas" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
-                    <SelectItem value="all">Todas</SelectItem>
-                    {comunas.map(c => (
-                      <SelectItem key={c} value={c}>Comuna {c}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Seleccionar comuna"
+                  searchPlaceholder="Buscar comuna..."
+                  emptyMessage="No se encontró la comuna"
+                />
               </div>
 
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Barrio
                 </label>
-                <Select 
-                  value={selectedBarrio} 
+                <SearchableSelect
+                  options={[
+                    { label: "Todos", value: "all" },
+                    ...barrios.map(b => ({ label: b, value: b }))
+                  ]}
+                  value={selectedBarrio}
                   onValueChange={(v) => { setSelectedBarrio(v); setCurrentPage(1); }}
-                >
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
-                    <SelectItem value="all">Todos</SelectItem>
-                    {barrios.map(b => (
-                      <SelectItem key={b} value={b}>{b}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Seleccionar barrio"
+                  searchPlaceholder="Buscar barrio..."
+                  emptyMessage="No se encontró el barrio"
+                />
               </div>
 
               <div className="space-y-2">
