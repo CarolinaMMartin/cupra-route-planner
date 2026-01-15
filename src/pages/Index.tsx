@@ -93,10 +93,6 @@ const Index = () => {
           <div className="flex justify-between items-center py-5">
             <div className="flex items-center gap-4">
               <img src={cupraLogo} alt="Cupra Wines" className="h-16 w-auto" />
-              <div className="h-8 w-px bg-border/50" />
-              <div>
-                <p className="text-xs tracking-widest uppercase text-muted-foreground font-light">Sales Planner</p>
-              </div>
             </div>
 
             <div className="flex items-center gap-5">
