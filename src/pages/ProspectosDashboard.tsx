@@ -133,16 +133,35 @@ const ProspectosDashboard = () => {
   };
 
   const fetchProspectosData = async () => {
-    const { data: prospectos, error } = await supabase
-      .from('prospectos')
-      .select('*');
+    const pageSize = 1000;
+    let allProspectos: Prospecto[] = [];
+    let page = 0;
+    let hasMore = true;
 
-    if (error) {
-      console.error('Error fetching prospectos:', error);
-      return;
+    while (hasMore) {
+      const from = page * pageSize;
+      const to = from + pageSize - 1;
+
+      const { data: prospectos, error } = await supabase
+        .from('prospectos')
+        .select('*')
+        .range(from, to);
+
+      if (error) {
+        console.error('Error fetching prospectos:', error);
+        return;
+      }
+
+      if (prospectos && prospectos.length > 0) {
+        allProspectos = [...allProspectos, ...prospectos];
+        hasMore = prospectos.length === pageSize;
+        page++;
+      } else {
+        hasMore = false;
+      }
     }
-    
-    setProspectosData(prospectos || []);
+
+    setProspectosData(allProspectos);
   };
 
   // Opciones únicas para filtros
