@@ -92,7 +92,7 @@ const Index = () => {
         <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
           <div className="flex justify-between items-center py-5">
             <div className="flex items-center gap-4">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-16 w-auto" />
+              <h1 className="text-xl font-semibold tracking-wide">Cupra Wines</h1>
             </div>
 
             <div className="flex items-center gap-5">
