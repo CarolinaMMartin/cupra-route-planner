@@ -204,7 +204,6 @@ const ProspectosDashboard = () => {
     const uniqueTipos = new Set<string>();
     prospectosData.forEach(p => {
       if (p.tipo_principal) uniqueTipos.add(p.tipo_principal);
-      if (p.tipos) p.tipos.forEach(t => uniqueTipos.add(t));
     });
     return Array.from(uniqueTipos).sort();
   }, [prospectosData]);
@@ -224,7 +223,7 @@ const ProspectosDashboard = () => {
       const matchComuna = selectedComuna === "all" || p.comuna === selectedComuna;
       const matchBarrio = selectedBarrio === "all" || p.barrio === selectedBarrio;
       const matchTipos = selectedTipos.length === 0 || 
-        selectedTipos.some(t => p.tipo_principal === t || (p.tipos && p.tipos.includes(t)));
+        selectedTipos.some(t => p.tipo_principal === t);
       const matchNivelPrecio = selectedNivelPrecio === "all" || p.nivel_precio === selectedNivelPrecio;
       const matchRating = (p.rating || 0) >= minRating;
       const matchSearch = searchTerm === "" || 
