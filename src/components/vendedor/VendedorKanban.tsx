@@ -144,39 +144,6 @@ const VendedorKanban = forwardRef<VendedorKanbanRef>((_, ref) => {
     })
   );
 
-  // Exponer función para enfocar una asignación desde notificaciones
-  useImperativeHandle(ref, () => ({
-    focusAssignment: (assignmentId: string) => {
-      // Buscar la asignación en todas las columnas
-      for (const [_, clientes] of Object.entries(assignments)) {
-        const found = clientes.find(c => c.id === assignmentId);
-        if (found) {
-          // Abrir el diálogo de información del cliente
-          handleCardClick(found);
-          
-          // Scroll al elemento si está visible
-          setTimeout(() => {
-            const element = document.getElementById(`assignment-${assignmentId}`);
-            if (element) {
-              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              element.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
-              setTimeout(() => {
-                element.classList.remove('ring-2', 'ring-primary', 'ring-offset-2');
-              }, 2000);
-            }
-          }, 100);
-          return;
-        }
-      }
-      
-      toast({
-        variant: "destructive",
-        title: "Asignación no encontrada",
-        description: "La asignación puede haber sido completada o eliminada.",
-      });
-    }
-  }));
-
   useEffect(() => {
     fetchAsignaciones();
   }, []);
@@ -489,6 +456,39 @@ const VendedorKanban = forwardRef<VendedorKanbanRef>((_, ref) => {
       console.error('Error fetching feedback:', error);
     }
   };
+
+  // Exponer función para enfocar una asignación desde notificaciones
+  useImperativeHandle(ref, () => ({
+    focusAssignment: (assignmentId: string) => {
+      // Buscar la asignación en todas las columnas
+      for (const [_, clientes] of Object.entries(assignments)) {
+        const found = clientes.find(c => c.id === assignmentId);
+        if (found) {
+          // Abrir el diálogo de información del cliente
+          handleCardClick(found);
+          
+          // Scroll al elemento si está visible
+          setTimeout(() => {
+            const element = document.getElementById(`assignment-${assignmentId}`);
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              element.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+              setTimeout(() => {
+                element.classList.remove('ring-2', 'ring-primary', 'ring-offset-2');
+              }, 2000);
+            }
+          }, 100);
+          return;
+        }
+      }
+      
+      toast({
+        variant: "destructive",
+        title: "Asignación no encontrada",
+        description: "La asignación puede haber sido completada o eliminada.",
+      });
+    }
+  }), [assignments, toast]);
 
   const handleSaveFeedback = async () => {
     if (!selectedCliente || !feedback.trim()) {
