@@ -718,6 +718,28 @@ export default function AreasManager() {
                               ))
                             )}
                           </div>
+
+                          {/* Agregar Nuevos Barrios */}
+                          <div className="mt-4 pt-4 border-t">
+                            <Label className="text-sm font-medium mb-2 block">
+                              Agregar Barrios
+                            </Label>
+                            <MultiSelect
+                              options={allPlaces
+                                .filter((p) => !area.places.some((ap) => ap.id === p.id))
+                                .map((p) => ({
+                                  label: `${p.barrio_principal || "Sin nombre"}${p.comuna ? ` - ${p.comuna}` : ""}${p.provincia_principal ? ` (${p.provincia_principal})` : ""}`,
+                                  value: p.id,
+                                }))}
+                              selected={[]}
+                              onChange={(selected) => {
+                                selected.forEach((placeId) => {
+                                  handleAddPlaceToArea(placeId, area.id);
+                                });
+                              }}
+                              placeholder="Buscar y agregar barrios..."
+                            />
+                          </div>
                         </div>
 
                         {/* Comentarios */}
