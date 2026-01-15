@@ -6,6 +6,7 @@ import { LogOut, User, UserCog, BarChart3, Layers, ClipboardList } from "lucide-
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import VendedorKanban from "@/components/vendedor/VendedorKanban";
+import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
@@ -163,6 +164,9 @@ const Index = () => {
                 </p>
                 <p className="text-xs text-muted-foreground capitalize tracking-wider">{profile.rol}</p>
               </div>
+              {profile.rol === 'vendedor' && (
+                <NotificacionesPanel />
+              )}
               <div className="h-8 w-px bg-border/50" />
               <Button
                 variant="ghost"
