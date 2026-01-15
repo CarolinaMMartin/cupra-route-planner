@@ -17,6 +17,15 @@ export interface GeocodingResponse {
   location_type?: string;
   error_code?: string;
   message?: string;
+  // Campos enriquecidos del webhook
+  barrio?: string | null;
+  comuna?: string | null;
+  ciudad?: string | null;
+  provincia?: string | null;
+  postal_code?: string | null;
+  admin_area_level_2?: string | null;
+  barrio_fallback_admin2?: string | null;
+  place_id?: string; // Google place_id (diferente al manual)
 }
 
 // URL del webhook de n8n para geocodificación
