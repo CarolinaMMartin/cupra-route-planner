@@ -54,6 +54,24 @@ interface Prospecto {
   longitud: number;
 }
 
+// Helper functions (defined before component to avoid hoisting issues)
+const formatTipoNegocio = (tipo: string) => {
+  return tipo
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, l => l.toUpperCase());
+};
+
+const formatNivelPrecio = (nivel: string | null) => {
+  if (!nivel) return "-";
+  const map: Record<string, string> = {
+    "PRICE_LEVEL_INEXPENSIVE": "$ Económico",
+    "PRICE_LEVEL_MODERATE": "$$ Moderado",
+    "PRICE_LEVEL_EXPENSIVE": "$$$ Caro",
+    "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$ Muy Caro",
+  };
+  return map[nivel] || nivel;
+};
+
 const ProspectosDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -303,22 +321,6 @@ const ProspectosDashboard = () => {
     setCurrentPage(1);
   };
 
-  const formatTipoNegocio = (tipo: string) => {
-    return tipo
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, l => l.toUpperCase());
-  };
-
-  const formatNivelPrecio = (nivel: string | null) => {
-    if (!nivel) return "-";
-    const map: Record<string, string> = {
-      "PRICE_LEVEL_INEXPENSIVE": "$ Económico",
-      "PRICE_LEVEL_MODERATE": "$$ Moderado",
-      "PRICE_LEVEL_EXPENSIVE": "$$$ Caro",
-      "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$ Muy Caro",
-    };
-    return map[nivel] || nivel;
-  };
 
   const handleExportCSV = () => {
     const headers = ["Nombre", "Tipo", "Barrio", "Ciudad", "Provincia", "Rating", "Nivel Precio", "Teléfono", "Website"];
