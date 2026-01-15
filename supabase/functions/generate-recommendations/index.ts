@@ -166,28 +166,67 @@ Deno.serve(async (req) => {
 
     console.log(`✅ Vendedores cargados: ${vendedoresData.length}`);
 
-    // 3. Cargar clientes de la tabla clientes
-    // Calcular fecha límite de 15 días para rotación
+    // 3. NUEVO FLUJO: Primero geografía desde client_places, luego datos de clientes
+    // Calcular fecha límite de 15 días para rotación (PRIORIZACIÓN, no exclusión)
     const quinceDiasAtras = new Date();
     quinceDiasAtras.setDate(quinceDiasAtras.getDate() - 15);
     const quinceDiasAtrasISO = quinceDiasAtras.toISOString();
     const quinceDiasAtrasDate = quinceDiasAtrasISO.split('T')[0]; // Solo fecha para ventas
 
-    let clientesQuery = supabaseClient
-      .from("clientes")
+    console.log(`📍 Zona seleccionada: ${barriosFinales.length > 0 ? barriosFinales.join(", ") : comunasFinales.length > 0 ? comunasFinales.join(", ") : provincia || "Todas"}`);
+
+    // PASO 1: Cargar ubicaciones de client_places con filtros geográficos PRIMERO
+    let placesQuery = supabaseClient
+      .from("client_places")
       .select("*")
-      .not("monto_total_historico", "is", null)
-      .or("excluir_recomendaciones.is.null,excluir_recomendaciones.eq.false") // Filtrar clientes excluidos
-      .or(`last_recommendation_at.is.null,last_recommendation_at.lt.${quinceDiasAtrasISO}`) // Filtrar recomendados en últimos 15 días
-      .order("monto_total_historico", { ascending: false })
-      .limit(200);
+      .eq("is_primary", true);
 
-    let { data: clientes, error: clientesError } = await clientesQuery;
-    if (clientesError) throw clientesError;
+    // Aplicar filtros geográficos a client_places
+    if (provincia && provincia !== "all") {
+      placesQuery = placesQuery.ilike("provincia_principal", `%${provincia}%`);
+    }
+    if (comunasFinales.length > 0) {
+      const comunasConditions = comunasFinales.map((c: string) => `comuna.ilike.%${c}%`).join(",");
+      placesQuery = placesQuery.or(comunasConditions);
+    }
+    if (barriosFinales.length > 0) {
+      const barriosConditions = barriosFinales.map((b: string) => `barrio_principal.ilike.%${b}%`).join(",");
+      placesQuery = placesQuery.or(barriosConditions);
+    }
 
-    console.log(`📊 Clientes después de filtro de rotación (15 días): ${clientes?.length || 0}`);
+    const { data: clientPlaces, error: placesError } = await placesQuery;
+    if (placesError) throw placesError;
 
-    // 3a. Cargar client_ids con ventas en últimos 15 días para excluirlos
+    console.log(`📍 Ubicaciones en zona geográfica: ${clientPlaces?.length || 0}`);
+
+    // Obtener client_ids de la zona
+    const clientIdsEnZona = clientPlaces?.map(p => p.client_id) || [];
+
+    // Crear mapa de places para uso posterior
+    const placesMap = new Map();
+    clientPlaces?.forEach((place) => {
+      placesMap.set(place.client_id, place);
+    });
+
+    // PASO 2: Cargar datos de clientes SIN filtro de rotación (rotación es priorización)
+    let clientes: any[] = [];
+    if (clientIdsEnZona.length > 0) {
+      const { data: clientesData, error: clientesError } = await supabaseClient
+        .from("clientes")
+        .select("*")
+        .in("client_id", clientIdsEnZona)
+        .not("monto_total_historico", "is", null)
+        .or("excluir_recomendaciones.is.null,excluir_recomendaciones.eq.false")
+        .order("monto_total_historico", { ascending: false })
+        .limit(300);
+
+      if (clientesError) throw clientesError;
+      clientes = clientesData || [];
+    }
+
+    console.log(`👥 Clientes en zona (total): ${clientes.length}`);
+
+    // PASO 3: Cargar client_ids con ventas en últimos 15 días para excluirlos
     const { data: ventasRecientes, error: ventasError } = await supabaseClient
       .from("ventas_cupra")
       .select("client_id")
@@ -197,21 +236,38 @@ Deno.serve(async (req) => {
       console.error("⚠️ Error cargando ventas recientes:", ventasError);
     }
 
-    // Crear set de client_ids con ventas recientes para excluir
     const clientsConVentasRecientes = new Set(
       ventasRecientes?.map(v => v.client_id).filter(Boolean) || []
     );
 
     console.log(`💰 Clientes con ventas en últimos 15 días: ${clientsConVentasRecientes.size}`);
 
-    // Filtrar clientes que tienen ventas recientes
-    if (clientes && clientsConVentasRecientes.size > 0) {
+    // Filtrar clientes que tienen ventas recientes (estos sí se excluyen)
+    if (clientes.length > 0 && clientsConVentasRecientes.size > 0) {
       const clientesAntes = clientes.length;
       clientes = clientes.filter(c => !clientsConVentasRecientes.has(c.client_id));
-      console.log(`📊 Clientes después de filtrar ventas recientes: ${clientes.length} (excluidos: ${clientesAntes - clientes.length})`)
+      console.log(`📊 Clientes después de filtrar ventas recientes: ${clientes.length} (excluidos: ${clientesAntes - clientes.length})`);
     }
 
-    // 3b. Cargar prospectos nuevos (últimos 30 días)
+    // PASO 4: Separar clientes por rotación para PRIORIZACIÓN (no exclusión)
+    const clientesNoRecomendadosReciente = clientes.filter(c => 
+      !c.last_recommendation_at || 
+      new Date(c.last_recommendation_at) < quinceDiasAtras
+    );
+
+    const clientesRecomendadosReciente = clientes.filter(c => 
+      c.last_recommendation_at && 
+      new Date(c.last_recommendation_at) >= quinceDiasAtras
+    );
+
+    console.log(`✅ Sin recomendación reciente (prioridad alta): ${clientesNoRecomendadosReciente.length}`);
+    console.log(`⚠️ Recomendados recientemente (prioridad baja): ${clientesRecomendadosReciente.length}`);
+
+    // Combinar: primero los no recomendados recientemente, luego los recientes
+    // Esto permite priorizar sin excluir
+    clientes = [...clientesNoRecomendadosReciente, ...clientesRecomendadosReciente];
+
+    // PASO 5: Cargar prospectos nuevos (últimos 30 días) con misma lógica
     const treintaDiasAtras = new Date();
     treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30);
 
@@ -219,7 +275,6 @@ Deno.serve(async (req) => {
       .from("prospectos")
       .select("*")
       .gte("created_at", treintaDiasAtras.toISOString())
-      .or(`last_recommendation_at.is.null,last_recommendation_at.lt.${quinceDiasAtrasISO}`) // Filtrar recomendados en últimos 15 días
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -236,18 +291,37 @@ Deno.serve(async (req) => {
       prospectosQuery = prospectosQuery.or(barriosConditions);
     }
 
-    let { data: prospectos, error: prospectosError } = await prospectosQuery;
+    let { data: prospectosData, error: prospectosError } = await prospectosQuery;
     if (prospectosError) throw prospectosError;
 
-    console.log(`🆕 Prospectos nuevos cargados: ${prospectos?.length || 0}`);
+    let prospectos = prospectosData || [];
+    console.log(`🆕 Prospectos en zona: ${prospectos.length}`);
 
-    if ((!clientes || clientes.length === 0) && (!prospectos || prospectos.length === 0)) {
+    // Separar prospectos por rotación para priorización
+    const prospectosNoRecomendadosReciente = prospectos.filter(p => 
+      !p.last_recommendation_at || 
+      new Date(p.last_recommendation_at) < quinceDiasAtras
+    );
+
+    const prospectosRecomendadosReciente = prospectos.filter(p => 
+      p.last_recommendation_at && 
+      new Date(p.last_recommendation_at) >= quinceDiasAtras
+    );
+
+    console.log(`✅ Prospectos sin recomendación reciente: ${prospectosNoRecomendadosReciente.length}`);
+    console.log(`⚠️ Prospectos recomendados recientemente: ${prospectosRecomendadosReciente.length}`);
+
+    // Combinar prospectos priorizados
+    prospectos = [...prospectosNoRecomendadosReciente, ...prospectosRecomendadosReciente];
+
+    // PASO 6: Verificar si hay datos para procesar
+    if (clientes.length === 0 && prospectos.length === 0) {
       return new Response(
         JSON.stringify({
           recomendaciones: [],
           resumen: {
             total_recomendaciones: 0,
-            descripcion: "No se encontraron clientes ni prospectos",
+            descripcion: "No se encontraron clientes ni prospectos en la zona seleccionada",
             distribucion_por_vendedor: {},
             zonas_priorizadas: [],
           },
@@ -256,10 +330,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    clientes = clientes || [];
-    prospectos = prospectos || [];
-
-    // 4. Cargar feedback de vendedores (tanto de clientes como de prospectos)
+    // PASO 7: Cargar feedback de vendedores
     const { data: feedbacks, error: feedbacksError } = await supabaseClient
       .from("cliente_feedbacks")
       .select(
@@ -277,14 +348,12 @@ Deno.serve(async (req) => {
     const feedbacksMapClientes = new Map();
     const feedbacksMapProspectos = new Map();
     feedbacks?.forEach((fb) => {
-      // Feedbacks de clientes
       if (fb.client_id) {
         if (!feedbacksMapClientes.has(fb.client_id)) {
           feedbacksMapClientes.set(fb.client_id, []);
         }
         feedbacksMapClientes.get(fb.client_id).push(fb);
       }
-      // Feedbacks de prospectos
       if (fb.prospecto_place_id) {
         if (!feedbacksMapProspectos.has(fb.prospecto_place_id)) {
           feedbacksMapProspectos.set(fb.prospecto_place_id, []);
@@ -296,7 +365,7 @@ Deno.serve(async (req) => {
     console.log(`📝 Feedbacks de clientes mapeados: ${feedbacksMapClientes.size}`);
     console.log(`📝 Feedbacks de prospectos mapeados: ${feedbacksMapProspectos.size}`);
 
-    // 5. Cargar contexto adicional si hay instrucciones específicas
+    // PASO 8: Cargar contexto adicional si hay instrucciones específicas
     let contextoDatos: {
       productos_disponibles?: string[];
       marcas_disponibles?: string[];
@@ -306,7 +375,6 @@ Deno.serve(async (req) => {
     if (instrucciones_adicionales) {
       console.log("🔍 Analizando instrucciones adicionales para obtener contexto...");
 
-      // Obtener productos únicos
       const { data: ventasData } = await supabaseClient
         .from("ventas_cupra")
         .select("nombre, marca, codigo_producto")
@@ -319,7 +387,6 @@ Deno.serve(async (req) => {
         if (v.marca) marcasUnicas.add(v.marca);
       });
 
-      // Obtener etiquetas únicas de clientes
       const { data: clientesEtiquetas } = await supabaseClient
         .from("clientes")
         .select("etiquetas, productos_comprados")
@@ -346,70 +413,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 6. Cargar ubicaciones de client_places
-    const clientIds = clientes.map((c) => c.client_id);
-    let placesQuery = supabaseClient
-      .from("client_places")
-      .select("*")
-      .eq("is_primary", true)
-      .in("client_id", clientIds);
-
-    // Aplicar filtros de provincia
-    if (provincia && provincia !== "all") {
-      placesQuery = placesQuery.ilike("provincia_principal", `%${provincia}%`);
-    }
-
-    // Aplicar filtros de comunas
-    if (comunasFinales.length > 0) {
-      const comunasConditions = comunasFinales.map((c: string) => `comuna.ilike.%${c}%`).join(",");
-      placesQuery = placesQuery.or(comunasConditions);
-    }
-
-    // Aplicar filtros de barrios
-    if (barriosFinales.length > 0) {
-      const barriosConditions = barriosFinales.map((b: string) => `barrio_principal.ilike.%${b}%`).join(",");
-      placesQuery = placesQuery.or(barriosConditions);
-    }
-
-    const { data: clientPlaces, error: placesError } = await placesQuery;
-    if (placesError) throw placesError;
-
-    console.log(`📍 Ubicaciones cargadas: ${clientPlaces?.length || 0}`);
-
-    // 5. Mapear places a clientes
-    const placesMap = new Map();
-    clientPlaces?.forEach((place) => {
-      placesMap.set(place.client_id, place);
-    });
-
-    // Incluir clientes con ubicación en client_places O con datos geográficos en la tabla clientes
-    // Priorizar clientes con ubicación verificada, pero incluir también los demás
-    const clientesConUbicacion = clientes.filter((c) => placesMap.has(c.client_id));
-    const clientesSinUbicacionVerificada = clientes.filter((c) => 
-      !placesMap.has(c.client_id) && 
-      (c.barrio_principal || c.ciudad_principal)
-    );
-    
-    // Combinar: primero los que tienen ubicación verificada, luego los demás
-    clientes = [...clientesConUbicacion, ...clientesSinUbicacionVerificada];
-    console.log(`✅ Clientes con ubicación verificada: ${clientesConUbicacion.length}`);
-    console.log(`📍 Clientes con datos geográficos: ${clientesSinUbicacionVerificada.length}`);
-    console.log(`📊 Total clientes disponibles: ${clientes.length}`);
-
-    if (!clientes || clientes.length === 0) {
-      return new Response(
-        JSON.stringify({
-          recomendaciones: [],
-          resumen: {
-            total_recomendaciones: 0,
-            descripcion: "No se encontraron clientes con los filtros aplicados",
-            distribucion_por_vendedor: {},
-            zonas_priorizadas: [],
-          },
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    // Log final de resumen antes de enviar a IA
+    console.log(`📊 RESUMEN FINAL:`);
+    console.log(`   - Clientes disponibles para IA: ${clientes.length}`);
+    console.log(`   - Prospectos disponibles para IA: ${prospectos.length}`);
+    console.log(`   - Total candidatos: ${clientes.length + prospectos.length}`);
 
     // 4. Preparar contexto para la IA
     const vendedoresContext =
@@ -420,10 +428,13 @@ Deno.serve(async (req) => {
       })) || [];
 
     // Tomar MÁS clientes que prospectos para priorizar clientes existentes
-    // Límite: 80 clientes y 20 prospectos para balance correcto
-    const clientesContext = clientes.slice(0, 80).map((c) => {
+    // Límite: 80 clientes y 30 prospectos para completar si no hay suficientes clientes
+    const clientesContext = clientes.slice(0, 80).map((c, index) => {
       const place = placesMap.get(c.client_id);
       const clientFeedbacks = feedbacksMapClientes.get(c.client_id) || [];
+      
+      // Marcar prioridad basada en posición (los primeros son los no recomendados recientemente)
+      const esPrioridadAlta = index < clientesNoRecomendadosReciente.length;
 
       return {
         client_id: c.client_id,
@@ -443,6 +454,7 @@ Deno.serve(async (req) => {
         long: place?.long,
         direccion: place?.direccion_principal,
         es_prospecto: false,
+        prioridad_rotacion: esPrioridadAlta ? "alta" : "baja", // Indicar prioridad por rotación
         feedbacks_recientes: clientFeedbacks.slice(0, 3).map((fb: any) => ({
           visita_realizada: fb.visita_realizada,
           feedback: fb.feedback,
@@ -453,17 +465,19 @@ Deno.serve(async (req) => {
       };
     });
 
-    // Agregar menos prospectos al contexto (máximo 20 para complementar)
-    const prospectosContext = prospectos.slice(0, 20).map((p) => {
+    // Agregar más prospectos al contexto (hasta 30 para completar si faltan clientes)
+    const prospectosContext = prospectos.slice(0, 30).map((p, index) => {
       const prospectoFeedbacks = feedbacksMapProspectos.get(p.place_id) || [];
+      
+      // Marcar prioridad basada en posición
+      const esPrioridadAlta = index < prospectosNoRecomendadosReciente.length;
 
-      // Debug: loggear cuando un prospecto tiene feedbacks
       if (prospectoFeedbacks.length > 0) {
         console.log(`🎯 Prospecto con feedback: ${p.nombre} (${p.place_id}) - ${prospectoFeedbacks.length} feedbacks`);
       }
 
       return {
-        client_id: p.place_id, // Usar place_id como identificador
+        client_id: p.place_id,
         razon_social: p.nombre,
         categoria_volumen: "NUEVO",
         categoria_recencia: "NUEVO",
@@ -480,6 +494,7 @@ Deno.serve(async (req) => {
         long: p.longitud,
         direccion: p.direccion,
         es_prospecto: true,
+        prioridad_rotacion: esPrioridadAlta ? "alta" : "baja",
         tipo_negocio: p.tipo_principal,
         rating: p.rating,
         website: p.website,
@@ -496,6 +511,10 @@ Deno.serve(async (req) => {
 
     const todosContext = [...clientesContext, ...prospectosContext];
 
+    // Contar clientes y prospectos con prioridad alta para informar a la IA
+    const clientesPrioridadAlta = clientesContext.filter(c => c.prioridad_rotacion === "alta").length;
+    const prospectosPrioridadAlta = prospectosContext.filter(p => p.prioridad_rotacion === "alta").length;
+
     const prompt = `
 VENDEDORES DISPONIBLES (${vendedoresContext.length} vendedores):
 ${JSON.stringify(vendedoresContext, null, 2)}
@@ -504,11 +523,13 @@ ${JSON.stringify(vendedoresContext, null, 2)}
 Total esperado: ${vendedoresContext.length * 8} recomendaciones (${vendedoresContext.length} vendedores x 8 recomendaciones)
 
 CLIENTES EXISTENTES (es_prospecto: false) - PRIORIDAD ALTA:
-⚠️ Debes seleccionar 6 clientes existentes por vendedor (o menos si no hay suficientes, completando con prospectos)
+Total disponibles: ${clientesContext.length} clientes (${clientesPrioridadAlta} con prioridad_rotacion: "alta")
+⚠️ Debes seleccionar hasta 6 clientes existentes por vendedor. Si hay menos de 6, usa todos los disponibles.
 ${JSON.stringify(clientesContext, null, 2)}
 
 PROSPECTOS NUEVOS (es_prospecto: true) - PARA COMPLETAR:
-⚠️ Debes seleccionar 2 prospectos por vendedor (o más si no hay suficientes clientes existentes)
+Total disponibles: ${prospectosContext.length} prospectos (${prospectosPrioridadAlta} con prioridad_rotacion: "alta")
+⚠️ Usa prospectos para completar hasta llegar a 8 recomendaciones por vendedor.
 ${JSON.stringify(prospectosContext, null, 2)}
 
 FILTROS APLICADOS:
@@ -517,9 +538,15 @@ FILTROS APLICADOS:
 - Barrios: ${barriosFinales.length > 0 ? barriosFinales.join(", ") : "Todos"}
 
 DISTRIBUCIÓN OBLIGATORIA POR VENDEDOR:
-- 6 clientes existentes (es_prospecto: false) + 2 prospectos (es_prospecto: true) = 8 total
-- Si hay menos de 6 clientes disponibles, completa hasta 8 con más prospectos
+- IDEAL: 6 clientes existentes + 2 prospectos = 8 total
+- SI HAY POCOS CLIENTES: Usa todos los clientes disponibles y completa con más prospectos hasta 8
+- EJEMPLO: Si solo hay 3 clientes disponibles → 3 clientes + 5 prospectos = 8 total
 - TODOS los vendedores deben tener EXACTAMENTE 8 recomendaciones
+
+PRIORIZACIÓN POR ROTACIÓN:
+- Los registros con "prioridad_rotacion": "alta" NO fueron recomendados en los últimos 15 días
+- Los registros con "prioridad_rotacion": "baja" fueron recomendados recientemente
+- PRIORIZA siempre los de prioridad "alta", pero usa los de prioridad "baja" si es necesario para completar
 
 CRITERIO CLAVE: Selecciona clientes y prospectos que estén GEOGRÁFICAMENTE CERCANOS entre sí para optimizar la ruta del vendedor.
 
