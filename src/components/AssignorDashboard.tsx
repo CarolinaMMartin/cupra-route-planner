@@ -39,8 +39,8 @@ const AssignorDashboard = () => {
     setRecommendations,
     selectedSucursales,
     setSelectedSucursales,
-    toggleSucursal,
-    toggleAllSucursales,
+    toggleSucursal: toggleSucursalStore,
+    toggleAllSucursales: toggleAllSucursalesStore,
     isLoading,
     setIsLoading,
     aiInsights,
@@ -489,15 +489,15 @@ const AssignorDashboard = () => {
                 <PreselectionStep
                   recommendations={filteredRecommendations}
                   selectedIds={selectedSucursales}
-                  onToggle={toggleSucursal}
-                  onToggleAll={toggleAllSucursales}
+                  onToggle={toggleSucursalStore}
+                  onToggleAll={toggleAllSucursalesStore}
                   onContinue={handleContinueToAssignment}
                 />
               ) : (
                 <ResultsMap
                   sucursales={filteredRecommendations}
                   selectedIds={selectedSucursales}
-                  onToggle={toggleSucursal}
+                  onToggle={toggleSucursalStore}
                   onContinue={handleContinueToAssignment}
                 />
               )}
