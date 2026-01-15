@@ -114,7 +114,7 @@ interface ClienteInfo {
   ultimo_feedback?: string;
 }
 
-const VendedorKanban = forwardRef<VendedorKanbanRef>((_, ref) => {
+const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKanban(_props, ref) {
   const [viewMode, setViewMode] = useState<'kanban' | 'map'>('kanban');
   const [assignments, setAssignments] = useState<Record<string, ClienteAsignado[]>>({
     'Por visitar': [],
@@ -1502,6 +1502,6 @@ const VendedorKanban = forwardRef<VendedorKanbanRef>((_, ref) => {
   );
 });
 
-VendedorKanban.displayName = 'VendedorKanban';
+
 
 export default VendedorKanban;
