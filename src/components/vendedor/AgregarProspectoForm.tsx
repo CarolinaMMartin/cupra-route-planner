@@ -34,6 +34,8 @@ interface FormData {
   ciudad: string;
   provincia: string;
   telefono: string;
+  email: string;
+  instagram: string;
 }
 
 const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps) => {
@@ -45,6 +47,8 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
     ciudad: "",
     provincia: "",
     telefono: "",
+    email: "",
+    instagram: "",
   });
   const [geocodeResult, setGeocodeResult] = useState<GeocodingResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
@@ -138,6 +142,8 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
           latitud: geocodeResult.lat,
           longitud: geocodeResult.lng,
           telefono: formData.telefono.trim() || null,
+          email: formData.email.trim() || null,
+          instagram: formData.instagram.trim() || null,
           tipo_principal: "Manual",
           es_cliente_cupra: false,
         });
@@ -322,6 +328,29 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
           placeholder="Ej: 11 1234-5678"
           value={formData.telefono}
           onChange={(e) => handleInputChange("telefono", e.target.value)}
+          className="bg-input border-border"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="email">Email</Label>
+        <Input
+          id="email"
+          type="email"
+          placeholder="Ej: contacto@restaurante.com"
+          value={formData.email}
+          onChange={(e) => handleInputChange("email", e.target.value)}
+          className="bg-input border-border"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="instagram">Instagram</Label>
+        <Input
+          id="instagram"
+          placeholder="Ej: @restaurante_doncarlos"
+          value={formData.instagram}
+          onChange={(e) => handleInputChange("instagram", e.target.value)}
           className="bg-input border-border"
         />
       </div>
