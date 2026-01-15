@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { LogOut, User, UserCog, BarChart3, Layers, ClipboardList } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
-import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/VendedorKanban";
+import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/VendedorKanbanWrapper";
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
 import { useToast } from "@/hooks/use-toast";
 
