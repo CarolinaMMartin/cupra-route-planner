@@ -1374,7 +1374,7 @@ const VendedorKanban = () => {
 
       {/* Dialog para agregar prospecto */}
       <Dialog open={showAgregarProspecto} onOpenChange={setShowAgregarProspecto}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Agregar Nuevo Prospecto</DialogTitle>
             <DialogDescription>
