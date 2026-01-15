@@ -124,7 +124,7 @@ const VendedorKanban = () => {
   const [clienteInfo, setClienteInfo] = useState<ClienteInfo | null>(null);
   const [feedback, setFeedback] = useState("");
   const [isSavingFeedback, setIsSavingFeedback] = useState(false);
-  const [visitaRealizada, setVisitaRealizada] = useState(false);
+  const [tipoCierre, setTipoCierre] = useState<'visitado' | 'online' | 'no_visitado' | ''>('');
   const [motivoNoVisita, setMotivoNoVisita] = useState("");
   const [tipoInteraccion, setTipoInteraccion] = useState("");
   const [actualizarEtiquetaWa, setActualizarEtiquetaWa] = useState("");
@@ -472,7 +472,16 @@ const VendedorKanban = () => {
       return;
     }
 
-    if (!visitaRealizada && !motivoNoVisita) {
+    if (!tipoCierre) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Por favor seleccione el tipo de cierre",
+      });
+      return;
+    }
+
+    if (tipoCierre === 'no_visitado' && !motivoNoVisita) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -481,7 +490,7 @@ const VendedorKanban = () => {
       return;
     }
 
-    if (visitaRealizada && !tipoInteraccion) {
+    if ((tipoCierre === 'visitado' || tipoCierre === 'online') && !tipoInteraccion) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -498,13 +507,16 @@ const VendedorKanban = () => {
       // Determinar si es prospecto y preparar datos para feedback
       const esProspecto = selectedCliente.etiquetas?.includes('Prospecto') || selectedCliente.client_id.startsWith('prospecto-');
       
+      // Determinar si hubo contacto (visitado u online)
+      const huboContacto = tipoCierre === 'visitado' || tipoCierre === 'online';
+      
       // Preparar el objeto de feedback según si es cliente o prospecto
       const feedbackData: any = {
         vendedor_id: user.id,
         feedback: feedback.trim(),
-        visita_realizada: visitaRealizada,
-        motivo_no_visita: !visitaRealizada ? motivoNoVisita : null,
-        tipo_interaccion: visitaRealizada ? tipoInteraccion : null,
+        visita_realizada: huboContacto,
+        motivo_no_visita: !huboContacto ? motivoNoVisita : null,
+        tipo_interaccion: huboContacto ? `${tipoCierre === 'online' ? '[Online] ' : ''}${tipoInteraccion}` : null,
         actualizar_etiqueta_wa: actualizarEtiquetaWa || null,
       };
 
@@ -525,7 +537,7 @@ const VendedorKanban = () => {
       if (feedbackError) throw feedbackError;
       
       // Si es prospecto y se concretó una venta, marcarlo como cliente
-      if (visitaRealizada && esProspecto && tipoInteraccion === "Venta Concretada") {
+      if (huboContacto && esProspecto && tipoInteraccion === "Venta Concretada") {
         const placeId = selectedCliente.client_id.replace('prospecto-', '');
         const { error: prospectoUpdateError } = await supabase
           .from('prospectos')
@@ -537,7 +549,7 @@ const VendedorKanban = () => {
         }
       }
       
-      if (visitaRealizada && !esProspecto) {
+      if (huboContacto && !esProspecto) {
         const { error: clienteUpdateError } = await supabase
           .from('clientes')
           .update({ ultima_visita: new Date().toISOString() })
@@ -577,7 +589,7 @@ const VendedorKanban = () => {
 
       toast({
         title: "Feedback guardado",
-        description: visitaRealizada 
+        description: huboContacto 
           ? (esProspecto && tipoInteraccion === "Venta Concretada" 
             ? "¡Venta concretada! El prospecto ha sido marcado como cliente y no volverá a aparecer en recomendaciones."
             : "El feedback ha sido guardado y la visita registrada. El cliente será recomendado en 15 días.")
@@ -586,7 +598,7 @@ const VendedorKanban = () => {
 
       setShowFeedbackDialog(false);
       setFeedback("");
-      setVisitaRealizada(false);
+      setTipoCierre('');
       setMotivoNoVisita("");
       setTipoInteraccion("");
       setActualizarEtiquetaWa("");
@@ -1275,18 +1287,52 @@ const VendedorKanban = () => {
           </DialogHeader>
           
           <div className="space-y-4">
-            <div className="flex items-center space-x-3">
-              <Checkbox 
-                id="visita-realizada"
-                checked={visitaRealizada}
-                onCheckedChange={(checked) => setVisitaRealizada(checked === true)}
-              />
-              <Label htmlFor="visita-realizada" className="text-sm font-medium cursor-pointer">
-                Visita realizada
-              </Label>
+            {/* Selector de tipo de cierre - 3 opciones visibles */}
+            <div>
+              <label className="text-sm font-medium mb-3 block">
+                Tipo de Cierre <span className="text-destructive">*</span>
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTipoCierre('visitado')}
+                  className={`p-3 rounded-lg border-2 text-center transition-all ${
+                    tipoCierre === 'visitado' 
+                      ? 'border-primary bg-primary/10 text-primary font-medium' 
+                      : 'border-border hover:border-muted-foreground'
+                  }`}
+                >
+                  <span className="text-lg block mb-1">👤</span>
+                  <span className="text-sm">Visitado</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTipoCierre('online')}
+                  className={`p-3 rounded-lg border-2 text-center transition-all ${
+                    tipoCierre === 'online' 
+                      ? 'border-primary bg-primary/10 text-primary font-medium' 
+                      : 'border-border hover:border-muted-foreground'
+                  }`}
+                >
+                  <span className="text-lg block mb-1">💻</span>
+                  <span className="text-sm">Online</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTipoCierre('no_visitado')}
+                  className={`p-3 rounded-lg border-2 text-center transition-all ${
+                    tipoCierre === 'no_visitado' 
+                      ? 'border-amber-500 bg-amber-500/10 text-amber-600 font-medium' 
+                      : 'border-border hover:border-muted-foreground'
+                  }`}
+                >
+                  <span className="text-lg block mb-1">❌</span>
+                  <span className="text-sm">No visitado</span>
+                </button>
+              </div>
             </div>
 
-            {!visitaRealizada && (
+            {tipoCierre === 'no_visitado' && (
               <div>
                 <label className="text-sm font-medium mb-2 block">
                   Motivo de la No Visita
@@ -1306,7 +1352,7 @@ const VendedorKanban = () => {
               </div>
             )}
 
-            {visitaRealizada && (
+            {(tipoCierre === 'visitado' || tipoCierre === 'online') && (
               <div>
                 <label className="text-sm font-medium mb-2 block">
                   Propósito Principal
@@ -1348,17 +1394,17 @@ const VendedorKanban = () => {
 
             <div>
               <label className="text-sm font-medium mb-2 block">
-                Comentarios de la visita ({feedback.length}/400)
+                Comentarios ({feedback.length}/400)
               </label>
               <Textarea
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Ingrese sus comentarios sobre la visita..."
+                placeholder="Ingrese sus comentarios..."
                 className="min-h-[100px]"
                 maxLength={400}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                {visitaRealizada 
+                {(tipoCierre === 'visitado' || tipoCierre === 'online')
                   ? "El cliente será recomendado nuevamente en 15 días"
                   : "El cliente será recomendado nuevamente mañana"}
               </p>
@@ -1370,7 +1416,7 @@ const VendedorKanban = () => {
                 onClick={() => {
                   setShowFeedbackDialog(false);
                   setFeedback("");
-                  setVisitaRealizada(false);
+                  setTipoCierre('');
                   setMotivoNoVisita("");
                   setTipoInteraccion("");
                   setActualizarEtiquetaWa("");
@@ -1381,7 +1427,7 @@ const VendedorKanban = () => {
               </Button>
               <Button
                 onClick={handleSaveFeedback}
-                disabled={isSavingFeedback || !feedback.trim()}
+                disabled={isSavingFeedback || !feedback.trim() || !tipoCierre}
               >
                 {isSavingFeedback ? "Guardando..." : "Guardar Feedback"}
               </Button>

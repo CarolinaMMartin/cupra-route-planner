@@ -270,7 +270,7 @@ const VendedorDashboard = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Activas</CardTitle>
+            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -311,7 +311,7 @@ const VendedorDashboard = () => {
           <Tabs defaultValue="todas" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="todas">Todas</TabsTrigger>
-              <TabsTrigger value="activas">Activas</TabsTrigger>
+              <TabsTrigger value="activas">Pendientes</TabsTrigger>
               <TabsTrigger value="visitadas">Visitadas</TabsTrigger>
             </TabsList>
 
