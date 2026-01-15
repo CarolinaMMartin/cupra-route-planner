@@ -327,6 +327,7 @@ export type Database = {
           id: string
           last_recommendation_at: string | null
           monto_total_historico: number | null
+          motivo_exclusion: string | null
           participacion_mercado: number | null
           primera_compra: string | null
           productos_comprados: string[] | null
@@ -366,6 +367,7 @@ export type Database = {
           id?: string
           last_recommendation_at?: string | null
           monto_total_historico?: number | null
+          motivo_exclusion?: string | null
           participacion_mercado?: number | null
           primera_compra?: string | null
           productos_comprados?: string[] | null
@@ -405,6 +407,7 @@ export type Database = {
           id?: string
           last_recommendation_at?: string | null
           monto_total_historico?: number | null
+          motivo_exclusion?: string | null
           participacion_mercado?: number | null
           primera_compra?: string | null
           productos_comprados?: string[] | null
