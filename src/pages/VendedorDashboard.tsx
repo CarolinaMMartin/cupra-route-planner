@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
 
 interface FeedbackInfo {
   feedback: string;
@@ -245,10 +246,13 @@ const VendedorDashboard = () => {
             <p className="text-muted-foreground">Resumen de todas tus asignaciones y actividad</p>
           </div>
         </div>
-        <Button variant="outline" onClick={() => navigate("/")} className="gap-2">
-          <ArrowLeft className="w-4 h-4" />
-          Volver a Asignaciones
-        </Button>
+        <div className="flex items-center gap-2">
+          <NotificacionesPanel />
+          <Button variant="outline" onClick={() => navigate("/")} className="gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Volver a Asignaciones
+          </Button>
+        </div>
       </div>
 
       {/* Estadísticas principales */}

@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.cleanup-visited-assignments]
 verify_jwt = false
+
+[functions.check-pending-assignments]
+verify_jwt = false

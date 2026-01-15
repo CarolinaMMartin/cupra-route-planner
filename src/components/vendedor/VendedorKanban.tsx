@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getGoogleMapsUrl } from "@/lib/utils";
-import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus, X } from "lucide-react";
+import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus, X, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -31,6 +31,7 @@ import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
 import AgregarProspectoForm from "./AgregarProspectoForm";
 import AutoAsignarDialog from "./AutoAsignarDialog";
+import NotificacionesPanel from "./NotificacionesPanel";
 
 export interface ClienteAsignado {
   id: string;
@@ -76,6 +77,8 @@ export interface ClienteAsignado {
   nivel_precio?: string;
   // Origen de la asignación
   origen_asignacion: 'auto' | 'asignador';
+  // Fecha de creación de la asignación (para alertas)
+  created_at?: string;
 }
 
 interface ClienteInfo {
@@ -284,6 +287,7 @@ const VendedorKanban = () => {
           emails: clienteData.emails,
           google_maps_link: placesMap.get(asig.client_id) || undefined,
           origen_asignacion: asig.origen_asignacion || 'asignador',
+          created_at: asig.created_at,
         };
         grouped[estado].push(cliente);
       });
@@ -331,6 +335,7 @@ const VendedorKanban = () => {
           rating: prospectoData.rating,
           nivel_precio: prospectoData.nivel_precio,
           origen_asignacion: asig.origen_asignacion || 'asignador',
+          created_at: asig.created_at,
         };
         grouped[estado].push(prospecto);
       });
@@ -635,6 +640,12 @@ const VendedorKanban = () => {
 
     const esProspecto = cliente.etiquetas?.includes('Prospecto');
     const puedeDesasignar = cliente.origen_asignacion === 'auto' && cliente.estado !== 'Visitado';
+    
+    // Calcular días desde la asignación para mostrar alerta
+    const diasAbierto = cliente.created_at 
+      ? Math.floor((Date.now() - new Date(cliente.created_at).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+    const mostrarAlertaPendiente = diasAbierto >= 3 && cliente.estado !== 'Visitado';
 
     return (
       <div ref={setNodeRef} style={style} className="relative">
@@ -725,6 +736,14 @@ const VendedorKanban = () => {
                     )}
                   </div>
                 </>
+              )}
+              
+              {/* Alerta de asignación pendiente */}
+              {mostrarAlertaPendiente && (
+                <div className="flex items-center gap-1.5 mt-2 p-1.5 bg-amber-50 dark:bg-amber-950/30 rounded text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                  <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="text-xs font-medium">{diasAbierto} días sin cerrar</span>
+                </div>
               )}
             </div>
           </div>
@@ -871,7 +890,8 @@ const VendedorKanban = () => {
         </div>
         
         {/* Acciones */}
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <NotificacionesPanel />
           <Button
             variant="outline"
             onClick={() => setShowAutoAsignar(true)}
