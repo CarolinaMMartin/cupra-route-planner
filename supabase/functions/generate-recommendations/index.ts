@@ -26,91 +26,51 @@ CONTEXTO DEL NEGOCIO:
 - Los vendedores deben mantener contacto regular (ideal: cada 15-20 días)
 
 TU TAREA:
-Analizar la cartera de clientes y recomendar visitas priorizadas SOLO para las zonas donde cada vendedor opera.
+Analizar la cartera de clientes y prospectos y generar recomendaciones de visitas.
 
-⚠️ REGLA OBLIGATORIA: DEBES generar EXACTAMENTE 8 RECOMENDACIONES POR VENDEDOR. NO es opcional.
-- Si hay clientes ideales: úsalos
-- Si no hay suficientes clientes ideales: RELAJA los criterios y completa las 8 recomendaciones
-- NUNCA devuelvas menos de 8 recomendaciones por vendedor
-- En la justificación, EXPLICA DETALLADAMENTE por qué elegiste cada cliente, incluyendo:
-  * Su ubicación exacta (barrio/comuna)
-  * Su relación con el vendedor (si es su vendedor principal o no)
-  * Su score comercial y qué significa
-  * Días desde última compra
-  * Por qué es una buena opción para visitar AHORA
-  * Si no cumple todos los criterios ideales, explica qué criterios relajaste y por qué
+⚠️ REGLA OBLIGATORIA - EXACTAMENTE 8 RECOMENDACIONES POR VENDEDOR:
+Para CADA vendedor debes generar EXACTAMENTE 8 recomendaciones con esta distribución:
+- 6 CLIENTES EXISTENTES de CUPRA (registros con "es_prospecto": false)
+- 2 PROSPECTOS NUEVOS (registros con "es_prospecto": true)
 
-CRITERIOS DE SCORING (EN ORDEN DE IMPORTANCIA):
+Si NO hay suficientes clientes existentes para un vendedor:
+- Usa todos los clientes existentes disponibles
+- Completa hasta llegar a 8 con prospectos nuevos adicionales
 
-1. Concentración Geográfica (50%) - MÁXIMA PRIORIDAD ABSOLUTA:
-   - ⚠️ CRÍTICO: Las 8 recomendaciones DEBEN estar en el MISMO BARRIO o BARRIOS MUY CERCANOS (< 2km)
-   - Clientes en MISMO BARRIO/COMUNA: 100 pts
-   - Clientes en BARRIOS ADYACENTES (<2km): 50 pts  
-   - Clientes en BARRIOS LEJANOS (>2km): 0 pts (DESCARTAR SIEMPRE)
-   
-   ⚠️ REGLA ESTRICTA NUEVA: 
-   - El vendedor NO puede trasladarse largas distancias en un día
-   - TODAS las recomendaciones deben formar un cluster geográfico compacto
-   - Prioriza AGRUPAR clientes del mismo barrio antes que dispersarlos
-   - Si un barrio tiene suficientes clientes (6-8), recomienda SOLO ese barrio
-   - Solo incluye un segundo barrio si el primero tiene menos de 4 clientes y está a menos de 2km
+NUNCA devuelvas menos de 8 recomendaciones por vendedor.
+NUNCA devuelvas más de 8 recomendaciones por vendedor.
 
-2. Vendedor Asignado (25%) - SEGUNDA PRIORIDAD:
-   - Cliente tiene vendedor_principal que coincide con el vendedor: 100 pts
-   - Cliente NO tiene vendedor_principal: 50 pts
-   - Cliente tiene otro vendedor_principal: 20 pts
-   
-   ⚠️ IMPORTANTE: Priorizar clientes que ya tienen relación con el vendedor.
+CRITERIO PRINCIPAL DE SELECCIÓN - PROXIMIDAD GEOGRÁFICA:
+⚠️ CRÍTICO: Las 8 recomendaciones de cada vendedor DEBEN estar GEOGRÁFICAMENTE CERCANAS entre sí.
+- Prioriza clientes y prospectos que estén en el MISMO BARRIO o BARRIOS ADYACENTES
+- Usa las coordenadas (lat/long) para determinar cercanía
+- Clientes/prospectos a menos de 2km entre sí son ideales
+- El vendedor NO puede trasladarse largas distancias en un día
 
-3. Score Comercial (20%):
-   - TOP_10: 100 pts | ALTO: 70 pts | MEDIO: 50 pts | BAJO: 30 pts
-   
-   NOTA: El score comercial es importante pero NO debe descartar clientes cercanos o con vendedor asignado.
-
-4. Urgencia de Visita (15%):
-   - 15-30 días sin compra: 100 pts (ventana ideal)
-   - 30-45 días: 80 pts
-   - > 45 días: 60 pts (riesgo de pérdida)
-   - < 15 días: 40 pts (puede esperar)
-   
-   NOTA: La urgencia es un factor complementario, no excluyente.
+ORDEN DE PRIORIDAD PARA SELECCIÓN:
+1. Concentración Geográfica (50%): Agrupar recomendaciones en un cluster geográfico compacto
+2. Vendedor Asignado (25%): Priorizar clientes con vendedor_principal del vendedor actual
+3. Score Comercial (15%): TOP_10 > ALTO > MEDIO > BAJO
+4. Urgencia de Visita (10%): 15-30 días sin compra es la ventana ideal
 
 FEEDBACK DE VENDEDORES:
-- Cada cliente tiene un array "feedbacks_recientes" con sus propios feedbacks históricos
-- SOLO menciona feedbacks que EXISTEN en el array "feedbacks_recientes" del cliente específico
-- ⚠️ IMPORTANTE: NO inventes ni repitas feedbacks de otros clientes
-- ⚠️ CRÍTICO: Si un cliente tiene feedbacks_recientes vacío [], NO menciones ningún feedback para ese cliente
-- Si un cliente tiene feedback negativo específico (ej: "NO volver a recomendar", "Local Cerrado", etc.):
-  * EVITA recomendarlo a menos que las instrucciones adicionales lo requieran específicamente
-  * Si lo recomiendas, explica claramente por qué a pesar del feedback negativo
-- Si un cliente tiene feedback positivo (visita exitosa, venta concretada):
-  * Considera mantenerlo en el circuito de visitas regulares
-  * Menciona el feedback positivo en la justificación
-- El feedback es información específica de cada cliente, NO es genérica
+- Cada registro tiene un array "feedbacks_recientes" con sus feedbacks específicos
+- Si hay feedback negativo (ej: "NO volver a recomendar", "Local Cerrado"), EVITA ese registro
+- NO inventes feedbacks - solo usa los que existen en el array de cada registro
 
-REGLAS DE DISTRIBUCIÓN:
-- ⚠️ OBLIGATORIO: Generar EXACTAMENTE 8 recomendaciones por vendedor (NO menos, NO más)
-- PRIORIDAD #1: CERCANÍA GEOGRÁFICA - Priorizar clientes en las zonas filtradas
-- PRIORIDAD #2: VENDEDOR ASIGNADO - Priorizar clientes con vendedor_principal del vendedor
-- AGRUPAR clientes del MISMO barrio o barrios adyacentes para optimizar rutas
-- No duplicar asignaciones del mismo cliente
-- FLEXIBILIDAD PARA COMPLETAR 8: Si hay pocos clientes ideales:
-  * Incluir clientes con score comercial MEDIO o BAJO si están cerca
-  * Incluir clientes con más de 90 días sin visita si están en la zona
-  * Incluir clientes sin vendedor_principal asignado si están cerca
-  * SIEMPRE explica en la justificación por qué incluiste ese cliente
-- La justificación debe ser COMPLETA y DETALLADA (3-5 líneas mínimo por cliente)
+JUSTIFICACIÓN DETALLADA:
+Para cada recomendación, explica en 3-5 líneas:
+- Ubicación exacta (barrio/comuna) y por qué está cerca de las otras recomendaciones
+- Si es cliente: relación con el vendedor, score comercial, días desde última compra
+- Si es prospecto: tipo de negocio, potencial, por qué es interesante
+- Por qué es buen momento para visitarlo
 
 FORMATO DE RESPUESTA:
-Para cada recomendación debes proporcionar:
-- justificacion: MÍNIMO 3-5 líneas explicando DETALLADAMENTE:
-  * Ubicación exacta (barrio/comuna)
-  * Relación con el vendedor
-  * Score comercial y recencia
-  * Por qué es un buen momento para visitarlo
-  * Si relajaste algún criterio, explica cuál y por qué
+- Genera EXACTAMENTE 8 recomendaciones por cada vendedor en la lista
+- Identifica clientes por "es_prospecto": false y prospectos por "es_prospecto": true
+- Para prospectos, el "client_id" es en realidad el "place_id" de Google Maps
 
-RECUERDA: SIEMPRE 8 recomendaciones por vendedor. Es obligatorio.`;
+RECUERDA: 8 recomendaciones por vendedor = 6 clientes existentes + 2 prospectos (o más prospectos si no hay suficientes clientes).`;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -537,51 +497,44 @@ Deno.serve(async (req) => {
     const todosContext = [...clientesContext, ...prospectosContext];
 
     const prompt = `
-VENDEDORES DISPONIBLES:
+VENDEDORES DISPONIBLES (${vendedoresContext.length} vendedores):
 ${JSON.stringify(vendedoresContext, null, 2)}
 
-CLIENTES Y PROSPECTOS CANDIDATOS:
-⚠️ REGLA CRÍTICA DE PRIORIZACIÓN:
-- Los registros con "es_prospecto": false son CLIENTES EXISTENTES de CUPRA (ya compraron)
-- Los registros con "es_prospecto": true son PROSPECTOS NUEVOS (negocios potenciales que AÚN NO son clientes)
-- DEBES PRIORIZAR CLIENTES EXISTENTES sobre prospectos nuevos
-- OBJETIVO: Incluir principalmente clientes existentes (5-6 de cada 8) y solo 2-3 prospectos nuevos para expansión
-- Solo incluye más prospectos si NO hay suficientes clientes existentes en la zona
-- Para prospectos, el "client_id" es en realidad el "place_id" de Google Maps
+⚠️ IMPORTANTE: Debes generar EXACTAMENTE 8 recomendaciones para CADA vendedor.
+Total esperado: ${vendedoresContext.length * 8} recomendaciones (${vendedoresContext.length} vendedores x 8 recomendaciones)
 
-${JSON.stringify(todosContext, null, 2)}
+CLIENTES EXISTENTES (es_prospecto: false) - PRIORIDAD ALTA:
+⚠️ Debes seleccionar 6 clientes existentes por vendedor (o menos si no hay suficientes, completando con prospectos)
+${JSON.stringify(clientesContext, null, 2)}
+
+PROSPECTOS NUEVOS (es_prospecto: true) - PARA COMPLETAR:
+⚠️ Debes seleccionar 2 prospectos por vendedor (o más si no hay suficientes clientes existentes)
+${JSON.stringify(prospectosContext, null, 2)}
 
 FILTROS APLICADOS:
 - Provincia: ${provincia || "Todas"}
 - Comunas: ${comunasFinales.length > 0 ? comunasFinales.join(", ") : "Todas"}
 - Barrios: ${barriosFinales.length > 0 ? barriosFinales.join(", ") : "Todos"}
-- Recomendaciones por vendedor: ${max_recomendaciones}
+
+DISTRIBUCIÓN OBLIGATORIA POR VENDEDOR:
+- 6 clientes existentes (es_prospecto: false) + 2 prospectos (es_prospecto: true) = 8 total
+- Si hay menos de 6 clientes disponibles, completa hasta 8 con más prospectos
+- TODOS los vendedores deben tener EXACTAMENTE 8 recomendaciones
+
+CRITERIO CLAVE: Selecciona clientes y prospectos que estén GEOGRÁFICAMENTE CERCANOS entre sí para optimizar la ruta del vendedor.
 
 ${
   instrucciones_adicionales
     ? `INSTRUCCIONES ADICIONALES DEL ASIGNADOR:
 ${instrucciones_adicionales}
 
-CONTEXTO DE DATOS DISPONIBLES PARA TUS CRITERIOS:
+CONTEXTO DE DATOS DISPONIBLES:
 ${JSON.stringify(contextoDatos, null, 2)}
-
-IMPORTANTE: Usa estos datos para filtrar y priorizar clientes según las instrucciones. Por ejemplo:
-- Si se menciona un producto específico, busca clientes en "productos_comprados" que incluyan ese producto
-- Si se menciona una etiqueta, filtra por clientes que tengan esa etiqueta
-- Si se menciona un canal, usa el campo "canal" de los clientes
-- Explica en tu justificación por qué cada cliente cumple con las instrucciones adicionales
 `
     : ""
 }
 
-ANALIZA y genera recomendaciones según las INSTRUCCIONES ADICIONALES.
-⚠️ REGLA CRÍTICA SOBRE FEEDBACKS:
-- Cada cliente tiene su propio array "feedbacks_recientes" con sus feedbacks específicos
-- NUNCA copies ni repitas feedbacks de un cliente a otro
-- Si un cliente no tiene feedbacks (array vacío []), NO menciones feedbacks en tu justificación
-- SOLO menciona feedbacks que realmente existen en el array del cliente específico
-Considera scores comerciales, recencia, proximidad geográfica, potencial de venta, y los FEEDBACKS ESPECÍFICOS de cada cliente individual.
-`;
+GENERA ${vendedoresContext.length * 8} RECOMENDACIONES TOTALES (8 por cada vendedor).`;
 
     // 5. Llamar a Lovable AI con tool calling
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
