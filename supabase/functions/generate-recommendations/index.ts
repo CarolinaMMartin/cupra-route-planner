@@ -884,41 +884,7 @@ GENERA ${vendedoresContext.length * 8} RECOMENDACIONES TOTALES (8 por cada vende
 
     console.log("✅ Recomendaciones guardadas en BD");
 
-    // 8a. Actualizar last_recommendation_at para clientes recomendados
-    const clientIdsRecomendados = enrichedRecommendations
-      .filter(rec => !rec.es_prospecto && rec.client_id)
-      .map(rec => rec.client_id);
-
-    if (clientIdsRecomendados.length > 0) {
-      const { error: updateClientesError } = await supabaseClient
-        .from("clientes")
-        .update({ last_recommendation_at: new Date().toISOString() })
-        .in("client_id", clientIdsRecomendados);
-      
-      if (updateClientesError) {
-        console.warn("⚠️ Error actualizando last_recommendation_at en clientes:", updateClientesError);
-      } else {
-        console.log(`✅ Actualizado last_recommendation_at para ${clientIdsRecomendados.length} clientes`);
-      }
-    }
-
-    // 8b. Actualizar last_recommendation_at para prospectos recomendados
-    const prospectPlaceIds = enrichedRecommendations
-      .filter(rec => rec.es_prospecto && rec.prospecto_place_id)
-      .map(rec => rec.prospecto_place_id);
-
-    if (prospectPlaceIds.length > 0) {
-      const { error: updateProspectosError } = await supabaseClient
-        .from("prospectos")
-        .update({ last_recommendation_at: new Date().toISOString() })
-        .in("place_id", prospectPlaceIds);
-      
-      if (updateProspectosError) {
-        console.warn("⚠️ Error actualizando last_recommendation_at en prospectos:", updateProspectosError);
-      } else {
-        console.log(`✅ Actualizado last_recommendation_at para ${prospectPlaceIds.length} prospectos`);
-      }
-    }
+    // NOTA: last_recommendation_at se actualiza en el frontend al confirmar asignaciones (KanbanAssignment.tsx)
 
     // 9. Calcular distribución por vendedor
     const distribucion: Record<string, number> = {};

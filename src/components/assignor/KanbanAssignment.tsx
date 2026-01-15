@@ -342,6 +342,29 @@ const KanbanAssignment = ({
         if (error) throw error;
       }
 
+      // Actualizar last_recommendation_at para clientes y prospectos ASIGNADOS (no solo recomendados)
+      if (validClienteIds.length > 0) {
+        const { error: updateClientesError } = await supabase
+          .from("clientes")
+          .update({ last_recommendation_at: new Date().toISOString() })
+          .in("client_id", validClienteIds);
+        
+        if (updateClientesError) {
+          console.warn("Error actualizando last_recommendation_at en clientes:", updateClientesError);
+        }
+      }
+
+      if (validProspectoIds.length > 0) {
+        const { error: updateProspectosError } = await supabase
+          .from("prospectos")
+          .update({ last_recommendation_at: new Date().toISOString() })
+          .in("place_id", validProspectoIds);
+        
+        if (updateProspectosError) {
+          console.warn("Error actualizando last_recommendation_at en prospectos:", updateProspectosError);
+        }
+      }
+
       toast({
         title: "Asignaciones guardadas",
         description: `Se asignaron ${newAssignments.length} clientes y prospectos exitosamente`,
