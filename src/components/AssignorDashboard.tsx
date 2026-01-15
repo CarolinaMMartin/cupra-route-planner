@@ -26,15 +26,33 @@ import AssignmentsSelector from "./assignor/AssignmentsSelector";
 import EditAssignmentsKanban from "./assignor/EditAssignmentsKanban";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
+import { useRecommendationsStore } from "@/hooks/useRecommendationsStore";
 
 type FlowStep = "recommendations" | "preselection" | "assignment" | "edit-select" | "edit-kanban";
 
 const AssignorDashboard = () => {
-  const [flowStep, setFlowStep] = useState<FlowStep>("recommendations");
+  // Usar el store global para persistir estado entre navegaciones
+  const {
+    flowStep,
+    setFlowStep,
+    recommendations,
+    setRecommendations,
+    selectedSucursales,
+    setSelectedSucursales,
+    toggleSucursal,
+    toggleAllSucursales,
+    isLoading,
+    setIsLoading,
+    aiInsights,
+    setAiInsights,
+    vendedoresData,
+    setVendedoresData,
+    instruccionesAdicionales,
+    setInstruccionesAdicionales,
+    resetToInitial,
+  } = useRecommendationsStore();
+
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
-  const [recommendations, setRecommendations] = useState<Sucursal[]>([]);
-  const [selectedSucursales, setSelectedSucursales] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [selectedCiudad, setSelectedCiudad] = useState<string>("all");
   const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
   const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
@@ -48,7 +66,8 @@ const AssignorDashboard = () => {
   const { toast } = useToast();
 
   // funcion para obtener el place id desde un url
-  const getPlaceIdFromUrl = (url) => {
+  const getPlaceIdFromUrl = (url: string | null | undefined) => {
+    if (!url) return null;
     try {
       const parsed = new URL(url);
 
@@ -83,10 +102,7 @@ const AssignorDashboard = () => {
     loadPlacesData();
   }, []);
 
-  const [aiInsights, setAiInsights] = useState<any>(null);
-  const [vendedoresData, setVendedoresData] = useState<Array<{ id: string; nombre: string }>>([]);
   const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
-  const [instruccionesAdicionales, setInstruccionesAdicionales] = useState<string>("");
   const [showExitDialog, setShowExitDialog] = useState(false);
 
   const handleRequestRecommendations = async (
@@ -236,17 +252,6 @@ const AssignorDashboard = () => {
     }
   };
 
-  const toggleSucursal = (id: string) => {
-    setSelectedSucursales((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
-  };
-
-  const toggleAllSucursales = () => {
-    if (selectedSucursales.length === recommendations.length) {
-      setSelectedSucursales([]);
-    } else {
-      setSelectedSucursales(recommendations.map((r) => r.id));
-    }
-  };
 
   const handleContinueToAssignment = () => {
     setFlowStep("assignment");
@@ -258,9 +263,7 @@ const AssignorDashboard = () => {
 
   const handleBackToRecommendations = () => {
     setShowExitDialog(false);
-    setFlowStep("recommendations");
-    setRecommendations([]);
-    setSelectedSucursales([]);
+    resetToInitial();
     setSelectedCiudad("all");
     setSelectedProvincia("all");
     setSelectedVendedor("all");
