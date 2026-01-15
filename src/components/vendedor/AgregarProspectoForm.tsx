@@ -129,16 +129,32 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
 
       const placeId = generateManualPlaceId();
 
-      // Insertar prospecto
+      // Lógica de fallback inteligente para datos geográficos
+      // En CABA: usa barrio del webhook
+      // En interior: usa barrio_fallback_admin2 si barrio es null
+      const barrioFinal = geocodeResult.barrio 
+        || geocodeResult.barrio_fallback_admin2 
+        || formData.barrio.trim() 
+        || null;
+
+      // Comuna: directamente del webhook o null (solo aplica en CABA)
+      const comunaFinal = geocodeResult.comuna || null;
+
+      // Ciudad y Provincia: preferir webhook, fallback a formulario
+      const ciudadFinal = geocodeResult.ciudad || formData.ciudad.trim();
+      const provinciaFinal = geocodeResult.provincia || formData.provincia;
+
+      // Insertar prospecto con datos enriquecidos
       const { error: prospectoError } = await supabase
         .from("prospectos")
         .insert({
           place_id: placeId,
           nombre: formData.nombre.trim(),
           direccion: geocodeResult.formatted_address || formData.direccion.trim(),
-          barrio: formData.barrio.trim() || null,
-          ciudad: formData.ciudad.trim(),
-          provincia: formData.provincia,
+          barrio: barrioFinal,
+          comuna: comunaFinal,
+          ciudad: ciudadFinal,
+          provincia: provinciaFinal,
           latitud: geocodeResult.lat,
           longitud: geocodeResult.lng,
           telefono: formData.telefono.trim() || null,
@@ -217,6 +233,15 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
   }
 
   if (step === "confirm" && geocodeResult) {
+    // Calcular valores finales para mostrar al usuario
+    const barrioMostrar = geocodeResult.barrio 
+      || geocodeResult.barrio_fallback_admin2 
+      || formData.barrio.trim() 
+      || null;
+    const comunaMostrar = geocodeResult.comuna || null;
+    const ciudadMostrar = geocodeResult.ciudad || formData.ciudad;
+    const provinciaMostrar = geocodeResult.provincia || formData.provincia;
+
     return (
       <div className="flex flex-col space-y-6 py-4">
         <div className="flex items-center justify-center">
@@ -236,7 +261,18 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
             <div className="space-y-1">
               <p className="font-medium text-foreground">{formData.nombre}</p>
               <p className="text-sm text-muted-foreground">{geocodeResult.formatted_address}</p>
-              <p className="text-xs text-muted-foreground">
+              {/* Datos geográficos detallados */}
+              <div className="text-xs text-muted-foreground space-y-0.5 pt-2 border-t border-border mt-2">
+                {barrioMostrar && (
+                  <p><span className="font-medium">Barrio:</span> {barrioMostrar}</p>
+                )}
+                {comunaMostrar && (
+                  <p><span className="font-medium">Comuna:</span> {comunaMostrar}</p>
+                )}
+                <p><span className="font-medium">Ciudad:</span> {ciudadMostrar}</p>
+                <p><span className="font-medium">Provincia:</span> {provinciaMostrar}</p>
+              </div>
+              <p className="text-xs text-muted-foreground pt-1">
                 Coordenadas: {geocodeResult.lat?.toFixed(6)}, {geocodeResult.lng?.toFixed(6)}
               </p>
             </div>
