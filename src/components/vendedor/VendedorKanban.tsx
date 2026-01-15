@@ -31,7 +31,6 @@ import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
 import AgregarProspectoForm from "./AgregarProspectoForm";
 import AutoAsignarDialog from "./AutoAsignarDialog";
-import NotificacionesPanel from "./NotificacionesPanel";
 
 export interface ClienteAsignado {
   id: string;
@@ -891,7 +890,6 @@ const VendedorKanban = () => {
         
         {/* Acciones */}
         <div className="flex items-center gap-2">
-          <NotificacionesPanel />
           <Button
             variant="outline"
             onClick={() => setShowAutoAsignar(true)}
