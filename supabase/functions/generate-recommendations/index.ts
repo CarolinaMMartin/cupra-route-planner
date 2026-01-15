@@ -185,29 +185,34 @@ Deno.serve(async (req) => {
     if (provincia && provincia !== "all") {
       placesQuery = placesQuery.ilike("provincia_principal", `%${provincia}%`);
     }
+    
+    // FIX: Combinar condiciones de comuna y barrio en un solo .or() para evitar sobrescritura
+    const geoConditionsPlaces: string[] = [];
     if (comunasFinales.length > 0) {
-      const comunasConditions = comunasFinales.map((c: string) => `comuna.ilike.%${c}%`).join(",");
-      placesQuery = placesQuery.or(comunasConditions);
+      comunasFinales.forEach((c: string) => geoConditionsPlaces.push(`comuna.ilike.%${c}%`));
     }
     if (barriosFinales.length > 0) {
-      const barriosConditions = barriosFinales.map((b: string) => `barrio_principal.ilike.%${b}%`).join(",");
-      placesQuery = placesQuery.or(barriosConditions);
+      barriosFinales.forEach((b: string) => geoConditionsPlaces.push(`barrio_principal.ilike.%${b}%`));
+    }
+    if (geoConditionsPlaces.length > 0) {
+      console.log(`🔍 Condiciones geográficas client_places: ${geoConditionsPlaces.join(" OR ")}`);
+      placesQuery = placesQuery.or(geoConditionsPlaces.join(","));
     }
 
     const { data: clientPlaces, error: placesError } = await placesQuery;
     if (placesError) throw placesError;
 
-    console.log(`📍 Ubicaciones en zona geográfica: ${clientPlaces?.length || 0}`);
+    console.log(`📍 client_places encontrados: ${clientPlaces?.length || 0}`);
 
-    // Obtener client_ids de la zona
-    const clientIdsEnZona = clientPlaces?.map(p => p.client_id) || [];
+    // FIX: Deduplicar client_ids para evitar IDs repetidos
+    const clientIdsEnZona = Array.from(new Set(clientPlaces?.map(p => p.client_id) || []));
+    console.log(`🆔 client_ids únicos en zona: ${clientIdsEnZona.length}`);
 
     // Crear mapa de places para uso posterior
     const placesMap = new Map();
     clientPlaces?.forEach((place) => {
       placesMap.set(place.client_id, place);
     });
-
     // PASO 2: Cargar datos de clientes SIN filtro de rotación (rotación es priorización)
     let clientes: any[] = [];
     if (clientIdsEnZona.length > 0) {
@@ -282,13 +287,18 @@ Deno.serve(async (req) => {
     if (provincia && provincia !== "all") {
       prospectosQuery = prospectosQuery.ilike("provincia", `%${provincia}%`);
     }
+    
+    // FIX: Combinar condiciones de comuna y barrio en un solo .or() para evitar sobrescritura
+    const geoConditionsProspectos: string[] = [];
     if (comunasFinales.length > 0) {
-      const comunasConditions = comunasFinales.map((c: string) => `comuna.ilike.%${c}%`).join(",");
-      prospectosQuery = prospectosQuery.or(comunasConditions);
+      comunasFinales.forEach((c: string) => geoConditionsProspectos.push(`comuna.ilike.%${c}%`));
     }
     if (barriosFinales.length > 0) {
-      const barriosConditions = barriosFinales.map((b: string) => `barrio.ilike.%${b}%`).join(",");
-      prospectosQuery = prospectosQuery.or(barriosConditions);
+      barriosFinales.forEach((b: string) => geoConditionsProspectos.push(`barrio.ilike.%${b}%`));
+    }
+    if (geoConditionsProspectos.length > 0) {
+      console.log(`🔍 Condiciones geográficas prospectos: ${geoConditionsProspectos.join(" OR ")}`);
+      prospectosQuery = prospectosQuery.or(geoConditionsProspectos.join(","));
     }
 
     let { data: prospectosData, error: prospectosError } = await prospectosQuery;
@@ -444,7 +454,7 @@ Deno.serve(async (req) => {
         dias_desde_ultima_compra: c.dias_desde_ultima_compra,
         ticket_promedio: c.ticket_promedio,
         barrio: place?.barrio_principal || c.barrio_principal,
-        ciudad: c.ciudad_principa,
+        ciudad: c.ciudad_principal,
         provincia: place?.provincia_principal || c.provincia_principal,
         vendedor_principal: c.vendedor_principal,
         score_volumen: c.score_volumen,
