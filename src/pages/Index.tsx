@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, UserCog, BarChart3, Layers, ClipboardList } from "lucide-react";
+import { LogOut, User, UserCog, BarChart3, Layers, ClipboardList, Store } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/VendedorKanbanWrapper";
@@ -94,7 +94,11 @@ const Index = () => {
               {profile.rol === 'asignador' && <>
                   <Button variant="ghost" size="sm" onClick={() => navigate("/clientes-dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors">
                     <BarChart3 className="w-4 h-4" />
-                    <span className="text-sm tracking-wide">Dashboard de Consultas</span>
+                    <span className="text-sm tracking-wide">Dashboard Clientes</span>
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/prospectos-dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors">
+                    <Store className="w-4 h-4" />
+                    <span className="text-sm tracking-wide">Dashboard Prospectos</span>
                   </Button>
                   <Button variant="ghost" size="sm" onClick={() => navigate("/areas")} className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors">
                     <Layers className="w-4 h-4" />
