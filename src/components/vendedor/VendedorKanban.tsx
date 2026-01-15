@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { 
   DndContext, 
   DragEndEvent, 
@@ -31,6 +31,10 @@ import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
 import AgregarProspectoForm from "./AgregarProspectoForm";
 import AutoAsignarDialog from "./AutoAsignarDialog";
+
+export interface VendedorKanbanRef {
+  focusAssignment: (assignmentId: string) => void;
+}
 
 export interface ClienteAsignado {
   id: string;
@@ -110,7 +114,7 @@ interface ClienteInfo {
   ultimo_feedback?: string;
 }
 
-const VendedorKanban = () => {
+const VendedorKanban = forwardRef<VendedorKanbanRef>((_, ref) => {
   const [viewMode, setViewMode] = useState<'kanban' | 'map'>('kanban');
   const [assignments, setAssignments] = useState<Record<string, ClienteAsignado[]>>({
     'Por visitar': [],
@@ -139,6 +143,39 @@ const VendedorKanban = () => {
       },
     })
   );
+
+  // Exponer función para enfocar una asignación desde notificaciones
+  useImperativeHandle(ref, () => ({
+    focusAssignment: (assignmentId: string) => {
+      // Buscar la asignación en todas las columnas
+      for (const [_, clientes] of Object.entries(assignments)) {
+        const found = clientes.find(c => c.id === assignmentId);
+        if (found) {
+          // Abrir el diálogo de información del cliente
+          handleCardClick(found);
+          
+          // Scroll al elemento si está visible
+          setTimeout(() => {
+            const element = document.getElementById(`assignment-${assignmentId}`);
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              element.classList.add('ring-2', 'ring-primary', 'ring-offset-2');
+              setTimeout(() => {
+                element.classList.remove('ring-2', 'ring-primary', 'ring-offset-2');
+              }, 2000);
+            }
+          }, 100);
+          return;
+        }
+      }
+      
+      toast({
+        variant: "destructive",
+        title: "Asignación no encontrada",
+        description: "La asignación puede haber sido completada o eliminada.",
+      });
+    }
+  }));
 
   useEffect(() => {
     fetchAsignaciones();
@@ -659,7 +696,7 @@ const VendedorKanban = () => {
     const mostrarAlertaPendiente = diasAbierto >= 3 && cliente.estado !== 'Visitado';
 
     return (
-      <div ref={setNodeRef} style={style} className="relative">
+      <div ref={setNodeRef} style={style} className="relative transition-all" id={`assignment-${cliente.id}`}>
         {/* Botón de des-asignar solo para auto-asignaciones que no están visitadas */}
         {puedeDesasignar && (
           <Button
@@ -1463,6 +1500,8 @@ const VendedorKanban = () => {
       />
     </div>
   );
-};
+});
+
+VendedorKanban.displayName = 'VendedorKanban';
 
 export default VendedorKanban;
