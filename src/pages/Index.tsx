@@ -8,55 +8,55 @@ import AssignorDashboard from "@/components/AssignorDashboard";
 import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/VendedorKanbanWrapper";
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
 import { useToast } from "@/hooks/use-toast";
-
 const Index = () => {
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const {
+    toast
+  } = useToast();
   const kanbanRef = useRef<VendedorKanbanRef>(null);
-
   const handleNotificacionClick = (asignacionId: string) => {
     kanbanRef.current?.focusAssignment(asignacionId);
   };
-
   useEffect(() => {
     // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        if (!session) {
-          navigate("/auth");
-        }
+    const {
+      data: {
+        subscription
       }
-    );
-
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (!session) {
         navigate("/auth");
       }
     });
 
+    // Check for existing session
+    supabase.auth.getSession().then(({
+      data: {
+        session
+      }
+    }) => {
+      setSession(session);
+      if (!session) {
+        navigate("/auth");
+      }
+    });
     return () => subscription.unsubscribe();
   }, [navigate]);
-
   useEffect(() => {
     if (session?.user) {
       fetchProfile();
     }
   }, [session]);
-
   const fetchProfile = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .single();
-
+      const {
+        data,
+        error
+      } = await supabase.from('profiles').select('*').eq('user_id', session.user.id).single();
       if (error) throw error;
       setProfile(data);
     } catch (error) {
@@ -65,99 +65,60 @@ const Index = () => {
       setIsLoading(false);
     }
   };
-
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast({
       title: "Sesión cerrada",
-      description: "Hasta pronto",
+      description: "Hasta pronto"
     });
     navigate("/auth");
   };
-
   if (isLoading || !session || !profile) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
+    return <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-6">
           <img src={cupraLogo} alt="Cupra Wines" className="w-32 h-auto mx-auto opacity-50 animate-pulse" />
           <p className="text-muted-foreground tracking-wide">Cargando...</p>
         </div>
-      </div>
-    );
+      </div>;
   }
-
-  return (
-    <div className="min-h-screen">
+  return <div className="min-h-screen">
       <header className="matte-card border-b border-border/40 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12">
           <div className="flex justify-between items-center py-5">
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-semibold tracking-wide">Cupra Wines</h1>
+              <h1 className="text-xl font-semibold tracking-wide">
+            </h1>
             </div>
 
             <div className="flex items-center gap-5">
-              {profile.rol === 'asignador' && (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate("/clientes-dashboard")}
-                    className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
-                  >
+              {profile.rol === 'asignador' && <>
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/clientes-dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors">
                     <BarChart3 className="w-4 h-4" />
                     <span className="text-sm tracking-wide">Dashboard de Consultas</span>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate("/areas")}
-                    className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/areas")} className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors">
                     <Layers className="w-4 h-4" />
                     <span className="text-sm tracking-wide">Asignaciones de Áreas</span>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate("/supervision-vendedores")}
-                    className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/supervision-vendedores")} className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors">
                     <ClipboardList className="w-4 h-4" />
                     <span className="text-sm tracking-wide">Supervisión Vendedores</span>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate("/profiles")}
-                    className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/profiles")} className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors">
                     <UserCog className="w-4 h-4" />
                     <span className="text-sm tracking-wide">Perfiles</span>
                   </Button>
-                </>
-              )}
-              {profile.rol === 'vendedor' && (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate("/vendedor-dashboard")}
-                    className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
-                  >
+                </>}
+              {profile.rol === 'vendedor' && <>
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/vendedor-dashboard")} className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors">
                     <BarChart3 className="w-4 h-4" />
                     <span className="text-sm tracking-wide">Mi Dashboard</span>
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate("/")}
-                    className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors"
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="flex items-center gap-2 text-muted-foreground hover:text-accent transition-colors">
                     <Layers className="w-4 h-4" />
                     <span className="text-sm tracking-wide">Mis Asignaciones</span>
                   </Button>
-                </>
-              )}
+                </>}
               <div className="text-right">
                 <p className="font-medium flex items-center gap-2 text-sm">
                   <User className="w-4 h-4 text-accent" />
@@ -165,16 +126,9 @@ const Index = () => {
                 </p>
                 <p className="text-xs text-muted-foreground capitalize tracking-wider">{profile.rol}</p>
               </div>
-              {profile.rol === 'vendedor' && (
-                <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />
-              )}
+              {profile.rol === 'vendedor' && <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />}
               <div className="h-8 w-px bg-border/50" />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="flex items-center gap-2 text-muted-foreground hover:text-destructive transition-colors"
-              >
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="flex items-center gap-2 text-muted-foreground hover:text-destructive transition-colors">
                 <LogOut className="w-4 h-4" />
                 <span className="text-sm tracking-wide">Salir</span>
               </Button>
@@ -184,14 +138,8 @@ const Index = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12">
-        {profile.rol === 'asignador' ? (
-          <AssignorDashboard />
-        ) : (
-          <VendedorKanban ref={kanbanRef} />
-        )}
+        {profile.rol === 'asignador' ? <AssignorDashboard /> : <VendedorKanban ref={kanbanRef} />}
       </main>
-    </div>
-  );
+    </div>;
 };
-
 export default Index;
