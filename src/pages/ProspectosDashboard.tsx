@@ -80,7 +80,7 @@ const ProspectosDashboard = () => {
   
   // Filtros
   const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
-  const [selectedCiudad, setSelectedCiudad] = useState<string>("all");
+  const [selectedComuna, setSelectedComuna] = useState<string>("all");
   const [selectedBarrio, setSelectedBarrio] = useState<string>("all");
   const [selectedTipos, setSelectedTipos] = useState<string[]>([]);
   const [selectedNivelPrecio, setSelectedNivelPrecio] = useState<string>("all");
@@ -174,24 +174,30 @@ const ProspectosDashboard = () => {
     return Array.from(uniqueProvincias).sort();
   }, [prospectosData]);
 
-  const ciudades = useMemo(() => {
-    const uniqueCiudades = new Set<string>();
+  const comunas = useMemo(() => {
+    const uniqueComunas = new Set<string>();
     prospectosData.forEach(p => {
       if (selectedProvincia !== "all" && p.provincia !== selectedProvincia) return;
-      if (p.ciudad) uniqueCiudades.add(p.ciudad);
+      if (p.comuna) uniqueComunas.add(p.comuna);
     });
-    return Array.from(uniqueCiudades).sort();
+    return Array.from(uniqueComunas).sort((a, b) => {
+      // Ordenar numéricamente si son comunas (ej: "1", "2", "10")
+      const numA = parseInt(a);
+      const numB = parseInt(b);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
   }, [prospectosData, selectedProvincia]);
 
   const barrios = useMemo(() => {
     const uniqueBarrios = new Set<string>();
     prospectosData.forEach(p => {
       if (selectedProvincia !== "all" && p.provincia !== selectedProvincia) return;
-      if (selectedCiudad !== "all" && p.ciudad !== selectedCiudad) return;
+      if (selectedComuna !== "all" && p.comuna !== selectedComuna) return;
       if (p.barrio) uniqueBarrios.add(p.barrio);
     });
     return Array.from(uniqueBarrios).sort();
-  }, [prospectosData, selectedProvincia, selectedCiudad]);
+  }, [prospectosData, selectedProvincia, selectedComuna]);
 
   const tiposNegocio = useMemo(() => {
     const uniqueTipos = new Set<string>();
@@ -214,7 +220,7 @@ const ProspectosDashboard = () => {
   const filteredData = useMemo(() => {
     return prospectosData.filter(p => {
       const matchProvincia = selectedProvincia === "all" || p.provincia === selectedProvincia;
-      const matchCiudad = selectedCiudad === "all" || p.ciudad === selectedCiudad;
+      const matchComuna = selectedComuna === "all" || p.comuna === selectedComuna;
       const matchBarrio = selectedBarrio === "all" || p.barrio === selectedBarrio;
       const matchTipos = selectedTipos.length === 0 || 
         selectedTipos.some(t => p.tipo_principal === t || (p.tipos && p.tipos.includes(t)));
@@ -224,10 +230,10 @@ const ProspectosDashboard = () => {
         p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (p.direccion || "").toLowerCase().includes(searchTerm.toLowerCase());
       
-      return matchProvincia && matchCiudad && matchBarrio && matchTipos && 
+      return matchProvincia && matchComuna && matchBarrio && matchTipos && 
              matchNivelPrecio && matchRating && matchSearch;
     });
-  }, [prospectosData, selectedProvincia, selectedCiudad, selectedBarrio, 
+  }, [prospectosData, selectedProvincia, selectedComuna, selectedBarrio, 
       selectedTipos, selectedNivelPrecio, minRating, searchTerm]);
 
   // KPIs calculados
@@ -319,7 +325,7 @@ const ProspectosDashboard = () => {
 
   const handleClearFilters = () => {
     setSelectedProvincia("all");
-    setSelectedCiudad("all");
+    setSelectedComuna("all");
     setSelectedBarrio("all");
     setSelectedTipos([]);
     setSelectedNivelPrecio("all");
@@ -330,13 +336,13 @@ const ProspectosDashboard = () => {
 
   const handleProvinciaChange = (value: string) => {
     setSelectedProvincia(value);
-    setSelectedCiudad("all");
+    setSelectedComuna("all");
     setSelectedBarrio("all");
     setCurrentPage(1);
   };
 
-  const handleCiudadChange = (value: string) => {
-    setSelectedCiudad(value);
+  const handleComunaChange = (value: string) => {
+    setSelectedComuna(value);
     setSelectedBarrio("all");
     setCurrentPage(1);
   };
@@ -456,20 +462,19 @@ const ProspectosDashboard = () => {
 
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Ciudad
+                  Comuna
                 </label>
                 <Select 
-                  value={selectedCiudad} 
-                  onValueChange={handleCiudadChange}
-                  disabled={selectedProvincia === "all"}
+                  value={selectedComuna} 
+                  onValueChange={handleComunaChange}
                 >
                   <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder={selectedProvincia === "all" ? "Seleccione provincia" : "Todas"} />
+                    <SelectValue placeholder="Todas" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
                     <SelectItem value="all">Todas</SelectItem>
-                    {ciudades.map(c => (
-                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    {comunas.map(c => (
+                      <SelectItem key={c} value={c}>Comuna {c}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -482,10 +487,9 @@ const ProspectosDashboard = () => {
                 <Select 
                   value={selectedBarrio} 
                   onValueChange={(v) => { setSelectedBarrio(v); setCurrentPage(1); }}
-                  disabled={selectedProvincia === "all"}
                 >
                   <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder={selectedProvincia === "all" ? "Seleccione provincia" : "Todos"} />
+                    <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
                     <SelectItem value="all">Todos</SelectItem>
