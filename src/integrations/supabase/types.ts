@@ -513,6 +513,47 @@ export type Database = {
           },
         ]
       }
+      notificaciones: {
+        Row: {
+          asignacion_id: string | null
+          created_at: string | null
+          id: string
+          leida: boolean | null
+          mensaje: string
+          tipo: string
+          titulo: string
+          vendedor_id: string
+        }
+        Insert: {
+          asignacion_id?: string | null
+          created_at?: string | null
+          id?: string
+          leida?: boolean | null
+          mensaje: string
+          tipo: string
+          titulo: string
+          vendedor_id: string
+        }
+        Update: {
+          asignacion_id?: string | null
+          created_at?: string | null
+          id?: string
+          leida?: boolean | null
+          mensaje?: string
+          tipo?: string
+          titulo?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notificaciones_asignacion_id_fkey"
+            columns: ["asignacion_id"]
+            isOneToOne: false
+            referencedRelation: "asignaciones_vendedores_clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       places: {
         Row: {
           barrio_principal: string | null
