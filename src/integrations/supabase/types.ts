@@ -572,9 +572,11 @@ export type Database = {
           comuna: string | null
           created_at: string
           direccion: string
+          email: string | null
           es_cliente_cupra: boolean | null
           estado_negocio: string | null
           id: string
+          instagram: string | null
           last_recommendation_at: string | null
           latitud: number
           longitud: number
@@ -598,9 +600,11 @@ export type Database = {
           comuna?: string | null
           created_at?: string
           direccion: string
+          email?: string | null
           es_cliente_cupra?: boolean | null
           estado_negocio?: string | null
           id?: string
+          instagram?: string | null
           last_recommendation_at?: string | null
           latitud: number
           longitud: number
@@ -624,9 +628,11 @@ export type Database = {
           comuna?: string | null
           created_at?: string
           direccion?: string
+          email?: string | null
           es_cliente_cupra?: boolean | null
           estado_negocio?: string | null
           id?: string
+          instagram?: string | null
           last_recommendation_at?: string | null
           latitud?: number
           longitud?: number
