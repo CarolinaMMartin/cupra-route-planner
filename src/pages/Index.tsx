@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, UserCog, BarChart3, Layers, ClipboardList } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
-import VendedorKanban from "@/components/vendedor/VendedorKanban";
+import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/VendedorKanban";
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
 import { useToast } from "@/hooks/use-toast";
 
@@ -15,6 +15,11 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const kanbanRef = useRef<VendedorKanbanRef>(null);
+
+  const handleNotificacionClick = (asignacionId: string) => {
+    kanbanRef.current?.focusAssignment(asignacionId);
+  };
 
   useEffect(() => {
     // Set up auth state listener
@@ -165,7 +170,7 @@ const Index = () => {
                 <p className="text-xs text-muted-foreground capitalize tracking-wider">{profile.rol}</p>
               </div>
               {profile.rol === 'vendedor' && (
-                <NotificacionesPanel />
+                <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />
               )}
               <div className="h-8 w-px bg-border/50" />
               <Button
@@ -186,7 +191,7 @@ const Index = () => {
         {profile.rol === 'asignador' ? (
           <AssignorDashboard />
         ) : (
-          <VendedorKanban />
+          <VendedorKanban ref={kanbanRef} />
         )}
       </main>
     </div>
