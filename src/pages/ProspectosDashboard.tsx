@@ -13,7 +13,8 @@ import {
   RefreshCw, 
   ExternalLink,
   Globe,
-  Download
+  Download,
+  Plus
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
@@ -22,6 +23,8 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import AgregarProspectoForm from "@/components/vendedor/AgregarProspectoForm";
 import { Slider } from "@/components/ui/slider";
 import {
   Table,
@@ -87,6 +90,9 @@ const ProspectosDashboard = () => {
   const [selectedNivelPrecio, setSelectedNivelPrecio] = useState<string>("all");
   const [minRating, setMinRating] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>("");
+  
+  // Dialog para agregar prospecto
+  const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
   
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -409,6 +415,13 @@ const ProspectosDashboard = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <Button
+              onClick={() => setShowAgregarProspecto(true)}
+              className="gap-2 wine-button"
+            >
+              <Plus className="h-4 w-4" />
+              Agregar Prospecto
+            </Button>
             <Button
               variant="outline"
               onClick={handleExportCSV}
@@ -825,6 +838,25 @@ const ProspectosDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Dialog para agregar prospecto */}
+      <Dialog open={showAgregarProspecto} onOpenChange={setShowAgregarProspecto}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Agregar Nuevo Prospecto</DialogTitle>
+            <DialogDescription>
+              Ingresá los datos del establecimiento. La dirección será validada automáticamente.
+            </DialogDescription>
+          </DialogHeader>
+          <AgregarProspectoForm
+            onSuccess={() => {
+              setShowAgregarProspecto(false);
+              fetchProspectosData();
+            }}
+            onCancel={() => setShowAgregarProspecto(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
