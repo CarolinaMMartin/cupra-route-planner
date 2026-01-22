@@ -93,6 +93,46 @@ async function processBatch(supabase: any, prospectos: any[], batchSize: number 
       } else {
         results.push(...(data || []));
       }
+
+      // === SINCRONIZACIÓN CON PLACES (idempotente con fallback GBA) ===
+      const provinciasGBA = ['Provincia de Buenos Aires', 'Buenos Aires', 'Buenos Aires Province'];
+      const valoresExcluidos = ['Buenos Aires', 'Gran Buenos Aires', 'ELJ', ''];
+
+      for (const prospecto of batchData) {
+        let lugarParaPlaces: string | null = null;
+        const provinciaOriginal = prospecto.provincia || '';
+
+        if (provinciaOriginal === 'Ciudad Autónoma de Buenos Aires') {
+          // CABA: solo barrio (nunca ciudad, puede ser código postal)
+          lugarParaPlaces = prospecto.barrio || null;
+        } else if (provinciasGBA.includes(provinciaOriginal)) {
+          // GBA: fallback ciudad si barrio es null
+          const candidato = prospecto.barrio || prospecto.ciudad;
+          if (candidato && !valoresExcluidos.includes(candidato)) {
+            lugarParaPlaces = candidato;
+          }
+        }
+
+        if (lugarParaPlaces) {
+          const provinciaNormalizada = provinciaOriginal === 'Ciudad Autónoma de Buenos Aires' 
+            ? 'Ciudad Autónoma de Buenos Aires' 
+            : 'Provincia de Buenos Aires';
+
+          // UPSERT idempotente - sin verificación previa
+          const { error: placesError } = await supabase.from('places').upsert({
+            barrio_principal: lugarParaPlaces,
+            comuna: prospecto.comuna || null,
+            provincia_principal: provinciaNormalizada
+          }, { 
+            onConflict: 'barrio_principal,provincia_principal',
+            ignoreDuplicates: true 
+          });
+
+          if (!placesError) {
+            console.log(`📍 Localidad sincronizada: ${lugarParaPlaces}`);
+          }
+        }
+      }
     }
   }
 
