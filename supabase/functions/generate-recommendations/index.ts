@@ -255,7 +255,11 @@ Deno.serve(async (req) => {
     }
 
     // NUEVO PASO: Cargar asignaciones del día para excluir
-    const hoy = new Date().toISOString().split('T')[0];
+    // Calcular "hoy" en zona horaria Argentina (UTC-3) para evitar errores después de las 21:00
+    const now = new Date();
+    now.setHours(now.getUTCHours() - 3); // Ajustar UTC a Argentina (UTC-3)
+    const hoy = now.toISOString().split('T')[0];
+    console.log(`📅 Fecha Argentina para filtro: ${hoy}`);
     const { data: asignacionesHoy, error: asignacionesError } = await supabaseClient
       .from("asignaciones_vendedores_clientes")
       .select("client_id, prospecto_place_id, vendedor_id, es_prospecto")
