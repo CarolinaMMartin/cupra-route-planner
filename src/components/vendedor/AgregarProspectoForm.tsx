@@ -506,6 +506,38 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
         throw new Error("Error al guardar el prospecto");
       }
 
+      // === SINCRONIZAR CON PLACES ===
+      // Solo si hay barrio válido, verificar y agregar a places si no existe
+      if (barrioFinal && provinciaFinal) {
+        try {
+          const { data: existingPlace } = await supabase
+            .from("places")
+            .select("id")
+            .eq("barrio_principal", barrioFinal)
+            .eq("provincia_principal", provinciaFinal)
+            .maybeSingle();
+
+          if (!existingPlace) {
+            const { error: placesError } = await supabase
+              .from("places")
+              .insert({
+                barrio_principal: barrioFinal,
+                comuna: comunaFinal,
+                provincia_principal: provinciaFinal
+              });
+
+            if (placesError) {
+              console.warn("No se pudo sincronizar barrio a places:", placesError);
+            } else {
+              console.log(`📍 Nuevo barrio agregado a places: ${barrioFinal}, ${provinciaFinal}`);
+            }
+          }
+        } catch (syncError) {
+          console.warn("Error en sincronización con places:", syncError);
+          // No bloquear el flujo principal
+        }
+      }
+
       toast({
         title: "Prospecto creado",
         description: `"${formData.nombre}" fue agregado correctamente.`,
