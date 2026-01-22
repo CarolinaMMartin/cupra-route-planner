@@ -506,32 +506,39 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
         throw new Error("Error al guardar el prospecto");
       }
 
-      // === SINCRONIZAR CON PLACES ===
-      // Solo si hay barrio válido, verificar y agregar a places si no existe
-      if (barrioFinal && provinciaFinal) {
+      // === SINCRONIZAR CON PLACES (idempotente con fallback GBA) ===
+      const provinciasGBA = ['Provincia de Buenos Aires', 'Buenos Aires', 'Buenos Aires Province'];
+      const valoresExcluidos = ['Buenos Aires', 'Gran Buenos Aires', 'ELJ', ''];
+
+      let lugarParaPlaces: string | null = null;
+
+      if (provinciaFinal === 'Ciudad Autónoma de Buenos Aires') {
+        // CABA: solo barrio (nunca ciudad, puede ser código postal)
+        lugarParaPlaces = barrioFinal || null;
+      } else if (provinciasGBA.includes(provinciaFinal || '')) {
+        // GBA: fallback ciudad si barrio es null
+        const candidato = barrioFinal || ciudadFinal;
+        if (candidato && !valoresExcluidos.includes(candidato)) {
+          lugarParaPlaces = candidato;
+        }
+      }
+
+      if (lugarParaPlaces && provinciaFinal) {
+        const provinciaNormalizada = provinciaFinal === 'Ciudad Autónoma de Buenos Aires' 
+          ? 'Ciudad Autónoma de Buenos Aires' 
+          : 'Provincia de Buenos Aires';
+        
         try {
-          const { data: existingPlace } = await supabase
-            .from("places")
-            .select("id")
-            .eq("barrio_principal", barrioFinal)
-            .eq("provincia_principal", provinciaFinal)
-            .maybeSingle();
-
-          if (!existingPlace) {
-            const { error: placesError } = await supabase
-              .from("places")
-              .insert({
-                barrio_principal: barrioFinal,
-                comuna: comunaFinal,
-                provincia_principal: provinciaFinal
-              });
-
-            if (placesError) {
-              console.warn("No se pudo sincronizar barrio a places:", placesError);
-            } else {
-              console.log(`📍 Nuevo barrio agregado a places: ${barrioFinal}, ${provinciaFinal}`);
-            }
-          }
+          // UPSERT idempotente - sin verificación previa
+          await supabase.from("places").upsert({
+            barrio_principal: lugarParaPlaces,
+            comuna: comunaFinal,
+            provincia_principal: provinciaNormalizada
+          }, { 
+            onConflict: 'barrio_principal,provincia_principal',
+            ignoreDuplicates: true 
+          });
+          console.log(`📍 Localidad sincronizada: ${lugarParaPlaces}`);
         } catch (syncError) {
           console.warn("Error en sincronización con places:", syncError);
           // No bloquear el flujo principal
