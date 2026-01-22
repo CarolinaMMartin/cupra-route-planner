@@ -198,6 +198,56 @@ Deno.serve(async (req) => {
       results.errors += updateErrorCount;
     }
 
+    // PASO 4: Sincronizar datos geográficos desde client_places (bulk optimizado)
+    console.log('📍 Sincronizando datos geográficos desde client_places...');
+
+    // Bulk fetch de todos los client_places relevantes (evita N+1)
+    const { data: allPlaces, error: placesError } = await supabase
+      .from('client_places')
+      .select('client_id, barrio_principal, direccion_principal, provincia_principal, is_primary')
+      .in('client_id', clientIds);
+
+    if (placesError) {
+      console.warn('⚠️ Error obteniendo client_places:', placesError.message);
+    } else if (allPlaces && allPlaces.length > 0) {
+      // Agrupar por client_id
+      const placesByClient = new Map<string, typeof allPlaces>();
+      for (const place of allPlaces) {
+        if (!placesByClient.has(place.client_id)) {
+          placesByClient.set(place.client_id, []);
+        }
+        placesByClient.get(place.client_id)!.push(place);
+      }
+
+      let geoSyncCount = 0;
+      for (const [clientId, places] of placesByClient) {
+        // Encontrar el primario
+        const primary = places.find(p => p.is_primary) || places[0];
+        
+        // Construir array de todos los barrios únicos
+        const todosBarrios = [...new Set(
+          places.map(p => p.barrio_principal).filter(Boolean)
+        )];
+
+        // Solo actualizar si hay barrio en el place primario
+        if (primary?.barrio_principal) {
+          const { error: geoError } = await supabase
+            .from('clientes')
+            .update({
+              barrio_principal: primary.barrio_principal,
+              direccion_principal: primary.direccion_principal,
+              provincia_principal: primary.provincia_principal,
+              todos_barrios: todosBarrios.length > 0 ? todosBarrios : null
+            })
+            .eq('client_id', clientId)
+            .is('barrio_principal', null); // Solo si no tiene barrio (no pisar datos existentes)
+
+          if (!geoError) geoSyncCount++;
+        }
+      }
+      console.log(`✅ ${geoSyncCount} clientes sincronizados con datos geográficos`);
+    }
+
     console.log('🎉 Proceso completado:', results);
 
     return new Response(
