@@ -254,6 +254,37 @@ Deno.serve(async (req) => {
       console.log(`📊 Clientes después de filtrar ventas recientes: ${clientes.length} (excluidos: ${clientesAntes - clientes.length})`);
     }
 
+    // NUEVO PASO: Cargar asignaciones del día para excluir
+    const hoy = new Date().toISOString().split('T')[0];
+    const { data: asignacionesHoy, error: asignacionesError } = await supabaseClient
+      .from("asignaciones_vendedores_clientes")
+      .select("client_id, prospecto_place_id, vendedor_id, es_prospecto")
+      .gte("created_at", `${hoy}T00:00:00`)
+      .neq("estado", "Visitado"); // Solo excluir si no fue visitado aún
+
+    if (asignacionesError) {
+      console.error("⚠️ Error cargando asignaciones del día:", asignacionesError);
+    }
+
+    // Crear sets para búsqueda rápida
+    const clientesAsignadosHoy = new Set(
+      asignacionesHoy?.filter(a => a.client_id).map(a => a.client_id) || []
+    );
+    const prospectosAsignadosHoy = new Set(
+      asignacionesHoy?.filter(a => a.prospecto_place_id).map(a => a.prospecto_place_id) || []
+    );
+
+    console.log(`📋 Asignaciones del día: ${asignacionesHoy?.length || 0}`);
+    console.log(`   - Clientes ya asignados hoy: ${clientesAsignadosHoy.size}`);
+    console.log(`   - Prospectos ya asignados hoy: ${prospectosAsignadosHoy.size}`);
+
+    // Filtrar clientes que ya están asignados hoy
+    if (clientes.length > 0 && clientesAsignadosHoy.size > 0) {
+      const clientesAntes = clientes.length;
+      clientes = clientes.filter(c => !clientesAsignadosHoy.has(c.client_id));
+      console.log(`📋 Clientes después de filtrar asignados hoy: ${clientes.length} (excluidos: ${clientesAntes - clientes.length})`);
+    }
+
     // PASO 4: Separar clientes por rotación para PRIORIZACIÓN (no exclusión)
     const clientesNoRecomendadosReciente = clientes.filter(c => 
       !c.last_recommendation_at || 
@@ -306,6 +337,13 @@ Deno.serve(async (req) => {
 
     let prospectos = prospectosData || [];
     console.log(`🆕 Prospectos en zona: ${prospectos.length}`);
+
+    // Filtrar prospectos que ya están asignados hoy
+    if (prospectos.length > 0 && prospectosAsignadosHoy.size > 0) {
+      const prospectosAntes = prospectos.length;
+      prospectos = prospectos.filter(p => !prospectosAsignadosHoy.has(p.place_id));
+      console.log(`📋 Prospectos después de filtrar asignados hoy: ${prospectos.length} (excluidos: ${prospectosAntes - prospectos.length})`);
+    }
 
     // Separar prospectos por rotación para priorización
     const prospectosNoRecomendadosReciente = prospectos.filter(p => 
@@ -546,6 +584,7 @@ FILTROS APLICADOS:
 - Provincia: ${provincia || "Todas"}
 - Comunas: ${comunasFinales.length > 0 ? comunasFinales.join(", ") : "Todas"}
 - Barrios: ${barriosFinales.length > 0 ? barriosFinales.join(", ") : "Todos"}
+- Excluidos por asignación hoy: ${clientesAsignadosHoy.size} clientes, ${prospectosAsignadosHoy.size} prospectos
 
 DISTRIBUCIÓN OBLIGATORIA POR VENDEDOR:
 - IDEAL: 6 clientes existentes + 2 prospectos = 8 total
