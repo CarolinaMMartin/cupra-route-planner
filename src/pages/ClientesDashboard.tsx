@@ -108,13 +108,18 @@ const ClientesDashboard = () => {
     return [];
   };
 
-  // Opciones únicas para filtros
+  // Opciones únicas para filtros (con dedupe case-insensitive)
   const provincias = useMemo(() => {
-    const uniqueProvincias = new Set<string>();
+    const provinciasMap = new Map<string, string>(); // normalized -> display
     clientesData.forEach(cliente => {
-      if (cliente.provincia_principal) uniqueProvincias.add(cliente.provincia_principal);
+      if (cliente.provincia_principal) {
+        const key = normalize(cliente.provincia_principal);
+        if (!provinciasMap.has(key)) {
+          provinciasMap.set(key, cliente.provincia_principal);
+        }
+      }
     });
-    return Array.from(uniqueProvincias).sort();
+    return Array.from(provinciasMap.values()).sort();
   }, [clientesData]);
 
   // Ciudades filtradas por provincia (con dedupe case-insensitive)
@@ -181,10 +186,11 @@ const ClientesDashboard = () => {
     return Array.from(uniqueCanales).sort();
   }, [clientesData]);
 
-  // Datos filtrados (con comparación case-insensitive para barrio y ciudad)
+  // Datos filtrados (con comparación case-insensitive para provincia, barrio y ciudad)
   const filteredData = useMemo(() => {
     return clientesData.filter(cliente => {
-      const matchProvincia = selectedProvincia === "all" || cliente.provincia_principal === selectedProvincia;
+      const matchProvincia = selectedProvincia === "all" || 
+        normalize(cliente.provincia_principal) === normalize(selectedProvincia);
       
       // Ciudades: case-insensitive con fallback robusto
       const ciudadesCliente = getClienteCiudades(cliente);
