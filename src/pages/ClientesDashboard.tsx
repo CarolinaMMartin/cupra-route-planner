@@ -89,6 +89,25 @@ const ClientesDashboard = () => {
     setClientesData(clientes);
   };
 
+  // Helper: normalizar strings para comparación case-insensitive
+  const normalize = (str: string | null | undefined): string => {
+    return str ? str.trim().toLowerCase().replace(/\s+/g, ' ') : '';
+  };
+
+  // Helper: obtener barrios de un cliente con fallback robusto
+  const getClienteBarrios = (cliente: any): string[] => {
+    if (cliente.todos_barrios?.length > 0) return cliente.todos_barrios;
+    if (cliente.barrio_principal) return [cliente.barrio_principal];
+    return [];
+  };
+
+  // Helper: obtener ciudades de un cliente con fallback robusto
+  const getClienteCiudades = (cliente: any): string[] => {
+    if (cliente.todas_ciudades?.length > 0) return cliente.todas_ciudades;
+    if (cliente.ciudad_principal) return [cliente.ciudad_principal];
+    return [];
+  };
+
   // Opciones únicas para filtros
   const provincias = useMemo(() => {
     const uniqueProvincias = new Set<string>();
@@ -98,39 +117,51 @@ const ClientesDashboard = () => {
     return Array.from(uniqueProvincias).sort();
   }, [clientesData]);
 
-  // Ciudades filtradas por provincia
+  // Ciudades filtradas por provincia (con dedupe case-insensitive)
   const ciudades = useMemo(() => {
-    const uniqueCiudades = new Set<string>();
+    const ciudadesMap = new Map<string, string>(); // normalized -> display
     clientesData.forEach(cliente => {
-      // Filtrar por provincia si está seleccionada
       if (selectedProvincia !== "all" && cliente.provincia_principal !== selectedProvincia) {
         return;
       }
-      const ciudadesList = cliente.todas_ciudades || [cliente.ciudad_principa];
-      ciudadesList.forEach((c: string) => c && uniqueCiudades.add(c));
+      const ciudadesList = getClienteCiudades(cliente);
+      ciudadesList.forEach((c: string) => {
+        if (c) {
+          const key = normalize(c);
+          if (!ciudadesMap.has(key)) {
+            ciudadesMap.set(key, c);
+          }
+        }
+      });
     });
-    return Array.from(uniqueCiudades).sort();
+    return Array.from(ciudadesMap.values()).sort();
   }, [clientesData, selectedProvincia]);
 
-  // Barrios filtrados por provincia y ciudad
+  // Barrios filtrados por provincia y ciudad (con dedupe case-insensitive)
   const barrios = useMemo(() => {
-    const uniqueBarrios = new Set<string>();
+    const barriosMap = new Map<string, string>(); // normalized -> display
     clientesData.forEach(cliente => {
-      // Filtrar por provincia si está seleccionada
       if (selectedProvincia !== "all" && cliente.provincia_principal !== selectedProvincia) {
         return;
       }
-      // Filtrar por ciudad si está seleccionada
       if (selectedCiudad !== "all") {
-        const ciudadesList = cliente.todas_ciudades || [cliente.ciudad_principa];
-        if (!ciudadesList.includes(selectedCiudad)) {
+        const ciudadesList = getClienteCiudades(cliente);
+        const matchCiudad = ciudadesList.some(c => normalize(c) === normalize(selectedCiudad));
+        if (!matchCiudad) {
           return;
         }
       }
-      const barriosList = cliente.todos_barrios || [cliente.barrio_principal];
-      barriosList.forEach((b: string) => b && uniqueBarrios.add(b));
+      const barriosList = getClienteBarrios(cliente);
+      barriosList.forEach((b: string) => {
+        if (b) {
+          const key = normalize(b);
+          if (!barriosMap.has(key)) {
+            barriosMap.set(key, b);
+          }
+        }
+      });
     });
-    return Array.from(uniqueBarrios).sort();
+    return Array.from(barriosMap.values()).sort();
   }, [clientesData, selectedProvincia, selectedCiudad]);
 
   const vendedores = useMemo(() => {
@@ -150,12 +181,21 @@ const ClientesDashboard = () => {
     return Array.from(uniqueCanales).sort();
   }, [clientesData]);
 
-  // Datos filtrados
+  // Datos filtrados (con comparación case-insensitive para barrio y ciudad)
   const filteredData = useMemo(() => {
     return clientesData.filter(cliente => {
       const matchProvincia = selectedProvincia === "all" || cliente.provincia_principal === selectedProvincia;
-      const matchCiudad = selectedCiudad === "all" || (cliente.todas_ciudades || []).includes(selectedCiudad);
-      const matchBarrio = selectedBarrio === "all" || (cliente.todos_barrios || []).includes(selectedBarrio);
+      
+      // Ciudades: case-insensitive con fallback robusto
+      const ciudadesCliente = getClienteCiudades(cliente);
+      const matchCiudad = selectedCiudad === "all" || 
+        ciudadesCliente.some(c => normalize(c) === normalize(selectedCiudad));
+      
+      // Barrios: case-insensitive con fallback robusto
+      const barriosCliente = getClienteBarrios(cliente);
+      const matchBarrio = selectedBarrio === "all" || 
+        barriosCliente.some(b => normalize(b) === normalize(selectedBarrio));
+      
       const matchVendedor = selectedVendedor === "all" || (cliente.todos_vendedores || []).includes(selectedVendedor);
       const matchCanal = selectedCanal === "all" || cliente.canal === selectedCanal;
       const matchSearch = searchTerm === "" || 
@@ -176,22 +216,26 @@ const ClientesDashboard = () => {
     return { totalVentas, totalClientes, totalOrdenes, ticketPromedio };
   }, [filteredData]);
 
-  // Top barrios
+  // Top barrios (con dedupe case-insensitive para evitar duplicados Palermo/PALERMO)
   const topBarrios = useMemo(() => {
-    const barriosMap = new Map<string, number>();
+    const barriosMap = new Map<string, { display: string; ventas: number }>();
     filteredData.forEach(cliente => {
-      const barrios = (cliente.todos_barrios?.length > 0) 
-        ? cliente.todos_barrios 
-        : (cliente.barrio_principal ? [cliente.barrio_principal] : []);
+      const barrios = getClienteBarrios(cliente);
       const monto = cliente.monto_total_historico || 0;
       barrios.forEach((barrio: string) => {
         if (barrio) {
-          barriosMap.set(barrio, (barriosMap.get(barrio) || 0) + Number(monto));
+          const key = normalize(barrio);
+          const existing = barriosMap.get(key);
+          if (existing) {
+            existing.ventas += Number(monto);
+          } else {
+            barriosMap.set(key, { display: barrio, ventas: Number(monto) });
+          }
         }
       });
     });
-    return Array.from(barriosMap.entries())
-      .map(([barrio, ventas]) => ({ barrio, ventas }))
+    return Array.from(barriosMap.values())
+      .map(({ display, ventas }) => ({ barrio: display, ventas }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
   }, [filteredData]);

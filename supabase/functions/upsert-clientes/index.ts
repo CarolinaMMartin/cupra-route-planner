@@ -104,15 +104,16 @@ Deno.serve(async (req) => {
     // - id, created_at, updated_at: Gestión automática de Supabase
     
     // CAMPOS ACTUALIZABLES (vienen de n8n):
+    // NOTA: barrio_principal, todos_barrios, direccion_principal, provincia_principal
+    // se excluyen porque se sincronizan desde client_places (fuente de verdad geográfica)
     const camposVentas = [
       'razon_social', 'cuit_dni', 'fantasia',
       'primera_compra', 'ultima_compra', 'dias_desde_ultima_compra',
       'cantidad_ordenes', 'monto_total_historico', 'ticket_promedio',
       'categoria_recencia', 'categoria_volumen',
       'score_recencia', 'score_volumen', 'score_comercial',
-      'participacion_mercado', 'ciudad_principal', 'barrio_principal',
-      'direccion_principal', 'provincia_principal', 'vendedor_principal',
-      'productos_comprados', 'todas_ciudades', 'todos_barrios',
+      'participacion_mercado', 'ciudad_principal', 'vendedor_principal',
+      'productos_comprados', 'todas_ciudades',
       'todas_direcciones', 'todos_vendedores', 'requiere_visita', 'canal', 'etiquetas',
       'telefonos', 'emails'
     ];
@@ -229,7 +230,8 @@ Deno.serve(async (req) => {
           places.map(p => p.barrio_principal).filter(Boolean)
         )];
 
-        // Solo actualizar si hay barrio en el place primario
+        // SIEMPRE sincronizar desde client_places (fuente de verdad)
+        // Esto corrige discrepancias de casing y datos incorrectos
         if (primary?.barrio_principal) {
           const { error: geoError } = await supabase
             .from('clientes')
@@ -239,13 +241,12 @@ Deno.serve(async (req) => {
               provincia_principal: primary.provincia_principal,
               todos_barrios: todosBarrios.length > 0 ? todosBarrios : null
             })
-            .eq('client_id', clientId)
-            .is('barrio_principal', null); // Solo si no tiene barrio (no pisar datos existentes)
+            .eq('client_id', clientId);
 
           if (!geoError) geoSyncCount++;
         }
       }
-      console.log(`✅ ${geoSyncCount} clientes sincronizados con datos geográficos`);
+      console.log(`✅ ${geoSyncCount} clientes sincronizados con datos geográficos (fuente: client_places)`);
     }
 
     console.log('🎉 Proceso completado:', results);
