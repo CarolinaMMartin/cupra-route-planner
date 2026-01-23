@@ -26,6 +26,7 @@ export interface ClienteEditable {
   ciudad_principal: string | null;
   barrio_principal: string | null;
   direccion_principal: string | null;
+  has_location: boolean; // Indica si tiene registro en client_places
 }
 
 const ClientesEdicion = () => {
@@ -38,6 +39,7 @@ const ClientesEdicion = () => {
   const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
   const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
   const [selectedDireccion, setSelectedDireccion] = useState<string>("all");
+  const [selectedUbicacion, setSelectedUbicacion] = useState<string>("all"); // "all", "with", "without"
   const [searchTerm, setSearchTerm] = useState<string>("");
   
   // Estado para edición
@@ -87,7 +89,8 @@ const ClientesEdicion = () => {
   };
 
   const fetchClientes = async () => {
-    const { data, error } = await supabase
+    // Obtener clientes
+    const { data: clientesRaw, error: clientesError } = await supabase
       .from('clientes')
       .select(`
         client_id, razon_social, fantasia, cuit_dni,
@@ -97,12 +100,31 @@ const ClientesEdicion = () => {
       `)
       .order('razon_social');
 
-    if (error) {
-      console.error('Error fetching clientes:', error);
+    if (clientesError) {
+      console.error('Error fetching clientes:', clientesError);
       return;
     }
+
+    // Obtener client_ids que tienen ubicación en client_places
+    const { data: placesData, error: placesError } = await supabase
+      .from('client_places')
+      .select('client_id')
+      .eq('is_primary', true);
+
+    if (placesError) {
+      console.error('Error fetching client_places:', placesError);
+    }
+
+    // Crear set de client_ids con ubicación
+    const clientsWithLocation = new Set(placesData?.map(p => p.client_id) || []);
+
+    // Mapear clientes con has_location
+    const clientesConUbicacion = (clientesRaw || []).map(cliente => ({
+      ...cliente,
+      has_location: clientsWithLocation.has(cliente.client_id),
+    }));
     
-    setClientesData(data || []);
+    setClientesData(clientesConUbicacion);
   };
 
   // Helper: normalizar strings para comparación case-insensitive
@@ -145,6 +167,11 @@ const ClientesEdicion = () => {
     return Array.from(direccionesMap.values()).sort();
   }, [clientesData]);
 
+  // Contador de clientes sin ubicación
+  const clientesSinUbicacion = useMemo(() => {
+    return clientesData.filter(c => !c.has_location).length;
+  }, [clientesData]);
+
   // Datos filtrados
   const filteredData = useMemo(() => {
     return clientesData.filter(cliente => {
@@ -163,14 +190,19 @@ const ClientesEdicion = () => {
         (selectedDireccion === "__null__" && !cliente.direccion_principal) ||
         (selectedDireccion !== "__null__" && normalize(cliente.direccion_principal) === normalize(selectedDireccion));
       
+      // Ubicación: filtro por has_location
+      const matchUbicacion = selectedUbicacion === "all" ||
+        (selectedUbicacion === "with" && cliente.has_location) ||
+        (selectedUbicacion === "without" && !cliente.has_location);
+      
       const matchSearch = searchTerm === "" || 
         (cliente.razon_social || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (cliente.fantasia || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (cliente.cuit_dni || "").toLowerCase().includes(searchTerm.toLowerCase());
       
-      return matchProvincia && matchVendedor && matchDireccion && matchSearch;
+      return matchProvincia && matchVendedor && matchDireccion && matchUbicacion && matchSearch;
     });
-  }, [clientesData, selectedProvincia, selectedVendedor, selectedDireccion, searchTerm]);
+  }, [clientesData, selectedProvincia, selectedVendedor, selectedDireccion, selectedUbicacion, searchTerm]);
 
   const handleEdit = (cliente: ClienteEditable) => {
     setEditingCliente(cliente);
@@ -219,6 +251,7 @@ const ClientesEdicion = () => {
     setSelectedProvincia("all");
     setSelectedVendedor("all");
     setSelectedDireccion("all");
+    setSelectedUbicacion("all");
     setSearchTerm("");
   };
 
@@ -332,6 +365,22 @@ const ClientesEdicion = () => {
                 </Select>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Estado Ubicación
+                </label>
+                <Select value={selectedUbicacion} onValueChange={setSelectedUbicacion}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="with">✅ Con ubicación</SelectItem>
+                    <SelectItem value="without">📍 Sin ubicación ({clientesSinUbicacion})</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex items-end">
                 <Button
                   variant="outline"
@@ -344,6 +393,31 @@ const ClientesEdicion = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Aviso de clientes sin geocodificar */}
+        {clientesSinUbicacion > 0 && selectedUbicacion === "all" && (
+          <div className="bg-muted/50 border border-border rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                <Users className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <p className="font-medium">
+                  {clientesSinUbicacion} clientes sin ubicación geocodificada
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Estos clientes no tienen coordenadas validadas para el mapa
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setSelectedUbicacion("without")}
+            >
+              Ver clientes
+            </Button>
+          </div>
+        )}
 
         {/* Contador y Tabla */}
         <Card className="matte-card">
@@ -372,6 +446,11 @@ const ClientesEdicion = () => {
             setEditingCliente(null);
           }}
           onSave={handleSave}
+          onLocationAdded={async () => {
+            await fetchClientes();
+            setSheetOpen(false);
+            setEditingCliente(null);
+          }}
           saving={saving}
           vendedores={vendedores}
         />
