@@ -1,198 +1,339 @@
 
-# Plan: Sincronización Geográfica Completa
 
-## Estado Actual Confirmado
+# Plan: Vista "Editar Datos de Clientes"
 
-### Provincias en `client_places` (fuente de verdad)
-| Valor | Cantidad | Acción |
-|-------|----------|--------|
-| Ciudad Autónoma de Buenos Aires | 75 | ✅ Correcto |
-| Provincia de Buenos Aires | 31 | ✅ Correcto |
-| Buenos Aires | 6 | → Normalizar |
-| Buenos Aires Province | 2 | → Normalizar |
+## Resumen Ejecutivo
 
-### Provincias en `clientes` (con problemas)
-| Valor | Cantidad | Acción |
-|-------|----------|--------|
-| Ciudad Autónoma de Buenos Aires | 65 | ✅ Mantener |
-| Provincia de Buenos Aires | 27 | ✅ Mantener |
-| BUENOS AIRES | 13 | → Sincronizar |
-| CABA | 11 | → Sincronizar |
-| Buenos Aires | 6 | → Sincronizar |
-| Buenos Aires Province | 1 | → Sincronizar |
-
-### Barrios en mayúsculas
-LINIERS, PUERTO MADERO, CITY BELL, CABALLITO, GONNET, ABASTO, BARRACAS, etc.
+Crear una nueva página `/clientes-edicion` accesible desde el Dashboard de Consultas, orientada exclusivamente a la edición manual de datos comerciales y de contacto, sin afectar métricas automáticas ni lógica de sincronización geográfica.
 
 ---
 
-## Implementación en 3 Fases
+## Arquitectura de Componentes
 
-### Fase 1 — SQL Backfill (una vez)
-
-#### 1.1 Normalizar provincias en `client_places`
-
-```sql
--- Normalizar "Buenos Aires" y "Buenos Aires Province" a "Provincia de Buenos Aires"
-UPDATE client_places
-SET provincia_principal = 'Provincia de Buenos Aires'
-WHERE provincia_principal IN ('Buenos Aires', 'Buenos Aires Province');
-```
-
-#### 1.2 Sincronizar `clientes` desde `client_places` (SIEMPRE)
-
-```sql
--- Sincronizar provincia, barrio, dirección desde client_places primario
-UPDATE clientes c
-SET 
-  provincia_principal = cp.provincia_principal,
-  barrio_principal = cp.barrio_principal,
-  direccion_principal = cp.direccion_principal
-FROM client_places cp
-WHERE c.client_id = cp.client_id
-  AND cp.is_primary = true;
-
--- Recalcular todos_barrios como array de todos los barrios del cliente
-UPDATE clientes c
-SET todos_barrios = subq.barrios_array
-FROM (
-  SELECT client_id, 
-         ARRAY_AGG(DISTINCT barrio_principal) FILTER (WHERE barrio_principal IS NOT NULL) as barrios_array
-  FROM client_places 
-  GROUP BY client_id
-) subq
-WHERE c.client_id = subq.client_id;
-```
-
-**Resultado esperado:**
-- Solo quedan 2 provincias: "Ciudad Autónoma de Buenos Aires" y "Provincia de Buenos Aires"
-- Desaparecen: CABA, BUENOS AIRES, Buenos Aires, Buenos Aires Province
-- Desaparecen barrios en mayúsculas: CITY BELL → City Bell, PALERMO → Palermo
-
----
-
-### Fase 2 — Prevención (Edge Functions)
-
-#### 2.1 Modificar `upsert-client-places`
-
-Agregar normalización de provincia al recibir datos:
-
-```typescript
-// Normalización de provincia antes de guardar
-const normalizeProvince = (prov: string | null | undefined): string | null => {
-  if (!prov) return null;
-  const trimmed = prov.trim();
-  const lower = trimmed.toLowerCase();
-  
-  // CABA variantes
-  if (lower.includes('ciudad autónoma') || lower === 'caba') {
-    return 'Ciudad Autónoma de Buenos Aires';
-  }
-  
-  // Provincia de Buenos Aires variantes
-  if (lower === 'buenos aires' || 
-      lower === 'buenos aires province' ||
-      lower === 'provincia de buenos aires') {
-    return 'Provincia de Buenos Aires';
-  }
-  
-  // Mantener original si no es variante conocida
-  return trimmed;
-};
-```
-
-Aplicar en el mapeo de datos (línea 99):
-```typescript
-provincia_principal: normalizeProvince(place.provincia),
-```
-
-#### 2.2 `upsert-clientes`
-
-Ya está correctamente implementado:
-- Excluye campos geográficos del payload de n8n (líneas 109-118)
-- Siempre sincroniza desde client_places (sin condición NULL, líneas 233-246)
-
----
-
-### Fase 3 — UI Robusta (Dashboard)
-
-#### 3.1 Agregar dedupe case-insensitive para Provincias
-
-El selector actual NO tiene dedupe (líneas 112-118):
-
-```typescript
-// ACTUAL:
-const provincias = useMemo(() => {
-  const uniqueProvincias = new Set<string>();
-  clientesData.forEach(cliente => {
-    if (cliente.provincia_principal) uniqueProvincias.add(cliente.provincia_principal);
-  });
-  return Array.from(uniqueProvincias).sort();
-}, [clientesData]);
-
-// CAMBIAR A:
-const provincias = useMemo(() => {
-  const provinciasMap = new Map<string, string>(); // normalized -> display
-  clientesData.forEach(cliente => {
-    if (cliente.provincia_principal) {
-      const key = normalize(cliente.provincia_principal);
-      if (!provinciasMap.has(key)) {
-        provinciasMap.set(key, cliente.provincia_principal);
-      }
-    }
-  });
-  return Array.from(provinciasMap.values()).sort();
-}, [clientesData]);
-```
-
-#### 3.2 Agregar filtrado case-insensitive para Provincia
-
-```typescript
-// ACTUAL (línea 187):
-const matchProvincia = selectedProvincia === "all" || 
-  cliente.provincia_principal === selectedProvincia;
-
-// CAMBIAR A:
-const matchProvincia = selectedProvincia === "all" || 
-  normalize(cliente.provincia_principal) === normalize(selectedProvincia);
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│                     ClientesDashboard.tsx                        │
+│                                                                  │
+│  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
+│  │ [Editar Datos]  │───>│ navigate('/clientes-edicion')       │ │
+│  │    Button       │    │                                     │ │
+│  └─────────────────┘    └─────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                   ClientesEdicion.tsx (NUEVA)                    │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Header: "Editar Datos de Clientes" + [Volver Dashboard]  │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Filtros: Búsqueda + Provincia + Ciudad + Vendedor        │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │                   ClientesTable.tsx                       │   │
+│  │  ┌────────────────────────────────────────────────────┐  │   │
+│  │  │ Razón Social │ CUIT │ Vendedor │ Teléfonos │ Edit  │  │   │
+│  │  ├────────────────────────────────────────────────────┤  │   │
+│  │  │ Cliente 1    │ ...  │ ...      │ ...       │ [✎]   │  │   │
+│  │  │ Cliente 2    │ ...  │ ...      │ ...       │ [✎]   │  │   │
+│  │  └────────────────────────────────────────────────────┘  │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
+                                   │
+                                   │ Click [Editar]
+                                   ▼
+┌──────────────────────────────────────────────────────────────────┐
+│              EditClienteSheet.tsx (Panel lateral)                │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ IDENTIFICACIÓN (solo lectura)                             │   │
+│  │ • Razón Social: "Vinoteca XYZ"                           │   │
+│  │ • CUIT/DNI: "30-12345678-9"                              │   │
+│  │ • Client ID: "CLI-001"                                   │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ EDITABLE                                                  │   │
+│  │ • Teléfonos: [input array editable]                      │   │
+│  │ • Emails: [input array editable]                         │   │
+│  │ • Vendedor Principal: [select con vendedores]            │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ AUTOMATIZACIÓN (bloqueado, visual diferenciado)          │   │
+│  │ • Requiere Visita: ✓ (disabled)                          │   │
+│  │ • Excluir Recomendaciones: ✗ (disabled)                  │   │
+│  │ • Motivo Exclusión: — (disabled)                         │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ UBICACIÓN (solo lectura, fase posterior)                  │   │
+│  │ • Provincia: "Ciudad Autónoma de Buenos Aires"           │   │
+│  │ • Ciudad: "Buenos Aires"                                 │   │
+│  │ • Barrio: "Palermo"                                      │   │
+│  │ • Dirección: "Av. Libertador 1234"                       │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │            [Cancelar]            [Guardar Cambios]        │   │
+│  └──────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Archivos a Modificar
+## Categorización de Campos
+
+| Categoría | Campos | Comportamiento |
+|-----------|--------|----------------|
+| **A) Identificación** | `razon_social`, `cuit_dni`, `client_id`, `fantasia` | Solo lectura (texto gris) |
+| **B) Editables** | `telefonos` (array), `emails` (array), `vendedor_principal` | Inputs activos |
+| **C) Automatización** | `requiere_visita`, `excluir_recomendaciones`, `motivo_exclusion` | Disabled + badge "Automático" |
+| **D) Ubicación** | `provincia_principal`, `ciudad_principal`, `barrio_principal`, `direccion_principal` | Solo lectura (fase posterior) |
+| **E) Métricas/Scores** | `monto_total_historico`, `cantidad_ordenes`, `score_*`, `primera_compra`, etc. | No mostrar |
+
+---
+
+## Flujo de Edición
+
+```text
+┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
+│   LECTURA   │───>│   EDICIÓN   │───>│ VALIDACIÓN  │───>│   GUARDADO  │
+│             │    │             │    │             │    │             │
+│ Ver tabla   │    │ Abrir Sheet │    │ Validar     │    │ UPDATE      │
+│ completa    │    │ Modificar   │    │ campos      │    │ + Toast     │
+│             │    │ campos      │    │ editables   │    │ + Refresh   │
+└─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘
+```
+
+**Detalles del flujo:**
+
+1. **Lectura**: Usuario ve tabla paginada con clientes filtrados
+2. **Edición**: Click en botón "Editar" abre Sheet lateral con datos del cliente
+3. **Validación**: Al guardar, validar:
+   - Emails con formato válido (si hay)
+   - Teléfonos no vacíos si se agregan
+   - Vendedor principal debe existir (si se selecciona)
+4. **Guardado**: 
+   - UPDATE solo campos editables
+   - Toast de confirmación
+   - Refrescar fila en tabla
+
+---
+
+## Archivos a Crear/Modificar
+
+### Nuevos Archivos
+
+| Archivo | Propósito |
+|---------|-----------|
+| `src/pages/ClientesEdicion.tsx` | Página principal con tabla y filtros |
+| `src/components/clientes/ClientesEditTable.tsx` | Tabla con datos y botón editar |
+| `src/components/clientes/EditClienteSheet.tsx` | Panel lateral de edición |
+
+### Archivos a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| SQL Migration | Normalizar client_places + Backfill clientes |
-| `supabase/functions/upsert-client-places/index.ts` | Agregar `normalizeProvince()` |
-| `src/pages/ClientesDashboard.tsx` | Dedupe + filtrado case-insensitive para provincias |
+| `src/App.tsx` | Agregar ruta `/clientes-edicion` |
+| `src/pages/ClientesDashboard.tsx` | Agregar botón "Editar Datos" en header |
+
+---
+
+## Detalle Técnico
+
+### 1. Página Principal (`ClientesEdicion.tsx`)
+
+```typescript
+// Estructura del componente
+const ClientesEdicion = () => {
+  // Estado para filtros
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedProvincia, setSelectedProvincia] = useState("all");
+  const [selectedVendedor, setSelectedVendedor] = useState("all");
+  
+  // Estado para edición
+  const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  
+  // Fetch de clientes (solo campos necesarios para tabla + edición)
+  const fetchClientes = async () => {
+    const { data } = await supabase
+      .from('clientes')
+      .select(`
+        client_id, razon_social, fantasia, cuit_dni,
+        telefonos, emails, vendedor_principal,
+        requiere_visita, excluir_recomendaciones, motivo_exclusion,
+        provincia_principal, ciudad_principal, barrio_principal, direccion_principal
+      `)
+      .order('razon_social');
+  };
+  
+  // Auth check: solo rol 'asignador'
+};
+```
+
+### 2. Tabla de Clientes (`ClientesEditTable.tsx`)
+
+**Columnas visibles:**
+- Razón Social / Fantasía
+- CUIT/DNI
+- Vendedor Principal
+- Teléfonos (resumido)
+- Provincia
+- Acción (botón Editar)
+
+**Características:**
+- Paginación local (50 por página)
+- Ordenamiento por razón social
+- Hover state en filas
+- Botón "Editar" con ícono lápiz
+
+### 3. Panel de Edición (`EditClienteSheet.tsx`)
+
+**Props:**
+```typescript
+interface EditClienteSheetProps {
+  cliente: Cliente;
+  open: boolean;
+  onClose: () => void;
+  onSave: (updatedCliente: Partial<Cliente>) => Promise<void>;
+}
+```
+
+**Campos editables con validación:**
+- `telefonos`: Array de strings, permite agregar/quitar
+- `emails`: Array de strings, validación de formato email
+- `vendedor_principal`: Select con lista de vendedores existentes
+
+**Campos bloqueados (visual diferenciado):**
+```typescript
+// Sección "Automatización" con estilo disabled
+<div className="bg-muted/50 rounded-lg p-4 border border-dashed">
+  <div className="flex items-center gap-2 mb-2">
+    <Badge variant="outline">Automático</Badge>
+  </div>
+  <Checkbox checked={cliente.requiere_visita} disabled />
+  <Checkbox checked={cliente.excluir_recomendaciones} disabled />
+  {/* etc */}
+</div>
+```
+
+### 4. Mutation de Guardado
+
+```typescript
+const handleSave = async (changes: Partial<Cliente>) => {
+  // SOLO permitir estos campos
+  const allowedFields = ['telefonos', 'emails', 'vendedor_principal'];
+  const sanitizedChanges = Object.fromEntries(
+    Object.entries(changes).filter(([key]) => allowedFields.includes(key))
+  );
+  
+  const { error } = await supabase
+    .from('clientes')
+    .update(sanitizedChanges)
+    .eq('client_id', cliente.client_id);
+    
+  if (!error) {
+    toast({ title: "Guardado", description: "Datos actualizados correctamente" });
+    onClose();
+    refetch();
+  }
+};
+```
+
+---
+
+## Seguridad: Protección de Campos Automáticos
+
+### En Frontend (defensa en profundidad)
+
+1. **Campos no editables no se incluyen en el estado del formulario**
+2. **Sanitización explícita antes de enviar**: solo `telefonos`, `emails`, `vendedor_principal`
+3. **Componentes disabled con visual diferenciado**
+
+### En Backend (RLS existente)
+
+La tabla `clientes` ya tiene RLS con política:
+- `SELECT`: Usuarios autenticados pueden ver
+- `ALL` (INSERT/UPDATE/DELETE): Solo service role
+
+Esto significa que los usuarios **no pueden hacer UPDATE directamente desde el cliente**.
+
+### Solución: Agregar política UPDATE para asignadores
+
+```sql
+-- Nueva política RLS para permitir edición de campos específicos
+CREATE POLICY "Asignadores pueden editar contacto de clientes"
+ON clientes
+FOR UPDATE
+TO authenticated
+USING (get_user_role(auth.uid()) = 'asignador')
+WITH CHECK (
+  get_user_role(auth.uid()) = 'asignador'
+);
+```
+
+**Nota importante**: Esta política permite UPDATE de cualquier campo. La restricción de campos editables se mantiene en el frontend. Si se requiere mayor seguridad, se puede crear una función RPC que solo acepte los campos permitidos.
+
+---
+
+## Flujo de Datos Resumido
+
+```text
+┌─────────────────┐         ┌─────────────────┐         ┌─────────────────┐
+│                 │         │                 │         │                 │
+│   Frontend      │  fetch  │   Supabase      │  sync   │   client_places │
+│   (edición)     │◄───────►│   (clientes)    │◄────────│   (geografía)   │
+│                 │  update │                 │         │                 │
+└─────────────────┘         └─────────────────┘         └─────────────────┘
+        │                           │
+        │                           │
+        │  Solo edita:              │  NO se tocan:
+        │  • telefonos              │  • provincia_principal
+        │  • emails                 │  • barrio_principal
+        │  • vendedor_principal     │  • direccion_principal
+        │                           │  • requiere_visita
+        │                           │  • excluir_recomendaciones
+        │                           │  • motivo_exclusion
+        │                           │  • métricas/scores
+```
+
+---
+
+## Secuencia de Implementación
+
+1. **Crear componentes base**
+   - `ClientesEdicion.tsx` (página con auth check)
+   - `ClientesEditTable.tsx` (tabla con filtros)
+   - `EditClienteSheet.tsx` (panel de edición)
+
+2. **Agregar ruta en App.tsx**
+   - `/clientes-edicion` apuntando a `ClientesEdicion`
+
+3. **Agregar botón en Dashboard**
+   - En header de `ClientesDashboard.tsx`, junto a "Supervisión"
+
+4. **Crear política RLS** (si es necesario)
+   - Permitir UPDATE a rol `asignador`
+
+5. **Testing**
+   - Verificar que solo campos permitidos se editan
+   - Verificar que campos automáticos no cambian
+   - Verificar que ubicación no se modifica
 
 ---
 
 ## Verificación Final
 
-### En base de datos
+| Criterio | Cómo verificar |
+|----------|----------------|
+| Solo campos editables se modifican | Inspeccionar payload en Network tab |
+| Campos automáticos visualmente bloqueados | UI muestra disabled + badge |
+| Ubicación no editable | Campos sin inputs, solo texto |
+| Métricas no visibles | No aparecen en panel de edición |
+| Solo asignadores acceden | Redirect a `/` si rol != asignador |
 
-```sql
--- Debe retornar solo 2 provincias
-SELECT DISTINCT provincia_principal FROM clientes;
-
--- Debe retornar 12 (según client_places primario)
-SELECT COUNT(*) FROM clientes WHERE barrio_principal = 'Palermo';
-```
-
-### En UI
-- Selector de provincia muestra 2 opciones (sin CABA, BUENOS AIRES, etc.)
-- Filtrar por "Palermo" muestra 12 clientes
-- No hay duplicados en ningún selector
-
----
-
-## Secuencia de Ejecución
-
-1. Ejecutar SQL: Normalizar `client_places.provincia_principal`
-2. Ejecutar SQL: Backfill `clientes` desde `client_places`
-3. Verificar en BD que solo hay 2 provincias y 12 Palermo
-4. Actualizar `upsert-client-places` con `normalizeProvince()`
-5. Robustecer `ClientesDashboard` con dedupe provincias
-6. Verificar UI: selectores sin duplicados
