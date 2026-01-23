@@ -14,14 +14,17 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Plus, X, Loader2, Bot, MapPin, User, Phone } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Plus, X, Loader2, Bot, MapPin, User, Phone, AlertTriangle } from "lucide-react";
 import type { ClienteEditable } from "@/pages/ClientesEdicion";
+import { GeocodificarClienteForm } from "./GeocodificarClienteForm";
 
 interface EditClienteSheetProps {
   cliente: ClienteEditable;
   open: boolean;
   onClose: () => void;
   onSave: (changes: Partial<ClienteEditable>) => Promise<void>;
+  onLocationAdded: () => Promise<void>;
   saving: boolean;
   vendedores: string[];
 }
@@ -31,6 +34,7 @@ export const EditClienteSheet = ({
   open,
   onClose,
   onSave,
+  onLocationAdded,
   saving,
   vendedores,
 }: EditClienteSheetProps) => {
@@ -40,6 +44,9 @@ export const EditClienteSheet = ({
   const [vendedorPrincipal, setVendedorPrincipal] = useState<string>("");
   const [newTelefono, setNewTelefono] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  
+  // Estado para mostrar formulario de geocodificación
+  const [showGeocodingForm, setShowGeocodingForm] = useState(false);
 
   // Inicializar estado cuando cambia el cliente
   useEffect(() => {
@@ -48,6 +55,7 @@ export const EditClienteSheet = ({
     setVendedorPrincipal(cliente.vendedor_principal || "");
     setNewTelefono("");
     setNewEmail("");
+    setShowGeocodingForm(false);
   }, [cliente]);
 
   const handleAddTelefono = () => {
@@ -293,40 +301,95 @@ export const EditClienteSheet = ({
 
           <Separator />
 
-          {/* SECCIÓN: Ubicación (Solo lectura) */}
+          {/* SECCIÓN: Ubicación */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <MapPin className="h-4 w-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 Ubicación
               </h3>
-              <Badge variant="outline" className="text-xs">Solo lectura</Badge>
+              {cliente.has_location ? (
+                <Badge variant="outline" className="text-xs">Geocodificado</Badge>
+              ) : (
+                <Badge variant="destructive" className="text-xs">Sin ubicación</Badge>
+              )}
             </div>
-            <div className="bg-muted/30 rounded-lg p-4 space-y-3">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Provincia</Label>
-                  <p className="text-sm">{cliente.provincia_principal || "—"}</p>
+            
+            {/* Cliente CON ubicación: mostrar datos solo lectura */}
+            {cliente.has_location && !showGeocodingForm && (
+              <div className="bg-muted/30 rounded-lg p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Provincia</Label>
+                    <p className="text-sm">{cliente.provincia_principal || "—"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Ciudad</Label>
+                    <p className="text-sm">{cliente.ciudad_principal || "—"}</p>
+                  </div>
                 </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Ciudad</Label>
-                  <p className="text-sm">{cliente.ciudad_principal || "—"}</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Barrio</Label>
+                    <p className="text-sm">{cliente.barrio_principal || "—"}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Dirección</Label>
+                    <p className="text-sm">{cliente.direccion_principal || "—"}</p>
+                  </div>
                 </div>
+                <p className="text-xs text-muted-foreground italic">
+                  ✅ La ubicación está validada con coordenadas geográficas
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Barrio</Label>
-                  <p className="text-sm">{cliente.barrio_principal || "—"}</p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Dirección</Label>
-                  <p className="text-sm">{cliente.direccion_principal || "—"}</p>
-                </div>
+            )}
+            
+            {/* Cliente SIN ubicación: mostrar alerta y botón */}
+            {!cliente.has_location && !showGeocodingForm && (
+              <div className="space-y-3">
+                <Alert variant="destructive" className="bg-destructive/10 border-destructive/30">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Este cliente no tiene coordenadas validadas. No aparecerá en mapas ni en recomendaciones geográficas.
+                  </AlertDescription>
+                </Alert>
+                
+                {/* Mostrar datos actuales (sin validar) si existen */}
+                {(cliente.direccion_principal || cliente.barrio_principal || cliente.provincia_principal) && (
+                  <div className="bg-muted/30 rounded-lg p-4 space-y-2 border border-dashed">
+                    <p className="text-xs text-muted-foreground font-medium">Datos actuales (sin validar):</p>
+                    <div className="text-sm">
+                      {cliente.direccion_principal && <p>{cliente.direccion_principal}</p>}
+                      {cliente.barrio_principal && <p>{cliente.barrio_principal}</p>}
+                      {(cliente.ciudad_principal || cliente.provincia_principal) && (
+                        <p>{[cliente.ciudad_principal, cliente.provincia_principal].filter(Boolean).join(", ")}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                <Button
+                  onClick={() => setShowGeocodingForm(true)}
+                  className="w-full"
+                >
+                  <MapPin className="mr-2 h-4 w-4" />
+                  Agregar ubicación
+                </Button>
               </div>
-              <p className="text-xs text-muted-foreground italic">
-                La ubicación se sincroniza desde los datos geográficos
-              </p>
-            </div>
+            )}
+            
+            {/* Formulario de geocodificación */}
+            {showGeocodingForm && (
+              <GeocodificarClienteForm
+                clientId={cliente.client_id}
+                razonSocial={cliente.razon_social}
+                direccionActual={cliente.direccion_principal}
+                ciudadActual={cliente.ciudad_principal}
+                provinciaActual={cliente.provincia_principal}
+                onSuccess={onLocationAdded}
+                onCancel={() => setShowGeocodingForm(false)}
+              />
+            )}
           </div>
         </div>
 
@@ -336,7 +399,7 @@ export const EditClienteSheet = ({
           </Button>
           <Button 
             onClick={handleSave} 
-            disabled={saving || !hasChanges}
+            disabled={saving || !hasChanges || showGeocodingForm}
           >
             {saving ? (
               <>
