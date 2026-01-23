@@ -19,6 +19,28 @@ interface PlaceInput {
   geocoding_status?: string;
 }
 
+// Normalización de provincia antes de guardar
+const normalizeProvince = (prov: string | null | undefined): string | null => {
+  if (!prov) return null;
+  const trimmed = prov.trim();
+  const lower = trimmed.toLowerCase();
+  
+  // CABA variantes
+  if (lower.includes('ciudad autónoma') || lower === 'caba') {
+    return 'Ciudad Autónoma de Buenos Aires';
+  }
+  
+  // Provincia de Buenos Aires variantes
+  if (lower === 'buenos aires' || 
+      lower === 'buenos aires province' ||
+      lower === 'provincia de buenos aires') {
+    return 'Provincia de Buenos Aires';
+  }
+  
+  // Mantener original si no es variante conocida
+  return trimmed;
+};
+
 interface PlaceData {
   client_id: string;
   lat: number;
@@ -96,7 +118,7 @@ Deno.serve(async (req) => {
         direccion_principal: place.direccion?.trim() || null,
         barrio_principal: place.barrio?.trim() || null,
         comuna: place.comuna_distrito?.trim() || null,
-        provincia_principal: place.provincia?.trim() || null,
+        provincia_principal: normalizeProvince(place.provincia),
         place_id: place.place_id?.trim() || null,
         google_maps_link: place.google_maps_link?.trim() || null,
         is_primary: place.is_primary !== undefined ? place.is_primary : true,
