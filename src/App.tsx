@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Profiles from "./pages/Profiles";
 import ClientesDashboard from "./pages/ClientesDashboard";
+import ClientesEdicion from "./pages/ClientesEdicion";
 import ProspectosDashboard from "./pages/ProspectosDashboard";
 import AreasManager from "./pages/AreasManager";
 import VendedorDashboard from "./pages/VendedorDashboard";
@@ -26,6 +27,7 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/profiles" element={<Profiles />} />
           <Route path="/clientes-dashboard" element={<ClientesDashboard />} />
+          <Route path="/clientes-edicion" element={<ClientesEdicion />} />
           <Route path="/prospectos-dashboard" element={<ProspectosDashboard />} />
           <Route path="/areas" element={<AreasManager />} />
           <Route path="/vendedor-dashboard" element={<VendedorDashboard />} />
