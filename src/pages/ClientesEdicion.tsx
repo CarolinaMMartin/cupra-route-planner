@@ -37,6 +37,7 @@ const ClientesEdicion = () => {
   // Filtros
   const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
   const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
+  const [selectedDireccion, setSelectedDireccion] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
   
   // Estado para edición
@@ -131,21 +132,45 @@ const ClientesEdicion = () => {
     return Array.from(uniqueVendedores).sort();
   }, [clientesData]);
 
+  const direcciones = useMemo(() => {
+    const direccionesMap = new Map<string, string>();
+    clientesData.forEach(cliente => {
+      if (cliente.direccion_principal) {
+        const key = normalize(cliente.direccion_principal);
+        if (!direccionesMap.has(key)) {
+          direccionesMap.set(key, cliente.direccion_principal);
+        }
+      }
+    });
+    return Array.from(direccionesMap.values()).sort();
+  }, [clientesData]);
+
   // Datos filtrados
   const filteredData = useMemo(() => {
     return clientesData.filter(cliente => {
-      const matchProvincia = selectedProvincia === "all" || 
-        normalize(cliente.provincia_principal) === normalize(selectedProvincia);
-      const matchVendedor = selectedVendedor === "all" || 
-        cliente.vendedor_principal === selectedVendedor;
+      // Provincia: "all" = todos, "__null__" = solo nulos, otro = ese valor
+      const matchProvincia = selectedProvincia === "all" ||
+        (selectedProvincia === "__null__" && !cliente.provincia_principal) ||
+        (selectedProvincia !== "__null__" && normalize(cliente.provincia_principal) === normalize(selectedProvincia));
+      
+      // Vendedor: misma lógica
+      const matchVendedor = selectedVendedor === "all" ||
+        (selectedVendedor === "__null__" && !cliente.vendedor_principal) ||
+        (selectedVendedor !== "__null__" && cliente.vendedor_principal === selectedVendedor);
+      
+      // Dirección: nuevo filtro
+      const matchDireccion = selectedDireccion === "all" ||
+        (selectedDireccion === "__null__" && !cliente.direccion_principal) ||
+        (selectedDireccion !== "__null__" && normalize(cliente.direccion_principal) === normalize(selectedDireccion));
+      
       const matchSearch = searchTerm === "" || 
         (cliente.razon_social || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (cliente.fantasia || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (cliente.cuit_dni || "").toLowerCase().includes(searchTerm.toLowerCase());
       
-      return matchProvincia && matchVendedor && matchSearch;
+      return matchProvincia && matchVendedor && matchDireccion && matchSearch;
     });
-  }, [clientesData, selectedProvincia, selectedVendedor, searchTerm]);
+  }, [clientesData, selectedProvincia, selectedVendedor, selectedDireccion, searchTerm]);
 
   const handleEdit = (cliente: ClienteEditable) => {
     setEditingCliente(cliente);
@@ -193,6 +218,7 @@ const ClientesEdicion = () => {
   const handleClearFilters = () => {
     setSelectedProvincia("all");
     setSelectedVendedor("all");
+    setSelectedDireccion("all");
     setSearchTerm("");
   };
 
@@ -239,7 +265,7 @@ const ClientesEdicion = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                   Buscar Cliente
@@ -262,6 +288,7 @@ const ClientesEdicion = () => {
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
                     <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="__null__">— Sin provincia —</SelectItem>
                     {provincias.map(p => (
                       <SelectItem key={p} value={p}>{p}</SelectItem>
                     ))}
@@ -279,8 +306,27 @@ const ClientesEdicion = () => {
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
                     <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="__null__">— Sin asignar —</SelectItem>
                     {vendedores.map(v => (
                       <SelectItem key={v} value={v}>{v}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Dirección
+                </label>
+                <Select value={selectedDireccion} onValueChange={setSelectedDireccion}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    <SelectItem value="all">Todas</SelectItem>
+                    <SelectItem value="__null__">— Sin dirección —</SelectItem>
+                    {direcciones.map(d => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
