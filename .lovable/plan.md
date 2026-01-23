@@ -1,107 +1,198 @@
 
-Contexto y diagnóstico (qué está pasando y por qué ves “Palermo” y “PALERMO”)
-- En la tabla clientes hoy conviven dos variantes:
-  - clientes.barrio_principal = 'Palermo' (9 filas)
-  - clientes.barrio_principal = 'PALERMO' (4 filas)
-- El filtro del dashboard compara por igualdad exacta (case-sensitive). Resultado:
-  - Si elegís “Palermo” ves 9
-  - Si elegís “PALERMO” ves 4
-- En client_places (que es donde está “la verdad” geográfica) el barrio primario aparece como “Palermo” en 12 clientes. O sea, el dashboard no está reflejando client_places, y además se contaminó con mayúsculas desde imports previos.
-- Importante adicional: al menos 1 de esos 4 “PALERMO” en clientes NO coincide con su client_place primario (ej. un cliente tiene clientes='PALERMO' pero client_places primario='Villa Lugano'). Esto confirma que no alcanza con “normalizar mayúsculas”: hay que resincronizar desde client_places aunque clientes ya tenga un valor no nulo.
+# Plan: Sincronización Geográfica Completa
 
-Objetivo (qué vamos a lograr)
-1) Que clientes.barrio_principal refleje SIEMPRE el barrio del client_places primario cuando exista.
-2) Que clientes.todos_barrios sea un array con TODOS los barrios asociados al cliente (distinct) desde client_places.
-3) Evitar que vuelva a aparecer la divergencia: upsert-clientes debe sincronizar (y corregir) aunque barrio_principal no sea null.
-4) Que el dashboard sea robusto: dedupe case-insensitive en opciones y comparación case-insensitive en filtros para que futuros datos “sucios” no rompan la UX.
-5) Verificar: Palermo muestre el conteo esperado (12) y no existan variantes “PALERMO” en el selector.
+## Estado Actual Confirmado
 
-Plan de implementación (backend + frontend)
+### Provincias en `client_places` (fuente de verdad)
+| Valor | Cantidad | Acción |
+|-------|----------|--------|
+| Ciudad Autónoma de Buenos Aires | 75 | ✅ Correcto |
+| Provincia de Buenos Aires | 31 | ✅ Correcto |
+| Buenos Aires | 6 | → Normalizar |
+| Buenos Aires Province | 2 | → Normalizar |
 
-Fase A — Backfill correctivo “source of truth = client_places”
-A1) Backfill: actualizar clientes desde client_places primario cuando difiere (no solo cuando es NULL)
-- Actualizar barrio_principal/direccion_principal/provincia_principal desde client_places cp.is_primary=true cuando:
-  - clientes.barrio_principal IS NULL
-  - o lower(trim(clientes.barrio_principal)) != lower(trim(cp.barrio_principal))
-  - (y opcionalmente lo mismo para provincia/dirección si queremos máxima consistencia)
-- Resultado: desaparece la bifurcación Palermo/PALERMO y además se corrigen casos “mal asignados” (ej. Palermo en clientes pero no en client_places, o viceversa).
+### Provincias en `clientes` (con problemas)
+| Valor | Cantidad | Acción |
+|-------|----------|--------|
+| Ciudad Autónoma de Buenos Aires | 65 | ✅ Mantener |
+| Provincia de Buenos Aires | 27 | ✅ Mantener |
+| BUENOS AIRES | 13 | → Sincronizar |
+| CABA | 11 | → Sincronizar |
+| Buenos Aires | 6 | → Sincronizar |
+| Buenos Aires Province | 1 | → Sincronizar |
 
-A2) Backfill: recomputar clientes.todos_barrios desde TODOS los client_places (no solo si array está vacío)
-- Recalcular todos_barrios como array_agg(distinct barrio_principal) filtrando nulls.
-- Importante: hacerlo “siempre” para clientes que tengan client_places, porque hoy hay arrays poblados con valores viejos que no incluyen Palermo (caso PALERMO).
+### Barrios en mayúsculas
+LINIERS, PUERTO MADERO, CITY BELL, CABALLITO, GONNET, ABASTO, BARRACAS, etc.
 
-A3) Opcional (recomendado): normalización general de strings
-- Si hay clientes sin client_places, podríamos normalizar barrio_principal a un formato consistente (por ejemplo Title Case) para evitar futuras duplicaciones en UI.
-- Pero la prioridad es: cuando hay client_places, mandan los datos de client_places.
+---
 
-Fase B — Arreglar upsert-clientes para que mantenga sincronía y no reintroduzca “PALERMO”
-Problema actual en tu diff
-- El PASO 4 actual solo actualiza clientes si barrio_principal es NULL:
-  - .is('barrio_principal', null)
-- Eso impide corregir:
-  - mayúsculas vs minúsculas
-  - barrios equivocados que ya tenían un valor
-  - arrays todos_barrios “viejos”
-- Además, el PASO 3 sigue aceptando barrio_principal/todos_barrios del payload de n8n, lo cual puede recontaminar.
+## Implementación en 3 Fases
 
-B1) Cambiar estrategia: sincronización geográfica bulk y correctiva (sin N+1 y sin “solo null”)
-- Mantener el bulk fetch, pero en vez de loop+update condicional por null:
-  - Hacer una actualización por cliente solo si difiere del primario (case-insensitive).
-  - Y setear siempre todos_barrios basado en places (para clientes presentes en el import).
-- Ideal: una sola sentencia SQL “bulk” dentro de la function para:
-  - primario por client_id
-  - agregación de barrios por client_id
-  - update clientes join subqueries
-Esto reduce latencia y evita inconsistencias parciales.
+### Fase 1 — SQL Backfill (una vez)
 
-B2) Evitar recontaminación desde el import
-- En el PASO 3 (camposVentas) considerar remover barrio_principal / todos_barrios / direccion_principal / provincia_principal de “campos de ventas” si esos campos deben venir solo de client_places.
-- Alternativa: dejarlos pero el PASO 4 los pisa siempre con client_places (más seguro y simple).
+#### 1.1 Normalizar provincias en `client_places`
 
-B3) Nota de higiene importante
-- No se debe editar src/integrations/supabase/types.ts manualmente (es autogenerado). Si hubo cambios ahí, hay que revertirlos para evitar drift/errores de tipos.
+```sql
+-- Normalizar "Buenos Aires" y "Buenos Aires Province" a "Provincia de Buenos Aires"
+UPDATE client_places
+SET provincia_principal = 'Provincia de Buenos Aires'
+WHERE provincia_principal IN ('Buenos Aires', 'Buenos Aires Province');
+```
 
-Fase C — Robustecer el dashboard para que no “se rompa” con variaciones de casing
-Aunque arreglemos la base, esto evita que vuelva el problema si entra data “sucia”.
+#### 1.2 Sincronizar `clientes` desde `client_places` (SIEMPRE)
 
-C1) Dedupe case-insensitive en opciones del selector “Barrio”
-- Al construir barrios (useMemo), en vez de Set<string> directo:
-  - usar una clave canonical: key = normalize(barrio) = trim + toLowerCase + colapsar espacios
-  - guardar un label canónico (preferir el de client_places/Title Case)
-- Mostrar una sola opción “Palermo” aunque existan “PALERMO”, “palermo”, “ Palermo ”.
+```sql
+-- Sincronizar provincia, barrio, dirección desde client_places primario
+UPDATE clientes c
+SET 
+  provincia_principal = cp.provincia_principal,
+  barrio_principal = cp.barrio_principal,
+  direccion_principal = cp.direccion_principal
+FROM client_places cp
+WHERE c.client_id = cp.client_id
+  AND cp.is_primary = true;
 
-C2) Filtrado case-insensitive + fallback correcto
-- Hoy matchBarrio usa (cliente.todos_barrios || []).includes(selectedBarrio) (case-sensitive) y no cae a barrio_principal si el array está null.
-- Cambiar a:
-  - barriosCliente = cliente.todos_barrios?.length ? cliente.todos_barrios : (cliente.barrio_principal ? [cliente.barrio_principal] : [])
-  - matchBarrio = selectedBarrio === 'all' || barriosCliente.some(b => normalize(b) === normalize(selectedBarrio))
-Esto elimina los falsos negativos.
+-- Recalcular todos_barrios como array de todos los barrios del cliente
+UPDATE clientes c
+SET todos_barrios = subq.barrios_array
+FROM (
+  SELECT client_id, 
+         ARRAY_AGG(DISTINCT barrio_principal) FILTER (WHERE barrio_principal IS NOT NULL) as barrios_array
+  FROM client_places 
+  GROUP BY client_id
+) subq
+WHERE c.client_id = subq.client_id;
+```
 
-C3) Bug adicional detectado (no de Palermo pero sí del panel)
-- En ciudades useMemo hay un typo: cliente.ciudad_principa (falta “l”). Eso puede romper el filtro de ciudad y la generación de opciones.
-- Corregir a cliente.ciudad_principal y aplicar el mismo patrón de fallback que en barrios.
+**Resultado esperado:**
+- Solo quedan 2 provincias: "Ciudad Autónoma de Buenos Aires" y "Provincia de Buenos Aires"
+- Desaparecen: CABA, BUENOS AIRES, Buenos Aires, Buenos Aires Province
+- Desaparecen barrios en mayúsculas: CITY BELL → City Bell, PALERMO → Palermo
 
-Fase D — Verificación (criterios de aceptación)
-D1) En base de datos
-- No debe existir barrio_principal='PALERMO' en clientes (o al menos no debe aparecer como opción separada).
-- Conteos esperados:
-  - client_places primario Palermo = 12
-  - clientes barrio_principal Palermo = 12 (si usamos client_places como source of truth; el que tiene Villa Lugano debe salir de Palermo)
-- Para todos los clientes con client_places:
-  - clientes.todos_barrios debe contener el barrio del primario
-  - clientes.barrio_principal debe estar incluido en todos_barrios (consistencia)
+---
 
-D2) En UI (/clientes-dashboard)
-- El selector muestra un solo “Palermo” (sin “PALERMO”).
-- Al filtrar “Palermo” el badge “X clientes filtrados” debe mostrar 12.
-- El topBarrios no debe tener duplicados “Palermo”/“PALERMO”.
+### Fase 2 — Prevención (Edge Functions)
 
-Seguridad y rollback
-- Los updates propuestos son determinísticos y reversibles (la “fuente” es client_places). Si algo sale raro, se puede rerun el sync o restaurar desde client_places.
-- Recomendación: antes de ejecutar, guardar un snapshot lógico (export) de columnas afectadas (client_id, barrio_principal, provincia_principal, direccion_principal, todos_barrios) para rollback rápido.
+#### 2.1 Modificar `upsert-client-places`
 
-Ejecución sugerida (orden)
-1) Ejecutar backfill A1 + A2 (corrige el estado actual ya).
-2) Refrescar dashboard y verificar Palermo (debe dar 12) y que no haya “PALERMO” como opción.
-3) Implementar cambios en upsert-clientes (Fase B) para evitar que vuelva a romperse.
-4) Implementar robustez en ClientesDashboard (Fase C) como “cinturón de seguridad”.
+Agregar normalización de provincia al recibir datos:
+
+```typescript
+// Normalización de provincia antes de guardar
+const normalizeProvince = (prov: string | null | undefined): string | null => {
+  if (!prov) return null;
+  const trimmed = prov.trim();
+  const lower = trimmed.toLowerCase();
+  
+  // CABA variantes
+  if (lower.includes('ciudad autónoma') || lower === 'caba') {
+    return 'Ciudad Autónoma de Buenos Aires';
+  }
+  
+  // Provincia de Buenos Aires variantes
+  if (lower === 'buenos aires' || 
+      lower === 'buenos aires province' ||
+      lower === 'provincia de buenos aires') {
+    return 'Provincia de Buenos Aires';
+  }
+  
+  // Mantener original si no es variante conocida
+  return trimmed;
+};
+```
+
+Aplicar en el mapeo de datos (línea 99):
+```typescript
+provincia_principal: normalizeProvince(place.provincia),
+```
+
+#### 2.2 `upsert-clientes`
+
+Ya está correctamente implementado:
+- Excluye campos geográficos del payload de n8n (líneas 109-118)
+- Siempre sincroniza desde client_places (sin condición NULL, líneas 233-246)
+
+---
+
+### Fase 3 — UI Robusta (Dashboard)
+
+#### 3.1 Agregar dedupe case-insensitive para Provincias
+
+El selector actual NO tiene dedupe (líneas 112-118):
+
+```typescript
+// ACTUAL:
+const provincias = useMemo(() => {
+  const uniqueProvincias = new Set<string>();
+  clientesData.forEach(cliente => {
+    if (cliente.provincia_principal) uniqueProvincias.add(cliente.provincia_principal);
+  });
+  return Array.from(uniqueProvincias).sort();
+}, [clientesData]);
+
+// CAMBIAR A:
+const provincias = useMemo(() => {
+  const provinciasMap = new Map<string, string>(); // normalized -> display
+  clientesData.forEach(cliente => {
+    if (cliente.provincia_principal) {
+      const key = normalize(cliente.provincia_principal);
+      if (!provinciasMap.has(key)) {
+        provinciasMap.set(key, cliente.provincia_principal);
+      }
+    }
+  });
+  return Array.from(provinciasMap.values()).sort();
+}, [clientesData]);
+```
+
+#### 3.2 Agregar filtrado case-insensitive para Provincia
+
+```typescript
+// ACTUAL (línea 187):
+const matchProvincia = selectedProvincia === "all" || 
+  cliente.provincia_principal === selectedProvincia;
+
+// CAMBIAR A:
+const matchProvincia = selectedProvincia === "all" || 
+  normalize(cliente.provincia_principal) === normalize(selectedProvincia);
+```
+
+---
+
+## Archivos a Modificar
+
+| Archivo | Cambio |
+|---------|--------|
+| SQL Migration | Normalizar client_places + Backfill clientes |
+| `supabase/functions/upsert-client-places/index.ts` | Agregar `normalizeProvince()` |
+| `src/pages/ClientesDashboard.tsx` | Dedupe + filtrado case-insensitive para provincias |
+
+---
+
+## Verificación Final
+
+### En base de datos
+
+```sql
+-- Debe retornar solo 2 provincias
+SELECT DISTINCT provincia_principal FROM clientes;
+
+-- Debe retornar 12 (según client_places primario)
+SELECT COUNT(*) FROM clientes WHERE barrio_principal = 'Palermo';
+```
+
+### En UI
+- Selector de provincia muestra 2 opciones (sin CABA, BUENOS AIRES, etc.)
+- Filtrar por "Palermo" muestra 12 clientes
+- No hay duplicados en ningún selector
+
+---
+
+## Secuencia de Ejecución
+
+1. Ejecutar SQL: Normalizar `client_places.provincia_principal`
+2. Ejecutar SQL: Backfill `clientes` desde `client_places`
+3. Verificar en BD que solo hay 2 provincias y 12 Palermo
+4. Actualizar `upsert-client-places` con `normalizeProvince()`
+5. Robustecer `ClientesDashboard` con dedupe provincias
+6. Verificar UI: selectores sin duplicados
