@@ -234,12 +234,15 @@ export const EditClienteSheet = ({
             {/* Vendedor Principal */}
             <div className="space-y-2">
               <Label>Vendedor Principal</Label>
-              <Select value={vendedorPrincipal} onValueChange={setVendedorPrincipal}>
+              <Select 
+                value={vendedorPrincipal || "__none__"} 
+                onValueChange={(val) => setVendedorPrincipal(val === "__none__" ? "" : val)}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Seleccionar vendedor..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sin asignar</SelectItem>
+                  <SelectItem value="__none__">Sin asignar</SelectItem>
                   {vendedores.map(v => (
                     <SelectItem key={v} value={v}>{v}</SelectItem>
                   ))}
