@@ -47,7 +47,8 @@ export const ClientesEditTable = ({ clientes, onEdit }: ClientesEditTableProps) 
           <TableHeader>
             <TableRow>
               <TableHead className="font-semibold">Razón Social</TableHead>
-              <TableHead className="font-semibold">CUIT/DNI</TableHead>
+              <TableHead className="font-semibold">Dirección</TableHead>
+              <TableHead className="font-semibold">Barrio</TableHead>
               <TableHead className="font-semibold">Vendedor Principal</TableHead>
               <TableHead className="font-semibold">Teléfonos</TableHead>
               <TableHead className="font-semibold">Provincia</TableHead>
@@ -57,7 +58,7 @@ export const ClientesEditTable = ({ clientes, onEdit }: ClientesEditTableProps) 
           <TableBody>
             {paginatedClientes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+              <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   No se encontraron clientes
                 </TableCell>
               </TableRow>
@@ -73,7 +74,10 @@ export const ClientesEditTable = ({ clientes, onEdit }: ClientesEditTableProps) 
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {cliente.cuit_dni || "—"}
+                    {cliente.direccion_principal || "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {cliente.barrio_principal || "—"}
                   </TableCell>
                   <TableCell>
                     {cliente.vendedor_principal || "—"}
