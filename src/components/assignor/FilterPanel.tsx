@@ -315,11 +315,25 @@ const FilterPanel = ({
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
                   <SelectItem value="none">Sin área seleccionada</SelectItem>
-                  {areas.map((area) => (
-                    <SelectItem key={area.id} value={area.id}>
-                      {area.nombre} ({area.vendedores.length} vendedores, {area.barrios.length} barrios)
-                    </SelectItem>
-                  ))}
+                  {areas.map((area) => {
+                    const nombresVendedores = vendedores
+                      .filter(v => area.vendedores.includes(v.id))
+                      .map(v => v.nombre.split(' ')[0]);
+                    
+                    const vendedoresDisplay = nombresVendedores.length > 3
+                      ? `${nombresVendedores.slice(0, 3).join(', ')}...`
+                      : nombresVendedores.join(', ');
+                    
+                    const barriosDisplay = area.barrios.length > 3
+                      ? `${area.barrios.slice(0, 3).join(', ')}...`
+                      : area.barrios.join(', ');
+
+                    return (
+                      <SelectItem key={area.id} value={area.id}>
+                        {area.nombre} • {vendedoresDisplay || 'Sin vendedores'} | {barriosDisplay || 'Sin barrios'}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
