@@ -307,16 +307,12 @@ Deno.serve(async (req) => {
     // Esto permite priorizar sin excluir
     clientes = [...clientesNoRecomendadosReciente, ...clientesRecomendadosReciente];
 
-    // PASO 5: Cargar prospectos nuevos (últimos 30 días) con misma lógica
-    const treintaDiasAtras = new Date();
-    treintaDiasAtras.setDate(treintaDiasAtras.getDate() - 30);
-
+    // PASO 5: Cargar prospectos con prioridad por rotación (sin filtro de fecha de creación)
     let prospectosQuery = supabaseClient
       .from("prospectos")
       .select("*")
-      .gte("created_at", treintaDiasAtras.toISOString())
-      .order("created_at", { ascending: false })
-      .limit(100);
+      .order("last_recommendation_at", { ascending: true, nullsFirst: true })
+      .limit(200);
 
     // Aplicar mismos filtros geográficos a prospectos
     if (provincia && provincia !== "all") {
