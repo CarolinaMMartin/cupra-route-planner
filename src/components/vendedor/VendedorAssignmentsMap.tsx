@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ClienteAsignado } from "./VendedorKanban";
-import { getGoogleMapsUrl } from "@/lib/utils";
+import { getGoogleMapsUrl, isManualPlaceId, getGoogleMapsUrlFromCoords } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -87,90 +87,125 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
     }
 
     // Procesar clientes filtrados
-    Object.entries(filteredAssignments).forEach(([estado, clientes]) => {
-      clientes.forEach((cliente) => {
-        // Solo procesar si tiene place_id (para obtener ubicación)
-        const placeId = cliente.prospecto_place_id || cliente.google_maps_link?.match(/place_id[:=]([^&]+)/)?.[1];
-        
-        if (placeId) {
-          const placesService = new google.maps.places.PlacesService(map);
-          
+    const processMarkers = async () => {
+      const placesService = new google.maps.places.PlacesService(map);
+      
+      // Helper para obtener detalles de Google Places
+      const getPlaceDetails = (placeId: string): Promise<google.maps.places.PlaceResult | null> => {
+        return new Promise((resolve) => {
           placesService.getDetails(
-            {
-              placeId: placeId,
-              fields: ["geometry", "name"],
-            },
+            { placeId, fields: ["geometry", "name"] },
             (place, status) => {
-              if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-                // Usar marcador default de Google Maps (sin especificar icon)
-                const marker = new google.maps.Marker({
-                  position: place.geometry.location,
-                  map: map,
-                  title: cliente.razon_social,
-                });
-
-                // InfoWindow con información del cliente
-                const infoWindow = new google.maps.InfoWindow({
-                  content: `
-                    <div style="padding: 8px; max-width: 250px;">
-                      <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px; color: #000;">
-                        ${cliente.razon_social}
-                      </h3>
-                      <div style="margin-bottom: 8px;">
-                        <span style="display: inline-block; padding: 2px 8px; background: ${
-                          estado === "Visitado" ? "#22c55e" : "#ef4444"
-                        }; color: white; border-radius: 4px; font-size: 12px;">
-                          ${estado}
-                        </span>
-                      </div>
-                      ${cliente.ciudad_principal ? `<p style="margin: 4px 0; font-size: 13px; color: #000;">📍 ${cliente.ciudad_principal}</p>` : ""}
-                      ${cliente.barrio_principal ? `<p style="margin: 4px 0; font-size: 13px; color: #000;">🏘️ ${cliente.barrio_principal}</p>` : ""}
-                      ${cliente.telefonos && cliente.telefonos.length > 0 ? `<p style="margin: 4px 0; font-size: 13px; color: #000;">📞 ${cliente.telefonos[0]}</p>` : ""}
-                      <button 
-                        onclick="window.open('${getGoogleMapsUrl(placeId)}', '_blank')"
-                        style="
-                          margin-top: 8px;
-                          padding: 6px 12px;
-                          background: #4285f4;
-                          color: white;
-                          border: none;
-                          border-radius: 4px;
-                          cursor: pointer;
-                          font-size: 13px;
-                          width: 100%;
-                        "
-                      >
-                        Abrir en Google Maps
-                      </button>
-                    </div>
-                  `,
-                });
-
-                marker.addListener("click", () => {
-                  infoWindow.open(map, marker);
-                });
-
-                newMarkers.push(marker);
-                bounds.extend(place.geometry.location);
-                markersCount++;
-
-                // Ajustar bounds cuando se hayan cargado todos los marcadores
-                if (markersCount > 0) {
-                  map.fitBounds(bounds);
-                  // Evitar zoom excesivo si solo hay un marcador
-                  const listener = google.maps.event.addListener(map, "idle", () => {
-                    if (map.getZoom()! > 16) map.setZoom(16);
-                    google.maps.event.removeListener(listener);
-                  });
-                }
+              if (status === google.maps.places.PlacesServiceStatus.OK && place) {
+                resolve(place);
+              } else {
+                resolve(null);
               }
             }
           );
-        }
-      });
-    });
+        });
+      };
 
-    setMarkers(newMarkers);
+      for (const [estado, clientes] of Object.entries(filteredAssignments)) {
+        for (const cliente of clientes) {
+          const placeId = cliente.prospecto_place_id || cliente.google_maps_link?.match(/place_id[:=]([^&]+)/)?.[1];
+          
+          let position: google.maps.LatLngLiteral | null = null;
+          let mapsUrl: string | null = null;
+          
+          // Verificar si es un prospecto manual con coordenadas directas
+          if (cliente.prospecto_place_id && isManualPlaceId(cliente.prospecto_place_id)) {
+            const lat = cliente.prospecto_latitud;
+            const lng = cliente.prospecto_longitud;
+            
+            if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+              position = { lat, lng };
+              mapsUrl = getGoogleMapsUrlFromCoords(lat, lng);
+              console.log(`[VendedorMap] ✅ Prospecto manual con coordenadas:`, {
+                nombre: cliente.razon_social,
+                coords: position
+              });
+            }
+          } else if (placeId) {
+            // Usar Google Places API
+            const place = await getPlaceDetails(placeId);
+            if (place?.geometry?.location) {
+              position = {
+                lat: place.geometry.location.lat(),
+                lng: place.geometry.location.lng()
+              };
+              mapsUrl = getGoogleMapsUrl(placeId);
+            }
+          }
+          
+          if (position && mapsUrl) {
+            const marker = new google.maps.Marker({
+              position,
+              map: map,
+              title: cliente.razon_social,
+            });
+
+            const infoWindow = new google.maps.InfoWindow({
+              content: `
+                <div style="padding: 8px; max-width: 250px;">
+                  <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px; color: #000;">
+                    ${cliente.razon_social}
+                  </h3>
+                  <div style="margin-bottom: 8px;">
+                    <span style="display: inline-block; padding: 2px 8px; background: ${
+                      estado === "Visitado" ? "#22c55e" : "#ef4444"
+                    }; color: white; border-radius: 4px; font-size: 12px;">
+                      ${estado}
+                    </span>
+                  </div>
+                  ${cliente.ciudad_principal ? `<p style="margin: 4px 0; font-size: 13px; color: #000;">📍 ${cliente.ciudad_principal}</p>` : ""}
+                  ${cliente.barrio_principal ? `<p style="margin: 4px 0; font-size: 13px; color: #000;">🏘️ ${cliente.barrio_principal}</p>` : ""}
+                  ${cliente.telefonos && cliente.telefonos.length > 0 ? `<p style="margin: 4px 0; font-size: 13px; color: #000;">📞 ${cliente.telefonos[0]}</p>` : ""}
+                  <button 
+                    onclick="window.open('${mapsUrl}', '_blank')"
+                    style="
+                      margin-top: 8px;
+                      padding: 6px 12px;
+                      background: #4285f4;
+                      color: white;
+                      border: none;
+                      border-radius: 4px;
+                      cursor: pointer;
+                      font-size: 13px;
+                      width: 100%;
+                    "
+                  >
+                    Abrir en Google Maps
+                  </button>
+                </div>
+              `,
+            });
+
+            marker.addListener("click", () => {
+              infoWindow.open(map, marker);
+            });
+
+            newMarkers.push(marker);
+            bounds.extend(position);
+            markersCount++;
+          }
+        }
+      }
+
+      // Ajustar bounds cuando se hayan cargado todos los marcadores
+      if (markersCount > 0) {
+        map.fitBounds(bounds);
+        const listener = google.maps.event.addListener(map, "idle", () => {
+          if (map.getZoom()! > 16) map.setZoom(16);
+          google.maps.event.removeListener(listener);
+        });
+      }
+      
+      setMarkers(newMarkers);
+    };
+
+    processMarkers();
+
   }, [map, assignments, showPorVisitar, showVisitado]);
 
   if (error) {

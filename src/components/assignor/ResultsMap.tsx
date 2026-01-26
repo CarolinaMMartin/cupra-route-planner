@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Sucursal } from "@/types/sales";
+import { isManualPlaceId } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -111,8 +112,35 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
             }
           }
 
-          // If we have place_id, fetch from Places API
+          // If we have place_id, check if it's manual or Google
           if (sucursal.prospecto_place_id) {
+            // Si es un place_id manual, ya tenemos las coordenadas en latitud/longitud
+            if (isManualPlaceId(sucursal.prospecto_place_id)) {
+              const lat = sucursal.latitud;
+              const lng = sucursal.longitud;
+              
+              if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+                const isValidLat = lat >= -60 && lat <= -20;
+                const isValidLng = lng >= -80 && lng <= -40;
+                
+                if (isValidLat && isValidLng) {
+                  return {
+                    id: sucursal.id,
+                    name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
+                    lat: lat,
+                    lng: lng,
+                    direccion: sucursal.direccion || sucursal.direccion_principal || "",
+                  };
+                }
+              }
+              console.warn(`[ResultsMap] Prospecto manual sin coordenadas válidas:`, {
+                id: sucursal.id,
+                place_id: sucursal.prospecto_place_id
+              });
+              return null;
+            }
+            
+            // Para place_id de Google, usar Places API
             return new Promise<ClientLocation>((resolve, reject) => {
               service.getDetails({ placeId: sucursal.prospecto_place_id! }, (place, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
