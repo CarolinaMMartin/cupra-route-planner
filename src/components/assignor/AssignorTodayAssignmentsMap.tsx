@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from "react";
-import { getGoogleMapsUrl } from "@/lib/utils";
+import { getGoogleMapsUrl, isManualPlaceId, getGoogleMapsUrlFromCoords } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -24,6 +24,8 @@ interface Assignment {
     telefono: string;
     direccion: string;
     barrio: string;
+    latitud?: number;
+    longitud?: number;
   };
   created_at: string;
 }
@@ -331,13 +333,83 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
       
       console.log('[Map] Marcadores de clientes creados:', newMarkers.length);
 
-      // Segundo, obtener TODOS los detalles de PROSPECTOS usando Promises
-      console.log('[Map] Obteniendo detalles de prospectos...');
+      // Segundo, procesar PROSPECTOS
+      console.log('[Map] Procesando prospectos...');
       const prospectoAssignments = filteredAssignments.filter(
         a => a.es_prospecto && a.prospecto_place_id
       );
       
-      const prospectoDetailsPromises = prospectoAssignments.map(assignment =>
+      // Separar prospectos manuales de prospectos con place_id de Google
+      const manualProspectos = prospectoAssignments.filter(a => isManualPlaceId(a.prospecto_place_id));
+      const googleProspectos = prospectoAssignments.filter(a => !isManualPlaceId(a.prospecto_place_id));
+      
+      console.log(`[Map] Prospectos manuales: ${manualProspectos.length}, Google: ${googleProspectos.length}`);
+
+      // Crear marcadores para prospectos MANUALES directamente (tienen lat/lng)
+      for (const assignment of manualProspectos) {
+        const lat = assignment.prospecto?.latitud;
+        const lng = assignment.prospecto?.longitud;
+        
+        if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+          const position = { lat, lng };
+          
+          const marker = new google.maps.Marker({
+            position: position,
+            map: map,
+            title: assignment.prospecto?.nombre || 'Prospecto',
+          });
+
+          console.log(`[Map] ✅ Marcador PROSPECTO MANUAL creado:`, {
+            place_id: assignment.prospecto_place_id,
+            nombre: assignment.prospecto?.nombre,
+            coords: position
+          });
+
+          bounds.extend(position);
+
+          // Para prospectos manuales, usar URL con coordenadas
+          const mapsUrl = getGoogleMapsUrlFromCoords(lat, lng);
+
+          const infoWindowContent = `
+            <div style="padding: 8px; min-width: 200px; color: black;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <strong style="font-size: 14px;">
+                  ${assignment.prospecto?.nombre || 'Prospecto sin nombre'}
+                </strong>
+                <span style="background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">NUEVO</span>
+              </div>
+              <p style="font-size: 13px; margin: 4px 0; color: #666;">
+                <strong>Vendedor:</strong> ${assignment.vendedor.nombre}
+              </p>
+              <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" 
+                 style="display: inline-block; margin-top: 8px; padding: 6px 12px; 
+                        background-color: #1a73e8; color: white; text-decoration: none; 
+                        border-radius: 4px; font-size: 12px; font-weight: 500;">
+                Abrir en Google Maps
+              </a>
+            </div>
+          `;
+
+          const infoWindow = new google.maps.InfoWindow({
+            content: infoWindowContent,
+          });
+
+          marker.addListener("click", () => {
+            infoWindow.open(map, marker);
+          });
+
+          newMarkers.push(marker);
+        } else {
+          console.warn(`[Map] ⚠️ Prospecto manual sin coordenadas válidas:`, {
+            place_id: assignment.prospecto_place_id,
+            nombre: assignment.prospecto?.nombre,
+            lat, lng
+          });
+        }
+      }
+
+      // Obtener detalles de prospectos con place_id de Google
+      const prospectoDetailsPromises = googleProspectos.map(assignment =>
         getPlaceDetails(assignment.prospecto_place_id!).then(place => ({
           assignment,
           place
@@ -353,9 +425,9 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
         return;
       }
       
-      console.log('[Map] Detalles de prospectos obtenidos:', prospectoResults.length);
+      console.log('[Map] Detalles de prospectos Google obtenidos:', prospectoResults.length);
 
-      // Tercero, crear marcadores de PROSPECTOS con los resultados
+      // Crear marcadores de PROSPECTOS GOOGLE con los resultados
       prospectoResults.forEach(({ assignment, place }) => {
         if (place?.geometry?.location) {
           const marker = new google.maps.Marker({

@@ -42,6 +42,8 @@ interface Assignment {
     telefono: string;
     direccion: string;
     barrio: string;
+    latitud?: number;
+    longitud?: number;
   };
   created_at: string;
   cliente_info?: {
@@ -122,7 +124,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
       if (prospectoPlaceIds.length > 0) {
         const { data: prospectosData, error: prospectosError } = await supabase
           .from('prospectos')
-          .select('place_id, nombre, telefono, direccion, barrio')
+          .select('place_id, nombre, telefono, direccion, barrio, latitud, longitud')
           .in('place_id', prospectoPlaceIds);
 
         if (!prospectosError && prospectosData) {
