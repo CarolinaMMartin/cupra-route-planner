@@ -999,7 +999,7 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
         </CardHeader>
         <CardContent 
           ref={setNodeRef}
-          className={`space-y-2 min-h-[400px] max-h-[600px] overflow-y-auto transition-colors ${
+          className={`space-y-2 md:min-h-[400px] md:max-h-[600px] md:overflow-y-auto transition-colors ${
             isOver ? 'bg-accent/10' : ''
           }`}
         >
