@@ -1,46 +1,87 @@
 
 
-# Plan: Ajuste Final de Scroll Interno en DroppableColumn
+# Plan: Restaurar Layout del Asignador en Desktop
 
 ## Problema Identificado
 
-Las clases de scroll interno en `DroppableColumn` (línea 1002) no tienen prefijos responsive:
+Los cambios responsive para el rol vendedor afectaron inadvertidamente el layout del rol asignador. En la imagen se ve que:
+- Los botones de navegación están en una línea
+- La info del usuario y "Salir" están en una segunda línea
+
+Esto sucede porque en la línea 87 y 93 se agregaron clases `flex-wrap` y `gap-2` que afectan a AMBOS roles.
+
+## Archivo a Modificar
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/pages/Index.tsx` | Restaurar layout de asignador, mantener responsive solo para vendedor |
+
+## Cambios Específicos
+
+### Línea 87 - Quitar flex-wrap del container principal del header
+
+El `flex-wrap` está causando que todo el header se rompa en dos líneas.
 
 ```typescript
-// Actual (línea 1002)
-className={`space-y-2 min-h-[400px] max-h-[600px] overflow-y-auto transition-colors ${...}`}
+// Antes (actual - problemático)
+<div className="flex flex-wrap justify-between items-center gap-2 py-3 md:py-5">
+
+// Después (corrección)
+<div className="flex justify-between items-center py-5">
 ```
 
-Aunque el kanban completo está oculto en mobile con `hidden md:block`, las buenas prácticas indican que estas clases deberían tener prefijos `md:` como medida de seguridad adicional.
+### Línea 93 - Quitar flex-wrap del container de navegación
 
-## Cambio Propuesto
+```typescript
+// Antes (actual - problemático)  
+<div className="flex items-center gap-2 md:gap-5 flex-wrap">
 
-**Archivo:** `src/components/vendedor/VendedorKanban.tsx`
+// Después (corrección)
+<div className="flex items-center gap-5">
+```
 
-**Línea 1002** - Agregar prefijos `md:` a las clases de altura y scroll:
+### Línea 143 - Restaurar separador visible siempre
 
 ```typescript
 // Antes
-className={`space-y-2 min-h-[400px] max-h-[600px] overflow-y-auto transition-colors ${
-  isOver ? 'bg-accent/10' : ''
-}`}
+<div className="h-8 w-px bg-border/50 hidden md:block" />
 
 // Después
-className={`space-y-2 md:min-h-[400px] md:max-h-[600px] md:overflow-y-auto transition-colors ${
-  isOver ? 'bg-accent/10' : ''
-}`}
+<div className="h-8 w-px bg-border/50" />
 ```
 
-## Justificación
+### Líneas 145-148 - Restaurar botón "Salir" completo
 
-1. **Defensivo**: Si por algún edge case el kanban se renderizara en mobile, no generará scroll interno
-2. **Consistente**: Sigue el patrón de diseño responsive del resto del componente
-3. **Sin impacto en desktop**: En `md:` y superiores, las clases se aplican igual que antes
+```typescript
+// Antes
+<Button variant="ghost" size="sm" onClick={handleLogout} className="flex items-center gap-2 text-muted-foreground hover:text-destructive transition-colors">
+  <LogOut className="w-4 h-4" />
+  <span className="hidden md:inline text-sm tracking-wide">Salir</span>
+</Button>
 
-## Checklist de Validación Post-Implementación
+// Después
+<Button variant="ghost" size="sm" onClick={handleLogout} className="flex items-center gap-2 text-muted-foreground hover:text-destructive transition-colors">
+  <LogOut className="w-4 h-4" />
+  <span className="text-sm tracking-wide">Salir</span>
+</Button>
+```
 
-1. En 375px: no existe scroll horizontal
-2. No hay scroll interno dentro de columnas/listas (solo scroll de página)
-3. Se puede: abrir detalle, marcar "Visitado" (abre feedback, guarda, mueve card a Visitado)
-4. Desktop no cambia: sigue 2 columnas con drag and drop y scroll interno
+### Líneas 116-133 - Mantener responsive SOLO para vendedor
+
+Los cambios de navegación responsive (desktop vs mobile) deben permanecer SOLO dentro del bloque de vendedor, que ya están correctamente encapsulados con `hidden md:flex` y `md:hidden`.
+
+### Línea 135 - Mantener info usuario visible siempre para asignador
+
+La clase condicional ya está correcta: `${profile.rol === 'vendedor' ? 'hidden md:block' : ''}` - esto hace que se oculte solo para vendedor en mobile.
+
+## Resultado Esperado
+
+| Rol | Desktop | Mobile |
+|-----|---------|--------|
+| **Asignador** | Una sola línea con: Logo + 5 botones nav + User info + Salir | (no aplica cambios) |
+| **Vendedor** | Una sola línea con: Logo + 2 botones nav + User info + Notif + Salir | Compacto: Logo + iconos + Notif + icono salir |
+
+## Nota de Overflow
+
+El `overflow-x-hidden` en la línea 84 del wrapper principal se mantiene como medida de seguridad general, ya que no afecta visualmente al asignador.
 
