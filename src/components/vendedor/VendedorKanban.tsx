@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getGoogleMapsUrl } from "@/lib/utils";
-import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus, X, AlertTriangle } from "lucide-react";
+import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus, X, AlertTriangle, MoreHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -27,6 +27,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
 import AgregarProspectoForm from "./AgregarProspectoForm";
@@ -117,8 +123,93 @@ interface ClienteInfo {
   ultimo_feedback?: string;
 }
 
+// Mobile-specific card component
+const MobileClientCard = ({ 
+  cliente, 
+  onInfoClick,
+  onMarkVisited,
+}: { 
+  cliente: ClienteAsignado; 
+  onInfoClick: () => void;
+  onMarkVisited?: () => void;
+}) => {
+  const esProspecto = cliente.etiquetas?.includes('Prospecto');
+  const diasAbierto = cliente.created_at 
+    ? Math.floor((Date.now() - new Date(cliente.created_at).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+  const mostrarAlertaPendiente = diasAbierto >= 2 && cliente.estado === 'Por visitar';
+  
+  return (
+    <Card 
+      id={`assignment-${cliente.id}`}
+      className="p-3"
+    >
+      <div className="flex items-start gap-3">
+        {/* Contenido clickeable para info */}
+        <div 
+          className="flex-1 min-w-0 cursor-pointer" 
+          onClick={onInfoClick}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <h4 className="font-semibold text-sm truncate">{cliente.razon_social}</h4>
+            {esProspecto && <Badge variant="secondary" className="text-xs shrink-0">NUEVO</Badge>}
+          </div>
+          
+          {cliente.canal && esProspecto && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Building className="w-3 h-3 shrink-0" />
+              <span className="truncate">{cliente.canal}</span>
+            </p>
+          )}
+          
+          {cliente.barrio_principal && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <MapPin className="w-3 h-3 shrink-0" />
+              <span className="truncate">{cliente.barrio_principal}</span>
+            </p>
+          )}
+          
+          {cliente.telefonos?.[0] && (
+            <a 
+              href={`tel:${cliente.telefonos[0]}`}
+              className="text-xs text-primary flex items-center gap-1 mt-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Phone className="w-3 h-3 shrink-0" />
+              {cliente.telefonos[0]}
+            </a>
+          )}
+          
+          {mostrarAlertaPendiente && (
+            <div className="flex items-center gap-1.5 mt-2 p-1.5 bg-amber-50 dark:bg-amber-950/30 rounded text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span className="text-xs font-medium">{diasAbierto} días sin cerrar</span>
+            </div>
+          )}
+        </div>
+        
+        {/* Botón para marcar visitado (alternativa táctil al drag) */}
+        {onMarkVisited && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkVisited();
+            }}
+            className="shrink-0 h-8 px-3"
+          >
+            Marcar ✓
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+};
+
 const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKanban(_props, ref) {
   const [viewMode, setViewMode] = useState<'kanban' | 'map'>('kanban');
+  const [mobileActiveTab, setMobileActiveTab] = useState<'Por visitar' | 'Visitado'>('Por visitar');
   const [assignments, setAssignments] = useState<Record<string, ClienteAsignado[]>>({
     'Por visitar': [],
     'Visitado': [],
@@ -434,6 +525,12 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
     }
 
     setActiveId(null);
+  };
+
+  // Handler for mobile "Marcar ✓" button - reuses the same flow as drag & drop
+  const handleMobileMarkVisited = (cliente: ClienteAsignado) => {
+    setSelectedCliente(cliente);
+    setShowFeedbackDialog(true);
   };
 
   const handleCardClick = async (cliente: ClienteAsignado) => {
@@ -932,78 +1029,145 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
     : null;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 overflow-x-hidden">
+      {/* Header responsive */}
+      <div className="flex flex-col gap-4">
+        {/* Título */}
         <div>
-          <h2 className="text-2xl font-bold">Mis Clientes Asignados</h2>
-          <p className="text-muted-foreground">
+          <h2 className="text-xl md:text-2xl font-bold">Mis Clientes Asignados</h2>
+          <p className="text-sm text-muted-foreground">
             {viewMode === 'kanban' 
-              ? 'Haz clic en un cliente para ver detalles. Arrastra entre columnas para actualizar su estado'
-              : 'Visualiza la ubicación de todos tus clientes asignados'}
+              ? 'Toca un cliente para ver detalles'
+              : 'Visualiza la ubicación de tus clientes'}
           </p>
         </div>
         
-        {/* Acciones */}
-        <div className="flex items-center gap-2">
+        {/* Acciones - responsive */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Botón primario siempre visible */}
+          <Button
+            variant="default"
+            onClick={() => setShowAgregarProspecto(true)}
+            size="sm"
+            className="gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Agregar Prospecto</span>
+            <span className="sm:hidden">Prospecto</span>
+          </Button>
+          
+          {/* Toggle Kanban/Mapa - siempre visible (importante para operación) */}
+          <div className="flex items-center border rounded-md">
+            <Button
+              variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('kanban')}
+              className="rounded-r-none"
+            >
+              <Columns className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'map' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('map')}
+              className="rounded-l-none"
+            >
+              <MapIcon className="w-4 h-4" />
+            </Button>
+          </div>
+          
+          {/* Desktop: Auto-asignar visible */}
           <Button
             variant="outline"
             onClick={() => setShowAutoAsignar(true)}
-            className="gap-2"
+            size="sm"
+            className="gap-2 hidden md:flex"
           >
             <UserPlus className="w-4 h-4" />
             Auto-asignar
           </Button>
-          <Button
-            variant="outline"
-            onClick={() => setShowAgregarProspecto(true)}
-            className="gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Agregar Prospecto
-          </Button>
-          <Button
-            variant={viewMode === 'kanban' ? 'default' : 'outline'}
-            onClick={() => setViewMode('kanban')}
-            className="gap-2"
-          >
-            <Columns className="w-4 h-4" />
-            Vista Kanban
-          </Button>
-          <Button
-            variant={viewMode === 'map' ? 'default' : 'outline'}
-            onClick={() => setViewMode('map')}
-            className="gap-2"
-          >
-            <MapIcon className="w-4 h-4" />
-            Vista Mapa
-          </Button>
+          
+          {/* Mobile: Auto-asignar en menú overflow */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="md:hidden">
+                <MoreHorizontal className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-background">
+              <DropdownMenuItem onClick={() => setShowAutoAsignar(true)}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Auto-asignar cliente
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      {/* Renderizar Kanban o Mapa según viewMode */}
       {viewMode === 'kanban' ? (
-        <DndContext 
-          sensors={sensors} 
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <DroppableColumn 
-              id="Por visitar" 
-              title="Por visitar" 
-              clientes={assignments['Por visitar']} 
-            />
-            <DroppableColumn 
-              id="Visitado" 
-              title="Visitado" 
-              clientes={assignments['Visitado']} 
-            />
+        <>
+          {/* DESKTOP: Kanban con drag & drop (md+) */}
+          <div className="hidden md:block">
+            <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+              <div className="grid grid-cols-2 gap-4">
+                <DroppableColumn id="Por visitar" title="Por visitar" clientes={assignments['Por visitar']} />
+                <DroppableColumn id="Visitado" title="Visitado" clientes={assignments['Visitado']} />
+              </div>
+              <DragOverlay>
+                {activeCliente ? <ClientCard cliente={activeCliente} /> : null}
+              </DragOverlay>
+            </DndContext>
           </div>
 
-          <DragOverlay>
-            {activeCliente ? <ClientCard cliente={activeCliente} /> : null}
-          </DragOverlay>
-        </DndContext>
+          {/* MOBILE: Tabs + Lista simple (<md) */}
+          <div className="md:hidden">
+            {/* Segmented control para cambiar estado */}
+            <div className="flex border rounded-lg p-1 bg-muted mb-4">
+              <button
+                onClick={() => setMobileActiveTab('Por visitar')}
+                className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+                  mobileActiveTab === 'Por visitar' 
+                    ? 'bg-background shadow-sm' 
+                    : 'text-muted-foreground'
+                }`}
+              >
+                Por visitar ({assignments['Por visitar'].length})
+              </button>
+              <button
+                onClick={() => setMobileActiveTab('Visitado')}
+                className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+                  mobileActiveTab === 'Visitado' 
+                    ? 'bg-background shadow-sm' 
+                    : 'text-muted-foreground'
+                }`}
+              >
+                Visitado ({assignments['Visitado'].length})
+              </button>
+            </div>
+            
+            {/* Lista - solo renderiza la activa */}
+            <div className="space-y-3">
+              {assignments[mobileActiveTab].length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  {mobileActiveTab === 'Por visitar' 
+                    ? 'Sin clientes por visitar' 
+                    : 'Sin visitas completadas'}
+                </p>
+              ) : (
+                assignments[mobileActiveTab].map(cliente => (
+                  <MobileClientCard 
+                    key={cliente.id} 
+                    cliente={cliente}
+                    onInfoClick={() => handleCardClick(cliente)}
+                    onMarkVisited={mobileActiveTab === 'Por visitar' 
+                      ? () => handleMobileMarkVisited(cliente) 
+                      : undefined}
+                  />
+                ))
+              )}
+            </div>
+          </div>
+        </>
       ) : (
         <VendedorAssignmentsMap assignments={assignments} />
       )}
@@ -1375,120 +1539,118 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
               </div>
             </div>
 
+            {/* Selector de motivo de no visita */}
             {tipoCierre === 'no_visitado' && (
               <div>
                 <label className="text-sm font-medium mb-2 block">
-                  Motivo de la No Visita
+                  Motivo de la no visita <span className="text-destructive">*</span>
                 </label>
-                <select
-                  value={motivoNoVisita}
-                  onChange={(e) => setMotivoNoVisita(e.target.value)}
-                  className="w-full p-2 border rounded-md bg-background"
-                >
-                  <option value="">Seleccione un motivo...</option>
-                  <option value="Local Cerrado / Fuera de Horario">Local Cerrado / Fuera de Horario</option>
-                  <option value="No se encontraba el Contacto/Decisor">No se encontraba el Contacto/Decisor</option>
-                  <option value="Rechazo de visita">Rechazo de visita</option>
-                  <option value="Falta de tiempo (Vendedor)">Falta de tiempo (Vendedor)</option>
-                  <option value="Otro (ver notas)">Otro (ver notas)</option>
-                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Cerrado', 'Cerrado definitivo', 'No me atendió', 'Otro motivo'].map((motivo) => (
+                    <button
+                      key={motivo}
+                      type="button"
+                      onClick={() => setMotivoNoVisita(motivo)}
+                      className={`p-2 rounded-lg border text-sm text-center transition-all ${
+                        motivoNoVisita === motivo 
+                          ? 'border-primary bg-primary/10 text-primary font-medium' 
+                          : 'border-border hover:border-muted-foreground'
+                      }`}
+                    >
+                      {motivo}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
+            {/* Selector de tipo de interacción */}
             {(tipoCierre === 'visitado' || tipoCierre === 'online') && (
               <div>
                 <label className="text-sm font-medium mb-2 block">
-                  Propósito Principal
+                  Tipo de Interacción <span className="text-destructive">*</span>
                 </label>
-                <select
-                  value={tipoInteraccion}
-                  onChange={(e) => setTipoInteraccion(e.target.value)}
-                  className="w-full p-2 border rounded-md bg-background"
-                >
-                  <option value="">Seleccione el propósito...</option>
-                  <option value="Seguimiento / Rutina">Seguimiento / Rutina</option>
-                  <option value="Asesoramiento (Carta / Exhibición)">Asesoramiento (Carta / Exhibición)</option>
-                  <option value="Gestión de Activación (Degustación / Capacitación)">Gestión de Activación (Degustación / Capacitación)</option>
-                  <option value="Presentación de Muestras">Presentación de Muestras</option>
-                  <option value="Gestión de Problemas (Entrega / Cobranza)">Gestión de Problemas (Entrega / Cobranza)</option>
-                  <option value="Prospección (Visita inicial)">Prospección (Visita inicial)</option>
-                  <option value="Venta Concretada">💰 Venta Concretada</option>
-                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Venta Concretada', 'Presupuesto enviado', 'Conversación / Seguimiento', 'No hubo interés'].map((tipo) => (
+                    <button
+                      key={tipo}
+                      type="button"
+                      onClick={() => setTipoInteraccion(tipo)}
+                      className={`p-2 rounded-lg border text-sm text-center transition-all ${
+                        tipoInteraccion === tipo 
+                          ? 'border-primary bg-primary/10 text-primary font-medium' 
+                          : 'border-border hover:border-muted-foreground'
+                      }`}
+                    >
+                      {tipo}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
+            {/* Selector de etiqueta WhatsApp */}
             <div>
               <label className="text-sm font-medium mb-2 block">
-                Actualizar Etiqueta (WhatsApp)
+                Actualizar etiqueta de WhatsApp (opcional)
               </label>
-              <select
-                value={actualizarEtiquetaWa}
-                onChange={(e) => setActualizarEtiquetaWa(e.target.value)}
-                className="w-full p-2 border rounded-md bg-background"
-              >
-                <option value="">(No cambiar)</option>
-                <option value="Nuevo Pedido">Nuevo Pedido</option>
-                <option value="Pago Pendiente">Pago Pendiente</option>
-                <option value="Importante (Seguimiento)">Importante (Seguimiento)</option>
-                <option value="Cliente Potencial">Cliente Potencial</option>
-                <option value="Cliente Perdido">Cliente Perdido</option>
-              </select>
+              <div className="flex flex-wrap gap-2">
+                {['Nuevo Lead', 'En Conversación', 'Interesado', 'Sin Interés', 'Cliente Activo'].map((etiqueta) => (
+                  <button
+                    key={etiqueta}
+                    type="button"
+                    onClick={() => setActualizarEtiquetaWa(actualizarEtiquetaWa === etiqueta ? '' : etiqueta)}
+                    className={`px-3 py-1.5 rounded-full border text-xs transition-all ${
+                      actualizarEtiquetaWa === etiqueta 
+                        ? 'border-primary bg-primary/10 text-primary font-medium' 
+                        : 'border-border hover:border-muted-foreground'
+                    }`}
+                  >
+                    {etiqueta}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>
               <label className="text-sm font-medium mb-2 block">
-                Comentarios ({feedback.length}/400)
+                Comentario <span className="text-destructive">*</span>
               </label>
-              <Textarea
+              <Textarea 
                 value={feedback}
                 onChange={(e) => setFeedback(e.target.value)}
-                placeholder="Ingrese sus comentarios..."
+                placeholder="Ingrese sus comentarios sobre la visita..."
                 className="min-h-[100px]"
                 maxLength={400}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                {(tipoCierre === 'visitado' || tipoCierre === 'online')
-                  ? "El cliente será recomendado nuevamente en 15 días"
-                  : "El cliente será recomendado nuevamente mañana"}
+                {feedback.length}/400 caracteres
               </p>
             </div>
             
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowFeedbackDialog(false);
-                  setFeedback("");
-                  setTipoCierre('');
-                  setMotivoNoVisita("");
-                  setTipoInteraccion("");
-                  setActualizarEtiquetaWa("");
-                }}
-                disabled={isSavingFeedback}
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleSaveFeedback}
-                disabled={isSavingFeedback || !feedback.trim() || !tipoCierre}
-              >
-                {isSavingFeedback ? "Guardando..." : "Guardar Feedback"}
-              </Button>
-            </div>
+            <Button 
+              onClick={handleSaveFeedback} 
+              disabled={isSavingFeedback || !feedback.trim() || !tipoCierre || 
+                (tipoCierre === 'no_visitado' && !motivoNoVisita) ||
+                ((tipoCierre === 'visitado' || tipoCierre === 'online') && !tipoInteraccion)}
+              className="w-full"
+            >
+              {isSavingFeedback ? 'Guardando...' : 'Guardar Feedback'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para agregar prospecto */}
+      {/* Dialog de agregar prospecto */}
       <Dialog open={showAgregarProspecto} onOpenChange={setShowAgregarProspecto}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Agregar Nuevo Prospecto</DialogTitle>
+            <DialogTitle>Agregar Prospecto Manualmente</DialogTitle>
             <DialogDescription>
-              Ingresá los datos del establecimiento. La dirección será validada automáticamente.
+              Crea un nuevo prospecto y agrégalo a tu lista de visitas
             </DialogDescription>
           </DialogHeader>
-          <AgregarProspectoForm
+          <AgregarProspectoForm 
             onSuccess={() => {
               setShowAgregarProspecto(false);
               fetchAsignaciones();
@@ -1498,16 +1660,16 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para auto-asignar cliente/prospecto */}
+      {/* Dialog de auto-asignar */}
       <AutoAsignarDialog
         open={showAutoAsignar}
         onOpenChange={setShowAutoAsignar}
-        onSuccess={fetchAsignaciones}
+        onSuccess={() => {
+          fetchAsignaciones();
+        }}
       />
     </div>
   );
 });
-
-
 
 export default VendedorKanban;
