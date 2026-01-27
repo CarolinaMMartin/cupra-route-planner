@@ -574,20 +574,20 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
 
   if (step === "validating") {
     return (
-      <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <Loader2 className="w-12 h-12 animate-spin text-accent" />
-        <p className="text-lg font-medium text-foreground">Validando ubicación...</p>
-        <p className="text-sm text-muted-foreground">Verificando la dirección con el servicio de geocodificación</p>
+      <div className="flex flex-col items-center justify-center py-8 md:py-12 space-y-3">
+        <Loader2 className="w-10 h-10 md:w-12 md:h-12 animate-spin text-accent" />
+        <p className="text-base md:text-lg font-medium text-foreground">Validando ubicación...</p>
+        <p className="text-xs md:text-sm text-muted-foreground text-center px-4">Verificando la dirección</p>
       </div>
     );
   }
 
   if (step === "checking_duplicates") {
     return (
-      <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <Loader2 className="w-12 h-12 animate-spin text-accent" />
-        <p className="text-lg font-medium text-foreground">Verificando duplicados...</p>
-        <p className="text-sm text-muted-foreground">Buscando prospectos o clientes similares</p>
+      <div className="flex flex-col items-center justify-center py-8 md:py-12 space-y-3">
+        <Loader2 className="w-10 h-10 md:w-12 md:h-12 animate-spin text-accent" />
+        <p className="text-base md:text-lg font-medium text-foreground">Verificando duplicados...</p>
+        <p className="text-xs md:text-sm text-muted-foreground text-center px-4">Buscando registros similares</p>
       </div>
     );
   }
@@ -596,58 +596,52 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
     const hasCritical = duplicatesFound.some(d => d.riesgo === "critico");
     
     return (
-      <div className="space-y-6 py-4">
+      <div className="space-y-4 py-2">
         <div className="flex items-center justify-center">
-          <div className={`flex items-center justify-center w-16 h-16 rounded-full ${hasCritical ? "bg-red-500/20" : "bg-yellow-500/20"}`}>
-            <AlertTriangle className={`w-10 h-10 ${hasCritical ? "text-red-500" : "text-yellow-500"}`} />
+          <div className={`flex items-center justify-center w-12 h-12 md:w-16 md:h-16 rounded-full ${hasCritical ? "bg-red-500/20" : "bg-yellow-500/20"}`}>
+            <AlertTriangle className={`w-7 h-7 md:w-10 md:h-10 ${hasCritical ? "text-red-500" : "text-yellow-500"}`} />
           </div>
         </div>
         
-        <div className="text-center space-y-2">
-          <p className="text-lg font-medium text-foreground">
-            {hasCritical ? "¡Posible duplicado exacto!" : "Posibles duplicados encontrados"}
+        <div className="text-center space-y-1">
+          <p className="text-base md:text-lg font-medium text-foreground">
+            {hasCritical ? "¡Posible duplicado!" : "Posibles duplicados"}
           </p>
-          <p className="text-sm text-muted-foreground">
-            Encontramos {duplicatesFound.length} registro(s) similar(es). 
-            {hasCritical 
-              ? " Se detectó un lugar con el mismo identificador de Google." 
-              : " ¿Querés continuar de todas formas?"}
+          <p className="text-xs md:text-sm text-muted-foreground px-2">
+            {duplicatesFound.length} registro(s) similar(es) encontrado(s)
           </p>
         </div>
 
-        {/* Lista de duplicados */}
-        <div className="space-y-3 max-h-60 overflow-y-auto">
+        {/* Lista de duplicados más compacta */}
+        <div className="space-y-2 max-h-48 md:max-h-60 overflow-y-auto">
           {duplicatesFound.map((dup, idx) => {
             const config = riskConfig[dup.riesgo];
             return (
-              <div key={idx} className={`rounded-lg p-3 border ${config.bg} ${config.border}`}>
-                <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <Badge variant={dup.tipo === "cliente" ? "default" : "secondary"}>
-                    {dup.tipo === "cliente" ? "Cliente Cupra" : "Prospecto"}
+              <div key={idx} className={`rounded-lg p-2.5 md:p-3 border ${config.bg} ${config.border}`}>
+                <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                  <Badge variant={dup.tipo === "cliente" ? "default" : "secondary"} className="text-xs">
+                    {dup.tipo === "cliente" ? "Cliente" : "Prospecto"}
                   </Badge>
-                  <Badge className={`${config.bg} ${config.text} border ${config.border}`}>
+                  <Badge className={`text-xs ${config.bg} ${config.text} border ${config.border}`}>
                     {config.label}
                   </Badge>
                 </div>
-                <p className="font-medium text-foreground">{dup.nombre}</p>
+                <p className="font-medium text-sm text-foreground truncate">{dup.nombre}</p>
                 {dup.direccion && (
-                  <p className="text-sm text-muted-foreground">{dup.direccion}</p>
+                  <p className="text-xs text-muted-foreground truncate">{dup.direccion}</p>
                 )}
-                <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
-                  {dup.telefono && <span>Tel: {dup.telefono}</span>}
-                  <span className={config.text}>{dup.razon_match}</span>
-                </div>
+                <p className={`text-xs mt-1 ${config.text}`}>{dup.razon_match}</p>
               </div>
             );
           })}
         </div>
 
-        <div className="flex gap-3 pt-2">
-          <Button variant="outline" onClick={onCancel} className="flex-1">
+        <div className="flex gap-2 pt-2 sticky bottom-0 bg-background">
+          <Button variant="outline" onClick={onCancel} className="flex-1 h-10">
             Cancelar
           </Button>
-          <Button onClick={handleContinueAnyway} className="flex-1 wine-button">
-            Continuar de todas formas
+          <Button onClick={handleContinueAnyway} className="flex-1 wine-button h-10 text-sm">
+            Continuar igual
           </Button>
         </div>
       </div>
@@ -656,29 +650,29 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
 
   if (step === "saving") {
     return (
-      <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <Loader2 className="w-12 h-12 animate-spin text-accent" />
-        <p className="text-lg font-medium text-foreground">Guardando prospecto...</p>
+      <div className="flex flex-col items-center justify-center py-8 md:py-12 space-y-3">
+        <Loader2 className="w-10 h-10 md:w-12 md:h-12 animate-spin text-accent" />
+        <p className="text-base md:text-lg font-medium text-foreground">Guardando prospecto...</p>
       </div>
     );
   }
 
   if (step === "error") {
     return (
-      <div className="flex flex-col items-center justify-center py-8 space-y-6">
-        <div className="flex items-center justify-center w-16 h-16 rounded-full bg-destructive/20">
-          <AlertCircle className="w-10 h-10 text-destructive" />
+      <div className="flex flex-col items-center justify-center py-6 md:py-8 space-y-4">
+        <div className="flex items-center justify-center w-12 h-12 md:w-16 md:h-16 rounded-full bg-destructive/20">
+          <AlertCircle className="w-7 h-7 md:w-10 md:h-10 text-destructive" />
         </div>
-        <div className="text-center space-y-2">
-          <p className="text-lg font-medium text-foreground">No se pudo validar la dirección</p>
-          <p className="text-sm text-muted-foreground max-w-sm">{errorMessage}</p>
+        <div className="text-center space-y-1 px-4">
+          <p className="text-base md:text-lg font-medium text-foreground">No se pudo validar</p>
+          <p className="text-xs md:text-sm text-muted-foreground">{errorMessage}</p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={onCancel}>
+        <div className="flex gap-2 w-full px-4">
+          <Button variant="outline" onClick={onCancel} className="flex-1 h-10">
             Cancelar
           </Button>
-          <Button onClick={handleRetry} className="wine-button">
-            Corregir datos
+          <Button onClick={handleRetry} className="flex-1 wine-button h-10">
+            Corregir
           </Button>
         </div>
       </div>
@@ -696,48 +690,41 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
     const provinciaMostrar = geocodeResult.provincia || formData.provincia;
 
     return (
-      <div className="flex flex-col space-y-6 py-4">
+      <div className="flex flex-col space-y-4 py-2">
         <div className="flex items-center justify-center">
-          <div className="flex items-center justify-center w-16 h-16 rounded-full bg-accent/20">
-            <CheckCircle className="w-10 h-10 text-accent" />
+          <div className="flex items-center justify-center w-12 h-12 md:w-16 md:h-16 rounded-full bg-accent/20">
+            <CheckCircle className="w-7 h-7 md:w-10 md:h-10 text-accent" />
           </div>
         </div>
         
-        <div className="text-center space-y-2">
-          <p className="text-lg font-medium text-foreground">Dirección validada</p>
-          <p className="text-sm text-muted-foreground">Confirmá que la dirección interpretada es correcta</p>
+        <div className="text-center space-y-1">
+          <p className="text-base md:text-lg font-medium text-foreground">Dirección validada</p>
+          <p className="text-xs md:text-sm text-muted-foreground">Confirmá que es correcta</p>
         </div>
 
-        <div className="bg-muted/50 rounded-lg p-4 border border-border">
-          <div className="flex items-start gap-3">
-            <MapPin className="w-5 h-5 text-accent mt-0.5 flex-shrink-0" />
-            <div className="space-y-1">
-              <p className="font-medium text-foreground">{formData.nombre}</p>
-              <p className="text-sm text-muted-foreground">{geocodeResult.formatted_address}</p>
-              {/* Datos geográficos detallados */}
-              <div className="text-xs text-muted-foreground space-y-0.5 pt-2 border-t border-border mt-2">
-                {barrioMostrar && (
-                  <p><span className="font-medium">Barrio:</span> {barrioMostrar}</p>
-                )}
-                {comunaMostrar && (
-                  <p><span className="font-medium">Comuna:</span> {comunaMostrar}</p>
-                )}
+        <div className="bg-muted/50 rounded-lg p-3 md:p-4 border border-border">
+          <div className="flex items-start gap-2.5">
+            <MapPin className="w-4 h-4 md:w-5 md:h-5 text-accent mt-0.5 flex-shrink-0" />
+            <div className="space-y-1 min-w-0">
+              <p className="font-medium text-sm md:text-base text-foreground truncate">{formData.nombre}</p>
+              <p className="text-xs md:text-sm text-muted-foreground">{geocodeResult.formatted_address}</p>
+              {/* Datos geográficos compactos */}
+              <div className="text-xs text-muted-foreground space-y-0.5 pt-1.5 border-t border-border mt-1.5">
+                {barrioMostrar && <p><span className="font-medium">Barrio:</span> {barrioMostrar}</p>}
+                {comunaMostrar && <p><span className="font-medium">Comuna:</span> {comunaMostrar}</p>}
                 <p><span className="font-medium">Ciudad:</span> {ciudadMostrar}</p>
                 <p><span className="font-medium">Provincia:</span> {provinciaMostrar}</p>
               </div>
-              <p className="text-xs text-muted-foreground pt-1">
-                Coordenadas: {geocodeResult.lat?.toFixed(6)}, {geocodeResult.lng?.toFixed(6)}
-              </p>
             </div>
           </div>
         </div>
 
-        <div className="flex gap-3 pt-2">
-          <Button variant="outline" onClick={handleRetry} className="flex-1">
-            Corregir datos
+        <div className="flex gap-2 pt-2 sticky bottom-0 bg-background">
+          <Button variant="outline" onClick={handleRetry} className="flex-1 h-10">
+            Corregir
           </Button>
-          <Button onClick={handleConfirmSave} className="flex-1 wine-button">
-            Confirmar y Guardar
+          <Button onClick={handleConfirmSave} className="flex-1 wine-button h-10">
+            Confirmar
           </Button>
         </div>
       </div>
@@ -746,58 +733,61 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
 
   // === FORMULARIO PRINCIPAL ===
   return (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <Label htmlFor="nombre">Nombre del establecimiento *</Label>
+    <div className="space-y-4">
+      {/* Campos obligatorios principales */}
+      <div className="space-y-1.5">
+        <Label htmlFor="nombre" className="text-sm">Nombre del establecimiento *</Label>
         <Input
           id="nombre"
           placeholder="Ej: Restaurante Don Carlos"
           value={formData.nombre}
           onChange={(e) => handleInputChange("nombre", e.target.value)}
-          className="bg-input border-border"
+          className="bg-input border-border h-10"
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="direccion">Dirección (calle y altura) *</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="direccion" className="text-sm">Dirección (calle y altura) *</Label>
         <Input
           id="direccion"
           placeholder="Ej: Av. Santa Fe 1234"
           value={formData.direccion}
           onChange={(e) => handleInputChange("direccion", e.target.value)}
-          className="bg-input border-border"
+          className="bg-input border-border h-10"
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="barrio">Barrio / Localidad</Label>
-        <Input
-          id="barrio"
-          placeholder="Ej: Recoleta"
-          value={formData.barrio}
-          onChange={(e) => handleInputChange("barrio", e.target.value)}
-          className="bg-input border-border"
-        />
+      {/* Fila: Barrio + Ciudad en grid 2 columnas en mobile */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="barrio" className="text-sm">Barrio</Label>
+          <Input
+            id="barrio"
+            placeholder="Recoleta"
+            value={formData.barrio}
+            onChange={(e) => handleInputChange("barrio", e.target.value)}
+            className="bg-input border-border h-10"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="ciudad" className="text-sm">Ciudad *</Label>
+          <Input
+            id="ciudad"
+            placeholder="Buenos Aires"
+            value={formData.ciudad}
+            onChange={(e) => handleInputChange("ciudad", e.target.value)}
+            className="bg-input border-border h-10"
+          />
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="ciudad">Ciudad *</Label>
-        <Input
-          id="ciudad"
-          placeholder="Ej: Buenos Aires"
-          value={formData.ciudad}
-          onChange={(e) => handleInputChange("ciudad", e.target.value)}
-          className="bg-input border-border"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="provincia">Provincia *</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="provincia" className="text-sm">Provincia *</Label>
         <Select
           value={formData.provincia}
           onValueChange={(value) => handleInputChange("provincia", value)}
         >
-          <SelectTrigger className="bg-input border-border">
+          <SelectTrigger className="bg-input border-border h-10">
             <SelectValue placeholder="Seleccionar provincia" />
           </SelectTrigger>
           <SelectContent>
@@ -810,47 +800,50 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
         </Select>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="telefono">Teléfono</Label>
-        <Input
-          id="telefono"
-          placeholder="Ej: 11 1234-5678"
-          value={formData.telefono}
-          onChange={(e) => handleInputChange("telefono", e.target.value)}
-          className="bg-input border-border"
-        />
+      {/* Campos opcionales en grid más compacto */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="telefono" className="text-sm">Teléfono</Label>
+          <Input
+            id="telefono"
+            placeholder="11 1234-5678"
+            value={formData.telefono}
+            onChange={(e) => handleInputChange("telefono", e.target.value)}
+            className="bg-input border-border h-10"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="text-sm">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder="contacto@..."
+            value={formData.email}
+            onChange={(e) => handleInputChange("email", e.target.value)}
+            className="bg-input border-border h-10"
+          />
+        </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          placeholder="Ej: contacto@restaurante.com"
-          value={formData.email}
-          onChange={(e) => handleInputChange("email", e.target.value)}
-          className="bg-input border-border"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="instagram">Instagram</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="instagram" className="text-sm">Instagram</Label>
         <Input
           id="instagram"
-          placeholder="Ej: @restaurante_doncarlos"
+          placeholder="@restaurante_doncarlos"
           value={formData.instagram}
           onChange={(e) => handleInputChange("instagram", e.target.value)}
-          className="bg-input border-border"
+          className="bg-input border-border h-10"
         />
       </div>
 
-      <div className="flex gap-3 pt-4">
-        <Button variant="outline" onClick={onCancel} className="flex-1">
+      {/* Botones de acción sticky en mobile */}
+      <div className="flex gap-3 pt-3 sticky bottom-0 bg-background pb-2">
+        <Button variant="outline" onClick={onCancel} className="flex-1 h-11">
           Cancelar
         </Button>
-        <Button onClick={handleValidateAndSave} className="flex-1 wine-button">
+        <Button onClick={handleValidateAndSave} className="flex-1 wine-button h-11">
           <MapPin className="w-4 h-4 mr-2" />
-          Validar y Guardar
+          Validar
         </Button>
       </div>
     </div>

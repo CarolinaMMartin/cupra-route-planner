@@ -23,6 +23,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -37,6 +45,7 @@ import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
 import AgregarProspectoForm from "./AgregarProspectoForm";
 import AutoAsignarDialog from "./AutoAsignarDialog";
+import ProspectoFormModal from "./ProspectoFormModal";
 
 export interface VendedorKanbanRef {
   focusAssignment: (assignmentId: string) => void;
@@ -1641,24 +1650,16 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de agregar prospecto */}
-      <Dialog open={showAgregarProspecto} onOpenChange={setShowAgregarProspecto}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Agregar Prospecto Manualmente</DialogTitle>
-            <DialogDescription>
-              Crea un nuevo prospecto y agrégalo a tu lista de visitas
-            </DialogDescription>
-          </DialogHeader>
-          <AgregarProspectoForm 
-            onSuccess={() => {
-              setShowAgregarProspecto(false);
-              fetchAsignaciones();
-            }}
-            onCancel={() => setShowAgregarProspecto(false)}
-          />
-        </DialogContent>
-      </Dialog>
+      {/* Agregar prospecto - Drawer en mobile, Dialog en desktop */}
+      <ProspectoFormModal
+        open={showAgregarProspecto}
+        onOpenChange={setShowAgregarProspecto}
+        onSuccess={() => {
+          setShowAgregarProspecto(false);
+          fetchAsignaciones();
+        }}
+        onCancel={() => setShowAgregarProspecto(false)}
+      />
 
       {/* Dialog de auto-asignar */}
       <AutoAsignarDialog
