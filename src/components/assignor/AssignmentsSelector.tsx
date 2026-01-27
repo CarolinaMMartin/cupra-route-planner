@@ -68,6 +68,7 @@ const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) =
   const fetchAssignments = async () => {
     setIsLoading(true);
     try {
+      // Solo mostrar asignaciones vigentes (no visitadas)
       const { data, error } = await supabase
         .from('asignaciones_vendedores_clientes')
         .select(`
@@ -93,6 +94,7 @@ const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) =
             direccion
           )
         `)
+        .neq('estado', 'Visitado')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
