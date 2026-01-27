@@ -12,25 +12,26 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('🧹 Iniciando limpieza de asignaciones visitadas...');
+    // Calcular fecha actual en hora Argentina para logging
+    const nowArg = new Date().toLocaleString('es-AR', { 
+      timeZone: 'America/Argentina/Buenos_Aires',
+      dateStyle: 'full',
+      timeStyle: 'long'
+    });
+    
+    console.log(`🧹 Iniciando limpieza de asignaciones visitadas...`);
+    console.log(`📅 Fecha/hora Argentina: ${nowArg}`);
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Obtener la fecha de inicio del día actual (00:00:00)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    console.log(`📅 Limpiando asignaciones visitadas desde: ${today.toISOString()}`);
-
-    // Eliminar asignaciones con estado "Visitado" creadas hoy
+    // Eliminar TODAS las asignaciones con estado "Visitado" sin importar la fecha de creación
     const { data: deletedAssignments, error: deleteError } = await supabase
       .from('asignaciones_vendedores_clientes')
       .delete()
       .eq('estado', 'Visitado')
-      .gte('created_at', today.toISOString())
       .select();
 
     if (deleteError) {
@@ -39,7 +40,7 @@ Deno.serve(async (req) => {
     }
 
     const deletedCount = deletedAssignments?.length || 0;
-    console.log(`✅ Se eliminaron ${deletedCount} asignaciones visitadas del día`);
+    console.log(`✅ Se eliminaron ${deletedCount} asignaciones visitadas (sin filtro de fecha)`);
 
     return new Response(
       JSON.stringify({
@@ -47,6 +48,7 @@ Deno.serve(async (req) => {
         message: `Se eliminaron ${deletedCount} asignaciones visitadas`,
         deletedCount,
         timestamp: new Date().toISOString(),
+        timestampArgentina: nowArg,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

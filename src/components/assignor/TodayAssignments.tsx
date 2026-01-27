@@ -88,14 +88,28 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const fetchTodayAssignments = async () => {
     setIsLoading(true);
     try {
-      // Calcular el inicio del día en UTC para asegurar consistencia
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = today.getMonth();
-      const day = today.getDate();
-      const startOfDay = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+      // Calcular el inicio del día en hora Argentina (UTC-3)
+      // Las 00:00 de Argentina = 03:00 UTC
+      const now = new Date();
+      const utcYear = now.getUTCFullYear();
+      const utcMonth = now.getUTCMonth();
+      const utcDate = now.getUTCDate();
+      const utcHours = now.getUTCHours();
+      
+      // Si estamos antes de las 03:00 UTC, estamos en el día anterior en Argentina
+      const argDate = utcHours < 3 ? utcDate - 1 : utcDate;
+      const argMonth = argDate < 1 ? utcMonth - 1 : utcMonth;
+      const argYear = argMonth < 0 ? utcYear - 1 : utcYear;
+      
+      // Inicio del día en Argentina = 03:00 UTC de ese día
+      const startOfDayArg = new Date(Date.UTC(
+        argMonth < 0 ? argYear : utcYear,
+        argMonth < 0 ? 11 : (argDate < 1 ? argMonth : utcMonth),
+        argDate < 1 ? new Date(utcYear, utcMonth, 0).getDate() : argDate,
+        3, 0, 0, 0
+      ));
 
-      console.log('Fetching assignments from:', startOfDay.toISOString());
+      console.log('Fetching assignments from (Argentina midnight):', startOfDayArg.toISOString());
 
       const { data, error } = await supabase
         .from('asignaciones_vendedores_clientes')
@@ -108,7 +122,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
           vendedor:profiles!asignaciones_vendedores_clientes_vendedor_id_fkey(nombre, email),
           cliente:clientes!asignaciones_vendedores_clientes_client_id_fkey(razon_social, cuit_dni)
         `)
-        .gte('created_at', startOfDay.toISOString())
+        .gte('created_at', startOfDayArg.toISOString())
         .order('created_at', { ascending: false });
 
       console.log('Assignments fetched:', data?.length);
@@ -186,17 +200,28 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const handleDeleteAllAssignments = async () => {
     setIsDeleting(true);
     try {
-      // Calcular el inicio del día en UTC
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = today.getMonth();
-      const day = today.getDate();
-      const startOfDay = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
+      // Calcular el inicio del día en hora Argentina (UTC-3)
+      const now = new Date();
+      const utcYear = now.getUTCFullYear();
+      const utcMonth = now.getUTCMonth();
+      const utcDate = now.getUTCDate();
+      const utcHours = now.getUTCHours();
+      
+      const argDate = utcHours < 3 ? utcDate - 1 : utcDate;
+      const argMonth = argDate < 1 ? utcMonth - 1 : utcMonth;
+      const argYear = argMonth < 0 ? utcYear - 1 : utcYear;
+      
+      const startOfDayArg = new Date(Date.UTC(
+        argMonth < 0 ? argYear : utcYear,
+        argMonth < 0 ? 11 : (argDate < 1 ? argMonth : utcMonth),
+        argDate < 1 ? new Date(utcYear, utcMonth, 0).getDate() : argDate,
+        3, 0, 0, 0
+      ));
 
       const { error } = await supabase
         .from('asignaciones_vendedores_clientes')
         .delete()
-        .gte('created_at', startOfDay.toISOString());
+        .gte('created_at', startOfDayArg.toISOString());
 
       if (error) throw error;
 
