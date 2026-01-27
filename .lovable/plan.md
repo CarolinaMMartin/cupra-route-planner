@@ -1,216 +1,358 @@
 
+# Plan Mejorado: Rediseño Mobile de "Mis Clientes Asignados"
 
-# Diagnóstico y Plan Técnico: Sistema de Asignaciones
+## Incorporación del Feedback Técnico
 
-## Estado Actual vs Reglas de Negocio
+He revisado el código y acepto los 4 puntos del feedback. El plan ahora incluye:
 
-| Regla de Negocio | Estado Actual | Cumple |
-|------------------|---------------|--------|
-| Asignación no visitada sigue válida aunque sea de días anteriores | El sistema mantiene las 8 asignaciones de ayer | ✅ |
-| "Asignaciones de Hoy" muestra solo asignaciones creadas hoy | Filtra por `created_at >= inicio del día (UTC)` | ⚠️ Usa UTC, no hora Argentina |
-| "Modificar" opera sobre todas las asignaciones vigentes | No tiene filtro de fecha ni estado | ❌ Incluye visitados |
-| Marcar "Visitado" excluye del circuito operativo | Se guarda en `visited_at` y cambia `estado` | ✅ |
-| Limpieza nocturna de TODOS los visitados sin filtrar fecha | Solo limpia visitados creados HOY | ❌ |
-| Cron ejecuta a las 23:00 hora Argentina | Ejecuta a las 23:00 UTC (20:00 ARG) | ❌ |
+1. **Layout 100% CSS responsive** (sin depender del hook para layout)
+2. **Eliminar estilos de scroll interno** en mobile
+3. **Reusar la función real de update** (no solo abrir dialog)
+4. **Renderizado condicional simple** en lugar de TabsContent dual
 
 ---
 
-## Diagnóstico Detallado
+## Archivo a Modificar
 
-### 1. Vista "Asignaciones de Hoy" - Problema de Zona Horaria
-
-**Archivo:** `TodayAssignments.tsx` (líneas 91-96)
-
-**Código actual:**
-```typescript
-const today = new Date();
-const startOfDay = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-```
-
-**Problema:** Usa `Date.UTC()` que calcula las 00:00 UTC, equivalente a las 21:00 del día anterior en Argentina. Esto puede causar que:
-- Entre las 00:00 y 03:00 ARG se muestren asignaciones del día anterior
-- Entre las 21:00 y 00:00 ARG no se muestren asignaciones del día actual
+| Archivo | Cambios |
+|---------|---------|
+| `src/components/vendedor/VendedorKanban.tsx` | Layout responsive, acciones compactas, lista mobile con estado local, menú contextual |
 
 ---
 
-### 2. Vista "Modificar" (AssignmentsSelector) - Sin Filtro de Estado
+## Cambios Detallados
 
-**Archivo:** `AssignmentsSelector.tsx` (líneas 71-96)
+### 1. Estado Local para Tab Activo (más eficiente que TabsContent)
 
-**Código actual:**
-```typescript
-const { data, error } = await supabase
-  .from('asignaciones_vendedores_clientes')
-  .select(...)
-  .order('created_at', { ascending: false });
-```
-
-**Problema:** No filtra por estado, por lo que incluiría asignaciones con estado "Visitado" si existieran. Según las reglas, debería mostrar solo asignaciones vigentes (no visitadas).
-
----
-
-### 3. Edge Function de Limpieza - Filtro de Fecha Incorrecto
-
-**Archivo:** `cleanup-visited-assignments/index.ts` (líneas 22-33)
-
-**Código actual:**
-```typescript
-const today = new Date();
-today.setHours(0, 0, 0, 0);
-
-const { data: deletedAssignments } = await supabase
-  .from('asignaciones_vendedores_clientes')
-  .delete()
-  .eq('estado', 'Visitado')
-  .gte('created_at', today.toISOString())  // ❌ Solo limpia visitados de HOY
-  .select();
-```
-
-**Problema:** Solo elimina asignaciones visitadas creadas hoy. Si un vendedor marca como visitada una asignación de ayer, NO se limpiará nunca.
-
----
-
-### 4. Cron Job - Hora Incorrecta
-
-**Configuración actual:**
-```sql
-schedule: '0 23 * * *'  -- 23:00 UTC = 20:00 Argentina
-```
-
-**Problema:** El cron ejecuta a las 20:00 hora Argentina, 3 horas antes del cierre del día laboral esperado (23:00 ARG).
-
----
-
-### 5. Preservación de Registros - OK
-
-**Verificado:** El sistema preserva correctamente el historial de visitas:
-- Los feedbacks se guardan en la tabla `cliente_feedbacks` con toda la información
-- El campo `visited_at` registra el momento exacto de la visita
-- Los datos de `vendedor_id`, `client_id`, `feedback`, `tipo_interaccion` quedan persistidos
-- La tabla de supervisión puede consultar esta información históricamente
-
----
-
-## Plan Técnico de Corrección
-
-### Paso 1: Corregir Edge Function de Limpieza
-
-**Archivo:** `supabase/functions/cleanup-visited-assignments/index.ts`
-
-**Cambios:**
-1. Eliminar el filtro `.gte('created_at', today.toISOString())`
-2. Limpiar TODAS las asignaciones con estado "Visitado" sin importar fecha
-3. Usar zona horaria Argentina para logging
-
-**Código propuesto:**
-```typescript
-Deno.serve(async (req) => {
-  // ... CORS handling ...
-
-  // Calcular fecha actual en Argentina para logging
-  const nowArg = new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' });
-  console.log(`🧹 Limpieza iniciada: ${nowArg} (hora Argentina)`);
-
-  // Eliminar TODAS las asignaciones visitadas (sin filtro de fecha)
-  const { data: deletedAssignments, error } = await supabase
-    .from('asignaciones_vendedores_clientes')
-    .delete()
-    .eq('estado', 'Visitado')
-    .select();
-
-  console.log(`✅ Eliminadas ${deletedAssignments?.length || 0} asignaciones visitadas`);
-  // ...
-});
-```
-
----
-
-### Paso 2: Actualizar Cron Job
-
-**Acción:** Ejecutar SQL para actualizar la hora del cron a 02:00 UTC (23:00 Argentina)
-
-```sql
-SELECT cron.unschedule(1);
-
-SELECT cron.schedule(
-  'cleanup-visited-assignments',
-  '0 2 * * *',  -- 02:00 UTC = 23:00 Argentina
-  $$
-  SELECT net.http_post(
-    url:='https://ofwhxaglbcgyksauwjby.supabase.co/functions/v1/cleanup-visited-assignments',
-    headers:='{"Content-Type": "application/json", "Authorization": "Bearer ..."}'::jsonb,
-    body:=concat('{"timestamp": "', now(), '"}')::jsonb
-  ) as request_id;
-  $$
-);
-```
-
----
-
-### Paso 3: Corregir Vista "Asignaciones de Hoy" (Zona Horaria)
-
-**Archivo:** `TodayAssignments.tsx`
-
-**Cambio:** Calcular el inicio del día en hora Argentina (UTC-3)
+Agregar estado simple para controlar qué lista mostrar en mobile:
 
 ```typescript
-// Calcular inicio del día en Argentina (UTC-3)
-const now = new Date();
-// Ajustar a Argentina sumando el offset de -3 horas
-const argentinaOffset = -3 * 60; // minutos
-const localOffset = now.getTimezoneOffset(); // minutos
-const diffMinutes = argentinaOffset - (-localOffset);
-
-const argentinaTime = new Date(now.getTime() + diffMinutes * 60 * 1000);
-const startOfDayArg = new Date(Date.UTC(
-  argentinaTime.getFullYear(),
-  argentinaTime.getMonth(),
-  argentinaTime.getDate(),
-  3, 0, 0, 0  // 03:00 UTC = 00:00 Argentina
-));
+const [mobileActiveTab, setMobileActiveTab] = useState<'Por visitar' | 'Visitado'>('Por visitar');
 ```
 
----
+Esto evita renderizar ambas listas y problemas de hydration.
 
-### Paso 4: Filtrar "Modificar" para Excluir Visitados
+### 2. Wrapper Principal: Eliminar Overflow Horizontal
 
-**Archivo:** `AssignmentsSelector.tsx`
+Línea 935 actual:
+```typescript
+<div className="space-y-4">
+```
 
-**Cambio:** Agregar filtro para excluir asignaciones visitadas
+Cambiar a:
+```typescript
+<div className="space-y-4 overflow-x-hidden">
+```
+
+### 3. Header Responsive (Líneas 936-981)
+
+El header actual tiene 4 botones en línea que desbordan en mobile.
+
+**Nuevo layout:**
 
 ```typescript
-const { data, error } = await supabase
-  .from('asignaciones_vendedores_clientes')
-  .select(...)
-  .neq('estado', 'Visitado')  // Excluir visitados
-  .order('created_at', { ascending: false });
+<div className="flex flex-col gap-4">
+  {/* Título */}
+  <div>
+    <h2 className="text-xl md:text-2xl font-bold">Mis Clientes Asignados</h2>
+    <p className="text-sm text-muted-foreground">
+      {viewMode === 'kanban' 
+        ? 'Toca un cliente para ver detalles'
+        : 'Visualiza la ubicación de tus clientes'}
+    </p>
+  </div>
+  
+  {/* Acciones - responsive */}
+  <div className="flex flex-wrap items-center gap-2">
+    {/* Botón primario siempre visible */}
+    <Button
+      variant="default"
+      onClick={() => setShowAgregarProspecto(true)}
+      size="sm"
+      className="gap-2"
+    >
+      <Plus className="w-4 h-4" />
+      <span className="hidden sm:inline">Agregar Prospecto</span>
+      <span className="sm:hidden">Prospecto</span>
+    </Button>
+    
+    {/* Toggle Kanban/Mapa - siempre visible (importante para operación) */}
+    <div className="flex items-center border rounded-md">
+      <Button
+        variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+        size="sm"
+        onClick={() => setViewMode('kanban')}
+        className="rounded-r-none"
+      >
+        <Columns className="w-4 h-4" />
+      </Button>
+      <Button
+        variant={viewMode === 'map' ? 'default' : 'ghost'}
+        size="sm"
+        onClick={() => setViewMode('map')}
+        className="rounded-l-none"
+      >
+        <MapIcon className="w-4 h-4" />
+      </Button>
+    </div>
+    
+    {/* Desktop: Auto-asignar visible */}
+    <Button
+      variant="outline"
+      onClick={() => setShowAutoAsignar(true)}
+      size="sm"
+      className="gap-2 hidden md:flex"
+    >
+      <UserPlus className="w-4 h-4" />
+      Auto-asignar
+    </Button>
+    
+    {/* Mobile: Auto-asignar en menú overflow */}
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="md:hidden">
+          <MoreHorizontal className="w-4 h-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => setShowAutoAsignar(true)}>
+          <UserPlus className="w-4 h-4 mr-2" />
+          Auto-asignar cliente
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
+</div>
+```
+
+### 4. Vista Kanban Responsive (Líneas 984-1009)
+
+**Problema actual:** `DroppableColumn` tiene `min-h-[400px] max-h-[600px] overflow-y-auto` (línea 905) que genera scroll interno.
+
+**Solución:**
+
+```typescript
+{viewMode === 'kanban' ? (
+  <>
+    {/* DESKTOP: Kanban con drag & drop (md+) */}
+    <div className="hidden md:block">
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="grid grid-cols-2 gap-4">
+          <DroppableColumn id="Por visitar" title="Por visitar" clientes={assignments['Por visitar']} />
+          <DroppableColumn id="Visitado" title="Visitado" clientes={assignments['Visitado']} />
+        </div>
+        <DragOverlay>
+          {activeCliente ? <ClientCard cliente={activeCliente} /> : null}
+        </DragOverlay>
+      </DndContext>
+    </div>
+
+    {/* MOBILE: Tabs + Lista simple (<md) */}
+    <div className="md:hidden">
+      {/* Segmented control para cambiar estado */}
+      <div className="flex border rounded-lg p-1 bg-muted mb-4">
+        <button
+          onClick={() => setMobileActiveTab('Por visitar')}
+          className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+            mobileActiveTab === 'Por visitar' 
+              ? 'bg-background shadow-sm' 
+              : 'text-muted-foreground'
+          }`}
+        >
+          Por visitar ({assignments['Por visitar'].length})
+        </button>
+        <button
+          onClick={() => setMobileActiveTab('Visitado')}
+          className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors ${
+            mobileActiveTab === 'Visitado' 
+              ? 'bg-background shadow-sm' 
+              : 'text-muted-foreground'
+          }`}
+        >
+          Visitado ({assignments['Visitado'].length})
+        </button>
+      </div>
+      
+      {/* Lista - solo renderiza la activa */}
+      <div className="space-y-3">
+        {assignments[mobileActiveTab].length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">
+            {mobileActiveTab === 'Por visitar' 
+              ? 'Sin clientes por visitar' 
+              : 'Sin visitas completadas'}
+          </p>
+        ) : (
+          assignments[mobileActiveTab].map(cliente => (
+            <MobileClientCard 
+              key={cliente.id} 
+              cliente={cliente}
+              onInfoClick={() => handleCardClick(cliente)}
+              onMarkVisited={mobileActiveTab === 'Por visitar' 
+                ? () => handleMobileMarkVisited(cliente) 
+                : undefined}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  </>
+) : (
+  <VendedorAssignmentsMap assignments={assignments} />
+)}
+```
+
+### 5. Componente MobileClientCard (Nuevo)
+
+Agregar dentro del archivo, antes de `DroppableColumn`:
+
+```typescript
+const MobileClientCard = ({ 
+  cliente, 
+  onInfoClick,
+  onMarkVisited,
+}: { 
+  cliente: ClienteAsignado; 
+  onInfoClick: () => void;
+  onMarkVisited?: () => void;
+}) => {
+  const esProspecto = cliente.etiquetas?.includes('Prospecto');
+  const diasAbierto = cliente.created_at 
+    ? Math.floor((Date.now() - new Date(cliente.created_at).getTime()) / (1000 * 60 * 60 * 24))
+    : 0;
+  const mostrarAlertaPendiente = diasAbierto >= 2 && cliente.estado === 'Por visitar';
+  
+  return (
+    <Card 
+      id={`assignment-${cliente.id}`}
+      className="p-3"
+    >
+      <div className="flex items-start gap-3">
+        {/* Contenido clickeable para info */}
+        <div 
+          className="flex-1 min-w-0 cursor-pointer" 
+          onClick={onInfoClick}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <h4 className="font-semibold text-sm truncate">{cliente.razon_social}</h4>
+            {esProspecto && <Badge variant="secondary" className="text-xs shrink-0">NUEVO</Badge>}
+          </div>
+          
+          {cliente.canal && esProspecto && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Building className="w-3 h-3 shrink-0" />
+              <span className="truncate">{cliente.canal}</span>
+            </p>
+          )}
+          
+          {cliente.barrio_principal && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <MapPin className="w-3 h-3 shrink-0" />
+              <span className="truncate">{cliente.barrio_principal}</span>
+            </p>
+          )}
+          
+          {cliente.telefonos?.[0] && (
+            <a 
+              href={`tel:${cliente.telefonos[0]}`}
+              className="text-xs text-primary flex items-center gap-1 mt-1"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Phone className="w-3 h-3 shrink-0" />
+              {cliente.telefonos[0]}
+            </a>
+          )}
+          
+          {mostrarAlertaPendiente && (
+            <div className="flex items-center gap-1.5 mt-2 p-1.5 bg-amber-50 dark:bg-amber-950/30 rounded text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span className="text-xs font-medium">{diasAbierto} días sin cerrar</span>
+            </div>
+          )}
+        </div>
+        
+        {/* Botón para marcar visitado (alternativa táctil al drag) */}
+        {onMarkVisited && (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkVisited();
+            }}
+            className="shrink-0 h-8 px-3"
+          >
+            Marcar ✓
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+};
+```
+
+### 6. Handler para Marcar Visitado desde Mobile
+
+Este es el punto clave del feedback: **reusar el flujo real**, no solo abrir dialog.
+
+La función `handleDragEnd` (línea 397-401) ya hace exactamente esto cuando el destino es "Visitado":
+```typescript
+if (newEstado === 'Visitado') {
+  setSelectedCliente(movedCliente);
+  setShowFeedbackDialog(true);
+  return;
+}
+```
+
+Entonces, el handler mobile debe hacer lo mismo:
+
+```typescript
+const handleMobileMarkVisited = (cliente: ClienteAsignado) => {
+  // Reutiliza exactamente el mismo flujo que el drag & drop
+  setSelectedCliente(cliente);
+  setShowFeedbackDialog(true);
+};
+```
+
+Esto garantiza que:
+- Se abre el dialog de feedback obligatorio
+- Al guardar, ejecuta `handleSaveFeedback` que:
+  - Inserta en `cliente_feedbacks`
+  - Actualiza `estado: 'Visitado'` y `visited_at`
+  - Actualiza la UI
+
+### 7. Importaciones Adicionales
+
+Agregar al inicio del archivo:
+
+```typescript
+import { MoreHorizontal, Check } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 ```
 
 ---
 
-## Resumen de Archivos a Modificar
+## Resumen de Decisiones Técnicas
 
-| Archivo | Cambio |
-|---------|--------|
-| `supabase/functions/cleanup-visited-assignments/index.ts` | Eliminar filtro de fecha, usar timezone Argentina |
-| `src/components/assignor/TodayAssignments.tsx` | Calcular inicio del día en hora Argentina |
-| `src/components/assignor/AssignmentsSelector.tsx` | Agregar `.neq('estado', 'Visitado')` |
-| SQL Migration | Actualizar cron de `0 23 * * *` a `0 2 * * *` |
+| Feedback Recibido | Decisión Tomada |
+|-------------------|-----------------|
+| No depender de `useIsMobile` para layout | Layout 100% con clases Tailwind (`hidden md:block`, `md:hidden`) |
+| Eliminar overflow interno en mobile | No se usa `DroppableColumn` en mobile; lista simple sin `max-h` ni `overflow-y-auto` |
+| Botón debe llamar misma función que drag | `handleMobileMarkVisited` hace exactamente `setSelectedCliente + setShowFeedbackDialog` |
+| TabsContent puede tener problemas | Uso estado local `mobileActiveTab` y renderizado condicional simple |
+| Vista Mapa visible, no en menú | Toggle Kanban/Mapa siempre visible (importante para operación) |
 
 ---
 
-## Verificación de Preservación de Datos
+## Validaciones Post-Implementación
 
-**Confirmado:** No se pierde información al limpiar porque:
-
-1. **Tabla `cliente_feedbacks`:** Guarda el registro permanente de cada visita con:
-   - `vendedor_id`, `client_id` o `prospecto_place_id`
-   - `feedback`, `tipo_interaccion`, `visita_realizada`
-   - `created_at` (timestamp del momento)
-
-2. **Campo `visited_at`:** Registra el momento exacto en que el vendedor marcó la visita
-
-3. **Supervisión:** La vista `SupervisionVendedores` puede consultar históricamente usando filtros de `visited_at` para reportes
-
-El proceso de limpieza solo elimina el registro de asignación (ya procesado), pero toda la información relevante queda preservada en las tablas de feedbacks y clientes.
-
+1. Viewport iPhone 375px: sin scroll horizontal
+2. Segmented control muestra counts correctos dinámicamente
+3. Botón "Marcar ✓" abre dialog de feedback y completa el flujo
+4. Al guardar feedback, la card se mueve a tab "Visitado"
+5. Desktop sigue funcionando igual (drag & drop intacto)
+6. No hay hydration mismatch (layout no depende de hook)
