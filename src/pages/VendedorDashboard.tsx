@@ -237,86 +237,87 @@ const VendedorDashboard = () => {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 overflow-x-hidden">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="flex items-center gap-3">
-          <img src={cupraLogo} alt="Cupra Wines" className="h-12 w-auto" />
+          <img src={cupraLogo} alt="Cupra Wines" className="h-8 md:h-12 w-auto" />
           <div>
-            <h1 className="text-3xl font-bold mb-2">Mi Dashboard</h1>
-            <p className="text-muted-foreground">Resumen de todas tus asignaciones y actividad</p>
+            <h1 className="text-xl md:text-3xl font-bold">Mi Dashboard</h1>
+            <p className="text-xs md:text-sm text-muted-foreground hidden md:block">Resumen de todas tus asignaciones y actividad</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <NotificacionesPanel />
-          <Button variant="outline" onClick={() => navigate("/")} className="gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate("/")} className="gap-2">
             <ArrowLeft className="w-4 h-4" />
-            Volver a Asignaciones
+            <span className="hidden sm:inline">Volver a Asignaciones</span>
+            <span className="sm:hidden">Volver</span>
           </Button>
         </div>
       </div>
 
       {/* Estadísticas principales */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Asignaciones</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+      <div className="grid grid-cols-2 gap-2 md:gap-4 lg:grid-cols-4">
+        <Card className="p-2 md:p-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 md:p-6 md:pb-2">
+            <CardTitle className="text-xs md:text-sm font-medium">Total</CardTitle>
+            <Users className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{estadisticas.totalAsignaciones}</div>
-            <p className="text-xs text-muted-foreground">Históricas</p>
+          <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
+            <div className="text-xl md:text-2xl font-bold">{estadisticas.totalAsignaciones}</div>
+            <p className="text-xs text-muted-foreground hidden md:block">Históricas</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
+        <Card className="p-2 md:p-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 md:p-6 md:pb-2">
+            <CardTitle className="text-xs md:text-sm font-medium">Pendientes</CardTitle>
+            <Target className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{estadisticas.asignacionesActivas}</div>
-            <p className="text-xs text-muted-foreground">Por atender</p>
+          <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
+            <div className="text-xl md:text-2xl font-bold">{estadisticas.asignacionesActivas}</div>
+            <p className="text-xs text-muted-foreground hidden md:block">Por atender</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Visitadas</CardTitle>
-            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+        <Card className="p-2 md:p-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 md:p-6 md:pb-2">
+            <CardTitle className="text-xs md:text-sm font-medium">Visitadas</CardTitle>
+            <CheckCircle2 className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{estadisticas.visitasRealizadas}</div>
-            <p className="text-xs text-muted-foreground">Completadas</p>
+          <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
+            <div className="text-xl md:text-2xl font-bold">{estadisticas.visitasRealizadas}</div>
+            <p className="text-xs text-muted-foreground hidden md:block">Completadas</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tasa de Conversión</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+        <Card className="p-2 md:p-0">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 md:p-6 md:pb-2">
+            <CardTitle className="text-xs md:text-sm font-medium">Conversión</CardTitle>
+            <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{estadisticas.tasaConversion}%</div>
-            <p className="text-xs text-muted-foreground">Visitas completadas</p>
+          <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
+            <div className="text-xl md:text-2xl font-bold">{estadisticas.tasaConversion}%</div>
+            <p className="text-xs text-muted-foreground hidden md:block">Visitas completadas</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Tabs de historial */}
       <Card>
-        <CardHeader>
-          <CardTitle>Historial de Asignaciones</CardTitle>
+        <CardHeader className="p-3 md:p-6">
+          <CardTitle className="text-base md:text-lg">Historial de Asignaciones</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
           <Tabs defaultValue="todas" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="todas">Todas</TabsTrigger>
-              <TabsTrigger value="activas">Pendientes</TabsTrigger>
-              <TabsTrigger value="visitadas">Visitadas</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-3 h-8 md:h-10">
+              <TabsTrigger value="todas" className="text-xs md:text-sm">Todas</TabsTrigger>
+              <TabsTrigger value="activas" className="text-xs md:text-sm">Pendientes</TabsTrigger>
+              <TabsTrigger value="visitadas" className="text-xs md:text-sm">Visitadas</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="todas" className="mt-4">
-              <ScrollArea className="h-[500px] w-full pr-4">
+            <TabsContent value="todas" className="mt-3 md:mt-4">
+              <ScrollArea className="h-[400px] md:h-[500px] w-full pr-2 md:pr-4">
                 {historial.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No hay asignaciones</p>
                 ) : (
@@ -374,8 +375,8 @@ const VendedorDashboard = () => {
               </ScrollArea>
             </TabsContent>
 
-            <TabsContent value="activas" className="mt-4">
-              <ScrollArea className="h-[500px] w-full pr-4">
+            <TabsContent value="activas" className="mt-3 md:mt-4">
+              <ScrollArea className="h-[400px] md:h-[500px] w-full pr-2 md:pr-4">
                 {historial.filter(h => h.estado === "Asignado" || h.estado === "Por visitar").length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No hay asignaciones activas</p>
                 ) : (
@@ -419,8 +420,8 @@ const VendedorDashboard = () => {
               </ScrollArea>
             </TabsContent>
 
-            <TabsContent value="visitadas" className="mt-4">
-              <ScrollArea className="h-[500px] w-full pr-4">
+            <TabsContent value="visitadas" className="mt-3 md:mt-4">
+              <ScrollArea className="h-[400px] md:h-[500px] w-full pr-2 md:pr-4">
                 {historial.filter(h => h.estado === "Visitado").length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No hay visitas completadas</p>
                 ) : (
@@ -466,7 +467,7 @@ const VendedorDashboard = () => {
 
       {/* Dialog de Detalles */}
       <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] md:max-w-2xl max-h-[85vh] overflow-y-auto p-4 md:p-6">
           <DialogHeader>
             <DialogTitle>
               {selectedAsignacion?.es_prospecto 
