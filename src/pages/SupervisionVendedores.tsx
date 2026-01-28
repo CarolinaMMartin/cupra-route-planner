@@ -11,7 +11,8 @@ import {
   TrendingUp, 
   Filter,
   RefreshCw,
-  Eye
+  Eye,
+  XCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
@@ -42,6 +43,7 @@ interface VendedorStats {
   total: number;
   pendientes: number;
   visitadas: number;
+  noVisitadas: number;
   tasa: number;
 }
 
@@ -305,6 +307,7 @@ const SupervisionVendedores = () => {
             total: 0,
             pendientes: 0,
             visitadas: 0,
+            noVisitadas: 0,
             tasa: 0
           });
         }
@@ -322,8 +325,8 @@ const SupervisionVendedores = () => {
               // Visitado o Online = cuenta como visitada
               stats.visitadas++;
             } else {
-              // No visitado = cuenta como pendiente (no cumplió)
-              stats.pendientes++;
+              // No visitado = cerrado pero sin visita efectiva
+              stats.noVisitadas++;
             }
           } else {
             // Sin feedback pero estado Visitado (edge case) - contar como visitada
@@ -413,8 +416,9 @@ const SupervisionVendedores = () => {
     const total = vendedorStats.reduce((sum, v) => sum + v.total, 0);
     const pendientes = vendedorStats.reduce((sum, v) => sum + v.pendientes, 0);
     const visitadas = vendedorStats.reduce((sum, v) => sum + v.visitadas, 0);
+    const noVisitadas = vendedorStats.reduce((sum, v) => sum + v.noVisitadas, 0);
     const tasa = total > 0 ? (visitadas / total) * 100 : 0;
-    return { total, pendientes, visitadas, tasa };
+    return { total, pendientes, visitadas, noVisitadas, tasa };
   }, [vendedorStats]);
 
   const formatDate = (dateString: string | null) => {
@@ -593,7 +597,7 @@ const SupervisionVendedores = () => {
         </Card>
 
         {/* KPIs Globales */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className="matte-card">
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
@@ -634,6 +638,18 @@ const SupervisionVendedores = () => {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">No Visitadas</p>
+                  <p className="text-3xl font-bold text-rose-500">{kpis.noVisitadas}</p>
+                </div>
+                <XCircle className="h-8 w-8 text-rose-500" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Tasa Cumplimiento</p>
                   <p className="text-3xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
                 </div>
@@ -659,13 +675,14 @@ const SupervisionVendedores = () => {
                   <TableHead className="text-center">Asignadas</TableHead>
                   <TableHead className="text-center">Pendientes</TableHead>
                   <TableHead className="text-center">Visitadas</TableHead>
+                  <TableHead className="text-center">No Visitadas</TableHead>
                   <TableHead className="text-center">Tasa %</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {vendedorStats.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                       No hay datos para los filtros seleccionados
                     </TableCell>
                   </TableRow>
@@ -680,6 +697,7 @@ const SupervisionVendedores = () => {
                       <TableCell className="text-center">{stat.total}</TableCell>
                       <TableCell className="text-center text-amber-500">{stat.pendientes}</TableCell>
                       <TableCell className="text-center text-emerald-500">{stat.visitadas}</TableCell>
+                      <TableCell className="text-center text-rose-500">{stat.noVisitadas}</TableCell>
                       <TableCell className="text-center">
                         <Badge variant={stat.tasa >= 70 ? "default" : stat.tasa >= 40 ? "secondary" : "destructive"}>
                           {stat.tasa.toFixed(1)}%
@@ -713,6 +731,7 @@ const SupervisionVendedores = () => {
                   <TableHead className="text-center">F. Asignación</TableHead>
                   <TableHead className="text-center">F. Visita</TableHead>
                   <TableHead className="text-center">Tipo Cierre</TableHead>
+                  <TableHead>Detalle</TableHead>
                   <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
@@ -720,7 +739,7 @@ const SupervisionVendedores = () => {
               <TableBody>
                 {asignaciones.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                       No hay asignaciones para los filtros seleccionados
                     </TableCell>
                   </TableRow>
@@ -753,6 +772,19 @@ const SupervisionVendedores = () => {
                           >
                             {a.tipo_cierre}
                           </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm max-w-[200px]">
+                        {a.tipo_cierre === 'No visitado' ? (
+                          <span className="text-amber-600 truncate block" title={a.motivo_no_visita || undefined}>
+                            {a.motivo_no_visita || '-'}
+                          </span>
+                        ) : a.tipo_interaccion ? (
+                          <span className="text-muted-foreground truncate block" title={a.tipo_interaccion}>
+                            {a.tipo_interaccion}
+                          </span>
                         ) : (
                           <span className="text-muted-foreground text-xs">-</span>
                         )}
