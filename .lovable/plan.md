@@ -1,87 +1,76 @@
 
+# Plan: Agregar botón "Modificar asignaciones" al Empty State
 
-# Plan: Restaurar Layout del Asignador en Desktop
+## Problema
 
-## Problema Identificado
+Actualmente, cuando no hay asignaciones de hoy (empty state), el componente `TodayAssignments` solo muestra:
+- Título "Asignaciones de hoy"
+- Descripción "No hay asignaciones realizadas hoy"
 
-Los cambios responsive para el rol vendedor afectaron inadvertidamente el layout del rol asignador. En la imagen se ve que:
-- Los botones de navegación están en una línea
-- La info del usuario y "Salir" están en una segunda línea
-
-Esto sucede porque en la línea 87 y 93 se agregaron clases `flex-wrap` y `gap-2` que afectan a AMBOS roles.
+El botón **"Modificar asignaciones"** no aparece en este caso, lo cual es incorrecto porque:
+1. Es el único acceso del asignador al histórico de asignaciones
+2. El empty state solo indica ausencia de asignaciones **hoy**, no ausencia de datos históricos
+3. El asignador debería poder acceder siempre a esta funcionalidad
 
 ## Archivo a Modificar
 
 | Archivo | Cambio |
 |---------|--------|
-| `src/pages/Index.tsx` | Restaurar layout de asignador, mantener responsive solo para vendedor |
+| `src/components/assignor/TodayAssignments.tsx` | Agregar botón al empty state (líneas 270-281) |
 
-## Cambios Específicos
+## Cambio Específico
 
-### Línea 87 - Quitar flex-wrap del container principal del header
+### Líneas 270-281 - Agregar botón al empty state
 
-El `flex-wrap` está causando que todo el header se rompa en dos líneas.
+```tsx
+// Antes (actual)
+if (assignments.length === 0) {
+  return (
+    <Card className="shadow-medium">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-accent" />
+          Asignaciones de hoy
+        </CardTitle>
+        <CardDescription>No hay asignaciones realizadas hoy</CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}
 
-```typescript
-// Antes (actual - problemático)
-<div className="flex flex-wrap justify-between items-center gap-2 py-3 md:py-5">
-
-// Después (corrección)
-<div className="flex justify-between items-center py-5">
+// Después (con botón)
+if (assignments.length === 0) {
+  return (
+    <Card className="shadow-medium">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-accent" />
+              Asignaciones de hoy
+            </CardTitle>
+            <CardDescription>No hay asignaciones realizadas hoy</CardDescription>
+          </div>
+          {onEditAssignments && (
+            <Button onClick={onEditAssignments} variant="outline" className="gap-2">
+              <Edit className="w-4 h-4" />
+              Modificar asignaciones
+            </Button>
+          )}
+        </div>
+      </CardHeader>
+    </Card>
+  );
+}
 ```
-
-### Línea 93 - Quitar flex-wrap del container de navegación
-
-```typescript
-// Antes (actual - problemático)  
-<div className="flex items-center gap-2 md:gap-5 flex-wrap">
-
-// Después (corrección)
-<div className="flex items-center gap-5">
-```
-
-### Línea 143 - Restaurar separador visible siempre
-
-```typescript
-// Antes
-<div className="h-8 w-px bg-border/50 hidden md:block" />
-
-// Después
-<div className="h-8 w-px bg-border/50" />
-```
-
-### Líneas 145-148 - Restaurar botón "Salir" completo
-
-```typescript
-// Antes
-<Button variant="ghost" size="sm" onClick={handleLogout} className="flex items-center gap-2 text-muted-foreground hover:text-destructive transition-colors">
-  <LogOut className="w-4 h-4" />
-  <span className="hidden md:inline text-sm tracking-wide">Salir</span>
-</Button>
-
-// Después
-<Button variant="ghost" size="sm" onClick={handleLogout} className="flex items-center gap-2 text-muted-foreground hover:text-destructive transition-colors">
-  <LogOut className="w-4 h-4" />
-  <span className="text-sm tracking-wide">Salir</span>
-</Button>
-```
-
-### Líneas 116-133 - Mantener responsive SOLO para vendedor
-
-Los cambios de navegación responsive (desktop vs mobile) deben permanecer SOLO dentro del bloque de vendedor, que ya están correctamente encapsulados con `hidden md:flex` y `md:hidden`.
-
-### Línea 135 - Mantener info usuario visible siempre para asignador
-
-La clase condicional ya está correcta: `${profile.rol === 'vendedor' ? 'hidden md:block' : ''}` - esto hace que se oculte solo para vendedor en mobile.
 
 ## Resultado Esperado
 
-| Rol | Desktop | Mobile |
-|-----|---------|--------|
-| **Asignador** | Una sola línea con: Logo + 5 botones nav + User info + Salir | (no aplica cambios) |
-| **Vendedor** | Una sola línea con: Logo + 2 botones nav + User info + Notif + Salir | Compacto: Logo + iconos + Notif + icono salir |
+| Estado | Antes | Después |
+|--------|-------|---------|
+| **Sin asignaciones hoy** | Solo título y descripción | Título, descripción + botón "Modificar asignaciones" |
+| **Con asignaciones hoy** | Todos los botones (mapa, modificar, borrar) | Sin cambios |
 
-## Nota de Overflow
+## Consistencia Visual
 
-El `overflow-x-hidden` en la línea 84 del wrapper principal se mantiene como medida de seguridad general, ya que no afecta visualmente al asignador.
-
+El layout del empty state usará la misma estructura `flex items-center justify-between` que usa el header cuando hay asignaciones (línea 287), manteniendo consistencia en la posición del botón.
