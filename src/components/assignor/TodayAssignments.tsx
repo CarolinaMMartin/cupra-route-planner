@@ -271,11 +271,21 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
     return (
       <Card className="shadow-medium">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-accent" />
-            Asignaciones de hoy
-          </CardTitle>
-          <CardDescription>No hay asignaciones realizadas hoy</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-accent" />
+                Asignaciones de hoy
+              </CardTitle>
+              <CardDescription>No hay asignaciones realizadas hoy</CardDescription>
+            </div>
+            {onEditAssignments && (
+              <Button onClick={onEditAssignments} variant="outline" className="gap-2">
+                <Edit className="w-4 h-4" />
+                Modificar asignaciones
+              </Button>
+            )}
+          </div>
         </CardHeader>
       </Card>
     );
