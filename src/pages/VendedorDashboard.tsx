@@ -116,7 +116,7 @@ const VendedorDashboard = () => {
         ?.filter(a => a.prospecto_place_id)
         .map(a => a.prospecto_place_id) || [];
 
-      const [clientesRes, prospectosRes, feedbacksRes, allFeedbacksRes] = await Promise.all([
+      const [clientesRes, prospectosRes, feedbacksRes, allFeedbacksRaw] = await Promise.all([
         clientIds.length > 0 
           ? supabase.from("clientes").select("client_id, razon_social, barrio_principal, provincia_principal, telefonos, emails, vendedor_principal, categoria_volumen, dias_desde_ultima_compra").in("client_id", clientIds)
           : Promise.resolve({ data: [] }),
@@ -125,11 +125,33 @@ const VendedorDashboard = () => {
           : Promise.resolve({ data: [] }),
         supabase.from("cliente_feedbacks").select("*").eq("vendedor_id", user.id),
         // Obtener TODOS los feedbacks (de todos los vendedores) para mostrar historial completo
-        supabase.from("cliente_feedbacks").select(`
-          *,
-          vendedor:profiles!cliente_feedbacks_vendedor_id_fkey(nombre)
-        `)
+        supabase.from("cliente_feedbacks").select("*")
       ]);
+
+      // Obtener vendedor_ids únicos de todos los feedbacks para hacer join manual
+      const vendedorIds = [...new Set(
+        allFeedbacksRaw.data?.map(f => f.vendedor_id).filter(Boolean) || []
+      )];
+
+      // Query separado para profiles (ya que no hay FK definida)
+      const profilesRes = vendedorIds.length > 0
+        ? await supabase
+            .from("profiles")
+            .select("user_id, nombre")
+            .in("user_id", vendedorIds)
+        : { data: [] };
+
+      // Crear mapa de profiles para merge manual
+      const profilesMap = new Map<string, string>();
+      profilesRes.data?.forEach(p => profilesMap.set(p.user_id, p.nombre));
+
+      // Mapear feedbacks con info del vendedor
+      const allFeedbacksData = allFeedbacksRaw.data?.map(f => ({
+        ...f,
+        vendedor: profilesMap.has(f.vendedor_id) 
+          ? { nombre: profilesMap.get(f.vendedor_id) }
+          : undefined
+      })) || [];
 
       // Mapear información
       const clientesMap = new Map<string, any>();
@@ -146,16 +168,13 @@ const VendedorDashboard = () => {
 
       // Agrupar todos los feedbacks por cliente/prospecto
       const allFeedbacksMap = new Map<string, FeedbackInfo[]>();
-      allFeedbacksRes.data?.forEach(f => {
+      allFeedbacksData.forEach(f => {
         const key = f.client_id || f.prospecto_place_id || '';
         if (key) {
           if (!allFeedbacksMap.has(key)) {
             allFeedbacksMap.set(key, []);
           }
-          allFeedbacksMap.get(key)?.push({
-            ...f,
-            vendedor: Array.isArray(f.vendedor) ? f.vendedor[0] : f.vendedor
-          } as FeedbackInfo);
+          allFeedbacksMap.get(key)?.push(f as FeedbackInfo);
         }
       });
 
