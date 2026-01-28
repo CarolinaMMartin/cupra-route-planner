@@ -1,161 +1,144 @@
 
-# Plan: Mejorar KPIs y Acceso a Feedback en Panel de Supervisión
+# Plan: Corregir KPIs, Resumen por Vendedor y Agregar Columna de Detalle
 
-## Resumen Ejecutivo
+## Problemas Identificados
 
-El Panel de Supervisión necesita ajustes en dos áreas clave:
-1. **KPIs incorrectos**: Actualmente cuentan "Visitado" como estado, pero deberían contar según el tipo de cierre del feedback
-2. **Sin acceso al feedback**: La tabla de detalle no muestra el tipo de cierre ni permite ver el feedback registrado
+### 1. KPIs - Falta tarjeta "No Visitadas"
+Actualmente solo hay 4 tarjetas: Total, Pendientes, Visitadas, Tasa. Falta una tarjeta específica para "No visitadas" (asignaciones cerradas pero sin visita real).
 
-## Análisis del Problema
+### 2. Resumen por Vendedor - No incluye "No visitado"
+La tabla solo muestra: Asignadas, Pendientes, Visitadas. Falta columna para "No visitado" (cerradas sin visita efectiva).
 
-### Estado Actual
-
-| Componente | Problema |
-|------------|----------|
-| **KPI Visitadas** | Cuenta solo estado = "Visitado", sin distinguir tipo de cierre |
-| **KPI Pendientes** | Cuenta estados != "Visitado" |
-| **Tasa Cumplimiento** | Incluye "No visitado" como visitado |
-| **Tabla Detalle** | No muestra tipo de cierre ni permite ver el feedback |
-
-### Modelo de Datos Existente
-
-La tabla `cliente_feedbacks` ya contiene los campos necesarios:
-- `visita_realizada` (boolean): true = Visitado/Online, false = No visitado
-- `tipo_interaccion`: Contiene "[Online]" si fue contacto digital
-- `motivo_no_visita`: Razón cuando visita_realizada = false
-- `feedback`: Comentario del vendedor
-- `actualizar_etiqueta_wa`: Etiqueta WhatsApp asignada
+### 3. Tabla Detalle - Falta info contextual junto a Tipo Cierre
+El usuario quiere ver "Tipo de Interacción" o "Motivo No Visita" directamente en la tabla, no solo en el modal.
 
 ## Archivo a Modificar
 
 | Archivo | Cambios |
 |---------|---------|
-| `src/pages/SupervisionVendedores.tsx` | KPIs, fetch data, tabla detalle, modal de feedback |
+| `src/pages/SupervisionVendedores.tsx` | Agregar KPI, columna en resumen, columna en detalle |
 
-## Cambios Técnicos Detallados
+## Cambios Técnicos
 
-### 1. Extender Interface `AsignacionDetalle` (línea ~39)
+### 1. Actualizar Interface `VendedorStats` (linea 38-46)
 
-Agregar campos para el feedback:
+Agregar campo para "no visitadas":
 
 ```typescript
-interface AsignacionDetalle {
-  // ... campos existentes ...
-  // Nuevos campos para feedback
-  tipo_cierre: 'Visitado' | 'Online' | 'No visitado' | null;
-  tipo_interaccion: string | null;
-  motivo_no_visita: string | null;
-  feedback_texto: string | null;
-  actualizar_etiqueta_wa: string | null;
-  feedback_fecha: string | null;
+interface VendedorStats {
+  vendedor_id: string;
+  nombre: string;
+  email: string;
+  total: number;
+  pendientes: number;
+  visitadas: number;
+  noVisitadas: number;  // NUEVO
+  tasa: number;
 }
 ```
 
-### 2. Modificar `fetchData()` - Agregar Query de Feedbacks (línea ~152)
+### 2. Actualizar Cálculo de Stats (linea 296-335)
 
-Después de obtener asignaciones, prospectos y clientes, agregar query para feedbacks:
-
-```typescript
-// Obtener feedbacks de las asignaciones visitadas
-const asignacionesConFeedback = asignacionesData?.filter(a => a.estado === 'Visitado') || [];
-const feedbackClientIds = asignacionesConFeedback
-  .filter(a => a.client_id).map(a => a.client_id);
-const feedbackProspectoIds = asignacionesConFeedback
-  .filter(a => a.prospecto_place_id).map(a => a.prospecto_place_id);
-
-const feedbacksRes = await supabase
-  .from('cliente_feedbacks')
-  .select('client_id, prospecto_place_id, vendedor_id, visita_realizada, tipo_interaccion, motivo_no_visita, feedback, actualizar_etiqueta_wa, created_at')
-  .or(`client_id.in.(${feedbackClientIds.join(',')}),prospecto_place_id.in.(${feedbackProspectoIds.join(',')})`)
-  .order('created_at', { ascending: false });
-```
-
-### 3. Modificar Cálculo de Stats por Vendedor (línea ~219)
-
-Cambiar la lógica para usar tipo de cierre del feedback:
+Agregar conteo de "No visitado":
 
 ```typescript
-asignacionesData?.forEach(a => {
-  // ... código existente para inicializar stats ...
-  
-  const stats = statsMap.get(a.vendedor_id)!;
-  stats.total++;
-  
-  if (a.estado === "Visitado") {
-    // Buscar feedback para determinar tipo de cierre
-    const feedback = feedbacksMap.get(getFeedbackKey(a));
-    if (feedback) {
-      const esOnline = feedback.tipo_interaccion?.startsWith('[Online]');
-      if (feedback.visita_realizada) {
-        // Visitado o Online = cuenta como visitada
-        stats.visitadas++;
-      } else {
-        // No visitado = cuenta como pendiente
-        stats.pendientes++;
-      }
-    } else {
-      // Sin feedback pero estado Visitado (edge case)
+statsMap.set(a.vendedor_id, {
+  // ... campos existentes ...
+  noVisitadas: 0,  // NUEVO
+  // ...
+});
+
+if (a.estado === "Visitado") {
+  const feedback = feedbacksMap.get(feedbackKey);
+  if (feedback) {
+    if (feedback.visita_realizada) {
       stats.visitadas++;
+    } else {
+      stats.noVisitadas++;  // Cambiar de pendientes a noVisitadas
     }
   } else {
-    stats.pendientes++;
+    stats.visitadas++;
   }
-});
+} else {
+  stats.pendientes++;
+}
 ```
 
-### 4. Mapear Tipo de Cierre en Detalle de Asignaciones (línea ~255)
+### 3. Actualizar KPIs Globales (linea 411-418)
 
-Al mapear cada asignación, determinar el tipo de cierre:
+Agregar cálculo de "No visitadas":
 
 ```typescript
-const detalleAsignaciones = asignacionesData?.map(a => {
-  // ... código existente ...
-  
-  // Determinar tipo de cierre basado en feedback
-  const feedback = feedbacksMap.get(getFeedbackKey(a));
-  let tipoCierre: 'Visitado' | 'Online' | 'No visitado' | null = null;
-  
-  if (feedback) {
-    if (!feedback.visita_realizada) {
-      tipoCierre = 'No visitado';
-    } else if (feedback.tipo_interaccion?.startsWith('[Online]')) {
-      tipoCierre = 'Online';
-    } else {
-      tipoCierre = 'Visitado';
-    }
-  }
-  
-  return {
-    // ... campos existentes ...
-    tipo_cierre: tipoCierre,
-    tipo_interaccion: feedback?.tipo_interaccion?.replace('[Online] ', '') || null,
-    motivo_no_visita: feedback?.motivo_no_visita || null,
-    feedback_texto: feedback?.feedback || null,
-    actualizar_etiqueta_wa: feedback?.actualizar_etiqueta_wa || null,
-    feedback_fecha: feedback?.created_at || null,
-  };
-});
+const kpis = useMemo(() => {
+  const total = vendedorStats.reduce((sum, v) => sum + v.total, 0);
+  const pendientes = vendedorStats.reduce((sum, v) => sum + v.pendientes, 0);
+  const visitadas = vendedorStats.reduce((sum, v) => sum + v.visitadas, 0);
+  const noVisitadas = vendedorStats.reduce((sum, v) => sum + v.noVisitadas, 0);  // NUEVO
+  const tasa = total > 0 ? (visitadas / total) * 100 : 0;
+  return { total, pendientes, visitadas, noVisitadas, tasa };
+}, [vendedorStats]);
 ```
 
-### 5. Agregar Estado para Modal de Feedback (después de línea ~66)
+### 4. Agregar Import de Icono (linea 6-15)
 
-```typescript
-const [feedbackModal, setFeedbackModal] = useState<AsignacionDetalle | null>(null);
-```
-
-### 6. Agregar Imports Necesarios (línea ~6)
+Agregar `XCircle` para la tarjeta de No visitadas:
 
 ```typescript
 import { 
-  // ... existentes ...
-  Eye // Nuevo
+  ArrowLeft, Users, CheckCircle2, Clock, TrendingUp, Filter, RefreshCw, Eye,
+  XCircle  // NUEVO
 } from "lucide-react";
 ```
 
-### 7. Modificar Tabla de Detalle (línea ~574)
+### 5. Agregar Tarjeta KPI "No Visitadas" (después de linea 631)
 
-Agregar columna "Tipo Cierre" y botón "Ver feedback":
+Nueva tarjeta entre "Visitadas" y "Tasa Cumplimiento":
+
+```tsx
+<Card className="matte-card">
+  <CardContent className="pt-6">
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-xs text-muted-foreground uppercase tracking-wide">No Visitadas</p>
+        <p className="text-3xl font-bold text-rose-500">{kpis.noVisitadas}</p>
+      </div>
+      <XCircle className="h-8 w-8 text-rose-500" />
+    </div>
+  </CardContent>
+</Card>
+```
+
+### 6. Actualizar Grid de KPIs (linea 596)
+
+Cambiar de 4 a 5 columnas:
+
+```tsx
+<div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+```
+
+### 7. Agregar Columna en Resumen por Vendedor (linea 656-692)
+
+Agregar columna "No Visitadas":
+
+```tsx
+<TableHeader>
+  <TableRow>
+    <TableHead>Vendedor</TableHead>
+    <TableHead className="text-center">Asignadas</TableHead>
+    <TableHead className="text-center">Pendientes</TableHead>
+    <TableHead className="text-center">Visitadas</TableHead>
+    <TableHead className="text-center">No Visitadas</TableHead>  {/* NUEVO */}
+    <TableHead className="text-center">Tasa %</TableHead>
+  </TableRow>
+</TableHeader>
+
+// Y en el body:
+<TableCell className="text-center text-rose-500">{stat.noVisitadas}</TableCell>
+```
+
+### 8. Agregar Columna "Detalle Cierre" en Tabla de Detalle (linea 709-788)
+
+Nueva columna después de "Tipo Cierre" que muestra Tipo de Interacción o Motivo:
 
 ```tsx
 <TableHeader>
@@ -165,151 +148,48 @@ Agregar columna "Tipo Cierre" y botón "Ver feedback":
     <TableHead className="text-center">F. Asignación</TableHead>
     <TableHead className="text-center">F. Visita</TableHead>
     <TableHead className="text-center">Tipo Cierre</TableHead>
+    <TableHead>Detalle</TableHead>  {/* NUEVO */}
     <TableHead className="text-center">Estado</TableHead>
     <TableHead className="text-center">Acciones</TableHead>
   </TableRow>
 </TableHeader>
-```
 
-Y en cada fila:
-
-```tsx
-{/* Columna Tipo Cierre */}
-<TableCell className="text-center">
-  {a.tipo_cierre && (
-    <Badge 
-      variant={a.tipo_cierre === 'Visitado' ? 'default' : a.tipo_cierre === 'Online' ? 'secondary' : 'outline'}
-      className={cn(
-        a.tipo_cierre === 'Visitado' && 'bg-emerald-500/20 text-emerald-500',
-        a.tipo_cierre === 'Online' && 'bg-blue-500/20 text-blue-500',
-        a.tipo_cierre === 'No visitado' && 'bg-amber-500/20 text-amber-600'
-      )}
-    >
-      {a.tipo_cierre}
-    </Badge>
+// Y en cada fila, después de Tipo Cierre:
+<TableCell className="text-sm max-w-[200px]">
+  {a.tipo_cierre === 'No visitado' ? (
+    <span className="text-amber-600 truncate block" title={a.motivo_no_visita || undefined}>
+      {a.motivo_no_visita || '-'}
+    </span>
+  ) : a.tipo_interaccion ? (
+    <span className="text-muted-foreground truncate block" title={a.tipo_interaccion}>
+      {a.tipo_interaccion}
+    </span>
+  ) : (
+    <span className="text-muted-foreground text-xs">-</span>
   )}
 </TableCell>
-
-{/* Columna Acciones */}
-<TableCell className="text-center">
-  {a.tipo_cierre && (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => setFeedbackModal(a)}
-      className="gap-1"
-    >
-      <Eye className="h-4 w-4" />
-      Ver feedback
-    </Button>
-  )}
-</TableCell>
-```
-
-### 8. Agregar Modal de Feedback (antes del cierre del return ~640)
-
-```tsx
-{/* Modal Ver Feedback */}
-<Dialog open={!!feedbackModal} onOpenChange={() => setFeedbackModal(null)}>
-  <DialogContent className="max-w-md">
-    <DialogHeader>
-      <DialogTitle>Detalle del Feedback</DialogTitle>
-      <DialogDescription>
-        {feedbackModal?.cliente_nombre}
-      </DialogDescription>
-    </DialogHeader>
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="text-xs text-muted-foreground uppercase">Tipo de Cierre</label>
-          <p className="font-medium">{feedbackModal?.tipo_cierre || '-'}</p>
-        </div>
-        <div>
-          <label className="text-xs text-muted-foreground uppercase">Vendedor</label>
-          <p className="font-medium">{feedbackModal?.vendedor_nombre || '-'}</p>
-        </div>
-      </div>
-      
-      {feedbackModal?.tipo_interaccion && (
-        <div>
-          <label className="text-xs text-muted-foreground uppercase">Tipo de Interacción</label>
-          <p className="font-medium">{feedbackModal.tipo_interaccion}</p>
-        </div>
-      )}
-      
-      {feedbackModal?.motivo_no_visita && (
-        <div>
-          <label className="text-xs text-muted-foreground uppercase">Motivo No Visita</label>
-          <p className="font-medium text-amber-600">{feedbackModal.motivo_no_visita}</p>
-        </div>
-      )}
-      
-      {feedbackModal?.feedback_texto && (
-        <div>
-          <label className="text-xs text-muted-foreground uppercase">Comentario</label>
-          <p className="text-sm bg-muted p-3 rounded-lg">{feedbackModal.feedback_texto}</p>
-        </div>
-      )}
-      
-      {feedbackModal?.actualizar_etiqueta_wa && (
-        <div>
-          <label className="text-xs text-muted-foreground uppercase">Etiqueta WhatsApp</label>
-          <Badge variant="outline">{feedbackModal.actualizar_etiqueta_wa}</Badge>
-        </div>
-      )}
-      
-      {feedbackModal?.feedback_fecha && (
-        <div className="text-xs text-muted-foreground text-right">
-          Registrado: {formatDate(feedbackModal.feedback_fecha)}
-        </div>
-      )}
-    </div>
-  </DialogContent>
-</Dialog>
-```
-
-### 9. Agregar Import para Dialog (línea ~4)
-
-```typescript
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 ```
 
 ## Resultado Esperado
 
-### KPIs Corregidos
+### Tarjetas KPI (5 en lugar de 4)
+| Total | Pendientes | Visitadas | No Visitadas | Tasa |
+|-------|------------|-----------|--------------|------|
+| 150   | 50         | 80        | 20           | 53.3% |
 
-| KPI | Antes | Después |
-|-----|-------|---------|
-| **Total** | Todas las asignaciones | Sin cambios |
-| **Visitadas** | estado = "Visitado" | visita_realizada = true (Visitado + Online) |
-| **Pendientes** | estado != "Visitado" | estado != "Visitado" OR visita_realizada = false |
-| **Tasa** | Visitadas / Total | (Visitadas + Online) / Total |
+### Resumen por Vendedor (6 columnas)
+| Vendedor | Asignadas | Pendientes | Visitadas | No Visitadas | Tasa % |
+|----------|-----------|------------|-----------|--------------|--------|
+| Juan     | 50        | 15         | 30        | 5            | 60%    |
 
-### Tabla de Detalle Mejorada
+### Detalle de Asignaciones (8 columnas)
+| Cliente | Vendedor | F.Asig | F.Visita | Tipo Cierre | Detalle | Estado | Acciones |
+|---------|----------|--------|----------|-------------|---------|--------|----------|
+| Acme    | Juan     | 01/01  | 02/01    | Online      | Llamada telefonica | check | Ver |
+| Beta    | Juan     | 01/01  | 02/01    | No visitado | Cerrado permanentemente | check | Ver |
 
-Nueva columna "Tipo Cierre" con badges de colores:
-- **Verde**: Visitado (visita presencial)
-- **Azul**: Online (contacto digital)
-- **Ámbar**: No visitado (con motivo)
-
-Nueva columna "Acciones" con botón "Ver feedback" que abre modal con:
-- Tipo de cierre
-- Vendedor
-- Tipo de interacción (si aplica)
-- Motivo de no visita (si aplica)
-- Comentario
-- Etiqueta WhatsApp (si aplica)
-- Fecha del feedback
-
-## Notas de Implementación
-
-1. La query de feedbacks se ejecuta solo cuando hay asignaciones visitadas
-2. Se usa un Map para lookup eficiente de feedbacks por client_id/prospecto_place_id
-3. Los KPIs reflejan el resultado real del cierre, no solo el estado de la asignación
-4. El modal es solo lectura, sin acciones de edición
+## Notas
+- "Pendientes" = asignaciones sin cerrar (estado != Visitado)
+- "No visitadas" = asignaciones cerradas pero con visita_realizada = false
+- "Visitadas" = asignaciones cerradas con visita_realizada = true (incluye Online)
+- La columna "Detalle" muestra el motivo de no visita (si es No visitado) o el tipo de interaccion (si es Visitado/Online)
