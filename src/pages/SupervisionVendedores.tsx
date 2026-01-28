@@ -10,7 +10,8 @@ import {
   Clock, 
   TrendingUp, 
   Filter,
-  RefreshCw 
+  RefreshCw,
+  Eye
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
@@ -25,6 +26,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface VendedorStats {
   vendedor_id: string;
@@ -46,6 +55,13 @@ interface AsignacionDetalle {
   vendedor_nombre: string;
   cliente_nombre: string;
   direccion: string;
+  // Campos de feedback
+  tipo_cierre: 'Visitado' | 'Online' | 'No visitado' | null;
+  tipo_interaccion: string | null;
+  motivo_no_visita: string | null;
+  feedback_texto: string | null;
+  actualizar_etiqueta_wa: string | null;
+  feedback_fecha: string | null;
 }
 
 interface Filters {
@@ -57,6 +73,18 @@ interface Filters {
   estado: string;
 }
 
+interface FeedbackData {
+  client_id: string | null;
+  prospecto_place_id: string | null;
+  vendedor_id: string;
+  visita_realizada: boolean;
+  tipo_interaccion: string | null;
+  motivo_no_visita: string | null;
+  feedback: string;
+  actualizar_etiqueta_wa: string | null;
+  created_at: string;
+}
+
 const SupervisionVendedores = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -64,6 +92,7 @@ const SupervisionVendedores = () => {
   const [vendedores, setVendedores] = useState<{ id: string; nombre: string }[]>([]);
   const [vendedorStats, setVendedorStats] = useState<VendedorStats[]>([]);
   const [asignaciones, setAsignaciones] = useState<AsignacionDetalle[]>([]);
+  const [feedbackModal, setFeedbackModal] = useState<AsignacionDetalle | null>(null);
   
   const [filters, setFilters] = useState<Filters>({
     asignadoDesde: "",
@@ -148,6 +177,13 @@ const SupervisionVendedores = () => {
     });
   };
 
+  // Helper para crear key de feedback
+  const getFeedbackKey = (a: { client_id?: string | null; prospecto_place_id?: string | null; vendedor_id: string }) => {
+    return a.client_id 
+      ? `client:${a.client_id}:${a.vendedor_id}` 
+      : `prospecto:${a.prospecto_place_id}:${a.vendedor_id}`;
+  };
+
   // Fetch data
   const fetchData = async () => {
     setLoading(true);
@@ -202,6 +238,9 @@ const SupervisionVendedores = () => {
       const clientIds = [...new Set(asignacionesData?.filter(a => a.client_id).map(a => a.client_id) || [])];
       const prospectoPlaceIds = [...new Set(asignacionesData?.filter(a => a.prospecto_place_id).map(a => a.prospecto_place_id) || [])];
 
+      // Query para feedbacks de asignaciones visitadas
+      const asignacionesVisitadas = asignacionesData?.filter(a => a.estado === 'Visitado') || [];
+      
       const [vendedoresRes, clientesRes, prospectosRes] = await Promise.all([
         supabase.from("profiles").select("user_id, nombre, email").in("user_id", vendedorIds),
         clientIds.length > 0 
@@ -212,11 +251,46 @@ const SupervisionVendedores = () => {
           : Promise.resolve({ data: [] as { place_id: string; nombre: string; direccion: string }[] })
       ]);
 
+      // Obtener feedbacks para las asignaciones visitadas
+      let feedbacksMap = new Map<string, FeedbackData>();
+      
+      if (asignacionesVisitadas.length > 0) {
+        const feedbackClientIds = asignacionesVisitadas.filter(a => a.client_id).map(a => a.client_id!);
+        const feedbackProspectoIds = asignacionesVisitadas.filter(a => a.prospecto_place_id).map(a => a.prospecto_place_id!);
+        
+        // Construir query de feedbacks
+        let feedbackQuery = supabase
+          .from('cliente_feedbacks')
+          .select('client_id, prospecto_place_id, vendedor_id, visita_realizada, tipo_interaccion, motivo_no_visita, feedback, actualizar_etiqueta_wa, created_at')
+          .order('created_at', { ascending: false });
+        
+        // Filtrar por client_ids o prospecto_place_ids
+        if (feedbackClientIds.length > 0 && feedbackProspectoIds.length > 0) {
+          feedbackQuery = feedbackQuery.or(`client_id.in.(${feedbackClientIds.join(',')}),prospecto_place_id.in.(${feedbackProspectoIds.join(',')})`);
+        } else if (feedbackClientIds.length > 0) {
+          feedbackQuery = feedbackQuery.in('client_id', feedbackClientIds);
+        } else if (feedbackProspectoIds.length > 0) {
+          feedbackQuery = feedbackQuery.in('prospecto_place_id', feedbackProspectoIds);
+        }
+        
+        const { data: feedbacksData } = await feedbackQuery;
+        
+        // Mapear feedbacks - usar el más reciente por client/prospecto + vendedor
+        (feedbacksData || []).forEach(f => {
+          const key = f.client_id 
+            ? `client:${f.client_id}:${f.vendedor_id}` 
+            : `prospecto:${f.prospecto_place_id}:${f.vendedor_id}`;
+          if (!feedbacksMap.has(key)) {
+            feedbacksMap.set(key, f);
+          }
+        });
+      }
+
       const vendedoresMap = new Map(vendedoresRes.data?.map(v => [v.user_id, v] as const) || []);
       const clientesMap = new Map((clientesRes.data || []).map(c => [c.client_id, c] as const));
       const prospectosMap = new Map((prospectosRes.data || []).map(p => [p.place_id, p] as const));
 
-      // Calcular estadísticas por vendedor
+      // Calcular estadísticas por vendedor usando tipo de cierre
       const statsMap = new Map<string, VendedorStats>();
       
       asignacionesData?.forEach(a => {
@@ -237,8 +311,24 @@ const SupervisionVendedores = () => {
 
         const stats = statsMap.get(a.vendedor_id)!;
         stats.total++;
+        
         if (a.estado === "Visitado") {
-          stats.visitadas++;
+          // Buscar feedback para determinar tipo de cierre real
+          const feedbackKey = getFeedbackKey(a);
+          const feedback = feedbacksMap.get(feedbackKey);
+          
+          if (feedback) {
+            if (feedback.visita_realizada) {
+              // Visitado o Online = cuenta como visitada
+              stats.visitadas++;
+            } else {
+              // No visitado = cuenta como pendiente (no cumplió)
+              stats.pendientes++;
+            }
+          } else {
+            // Sin feedback pero estado Visitado (edge case) - contar como visitada
+            stats.visitadas++;
+          }
         } else {
           stats.pendientes++;
         }
@@ -251,7 +341,7 @@ const SupervisionVendedores = () => {
 
       setVendedorStats(Array.from(statsMap.values()).sort((a, b) => b.total - a.total));
 
-      // Mapear asignaciones con detalles
+      // Mapear asignaciones con detalles y feedback
       const detalleAsignaciones: AsignacionDetalle[] = (asignacionesData || []).map(a => {
         const vendedor = vendedoresMap.get(a.vendedor_id);
         let clienteNombre = "";
@@ -267,6 +357,21 @@ const SupervisionVendedores = () => {
           direccion = cliente?.direccion_principal || "";
         }
 
+        // Determinar tipo de cierre basado en feedback
+        const feedbackKey = getFeedbackKey(a);
+        const feedback = feedbacksMap.get(feedbackKey);
+        let tipoCierre: 'Visitado' | 'Online' | 'No visitado' | null = null;
+        
+        if (feedback) {
+          if (!feedback.visita_realizada) {
+            tipoCierre = 'No visitado';
+          } else if (feedback.tipo_interaccion?.startsWith('[Online]')) {
+            tipoCierre = 'Online';
+          } else {
+            tipoCierre = 'Visitado';
+          }
+        }
+
         return {
           id: a.id,
           estado: a.estado,
@@ -276,7 +381,13 @@ const SupervisionVendedores = () => {
           origen_asignacion: a.origen_asignacion,
           vendedor_nombre: vendedor?.nombre || "Desconocido",
           cliente_nombre: clienteNombre,
-          direccion
+          direccion,
+          tipo_cierre: tipoCierre,
+          tipo_interaccion: feedback?.tipo_interaccion?.replace('[Online] ', '') || null,
+          motivo_no_visita: feedback?.motivo_no_visita || null,
+          feedback_texto: feedback?.feedback || null,
+          actualizar_etiqueta_wa: feedback?.actualizar_etiqueta_wa || null,
+          feedback_fecha: feedback?.created_at || null,
         };
       });
 
@@ -312,6 +423,17 @@ const SupervisionVendedores = () => {
       day: "2-digit",
       month: "2-digit",
       year: "2-digit"
+    });
+  };
+
+  const formatDateTime = (dateString: string | null) => {
+    if (!dateString) return "-";
+    return new Date(dateString).toLocaleString("es-AR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
     });
   };
 
@@ -590,14 +712,15 @@ const SupervisionVendedores = () => {
                   <TableHead>Vendedor</TableHead>
                   <TableHead className="text-center">F. Asignación</TableHead>
                   <TableHead className="text-center">F. Visita</TableHead>
+                  <TableHead className="text-center">Tipo Cierre</TableHead>
                   <TableHead className="text-center">Estado</TableHead>
-                  <TableHead className="text-center">Origen</TableHead>
+                  <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {asignaciones.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       No hay asignaciones para los filtros seleccionados
                     </TableCell>
                   </TableRow>
@@ -619,6 +742,22 @@ const SupervisionVendedores = () => {
                       <TableCell className="text-center text-sm">{formatDate(a.created_at)}</TableCell>
                       <TableCell className="text-center text-sm">{formatDate(a.visited_at)}</TableCell>
                       <TableCell className="text-center">
+                        {a.tipo_cierre ? (
+                          <Badge 
+                            variant="outline"
+                            className={cn(
+                              a.tipo_cierre === 'Visitado' && 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30',
+                              a.tipo_cierre === 'Online' && 'bg-blue-500/20 text-blue-500 border-blue-500/30',
+                              a.tipo_cierre === 'No visitado' && 'bg-amber-500/20 text-amber-600 border-amber-500/30'
+                            )}
+                          >
+                            {a.tipo_cierre}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">
                         <Badge 
                           variant={a.estado === "Visitado" ? "default" : a.estado === "Por visitar" ? "secondary" : "outline"}
                           className={a.estado === "Visitado" ? "bg-emerald-500/20 text-emerald-500" : ""}
@@ -627,9 +766,19 @@ const SupervisionVendedores = () => {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge variant="outline" className="text-xs">
-                          {a.origen_asignacion === "auto" ? "Auto" : "Asig."}
-                        </Badge>
+                        {a.tipo_cierre ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setFeedbackModal(a)}
+                            className="gap-1"
+                          >
+                            <Eye className="h-4 w-4" />
+                            Ver
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))
@@ -639,6 +788,77 @@ const SupervisionVendedores = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal Ver Feedback */}
+      <Dialog open={!!feedbackModal} onOpenChange={() => setFeedbackModal(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detalle del Feedback</DialogTitle>
+            <DialogDescription>
+              {feedbackModal?.cliente_nombre}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-muted-foreground uppercase">Tipo de Cierre</label>
+                <p className="font-medium">
+                  {feedbackModal?.tipo_cierre && (
+                    <Badge 
+                      variant="outline"
+                      className={cn(
+                        feedbackModal.tipo_cierre === 'Visitado' && 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30',
+                        feedbackModal.tipo_cierre === 'Online' && 'bg-blue-500/20 text-blue-500 border-blue-500/30',
+                        feedbackModal.tipo_cierre === 'No visitado' && 'bg-amber-500/20 text-amber-600 border-amber-500/30'
+                      )}
+                    >
+                      {feedbackModal.tipo_cierre}
+                    </Badge>
+                  )}
+                </p>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground uppercase">Vendedor</label>
+                <p className="font-medium">{feedbackModal?.vendedor_nombre || '-'}</p>
+              </div>
+            </div>
+            
+            {feedbackModal?.tipo_interaccion && (
+              <div>
+                <label className="text-xs text-muted-foreground uppercase">Tipo de Interacción</label>
+                <p className="font-medium">{feedbackModal.tipo_interaccion}</p>
+              </div>
+            )}
+            
+            {feedbackModal?.motivo_no_visita && (
+              <div>
+                <label className="text-xs text-muted-foreground uppercase">Motivo No Visita</label>
+                <p className="font-medium text-amber-600">{feedbackModal.motivo_no_visita}</p>
+              </div>
+            )}
+            
+            {feedbackModal?.feedback_texto && (
+              <div>
+                <label className="text-xs text-muted-foreground uppercase">Comentario</label>
+                <p className="text-sm bg-muted p-3 rounded-lg">{feedbackModal.feedback_texto}</p>
+              </div>
+            )}
+            
+            {feedbackModal?.actualizar_etiqueta_wa && (
+              <div>
+                <label className="text-xs text-muted-foreground uppercase">Etiqueta WhatsApp</label>
+                <Badge variant="outline">{feedbackModal.actualizar_etiqueta_wa}</Badge>
+              </div>
+            )}
+            
+            {feedbackModal?.feedback_fecha && (
+              <div className="text-xs text-muted-foreground text-right pt-2 border-t">
+                Registrado: {formatDateTime(feedbackModal.feedback_fecha)}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
