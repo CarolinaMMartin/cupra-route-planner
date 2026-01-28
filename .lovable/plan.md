@@ -1,195 +1,124 @@
 
-# Plan: Corregir KPIs, Resumen por Vendedor y Agregar Columna de Detalle
 
-## Problemas Identificados
+# Plan: Corregir Historial de Interacciones en Detalle de Asignación
 
-### 1. KPIs - Falta tarjeta "No Visitadas"
-Actualmente solo hay 4 tarjetas: Total, Pendientes, Visitadas, Tasa. Falta una tarjeta específica para "No visitadas" (asignaciones cerradas pero sin visita real).
+## Problema Identificado
 
-### 2. Resumen por Vendedor - No incluye "No visitado"
-La tabla solo muestra: Asignadas, Pendientes, Visitadas. Falta columna para "No visitado" (cerradas sin visita efectiva).
+Cuando el vendedor abre una tarjeta de asignación desde el "Historial de Asignaciones", la sección **"Historial de Interacciones"** muestra (0) y el mensaje "No hay interacciones registradas aún", a pesar de que en la minivista de la tarjeta SÍ aparece el feedback.
 
-### 3. Tabla Detalle - Falta info contextual junto a Tipo Cierre
-El usuario quiere ver "Tipo de Interacción" o "Motivo No Visita" directamente en la tabla, no solo en el modal.
+### Causa Raíz
+
+En `VendedorDashboard.tsx`, el query para obtener todos los feedbacks (línea 128-131) usa un join con foreign key que **no existe** en la base de datos:
+
+```typescript
+supabase.from("cliente_feedbacks").select(`
+  *,
+  vendedor:profiles!cliente_feedbacks_vendedor_id_fkey(nombre)
+`)
+```
+
+La tabla `cliente_feedbacks` **no tiene una foreign key hacia `profiles`** para `vendedor_id`. Esto causa que el query falle silenciosamente o devuelva datos incorrectos.
+
+### Evidencia
+
+| Query | Estado |
+|-------|--------|
+| `feedbacksRes` (línea 126) - simple query | Funciona correctamente |
+| `allFeedbacksRes` (línea 128-131) - con join | Falla por FK inexistente |
+
+Los datos existen en la base de datos y el join SQL directo sí funciona, pero la sintaxis de Supabase SDK con `!foreign_key_name` requiere que la FK exista.
 
 ## Archivo a Modificar
 
-| Archivo | Cambios |
-|---------|---------|
-| `src/pages/SupervisionVendedores.tsx` | Agregar KPI, columna en resumen, columna en detalle |
+| Archivo | Cambio |
+|---------|--------|
+| `src/pages/VendedorDashboard.tsx` | Corregir query de feedbacks y agregar profiles manualmente |
 
-## Cambios Técnicos
+## Solución Técnica
 
-### 1. Actualizar Interface `VendedorStats` (linea 38-46)
+### Opción Implementada: Query separado + merge manual
 
-Agregar campo para "no visitadas":
+Dado que no hay FK definida, se harán dos queries:
+1. Query de todos los feedbacks (sin join)
+2. Query de profiles para los vendedor_ids únicos
+3. Merge manual de la información del vendedor
+
+### Cambios en fetchDashboardData() (líneas 119-160)
 
 ```typescript
-interface VendedorStats {
-  vendedor_id: string;
-  nombre: string;
-  email: string;
-  total: number;
-  pendientes: number;
-  visitadas: number;
-  noVisitadas: number;  // NUEVO
-  tasa: number;
-}
+// Antes (falla):
+const [clientesRes, prospectosRes, feedbacksRes, allFeedbacksRes] = await Promise.all([
+  // ... otros queries ...
+  supabase.from("cliente_feedbacks").select(`
+    *,
+    vendedor:profiles!cliente_feedbacks_vendedor_id_fkey(nombre)
+  `)
+]);
+
+// Después (funciona):
+const [clientesRes, prospectosRes, feedbacksRes, allFeedbacksRaw] = await Promise.all([
+  // ... otros queries mantienen igual ...
+  supabase.from("cliente_feedbacks").select("*")  // Sin join
+]);
+
+// Obtener vendedor_ids únicos de todos los feedbacks
+const vendedorIds = [...new Set(
+  allFeedbacksRaw.data?.map(f => f.vendedor_id).filter(Boolean) || []
+)];
+
+// Query separado para profiles
+const profilesRes = vendedorIds.length > 0
+  ? await supabase
+      .from("profiles")
+      .select("user_id, nombre")
+      .in("user_id", vendedorIds)
+  : { data: [] };
+
+// Crear mapa de profiles
+const profilesMap = new Map<string, string>();
+profilesRes.data?.forEach(p => profilesMap.set(p.user_id, p.nombre));
+
+// Mapear feedbacks con info del vendedor
+const allFeedbacksData = allFeedbacksRaw.data?.map(f => ({
+  ...f,
+  vendedor: profilesMap.has(f.vendedor_id) 
+    ? { nombre: profilesMap.get(f.vendedor_id) }
+    : undefined
+})) || [];
 ```
 
-### 2. Actualizar Cálculo de Stats (linea 296-335)
-
-Agregar conteo de "No visitado":
+### Actualizar el mapeo de allFeedbacksMap (líneas 147-160)
 
 ```typescript
-statsMap.set(a.vendedor_id, {
-  // ... campos existentes ...
-  noVisitadas: 0,  // NUEVO
-  // ...
-});
-
-if (a.estado === "Visitado") {
-  const feedback = feedbacksMap.get(feedbackKey);
-  if (feedback) {
-    if (feedback.visita_realizada) {
-      stats.visitadas++;
-    } else {
-      stats.noVisitadas++;  // Cambiar de pendientes a noVisitadas
+// Agrupar todos los feedbacks por cliente/prospecto
+const allFeedbacksMap = new Map<string, FeedbackInfo[]>();
+allFeedbacksData.forEach(f => {
+  const key = f.client_id || f.prospecto_place_id || '';
+  if (key) {
+    if (!allFeedbacksMap.has(key)) {
+      allFeedbacksMap.set(key, []);
     }
-  } else {
-    stats.visitadas++;
+    allFeedbacksMap.get(key)?.push(f as FeedbackInfo);
   }
-} else {
-  stats.pendientes++;
-}
-```
-
-### 3. Actualizar KPIs Globales (linea 411-418)
-
-Agregar cálculo de "No visitadas":
-
-```typescript
-const kpis = useMemo(() => {
-  const total = vendedorStats.reduce((sum, v) => sum + v.total, 0);
-  const pendientes = vendedorStats.reduce((sum, v) => sum + v.pendientes, 0);
-  const visitadas = vendedorStats.reduce((sum, v) => sum + v.visitadas, 0);
-  const noVisitadas = vendedorStats.reduce((sum, v) => sum + v.noVisitadas, 0);  // NUEVO
-  const tasa = total > 0 ? (visitadas / total) * 100 : 0;
-  return { total, pendientes, visitadas, noVisitadas, tasa };
-}, [vendedorStats]);
-```
-
-### 4. Agregar Import de Icono (linea 6-15)
-
-Agregar `XCircle` para la tarjeta de No visitadas:
-
-```typescript
-import { 
-  ArrowLeft, Users, CheckCircle2, Clock, TrendingUp, Filter, RefreshCw, Eye,
-  XCircle  // NUEVO
-} from "lucide-react";
-```
-
-### 5. Agregar Tarjeta KPI "No Visitadas" (después de linea 631)
-
-Nueva tarjeta entre "Visitadas" y "Tasa Cumplimiento":
-
-```tsx
-<Card className="matte-card">
-  <CardContent className="pt-6">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-xs text-muted-foreground uppercase tracking-wide">No Visitadas</p>
-        <p className="text-3xl font-bold text-rose-500">{kpis.noVisitadas}</p>
-      </div>
-      <XCircle className="h-8 w-8 text-rose-500" />
-    </div>
-  </CardContent>
-</Card>
-```
-
-### 6. Actualizar Grid de KPIs (linea 596)
-
-Cambiar de 4 a 5 columnas:
-
-```tsx
-<div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-```
-
-### 7. Agregar Columna en Resumen por Vendedor (linea 656-692)
-
-Agregar columna "No Visitadas":
-
-```tsx
-<TableHeader>
-  <TableRow>
-    <TableHead>Vendedor</TableHead>
-    <TableHead className="text-center">Asignadas</TableHead>
-    <TableHead className="text-center">Pendientes</TableHead>
-    <TableHead className="text-center">Visitadas</TableHead>
-    <TableHead className="text-center">No Visitadas</TableHead>  {/* NUEVO */}
-    <TableHead className="text-center">Tasa %</TableHead>
-  </TableRow>
-</TableHeader>
-
-// Y en el body:
-<TableCell className="text-center text-rose-500">{stat.noVisitadas}</TableCell>
-```
-
-### 8. Agregar Columna "Detalle Cierre" en Tabla de Detalle (linea 709-788)
-
-Nueva columna después de "Tipo Cierre" que muestra Tipo de Interacción o Motivo:
-
-```tsx
-<TableHeader>
-  <TableRow>
-    <TableHead>Cliente/Prospecto</TableHead>
-    <TableHead>Vendedor</TableHead>
-    <TableHead className="text-center">F. Asignación</TableHead>
-    <TableHead className="text-center">F. Visita</TableHead>
-    <TableHead className="text-center">Tipo Cierre</TableHead>
-    <TableHead>Detalle</TableHead>  {/* NUEVO */}
-    <TableHead className="text-center">Estado</TableHead>
-    <TableHead className="text-center">Acciones</TableHead>
-  </TableRow>
-</TableHeader>
-
-// Y en cada fila, después de Tipo Cierre:
-<TableCell className="text-sm max-w-[200px]">
-  {a.tipo_cierre === 'No visitado' ? (
-    <span className="text-amber-600 truncate block" title={a.motivo_no_visita || undefined}>
-      {a.motivo_no_visita || '-'}
-    </span>
-  ) : a.tipo_interaccion ? (
-    <span className="text-muted-foreground truncate block" title={a.tipo_interaccion}>
-      {a.tipo_interaccion}
-    </span>
-  ) : (
-    <span className="text-muted-foreground text-xs">-</span>
-  )}
-</TableCell>
+});
 ```
 
 ## Resultado Esperado
 
-### Tarjetas KPI (5 en lugar de 4)
-| Total | Pendientes | Visitadas | No Visitadas | Tasa |
-|-------|------------|-----------|--------------|------|
-| 150   | 50         | 80        | 20           | 53.3% |
+| Antes | Después |
+|-------|---------|
+| Historial de Interacciones (0) | Historial de Interacciones (N) con todos los feedbacks |
+| "No hay interacciones registradas aún" | Lista completa de feedbacks con vendedor, fecha y detalles |
 
-### Resumen por Vendedor (6 columnas)
-| Vendedor | Asignadas | Pendientes | Visitadas | No Visitadas | Tasa % |
-|----------|-----------|------------|-----------|--------------|--------|
-| Juan     | 50        | 15         | 30        | 5            | 60%    |
+## Alternativa a Futuro (Opcional)
 
-### Detalle de Asignaciones (8 columnas)
-| Cliente | Vendedor | F.Asig | F.Visita | Tipo Cierre | Detalle | Estado | Acciones |
-|---------|----------|--------|----------|-------------|---------|--------|----------|
-| Acme    | Juan     | 01/01  | 02/01    | Online      | Llamada telefonica | check | Ver |
-| Beta    | Juan     | 01/01  | 02/01    | No visitado | Cerrado permanentemente | check | Ver |
+Si se desea mantener la sintaxis original con join, se podría agregar la FK faltante a la base de datos:
 
-## Notas
-- "Pendientes" = asignaciones sin cerrar (estado != Visitado)
-- "No visitadas" = asignaciones cerradas pero con visita_realizada = false
-- "Visitadas" = asignaciones cerradas con visita_realizada = true (incluye Online)
-- La columna "Detalle" muestra el motivo de no visita (si es No visitado) o el tipo de interaccion (si es Visitado/Online)
+```sql
+ALTER TABLE cliente_feedbacks 
+ADD CONSTRAINT cliente_feedbacks_vendedor_id_fkey 
+FOREIGN KEY (vendedor_id) REFERENCES profiles(user_id);
+```
+
+Sin embargo, la solución con queries separados es más robusta y no requiere cambios en la base de datos.
+
