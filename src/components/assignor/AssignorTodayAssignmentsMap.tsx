@@ -545,7 +545,7 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
   }
 
   return (
-    <Card className="w-full h-[600px] relative overflow-hidden">
+    <Card className="w-full h-[min(600px,_calc(85vh-120px))] relative overflow-hidden flex-1">
       {isLoading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <div className="text-center">

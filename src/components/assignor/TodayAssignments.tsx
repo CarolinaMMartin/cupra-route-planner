@@ -487,7 +487,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
       </Dialog>
 
       <Dialog open={!!showMapVendedor} onOpenChange={(open) => !open && setShowMapVendedor(null)}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh]">
+        <DialogContent className="max-w-[90vw] max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Asignaciones de {showMapVendedor}</DialogTitle>
           </DialogHeader>
