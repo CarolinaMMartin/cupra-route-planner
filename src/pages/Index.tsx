@@ -88,10 +88,10 @@ const Index = () => {
       <header className="bg-background/90 backdrop-blur-xl sticky top-0 z-50 border-b border-border/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
           <div className="flex justify-between items-center h-14">
-            {/* Logo + Angel seal */}
-            <div className="flex items-center gap-3">
-              <img src={angelBlanco} alt="" className="h-7 w-auto opacity-50" />
-              <img src={cupraLogo} alt="Cupra Wines" className="h-7 w-auto opacity-80" />
+            {/* Logo */}
+            <div className="flex items-center gap-2.5">
+              <img src={angelBlanco} alt="" className="h-8 w-auto opacity-40" />
+              <img src={cupraLogo} alt="Cupra Wines" className="h-6 w-auto opacity-70" />
             </div>
 
             {/* Navigation */}
