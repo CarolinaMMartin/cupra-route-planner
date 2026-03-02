@@ -262,8 +262,8 @@ const VendedorDashboard = () => {
         <div className="flex items-center gap-3">
           <img src={cupraLogo} alt="Cupra Wines" className="h-8 md:h-12 w-auto" />
           <div>
-            <h1 className="text-xl md:text-3xl font-bold">Mi Dashboard</h1>
-            <p className="text-xs md:text-sm text-muted-foreground hidden md:block">Resumen de todas tus asignaciones y actividad</p>
+            <h1 className="text-lg md:text-2xl font-serif text-foreground tracking-tight">Mi Dashboard</h1>
+            <p className="text-xs text-muted-foreground hidden md:block">Resumen de asignaciones y actividad</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -283,44 +283,44 @@ const VendedorDashboard = () => {
       <div className="grid grid-cols-2 gap-2 md:gap-4 lg:grid-cols-4">
         <Card className="p-2 md:p-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 md:p-6 md:pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium">Total</CardTitle>
+            <CardTitle className="text-[11px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider">Total</CardTitle>
             <Users className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
-            <div className="text-xl md:text-2xl font-bold">{estadisticas.totalAsignaciones}</div>
+            <div className="text-lg md:text-xl font-semibold text-foreground">{estadisticas.totalAsignaciones}</div>
             <p className="text-xs text-muted-foreground hidden md:block">Históricas</p>
           </CardContent>
         </Card>
 
         <Card className="p-2 md:p-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 md:p-6 md:pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium">Pendientes</CardTitle>
+            <CardTitle className="text-[11px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider">Pendientes</CardTitle>
             <Target className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
-            <div className="text-xl md:text-2xl font-bold">{estadisticas.asignacionesActivas}</div>
+            <div className="text-lg md:text-xl font-semibold text-foreground">{estadisticas.asignacionesActivas}</div>
             <p className="text-xs text-muted-foreground hidden md:block">Por atender</p>
           </CardContent>
         </Card>
 
         <Card className="p-2 md:p-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 md:p-6 md:pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium">Visitadas</CardTitle>
+            <CardTitle className="text-[11px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider">Visitadas</CardTitle>
             <CheckCircle2 className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
-            <div className="text-xl md:text-2xl font-bold">{estadisticas.visitasRealizadas}</div>
+            <div className="text-lg md:text-xl font-semibold text-foreground">{estadisticas.visitasRealizadas}</div>
             <p className="text-xs text-muted-foreground hidden md:block">Completadas</p>
           </CardContent>
         </Card>
 
         <Card className="p-2 md:p-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 md:p-6 md:pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium">Conversión</CardTitle>
+            <CardTitle className="text-[11px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider">Conversión</CardTitle>
             <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
-            <div className="text-xl md:text-2xl font-bold">{estadisticas.tasaConversion}%</div>
+            <div className="text-lg md:text-xl font-semibold text-foreground">{estadisticas.tasaConversion}%</div>
             <p className="text-xs text-muted-foreground hidden md:block">Visitas completadas</p>
           </CardContent>
         </Card>
@@ -329,7 +329,7 @@ const VendedorDashboard = () => {
       {/* Tabs de historial */}
       <Card>
         <CardHeader className="p-3 md:p-6">
-          <CardTitle className="text-base md:text-lg">Historial de Asignaciones</CardTitle>
+          <CardTitle className="text-sm md:text-base font-serif">Historial de Asignaciones</CardTitle>
         </CardHeader>
         <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
           <Tabs defaultValue="todas" className="w-full">
@@ -354,7 +354,7 @@ const VendedorDashboard = () => {
                         <div className="flex items-start justify-between">
                           <div className="space-y-2 flex-1">
                             <div className="flex items-center gap-2">
-                              <p className="font-semibold">
+                              <p className="text-sm font-medium text-foreground">
                                 {asig.es_prospecto 
                                   ? asig.prospecto_info?.nombre 
                                   : asig.cliente_info?.razon_social}
@@ -415,7 +415,7 @@ const VendedorDashboard = () => {
                           <div className="flex items-start justify-between">
                             <div className="space-y-2 flex-1">
                               <div className="flex items-center gap-2">
-                                <p className="font-semibold">
+                                <p className="text-sm font-medium text-foreground">
                                   {asig.es_prospecto 
                                     ? asig.prospecto_info?.nombre 
                                     : asig.cliente_info?.razon_social}
@@ -460,7 +460,7 @@ const VendedorDashboard = () => {
                           <div className="flex items-start justify-between">
                             <div className="space-y-2 flex-1">
                               <div className="flex items-center gap-2">
-                                <p className="font-semibold">
+                                <p className="text-sm font-medium text-foreground">
                                   {asig.es_prospecto 
                                     ? asig.prospecto_info?.nombre 
                                     : asig.cliente_info?.razon_social}
