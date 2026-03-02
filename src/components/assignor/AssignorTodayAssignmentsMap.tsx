@@ -440,10 +440,12 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
       // Crear marcadores de PROSPECTOS GOOGLE con los resultados
       prospectoResults.forEach(({ assignment, place }) => {
         if (place?.geometry?.location) {
+          const vendorColorG = getVendorColor(assignment.vendedor.nombre);
           const marker = new google.maps.Marker({
             position: place.geometry.location,
             map: map,
             title: assignment.prospecto?.nombre || 'Prospecto',
+            icon: createColoredMarkerIcon(vendorColorG),
           });
 
           bounds.extend(place.geometry.location);
