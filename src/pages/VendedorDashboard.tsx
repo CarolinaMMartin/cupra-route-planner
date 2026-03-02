@@ -309,7 +309,7 @@ const VendedorDashboard = () => {
             <CheckCircle2 className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
-            <div className="text-xl md:text-2xl font-bold">{estadisticas.visitasRealizadas}</div>
+            <div className="text-lg md:text-xl font-semibold text-foreground">{estadisticas.visitasRealizadas}</div>
             <p className="text-xs text-muted-foreground hidden md:block">Completadas</p>
           </CardContent>
         </Card>
