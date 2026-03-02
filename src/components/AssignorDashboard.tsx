@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import FilterPanel from "./assignor/FilterPanel";
 import ResultsMap from "./assignor/ResultsMap";
 import PreselectionStep from "./assignor/PreselectionStep";
-import TableAssignment from "./assignor/TableAssignment";
+import TableAssignment from "@/components/assignor/TableAssignment";
 import TodayAssignments from "./assignor/TodayAssignments";
 import AIInsightsCard from "./assignor/AIInsightsCard";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
