@@ -33,13 +33,37 @@
 - `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
 - Tipo `Sucursal` extendido con `vendedor_actual`
 
+---
+
+# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Tabs principales ✅
+- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
+- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
+
+### B. FilterPanel con dos modos ✅
+- Modo "Por Área": selector de área → ver resumen → generar
+- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
+- Instrucciones IA colapsables en ambos modos
+- Vendedores en Collapsible con badge "X de Y seleccionados"
+
+### C. RecommendationFilters simplificado ✅
+- De 6 filtros redundantes a solo 1 filtro por vendedor
+- Se muestra solo cuando hay más de 1 vendedor
+
+### D. TodayAssignments sin Card wrapper ✅
+- Funciona como contenido directo del tab
+- Layout más limpio sin doble Card
+
 ## Archivos modificados
 | Archivo | Cambio |
 |---------|--------|
-| `supabase/functions/generate-recommendations/index.ts` | Reescrito: pre-scoring + prompt reducido + mapeo nombre→UUID |
-| `supabase/functions/upsert-clientes/index.ts` | `vendedor_actual` agregado a `camposVentas` |
-| `src/components/assignor/ClientDetailCard.tsx` | Vendedor actual/anterior en compact y full views |
-| `src/types/sales.ts` | `vendedor_actual` agregado a `Sucursal` |
+| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
+| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
+| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
+| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
 
 ## Próximos pasos potenciales
 - Planificación temporal (agenda semanal)
