@@ -597,6 +597,9 @@ const SupervisionVendedores = () => {
           </CardContent>
         </Card>
 
+        {/* Activaciones por vendedor */}
+        <ActividadesResumen />
+
         {/* KPIs Globales */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className="matte-card">
