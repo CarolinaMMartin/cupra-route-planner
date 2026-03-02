@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react"; // refreshed
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -11,7 +11,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MapPin, List } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MapPin, List, Plus, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FilterPanel from "./assignor/FilterPanel";
 import ResultsList from "./assignor/ResultsList";
@@ -31,7 +32,6 @@ import { useRecommendationsStore } from "@/hooks/useRecommendationsStore";
 type FlowStep = "recommendations" | "preselection" | "assignment" | "edit-select" | "edit-kanban";
 
 const AssignorDashboard = () => {
-  // Usar el store global para persistir estado entre navegaciones
   const {
     flowStep,
     setFlowStep,
@@ -63,21 +63,17 @@ const AssignorDashboard = () => {
   const [placesData, setPlacesData] = useState<
     Array<{ comuna: string | null; barrio_principal: string | null; provincia_principal: string | null }>
   >([]);
+  const [activeTab, setActiveTab] = useState<string>("nueva");
   const { toast } = useToast();
 
-  // funcion para obtener el place id desde un url
   const getPlaceIdFromUrl = (url: string | null | undefined) => {
     if (!url) return null;
     try {
       const parsed = new URL(url);
-
-      // Buscar en query param "q"
       const q = parsed.searchParams.get("q");
       if (q && q.startsWith("place_id:")) {
         return q.replace("place_id:", "");
       }
-
-      // Buscar en todo el URL por si viene incrustado
       const match = url.match(/place_id:([^&]+)/);
       return match ? match[1] : null;
     } catch (err) {
@@ -86,19 +82,15 @@ const AssignorDashboard = () => {
     }
   };
 
-  // Cargar datos de places al montar el componente
   useEffect(() => {
     const loadPlacesData = async () => {
       const { data, error } = await supabase.from("places").select("comuna, barrio_principal, provincia_principal");
-
       if (error) {
         console.error("Error loading places:", error);
         return;
       }
-
       setPlacesData(data || []);
     };
-
     loadPlacesData();
   }, []);
 
@@ -112,8 +104,6 @@ const AssignorDashboard = () => {
   ) => {
     setIsLoading(true);
     setSelectedVendedoresIds(selectedVendedoresData.ids);
-
-    // Guardar datos de vendedores para el insights card
     setVendedoresData(
       selectedVendedoresData.ids.map((id, idx) => ({
         id,
@@ -139,7 +129,6 @@ const AssignorDashboard = () => {
 
       console.log("Payload enviado a Supabase:", JSON.stringify(payload, null, 2));
 
-      // Llamar al edge function de Lovable AI
       const { data, error } = await supabase.functions.invoke("generate-recommendations", {
         body: payload,
       });
@@ -151,7 +140,6 @@ const AssignorDashboard = () => {
 
       console.log("✅✅ Respuesta del edge function:", data);
 
-      // Verificar si no hay recomendaciones
       if (!data.recomendaciones || data.recomendaciones.length === 0) {
         toast({
           variant: "destructive",
@@ -165,9 +153,8 @@ const AssignorDashboard = () => {
         return;
       }
 
-      // Mapear los datos al formato Sucursal
       const mappedRecommendations: Sucursal[] = (data.recomendaciones || []).map((rec: any) => ({
-        id: rec.request_id + "-" + (rec.client_id || rec.prospecto_place_id), // ID único combinado
+        id: rec.request_id + "-" + (rec.client_id || rec.prospecto_place_id),
         nombre: rec.razon_social,
         direccion: rec.ciudades?.[0] || "Sin dirección",
         zona: rec.provincias?.[0] || "Sin zona",
@@ -180,15 +167,11 @@ const AssignorDashboard = () => {
         cuit_dni: rec.cuit_dni,
         vendedores: rec.vendedores || [],
         client_id: rec.client_id,
-
-        // Campos específicos de prospectos
         es_prospecto: rec.es_prospecto || false,
         prospecto_place_id: rec.prospecto_place_id,
         tipo_negocio: rec.factores_ia?.tipo_negocio,
         rating: rec.factores_ia?.rating,
         website: rec.factores_ia?.website,
-
-        // Campos completos de clientes
         fantasia: rec.razon_social,
         primera_compra: rec.first_purchase_at,
         ultima_compra: rec.last_purchase_at,
@@ -213,8 +196,6 @@ const AssignorDashboard = () => {
         direccion_principal: rec.direccion_principal,
         google_maps_link: rec.google_maps_link,
         place_id: getPlaceIdFromUrl(rec.google_maps_link),
-
-        // Campos de IA
         ai_reasoning: rec.ai_reasoning,
         score_geografico: rec.score_geografico,
         factores_ia: rec.factores_ia,
@@ -233,15 +214,12 @@ const AssignorDashboard = () => {
       });
     } catch (error: any) {
       console.error("Error:", error);
-
       let errorMessage = "Error al solicitar recomendaciones";
-
       if (error.message?.includes("429")) {
         errorMessage = "Límite de consultas IA alcanzado. Reintenta en unos minutos.";
       } else if (error.message?.includes("402")) {
         errorMessage = "Créditos de IA agotados. Agrega créditos en Settings → Usage.";
       }
-
       toast({
         variant: "destructive",
         title: "Error",
@@ -251,7 +229,6 @@ const AssignorDashboard = () => {
       setIsLoading(false);
     }
   };
-
 
   const handleContinueToAssignment = () => {
     setFlowStep("assignment");
@@ -305,23 +282,16 @@ const AssignorDashboard = () => {
     setSelectedPlacesProvincia("all");
   };
 
-  // Obtener opciones únicas para los filtros
   const { ciudades, provincias, vendedores } = useMemo(() => {
     const ciudadesSet = new Set<string>();
     const provinciasSet = new Set<string>();
     const vendedoresSet = new Set<string>();
 
     recommendations.forEach((rec: any) => {
-      if (rec.direccion && rec.direccion !== "Sin dirección") {
-        ciudadesSet.add(rec.direccion);
-      }
-      if (rec.zona && rec.zona !== "Sin zona") {
-        provinciasSet.add(rec.zona);
-      }
+      if (rec.direccion && rec.direccion !== "Sin dirección") ciudadesSet.add(rec.direccion);
+      if (rec.zona && rec.zona !== "Sin zona") provinciasSet.add(rec.zona);
       if (rec.vendedores && Array.isArray(rec.vendedores)) {
-        rec.vendedores.forEach((v: string) => {
-          if (v) vendedoresSet.add(v);
-        });
+        rec.vendedores.forEach((v: string) => { if (v) vendedoresSet.add(v); });
       }
     });
 
@@ -332,44 +302,21 @@ const AssignorDashboard = () => {
     };
   }, [recommendations]);
 
-  // Aplicar filtros a las recomendaciones
   const filteredRecommendations = useMemo(() => {
     return recommendations.filter((rec: any) => {
-      // Filtros de recomendaciones originales
-      if (selectedCiudad !== "all" && rec.direccion !== selectedCiudad) {
-        return false;
-      }
-      if (selectedProvincia !== "all" && rec.zona !== selectedProvincia) {
-        return false;
-      }
+      if (selectedCiudad !== "all" && rec.direccion !== selectedCiudad) return false;
+      if (selectedProvincia !== "all" && rec.zona !== selectedProvincia) return false;
       if (selectedVendedor !== "all") {
-        if (!rec.vendedores || !Array.isArray(rec.vendedores)) {
-          return false;
-        }
-        if (!rec.vendedores.includes(selectedVendedor)) {
-          return false;
-        }
+        if (!rec.vendedores || !Array.isArray(rec.vendedores)) return false;
+        if (!rec.vendedores.includes(selectedVendedor)) return false;
       }
-
-      // Filtros de Places
       if (selectedPlacesProvincia !== "all") {
-        if (!rec.zona || rec.zona !== selectedPlacesProvincia) {
-          return false;
-        }
+        if (!rec.zona || rec.zona !== selectedPlacesProvincia) return false;
       }
-
-      if (selectedPlacesComuna.length > 0) {
-        // El campo comuna no está directamente en recomendaciones
-        // Este filtro será más efectivo cuando se integre con places
-        return true;
-      }
-
+      if (selectedPlacesComuna.length > 0) return true;
       if (selectedPlacesBarrio.length > 0) {
-        if (!rec.barrio_principal || !selectedPlacesBarrio.includes(rec.barrio_principal)) {
-          return false;
-        }
+        if (!rec.barrio_principal || !selectedPlacesBarrio.includes(rec.barrio_principal)) return false;
       }
-
       return true;
     });
   }, [recommendations, selectedCiudad, selectedProvincia, selectedVendedor, selectedPlacesProvincia]);
@@ -397,27 +344,32 @@ const AssignorDashboard = () => {
       </AlertDialog>
 
       {flowStep === "recommendations" && (
-        <>
-          <Card className="shadow-medium">
-            <CardHeader>
-              <CardTitle className="font-serif tracking-wide">Panel de Asignación</CardTitle>
-              <CardDescription>
-                Selecciona un área o aplica filtros para solicitar recomendaciones inteligentes
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FilterPanel
-                onRequestRecommendations={handleRequestRecommendations}
-                isLoading={isLoading}
-                placesData={placesData}
-                instruccionesAdicionales={instruccionesAdicionales}
-                onInstruccionesChange={setInstruccionesAdicionales}
-              />
-            </CardContent>
-          </Card>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="w-full grid grid-cols-2 h-12">
+            <TabsTrigger value="nueva" className="gap-2 text-sm">
+              <Plus className="w-4 h-4" />
+              Nueva Asignación
+            </TabsTrigger>
+            <TabsTrigger value="hoy" className="gap-2 text-sm">
+              <Calendar className="w-4 h-4" />
+              Asignaciones de Hoy
+            </TabsTrigger>
+          </TabsList>
 
-          <TodayAssignments onEditAssignments={handleEditAssignments} />
-        </>
+          <TabsContent value="nueva" className="mt-4">
+            <FilterPanel
+              onRequestRecommendations={handleRequestRecommendations}
+              isLoading={isLoading}
+              placesData={placesData}
+              instruccionesAdicionales={instruccionesAdicionales}
+              onInstruccionesChange={setInstruccionesAdicionales}
+            />
+          </TabsContent>
+
+          <TabsContent value="hoy" className="mt-4">
+            <TodayAssignments onEditAssignments={handleEditAssignments} />
+          </TabsContent>
+        </Tabs>
       )}
 
       {flowStep === "edit-select" && (
