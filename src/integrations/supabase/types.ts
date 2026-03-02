@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      activaciones: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          descripcion: string | null
+          fecha: string
+          id: string
+          prospecto_place_id: string | null
+          tipo: string
+          vendedor_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          prospecto_place_id?: string | null
+          tipo: string
+          vendedor_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          descripcion?: string | null
+          fecha?: string
+          id?: string
+          prospecto_place_id?: string | null
+          tipo?: string
+          vendedor_id?: string
+        }
+        Relationships: []
+      }
       areas: {
         Row: {
           color: string | null
