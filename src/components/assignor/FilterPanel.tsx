@@ -1,17 +1,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Users, MapPin, X, Info, ChevronDown } from "lucide-react";
+import { Sparkles, MapPin, X, Info, ChevronDown, LayoutGrid, Search } from "lucide-react";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+
 interface Vendedor {
   id: string;
   nombre: string;
@@ -32,6 +33,7 @@ interface FilterPanelProps {
   instruccionesAdicionales: string;
   onInstruccionesChange: (value: string) => void;
 }
+
 const FilterPanel = ({
   onRequestRecommendations,
   isLoading,
@@ -39,7 +41,7 @@ const FilterPanel = ({
   instruccionesAdicionales,
   onInstruccionesChange
 }: FilterPanelProps) => {
-  const [cantidadVendedores, setCantidadVendedores] = useState('');
+  const [mode, setMode] = useState<'area' | 'custom'>('area');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [selectedVendedores, setSelectedVendedores] = useState<string[]>([]);
   const [isLoadingVendedores, setIsLoadingVendedores] = useState(true);
@@ -50,12 +52,9 @@ const FilterPanel = ({
   const [selectedArea, setSelectedArea] = useState<string>('none');
   const [isLoadingAreas, setIsLoadingAreas] = useState(true);
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
-  const [pendingAreaGeneration, setPendingAreaGeneration] = useState(false);
-  const {
-    toast
-  } = useToast();
+  const [isVendedoresOpen, setIsVendedoresOpen] = useState(false);
+  const { toast } = useToast();
 
-  // Obtener provincias únicas ordenadas alfabéticamente
   const provincias = useMemo(() => {
     const set = new Set<string>();
     placesData.forEach(place => {
@@ -64,7 +63,6 @@ const FilterPanel = ({
     return Array.from(set).sort();
   }, [placesData]);
 
-  // Obtener comunas filtradas por provincia y ordenadas alfabéticamente
   const comunas = useMemo(() => {
     const filtered = placesData.filter(place => 
       selectedProvincia === 'all' || place.provincia_principal === selectedProvincia
@@ -76,7 +74,6 @@ const FilterPanel = ({
     return Array.from(set).sort().map(c => ({ label: c, value: c }));
   }, [placesData, selectedProvincia]);
 
-  // Obtener barrios filtrados por provincia y comuna, ordenados alfabéticamente
   const barrios = useMemo(() => {
     const filtered = placesData.filter(place => 
       (selectedProvincia === 'all' || place.provincia_principal === selectedProvincia) &&
@@ -89,7 +86,6 @@ const FilterPanel = ({
     return Array.from(set).sort().map(b => ({ label: b, value: b }));
   }, [placesData, selectedProvincia, selectedComuna]);
 
-  // Resetear filtros dependientes cuando cambia la provincia
   const handleProvinciaChange = (value: string) => {
     setSelectedProvincia(value);
     setSelectedComuna([]);
@@ -98,58 +94,15 @@ const FilterPanel = ({
 
   const handleAreaChange = async (areaId: string) => {
     setSelectedArea(areaId);
-    
-    if (areaId === 'none') {
-      // Limpiar selecciones
-      setSelectedVendedores(vendedores.map(v => v.id));
-      setSelectedBarrio([]);
-      setPendingAreaGeneration(false);
-      return;
-    }
+    if (areaId === 'none') return;
 
     const area = areas.find(a => a.id === areaId);
     if (!area) return;
 
-    // Llenar automáticamente los filtros con el contenido del área
-    setSelectedVendedores(area.vendedores);
-    setSelectedBarrio(area.barrios);
-    setPendingAreaGeneration(true);
-    
     toast({
       title: "✅ Área seleccionada",
-      description: `"${area.nombre}" cargada con ${area.vendedores.length} vendedores y ${area.barrios.length} barrios. Presiona "Generar Recomendaciones" para continuar.`
+      description: `"${area.nombre}" con ${area.vendedores.length} vendedores y ${area.barrios.length} barrios.`
     });
-  };
-
-  const handleGenerateFromArea = () => {
-    const area = areas.find(a => a.id === selectedArea);
-    if (!area) return;
-
-    toast({
-      title: "⏳ Generando recomendaciones...",
-      description: `La IA está analizando el área "${area.nombre}"...`
-    });
-
-    // Obtener nombres de los vendedores seleccionados
-    const nombresVendedores = vendedores
-      .filter(v => area.vendedores.includes(v.id))
-      .map(v => v.nombre);
-
-    // Generar recomendaciones para el área
-    setTimeout(() => {
-      onRequestRecommendations({
-        area_id: selectedArea,
-        cantidad_vendedores: area.vendedores.length
-      }, {
-        ids: area.vendedores,
-        nombres: nombresVendedores
-      }, {
-        comuna: selectedComuna.length > 0 ? selectedComuna : null,
-        barrio: area.barrios.length > 0 ? area.barrios : null,
-        provincia: selectedProvincia !== 'all' ? selectedProvincia : null
-      });
-      setPendingAreaGeneration(false);
-    }, 100);
   };
 
   const handleClearFilters = () => {
@@ -157,13 +110,13 @@ const FilterPanel = ({
     setSelectedComuna([]);
     setSelectedBarrio([]);
     setSelectedArea('none');
-    setPendingAreaGeneration(false);
   };
 
   const hasActiveFilters = 
     selectedProvincia !== 'all' ||
     selectedComuna.length > 0 ||
     selectedBarrio.length > 0;
+
   useEffect(() => {
     fetchVendedores();
     fetchAreas();
@@ -172,29 +125,24 @@ const FilterPanel = ({
   const fetchAreas = async () => {
     setIsLoadingAreas(true);
     try {
-      // Obtener áreas con sus relaciones
       const { data: areasData, error: areasError } = await supabase
         .from('areas')
         .select('id, nombre');
 
       if (areasError) throw areasError;
 
-      // Para cada área, obtener sus vendedores y barrios
       const areasWithRelations = await Promise.all(
         (areasData || []).map(async (area) => {
-          // Obtener vendedores del área
           const { data: vendedoresData } = await supabase
             .from('areas_vendedores')
             .select('vendedor_id')
             .eq('area_id', area.id);
 
-          // Obtener places (barrios) del área
           const { data: placesData } = await supabase
             .from('areas_places')
             .select('place_id')
             .eq('area_id', area.id);
 
-          // Obtener los barrios de los places
           const placeIds = (placesData || []).map(p => p.place_id);
           const barrios: string[] = [];
           
@@ -221,11 +169,7 @@ const FilterPanel = ({
       setAreas(areasWithRelations);
     } catch (error) {
       console.error('Error fetching areas:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Error al cargar áreas"
-      });
+      toast({ variant: "destructive", title: "Error", description: "Error al cargar áreas" });
     } finally {
       setIsLoadingAreas(false);
     }
@@ -234,33 +178,31 @@ const FilterPanel = ({
   const fetchVendedores = async () => {
     setIsLoadingVendedores(true);
     try {
-      const {
-        data,
-        error
-      } = await supabase.from('profiles').select('id, user_id, nombre, email').eq('rol', 'vendedor').eq('activo', true);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, user_id, nombre, email')
+        .eq('rol', 'vendedor')
+        .eq('activo', true);
       if (error) throw error;
       const mappedVendedores = (data || []).map(v => ({
-        id: v.id, // Usar el profile.id en lugar de user_id
+        id: v.id,
         nombre: v.nombre,
         email: v.email
       }));
       setVendedores(mappedVendedores);
-      // Por defecto, seleccionar todos los vendedores
       setSelectedVendedores(mappedVendedores.map(v => v.id));
     } catch (error) {
       console.error('Error fetching vendedores:', error);
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Error al cargar vendedores"
-      });
+      toast({ variant: "destructive", title: "Error", description: "Error al cargar vendedores" });
     } finally {
       setIsLoadingVendedores(false);
     }
   };
+
   const toggleVendedor = (vendedorId: string) => {
     setSelectedVendedores(prev => prev.includes(vendedorId) ? prev.filter(id => id !== vendedorId) : [...prev, vendedorId]);
   };
+
   const toggleAllVendedores = () => {
     if (selectedVendedores.length === vendedores.length) {
       setSelectedVendedores([]);
@@ -268,24 +210,41 @@ const FilterPanel = ({
       setSelectedVendedores(vendedores.map(v => v.id));
     }
   };
-  const handleSubmit = (e: React.FormEvent) => {
+
+  const handleSubmitArea = () => {
+    const area = areas.find(a => a.id === selectedArea);
+    if (!area) return;
+
+    const nombresVendedores = vendedores
+      .filter(v => area.vendedores.includes(v.id))
+      .map(v => v.nombre);
+
+    onRequestRecommendations({
+      area_id: selectedArea,
+      cantidad_vendedores: area.vendedores.length
+    }, {
+      ids: area.vendedores,
+      nombres: nombresVendedores
+    }, {
+      comuna: null,
+      barrio: area.barrios.length > 0 ? area.barrios : null,
+      provincia: null
+    });
+  };
+
+  const handleSubmitCustom = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedVendedores.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Debes seleccionar al menos un vendedor"
-      });
+      toast({ variant: "destructive", title: "Error", description: "Debes seleccionar al menos un vendedor" });
       return;
     }
-    
-    // Obtener nombres de los vendedores seleccionados
+
     const nombresVendedores = vendedores
       .filter(v => selectedVendedores.includes(v.id))
       .map(v => v.nombre);
-    
+
     onRequestRecommendations({
-      cantidad_vendedores: parseInt(cantidadVendedores) || selectedVendedores.length
+      cantidad_vendedores: selectedVendedores.length
     }, {
       ids: selectedVendedores,
       nombres: nombresVendedores
@@ -295,246 +254,274 @@ const FilterPanel = ({
       provincia: selectedProvincia !== 'all' ? selectedProvincia : null
     });
   };
-  return <form onSubmit={handleSubmit} className="space-y-6">
-      {/* SECCIÓN 1: FILTRO RÁPIDO POR ÁREA */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 pb-2 border-b border-border">
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent/20 text-accent font-bold text-sm">
-            1
-          </div>
-          <h2 className="text-lg font-bold">Filtro Rápido por Área</h2>
-        </div>
-        
-        <Card className="p-4 bg-accent/5 border-accent/30">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="area-filter" className="text-base">Seleccionar Área</Label>
-              <Select value={selectedArea} onValueChange={handleAreaChange} disabled={isLoadingAreas}>
-                <SelectTrigger id="area-filter" className="bg-background">
-                  <SelectValue placeholder="Sin área seleccionada" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="none">Sin área seleccionada</SelectItem>
-                  {areas.map((area) => {
-                    const nombresVendedores = vendedores
-                      .filter(v => area.vendedores.includes(v.id))
-                      .map(v => v.nombre.split(' ')[0]);
-                    
-                    const vendedoresDisplay = nombresVendedores.length > 3
-                      ? `${nombresVendedores.slice(0, 3).join(', ')}...`
-                      : nombresVendedores.join(', ');
-                    
-                    const barriosDisplay = area.barrios.length > 3
-                      ? `${area.barrios.slice(0, 3).join(', ')}...`
-                      : area.barrios.join(', ');
 
-                    return (
-                      <SelectItem key={area.id} value={area.id}>
-                        {area.nombre} • {vendedoresDisplay || 'Sin vendedores'} | {barriosDisplay || 'Sin barrios'}
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                ✨ Selecciona un área predefinida para cargar vendedores y barrios automáticamente
-              </p>
-            </div>
-            
-            {pendingAreaGeneration && selectedArea !== 'none' && (
-              <Button
-                type="button"
-                onClick={handleGenerateFromArea}
-                disabled={isLoading}
-                className="w-full"
-                variant="default"
-              >
-                <Sparkles className="w-4 h-4 mr-2" />
-                Generar Recomendaciones con IA
-              </Button>
-            )}
+  const selectedAreaData = areas.find(a => a.id === selectedArea);
+
+  return (
+    <div className="space-y-5">
+      {/* Mode selector */}
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => setMode('area')}
+          className={`p-4 rounded-lg border-2 text-left transition-all ${
+            mode === 'area'
+              ? 'border-primary bg-primary/5'
+              : 'border-border hover:border-muted-foreground/30'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <LayoutGrid className="w-5 h-5 text-primary" />
+            <span className="font-semibold text-sm">Por Área</span>
           </div>
-        </Card>
+          <p className="text-xs text-muted-foreground">Usá un área predefinida con vendedores y zonas ya configuradas</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMode('custom')}
+          className={`p-4 rounded-lg border-2 text-left transition-all ${
+            mode === 'custom'
+              ? 'border-primary bg-primary/5'
+              : 'border-border hover:border-muted-foreground/30'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <Search className="w-5 h-5 text-primary" />
+            <span className="font-semibold text-sm">Personalizado</span>
+          </div>
+          <p className="text-xs text-muted-foreground">Elegí vendedores y zonas manualmente</p>
+        </button>
       </div>
 
-      {/* SECCIÓN 2: FILTROS */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 pb-2 border-b border-border">
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent/20 text-accent font-bold text-sm">
-            2
-          </div>
-          <h2 className="text-lg font-bold">Filtros de Selección</h2>
-        </div>
-
-        {/* Vendedores */}
-        <Card className="p-4 bg-muted/50">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-accent" />
-                <div>
-                  <h3 className="font-semibold">Vendedores</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedVendedores.length} de {vendedores.length} seleccionados
-                  </p>
-                </div>
-              </div>
-              <Button type="button" variant="outline" size="sm" onClick={toggleAllVendedores} disabled={isLoadingVendedores}>
-                {selectedVendedores.length === vendedores.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
-              </Button>
-            </div>
-
-            {isLoadingVendedores ? (
-              <div className="text-sm text-muted-foreground">Cargando vendedores...</div>
-            ) : vendedores.length === 0 ? (
-              <div className="text-sm text-muted-foreground">No hay vendedores activos disponibles</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {vendedores.map(vendedor => (
-                  <label key={vendedor.id} className="flex items-start gap-3 p-3 rounded-lg border bg-background cursor-pointer hover:bg-accent/5 transition-colors">
-                    <Checkbox checked={selectedVendedores.includes(vendedor.id)} onCheckedChange={() => toggleVendedor(vendedor.id)} className="mt-1" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{vendedor.nombre}</p>
-                      <p className="text-xs text-muted-foreground truncate">{vendedor.email}</p>
-                    </div>
-                  </label>
+      {/* Mode: Area */}
+      {mode === 'area' && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="area-filter">Seleccionar Área</Label>
+            <Select value={selectedArea} onValueChange={handleAreaChange} disabled={isLoadingAreas}>
+              <SelectTrigger id="area-filter" className="bg-background">
+                <SelectValue placeholder="Elegí un área..." />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="none">Sin área seleccionada</SelectItem>
+                {areas.map((area) => (
+                  <SelectItem key={area.id} value={area.id}>
+                    {area.nombre}
+                  </SelectItem>
                 ))}
-              </div>
-            )}
+              </SelectContent>
+            </Select>
           </div>
-        </Card>
 
-        {/* Filtros Geográficos */}
-        <Card className="p-4 bg-muted/50">
-          <div className="space-y-4">
+          {selectedAreaData && (
+            <Card className="p-4 bg-muted/30 space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground mr-1">Vendedores:</span>
+                {vendedores
+                  .filter(v => selectedAreaData.vendedores.includes(v.id))
+                  .map(v => (
+                    <Badge key={v.id} variant="secondary" className="text-xs">{v.nombre.split(' ')[0]}</Badge>
+                  ))}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="text-xs font-medium text-muted-foreground mr-1">Barrios:</span>
+                {selectedAreaData.barrios.length > 0 ? (
+                  selectedAreaData.barrios.slice(0, 5).map(b => (
+                    <Badge key={b} variant="outline" className="text-xs">{b}</Badge>
+                  ))
+                ) : (
+                  <span className="text-xs text-muted-foreground">Todos</span>
+                )}
+                {selectedAreaData.barrios.length > 5 && (
+                  <Badge variant="outline" className="text-xs">+{selectedAreaData.barrios.length - 5} más</Badge>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* AI Instructions for area mode */}
+          <AIInstructionsCollapsible
+            isOpen={isAIInstructionsOpen}
+            onOpenChange={setIsAIInstructionsOpen}
+            value={instruccionesAdicionales}
+            onChange={onInstruccionesChange}
+          />
+
+          <Button
+            type="button"
+            onClick={handleSubmitArea}
+            disabled={isLoading || selectedArea === 'none'}
+            className="w-full"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            {isLoading ? "IA analizando..." : "Generar Recomendaciones con IA"}
+          </Button>
+        </div>
+      )}
+
+      {/* Mode: Custom */}
+      {mode === 'custom' && (
+        <form onSubmit={handleSubmitCustom} className="space-y-4">
+          {/* Vendedores collapsible */}
+          <Collapsible open={isVendedoresOpen} onOpenChange={setIsVendedoresOpen}>
+            <Card className="p-0 overflow-hidden">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm">Vendedores</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {selectedVendedores.length} de {vendedores.length}
+                    </Badge>
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isVendedoresOpen ? 'rotate-180' : ''}`} />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="px-4 pb-4 space-y-3 border-t">
+                  <div className="flex justify-end pt-3">
+                    <Button type="button" variant="outline" size="sm" onClick={toggleAllVendedores} disabled={isLoadingVendedores}>
+                      {selectedVendedores.length === vendedores.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                    </Button>
+                  </div>
+                  {isLoadingVendedores ? (
+                    <p className="text-sm text-muted-foreground">Cargando vendedores...</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {vendedores.map(vendedor => (
+                        <label key={vendedor.id} className="flex items-center gap-2 p-2 rounded-md border bg-background cursor-pointer hover:bg-accent/5 transition-colors">
+                          <Checkbox checked={selectedVendedores.includes(vendedor.id)} onCheckedChange={() => toggleVendedor(vendedor.id)} />
+                          <div className="min-w-0">
+                            <p className="font-medium text-sm truncate">{vendedor.nombre}</p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+
+          {/* Geographic filters */}
+          <Card className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-accent" />
-                <div>
-                  <h3 className="font-semibold">Filtros Geográficos</h3>
-                  <p className="text-xs text-muted-foreground">Define las zonas donde la IA buscará clientes</p>
-                </div>
+                <MapPin className="w-4 h-4 text-primary" />
+                <span className="font-semibold text-sm">Filtros Geográficos</span>
               </div>
               {hasActiveFilters && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClearFilters}
-                  className="h-8 px-2"
-                >
-                  <X className="w-4 h-4 mr-1" />
+                <Button type="button" variant="ghost" size="sm" onClick={handleClearFilters} className="h-7 px-2 text-xs">
+                  <X className="w-3 h-3 mr-1" />
                   Limpiar
                 </Button>
               )}
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="provincia-filter">Provincia</Label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="provincia-filter" className="text-xs">Provincia</Label>
                 <Select value={selectedProvincia} onValueChange={handleProvinciaChange}>
-                  <SelectTrigger id="provincia-filter" className="bg-background">
-                    <SelectValue placeholder="Todas las provincias" />
+                  <SelectTrigger id="provincia-filter" className="bg-background h-9">
+                    <SelectValue placeholder="Todas" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
                     <SelectItem value="all">Todas las provincias</SelectItem>
                     {provincias.map((provincia) => (
-                      <SelectItem key={provincia} value={provincia}>
-                        {provincia}
-                      </SelectItem>
+                      <SelectItem key={provincia} value={provincia}>{provincia}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="comuna-filter">Comuna / Distrito</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Comuna / Distrito</Label>
                 <MultiSelect
                   options={comunas}
                   selected={selectedComuna}
                   onChange={setSelectedComuna}
-                  placeholder="Todas las comunas"
+                  placeholder="Todas"
                   className="w-full"
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="barrio-filter">Barrio</Label>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Barrio</Label>
                 <MultiSelect
                   options={barrios}
                   selected={selectedBarrio}
                   onChange={setSelectedBarrio}
-                  placeholder="Todos los barrios"
+                  placeholder="Todos"
                   className="w-full"
                 />
               </div>
             </div>
-          </div>
-        </Card>
-      </div>
+          </Card>
 
-      {/* SECCIÓN 3: INSTRUCCIONES ADICIONALES PARA IA (OPCIONAL) */}
-      <div className="space-y-3">
-        <Collapsible open={isAIInstructionsOpen} onOpenChange={setIsAIInstructionsOpen}>
-          <div className="flex items-center gap-2 pb-2 border-b border-border">
-            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-accent/20 text-accent font-bold text-sm">
-              3
-            </div>
-            <h2 className="text-lg font-bold flex-1">Instrucciones Adicionales para la IA</h2>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2">
-                <span className="text-xs text-muted-foreground">Opcional</span>
-                <ChevronDown className={`w-4 h-4 transition-transform ${isAIInstructionsOpen ? 'rotate-180' : ''}`} />
-              </Button>
-            </CollapsibleTrigger>
-          </div>
-          
-          <CollapsibleContent>
-            <Card className="p-4 bg-gradient-to-br from-accent/5 to-primary/5 border-accent/20">
-              <div className="space-y-4">
-                <Alert>
-                  <Info className="h-4 w-4" />
-                  <AlertDescription className="text-xs">
-                    <strong>Ejemplos de criterios:</strong>
-                    <ul className="mt-2 space-y-1 list-disc list-inside">
-                      <li>Priorizar clientes que compran productos específicos (ej: "clientes que compran Malbec")</li>
-                      <li>Enfocarse en ciertos canales (ej: "solo restaurantes ON_TRADE")</li>
-                      <li>Considerar etiquetas específicas (ej: "clientes VIP o Premium")</li>
-                      <li>Evitar clientes con ciertos criterios (ej: "evitar clientes con pagos pendientes")</li>
-                    </ul>
-                  </AlertDescription>
-                </Alert>
+          {/* AI Instructions for custom mode */}
+          <AIInstructionsCollapsible
+            isOpen={isAIInstructionsOpen}
+            onOpenChange={setIsAIInstructionsOpen}
+            value={instruccionesAdicionales}
+            onChange={onInstruccionesChange}
+          />
 
-                <div className="space-y-2">
-                  <Label htmlFor="additional-instructions">
-                    Instrucciones libres para la IA
-                  </Label>
-                  <Textarea
-                    id="additional-instructions"
-                    placeholder="Ej: Priorizar clientes que compran Malbec Gran Reserva, enfocarse en restaurantes de alta gama del canal ON_TRADE..."
-                    value={instruccionesAdicionales}
-                    onChange={(e) => onInstruccionesChange(e.target.value)}
-                    className="min-h-[120px] resize-none bg-background"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    La IA buscará en la base de datos (productos, etiquetas, canales) para cumplir con tus instrucciones
-                  </p>
-                </div>
-              </div>
-            </Card>
-          </CollapsibleContent>
-        </Collapsible>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Button type="submit" className="wine-button w-full md:w-auto" disabled={isLoading || selectedVendedores.length === 0}>
-          <Sparkles className="w-4 h-4 mr-2" />
-          {isLoading ? "IA analizando base de datos..." : "Generar 8 Recomendaciones con IA"}
-        </Button>
-        <p className="text-xs text-muted-foreground text-center">
-          La IA analizará la base de datos usando los filtros y vendedores seleccionados
-        </p>
-      </div>
-    </form>;
+          <Button type="submit" className="w-full" disabled={isLoading || selectedVendedores.length === 0}>
+            <Sparkles className="w-4 h-4 mr-2" />
+            {isLoading ? "IA analizando..." : "Generar Recomendaciones con IA"}
+          </Button>
+        </form>
+      )}
+    </div>
+  );
 };
+
+/* Extracted collapsible AI instructions component */
+function AIInstructionsCollapsible({
+  isOpen,
+  onOpenChange,
+  value,
+  onChange,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Collapsible open={isOpen} onOpenChange={onOpenChange}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="w-full flex items-center gap-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Info className="w-4 h-4" />
+          <span>Instrucciones adicionales para la IA</span>
+          <span className="text-xs">(Opcional)</span>
+          <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <Card className="p-4 mt-2 space-y-3">
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              <strong>Ejemplos:</strong> "Priorizar clientes que compran Malbec", "Solo restaurantes ON_TRADE", "Clientes VIP"
+            </AlertDescription>
+          </Alert>
+          <Textarea
+            placeholder="Ej: Priorizar clientes que compran Malbec Gran Reserva..."
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="min-h-[80px] resize-none bg-background text-sm"
+          />
+        </Card>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 export default FilterPanel;

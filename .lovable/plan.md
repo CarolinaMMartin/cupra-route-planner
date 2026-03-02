@@ -1,104 +1,72 @@
-## Analisis UX/UI de la pagina principal del Asignador
 
-### Problemas identificados
+# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
-**1. Sobrecarga cognitiva en el FilterPanel**
-La pantalla muestra simultaneamente 3 secciones numeradas (Area, Filtros de Seleccion, Instrucciones IA) mas la seccion de "Asignaciones de hoy" debajo. El usuario ve:
+## Cambios realizados
 
-- Un selector de Area con texto muy largo y dificil de escanear
-- Una grilla de checkboxes de vendedores siempre visible (ocupa mucho espacio vertical)
-- Filtros geograficos (Provincia, Comuna, Barrio) que se confunden con los filtros del Area
-- Instrucciones IA desplegables
-- Todo esto ANTES de llegar a las asignaciones del dia
+### A. DB: Campo `vendedor_actual` en `clientes` ✅
+- Nuevo campo `vendedor_actual` (text) agregado
+- Inicializado desde la última venta registrada en `ventas_cupra`
+- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
 
-**2. Caminos redundantes y confusos**
-Hay dos formas de generar recomendaciones:
+### B. Pre-scoring determinístico ✅
+- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
+- **score_geo (50%)**: Distancia Haversine al centroide del cluster
+- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
+- **score_comercial (15%)**: Score comercial normalizado (0-100)
+- **score_rotacion (10%)**: Días desde última recomendación
+- Filtra candidatos con feedback negativo automáticamente
+- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
 
-- Seleccionar un Area → boton "Generar Recomendaciones con IA"
-- Seleccionar vendedores + filtros geograficos manualmente → boton "Generar 8 Recomendaciones con IA"
+### C. Mapeo nombre→UUID ✅
+- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
+- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
+- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
 
-Ambos hacen lo mismo pero el usuario no sabe cual usar. El Area ya incluye vendedores y barrios, pero los filtros manuales tambien permiten lo mismo, creando confusion.
+### D. Prompt reducido centrado en vendedor ✅
+- De ~65K chars a ~5-10K chars (reducción ~80%)
+- Formato tabular compacto con scores pre-calculados
+- IA solo decide ruta óptima y genera justificaciones
+- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
 
-**3. La seccion "Asignaciones de hoy" queda enterrada**
-Es informacion clave (que se asigno hoy) pero aparece debajo de todo el panel de filtros, fuera de la vista inicial.
-
-**4. Post-recomendaciones: doble filtrado**
-Cuando se generan recomendaciones, aparece un `RecommendationFilters` con 6 filtros adicionales (3 de recomendaciones + 3 de Places) que duplican conceptos ya usados en el FilterPanel.
-
----
-
-### Propuesta de rediseno
-
-**Concepto: "Dos acciones claras, informacion a la vista"**
-
-**A. Reorganizar la pagina en dos zonas con Tabs:**
-
-```text
-┌─────────────────────────────────────────────┐
-│  Panel de Asignacion                        │
-│  ┌──────────────┐ ┌──────────────────────┐  │
-│  │ Nueva Ronda  │ │ Asignaciones de Hoy  │  │
-│  └──────────────┘ └──────────────────────┘  │
-│                                             │
-│  [Contenido del tab activo]                 │
-└─────────────────────────────────────────────┘
-```
-
-- **Tab "Nueva asignación"**: El flujo de generar recomendaciones
-- **Tab "Asignaciones de Hoy"**: Lo que hoy ya existe (actualmente enterrado abajo)
-
-Esto da visibilidad inmediata a las asignaciones del dia.
-
-**B. Simplificar el flujo de "Nueva Ronda" con dos caminos claros:**
-
-```text
-┌─────────────────────────────────────────────┐
-│  ¿Como queres generar recomendaciones?      │
-│                                             │
-│  ┌─────────────────┐  ┌──────────────────┐  │
-│  │  📋 Por Area     │  │  🔍 Personalizado│  │
-│  │  Usa un area     │  │  Elegí vendedores│  │
-│  │  predefinida     │  │  y zonas manual  │  │
-│  └─────────────────┘  └──────────────────┘  │
-│                                             │
-│  [Panel del modo seleccionado]              │
-└─────────────────────────────────────────────┘
-```
-
-- **Por Area**: Solo muestra el selector de Area + boton Generar. Simple y directo.
-- **Personalizado**: Muestra vendedores (colapsados por defecto, con resumen "5 de 8 seleccionados") + filtros geograficos en una fila compacta.
-- Instrucciones IA: siempre colapsable al final de ambos modos.
-
-**C. Vendedores: de grilla a MultiSelect o Collapsible**
-
-En lugar de mostrar siempre la grilla de checkboxes (que puede tener 8+ vendedores ocupando media pantalla), usar:
-
-- Un componente colapsable que muestre "Vendedores: 5 de 8 seleccionados" con un boton para expandir
-- O un MultiSelect con badges como los filtros de Comuna/Barrio
-
-**D. Eliminar el RecommendationFilters duplicado**
-
-Los filtros post-recomendaciones (`RecommendationFilters.tsx`) tienen 6 selectores que confunden. Propuesta:
-
-- Eliminar los filtros duplicados de "Places" (ya se filtraron antes de pedir)
-- Dejar solo un buscador de texto + filtro por vendedor para refinar la lista de resultados
+### E. UI: Vendedor actual vs anterior ✅
+- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
+- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
+- Tipo `Sucursal` extendido con `vendedor_actual`
 
 ---
 
-### Archivos a modificar
+# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
 
+## Cambios realizados
 
-| Archivo                                             | Cambio                                                                        |
-| --------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `src/components/AssignorDashboard.tsx`              | Agregar Tabs (Nueva Ronda / Asignaciones de Hoy), reorganizar layout          |
-| `src/components/assignor/FilterPanel.tsx`           | Refactorizar en dos modos (Area / Personalizado), colapsar vendedores         |
-| `src/components/assignor/RecommendationFilters.tsx` | Simplificar: solo buscador + filtro vendedor                                  |
-| `src/components/assignor/TodayAssignments.tsx`      | Adaptar para funcionar como contenido de tab (quitar Card wrapper redundante) |
+### A. Tabs principales ✅
+- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
+- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
 
+### B. FilterPanel con dos modos ✅
+- Modo "Por Área": selector de área → ver resumen → generar
+- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
+- Instrucciones IA colapsables en ambos modos
+- Vendedores en Collapsible con badge "X de Y seleccionados"
 
-### Detalle tecnico
+### C. RecommendationFilters simplificado ✅
+- De 6 filtros redundantes a solo 1 filtro por vendedor
+- Se muestra solo cuando hay más de 1 vendedor
 
-- Usar `@radix-ui/react-tabs` (ya instalado) para las tabs principales
-- Usar estado local para alternar entre modo "Area" y "Personalizado" con botones tipo toggle o radio cards
-- Colapsar vendedores con `Collapsible` (ya usado en el componente)
-- Mantener toda la logica de datos existente, solo reorganizar la presentacion
+### D. TodayAssignments sin Card wrapper ✅
+- Funciona como contenido directo del tab
+- Layout más limpio sin doble Card
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
+| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
+| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
+| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
+
+## Próximos pasos potenciales
+- Planificación temporal (agenda semanal)
+- Reportes y supervisión
+- Pipeline ETL directo sin n8n
+- Agente conversacional

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -88,20 +87,16 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const fetchTodayAssignments = async () => {
     setIsLoading(true);
     try {
-      // Calcular el inicio del día en hora Argentina (UTC-3)
-      // Las 00:00 de Argentina = 03:00 UTC
       const now = new Date();
       const utcYear = now.getUTCFullYear();
       const utcMonth = now.getUTCMonth();
       const utcDate = now.getUTCDate();
       const utcHours = now.getUTCHours();
       
-      // Si estamos antes de las 03:00 UTC, estamos en el día anterior en Argentina
       const argDate = utcHours < 3 ? utcDate - 1 : utcDate;
       const argMonth = argDate < 1 ? utcMonth - 1 : utcMonth;
       const argYear = argMonth < 0 ? utcYear - 1 : utcYear;
       
-      // Inicio del día en Argentina = 03:00 UTC de ese día
       const startOfDayArg = new Date(Date.UTC(
         argMonth < 0 ? argYear : utcYear,
         argMonth < 0 ? 11 : (argDate < 1 ? argMonth : utcMonth),
@@ -125,11 +120,8 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
         .gte('created_at', startOfDayArg.toISOString())
         .order('created_at', { ascending: false });
 
-      console.log('Assignments fetched:', data?.length);
-
       if (error) throw error;
 
-      // Obtener place_ids de prospectos
       const prospectoPlaceIds = (data || [])
         .filter((a: any) => a.es_prospecto && a.prospecto_place_id)
         .map((a: any) => a.prospecto_place_id);
@@ -146,12 +138,10 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
         }
       }
 
-      // Enriquecer con información adicional de clientes_recomendaciones_temporal y prospectos
       const assignmentsWithInfo = await Promise.all(
         (data || []).map(async (assignment: any) => {
           try {
             if (assignment.es_prospecto && assignment.prospecto_place_id) {
-              // Para prospectos
               const prospectoData = prospectosMap.get(assignment.prospecto_place_id);
               return {
                 ...assignment,
@@ -159,7 +149,6 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                 cliente_info: { etiquetas: ['Prospecto'] },
               };
             } else {
-              // Para clientes existentes
               const { data: clienteInfo, error: infoError } = await supabase
                 .from('clientes_recomendaciones_temporal')
                 .select('*')
@@ -172,10 +161,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                 return assignment;
               }
 
-              return {
-                ...assignment,
-                cliente_info: clienteInfo,
-              };
+              return { ...assignment, cliente_info: clienteInfo };
             }
           } catch (err) {
             console.error('Error processing assignment:', err);
@@ -200,7 +186,6 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const handleDeleteAllAssignments = async () => {
     setIsDeleting(true);
     try {
-      // Calcular el inicio del día en hora Argentina (UTC-3)
       const now = new Date();
       const utcYear = now.getUTCFullYear();
       const utcMonth = now.getUTCMonth();
@@ -230,7 +215,6 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
         description: `Se eliminaron todas las asignaciones de hoy (${assignments.length} clientes)`,
       });
 
-      // Actualizar la lista
       setAssignments([]);
     } catch (error) {
       console.error('Error deleting assignments:', error);
@@ -244,281 +228,255 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
     }
   };
 
-  // Agrupar asignaciones por vendedor
   const assignmentsByVendedor = assignments.reduce((acc, assignment) => {
     const vendedorNombre = assignment.vendedor?.nombre || 'Vendedor desconocido';
     if (!acc[vendedorNombre]) {
-      acc[vendedorNombre] = {
-        email: assignment.vendedor?.email || '',
-        clientes: [],
-      };
+      acc[vendedorNombre] = { email: assignment.vendedor?.email || '', clientes: [] };
     }
     acc[vendedorNombre].clientes.push(assignment);
     return acc;
   }, {} as Record<string, { email: string; clientes: Assignment[] }>);
 
   if (isLoading) {
-    return (
-      <Card className="shadow-medium">
-        <CardContent className="p-6">
-          <p className="text-muted-foreground">Cargando asignaciones...</p>
-        </CardContent>
-      </Card>
-    );
+    return <p className="text-muted-foreground p-4">Cargando asignaciones...</p>;
   }
 
   if (assignments.length === 0) {
     return (
-      <Card className="shadow-medium">
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-accent" />
-                Asignaciones de hoy
-              </CardTitle>
-              <CardDescription>No hay asignaciones realizadas hoy</CardDescription>
-            </div>
-            {onEditAssignments && (
-              <Button onClick={onEditAssignments} variant="outline" className="gap-2">
-                <Edit className="w-4 h-4" />
-                Modificar asignaciones
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-      </Card>
+      <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
+        <div>
+          <h3 className="font-semibold flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-primary" />
+            No hay asignaciones hoy
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1">Generá recomendaciones en la pestaña "Nueva Asignación"</p>
+        </div>
+        {onEditAssignments && (
+          <Button onClick={onEditAssignments} variant="outline" size="sm" className="gap-2">
+            <Edit className="w-4 h-4" />
+            Modificar
+          </Button>
+        )}
+      </div>
     );
   }
 
   return (
-    <Card className="shadow-medium">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-accent" />
-              Asignaciones de hoy
-            </CardTitle>
-            <CardDescription>
-              Total: {assignments.length} cliente{assignments.length !== 1 ? 's' : ''} asignado{assignments.length !== 1 ? 's' : ''}
-            </CardDescription>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={() => setShowMapAll(true)} variant="outline" className="gap-2">
-              <MapPin className="w-4 h-4" />
-              Ver todas en mapa
+    <div className="space-y-4">
+      {/* Header with actions */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Total: {assignments.length} cliente{assignments.length !== 1 ? 's' : ''} asignado{assignments.length !== 1 ? 's' : ''}
+        </p>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowMapAll(true)} variant="outline" size="sm" className="gap-2">
+            <MapPin className="w-4 h-4" />
+            Ver en mapa
+          </Button>
+          {onEditAssignments && (
+            <Button onClick={onEditAssignments} variant="outline" size="sm" className="gap-2">
+              <Edit className="w-4 h-4" />
+              Modificar
             </Button>
-            {onEditAssignments && (
-              <Button onClick={onEditAssignments} variant="outline" className="gap-2">
-                <Edit className="w-4 h-4" />
-                Modificar asignaciones
+          )}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" className="gap-2" disabled={isDeleting}>
+                <Trash2 className="w-4 h-4" />
+                Borrar todas
               </Button>
-            )}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" className="gap-2" disabled={isDeleting}>
-                  <Trash2 className="w-4 h-4" />
-                  Borrar todas
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta acción eliminará todas las asignaciones de hoy ({assignments.length} cliente{assignments.length !== 1 ? 's' : ''}).
-                    Esta acción no se puede deshacer.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeleteAllAssignments}>
-                    Eliminar todo
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta acción eliminará todas las asignaciones de hoy ({assignments.length} cliente{assignments.length !== 1 ? 's' : ''}).
+                  Esta acción no se puede deshacer.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAllAssignments}>
+                  Eliminar todo
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {Object.entries(assignmentsByVendedor).map(([vendedorNombre, data]) => (
-          <div key={vendedorNombre} className="border rounded-lg p-4 bg-muted/30">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-accent" />
-                  <h3 className="font-semibold">{vendedorNombre}</h3>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">{data.email}</p>
-              </div>
+      </div>
+
+      {/* Assignments by vendedor */}
+      {Object.entries(assignmentsByVendedor).map(([vendedorNombre, data]) => (
+        <div key={vendedorNombre} className="border rounded-lg p-4 bg-muted/30">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex-1">
               <div className="flex items-center gap-2">
-                <Button 
-                  onClick={() => setShowMapVendedor(vendedorNombre)} 
-                  variant="outline" 
-                  size="sm" 
-                  className="gap-2"
-                >
-                  <MapPin className="w-4 h-4" />
-                  Ver en mapa
-                </Button>
-                <Badge variant="secondary">
-                  {data.clientes.length} cliente{data.clientes.length !== 1 ? 's' : ''}
-                </Badge>
+                <Users className="w-4 h-4 text-primary" />
+                <h3 className="font-semibold">{vendedorNombre}</h3>
               </div>
+              <p className="text-xs text-muted-foreground mt-1">{data.email}</p>
             </div>
-            <div className="space-y-2">
-              {data.clientes.map((assignment) => (
-                <div
-                  key={assignment.id}
-                  className="p-3 rounded-lg bg-background border space-y-2"
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-base">
-                          {assignment.es_prospecto 
-                            ? (assignment.prospecto?.nombre || 'Prospecto sin nombre')
-                            : (assignment.cliente?.razon_social || 'Cliente desconocido')
-                          }
-                        </p>
-                        {assignment.es_prospecto && (
-                          <Badge variant="secondary" className="text-xs">NUEVO</Badge>
-                        )}
-                      </div>
-                      {assignment.es_prospecto ? (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {assignment.prospecto?.direccion || 'Sin dirección'}
-                          {assignment.prospecto?.barrio && ` • ${assignment.prospecto.barrio}`}
-                        </p>
-                      ) : (
-                        <p className="text-xs text-muted-foreground mt-1">CUIT: {assignment.cliente?.cuit_dni}</p>
+            <div className="flex items-center gap-2">
+              <Button 
+                onClick={() => setShowMapVendedor(vendedorNombre)} 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+              >
+                <MapPin className="w-4 h-4" />
+                Ver en mapa
+              </Button>
+              <Badge variant="secondary">
+                {data.clientes.length} cliente{data.clientes.length !== 1 ? 's' : ''}
+              </Badge>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {data.clientes.map((assignment) => (
+              <div key={assignment.id} className="p-3 rounded-lg bg-background border space-y-2">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-base">
+                        {assignment.es_prospecto 
+                          ? (assignment.prospecto?.nombre || 'Prospecto sin nombre')
+                          : (assignment.cliente?.razon_social || 'Cliente desconocido')
+                        }
+                      </p>
+                      {assignment.es_prospecto && (
+                        <Badge variant="secondary" className="text-xs">NUEVO</Badge>
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(assignment.created_at).toLocaleTimeString('es-AR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
+                    {assignment.es_prospecto ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {assignment.prospecto?.direccion || 'Sin dirección'}
+                        {assignment.prospecto?.barrio && ` • ${assignment.prospecto.barrio}`}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground mt-1">CUIT: {assignment.cliente?.cuit_dni}</p>
+                    )}
                   </div>
-
-                  {assignment.es_prospecto ? (
-                    // Información de prospecto
-                    assignment.prospecto && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                        {assignment.prospecto.telefono && (
-                          <div>
-                            <span className="font-medium">Teléfono:</span>{' '}
-                            <span className="text-muted-foreground">{assignment.prospecto.telefono}</span>
-                          </div>
-                        )}
-                        {assignment.prospecto.barrio && (
-                          <div>
-                            <span className="font-medium">Barrio:</span>{' '}
-                            <span className="text-muted-foreground">{assignment.prospecto.barrio}</span>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  ) : (
-                    // Información de cliente
-                    assignment.cliente_info && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                        {assignment.cliente_info.ciudades && assignment.cliente_info.ciudades.length > 0 && (
-                          <div>
-                            <span className="font-medium">Ciudad:</span>{' '}
-                            <span className="text-muted-foreground">{assignment.cliente_info.ciudades.join(', ')}</span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.provincias && assignment.cliente_info.provincias.length > 0 && (
-                          <div>
-                            <span className="font-medium">Provincia:</span>{' '}
-                            <span className="text-muted-foreground">{assignment.cliente_info.provincias.join(', ')}</span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.telefonos && assignment.cliente_info.telefonos.length > 0 && (
-                          <div>
-                            <span className="font-medium">Teléfono:</span>{' '}
-                            <span className="text-muted-foreground">{assignment.cliente_info.telefonos.join(', ')}</span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.score_comercial && (
-                          <div>
-                            <span className="font-medium">Score:</span>{' '}
-                            <span className="text-muted-foreground">{assignment.cliente_info.score_comercial}</span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.monto_total_vendido && (
-                          <div>
-                            <span className="font-medium">Total vendido:</span>{' '}
-                            <span className="text-muted-foreground">
-                              ${assignment.cliente_info.monto_total_vendido.toLocaleString('es-AR')}
-                            </span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.orders_count && (
-                          <div>
-                            <span className="font-medium">Órdenes:</span>{' '}
-                            <span className="text-muted-foreground">{assignment.cliente_info.orders_count}</span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.avg_ticket && (
-                          <div>
-                            <span className="font-medium">Ticket promedio:</span>{' '}
-                            <span className="text-muted-foreground">
-                              ${assignment.cliente_info.avg_ticket.toLocaleString('es-AR')}
-                            </span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.participacion !== null && (
-                          <div>
-                            <span className="font-medium">Participación:</span>{' '}
-                            <span className="text-muted-foreground">{assignment.cliente_info.participacion}%</span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.days_since_last_purchase !== null && (
-                          <div>
-                            <span className="font-medium">Última compra:</span>{' '}
-                            <span className="text-muted-foreground">
-                              hace {assignment.cliente_info.days_since_last_purchase} días
-                            </span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.first_purchase_at && (
-                          <div>
-                            <span className="font-medium">Primera compra:</span>{' '}
-                            <span className="text-muted-foreground">
-                              {new Date(assignment.cliente_info.first_purchase_at).toLocaleDateString('es-AR')}
-                            </span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.vendedores && assignment.cliente_info.vendedores.length > 0 && (
-                          <div className="md:col-span-2">
-                            <span className="font-medium">Vendedores previos:</span>{' '}
-                            <span className="text-muted-foreground">{assignment.cliente_info.vendedores.join(', ')}</span>
-                          </div>
-                        )}
-                        {assignment.cliente_info.etiquetas && assignment.cliente_info.etiquetas.length > 0 && (
-                          <div className="md:col-span-2">
-                            <span className="font-medium">Productos:</span>{' '}
-                            <span className="text-muted-foreground text-xs">
-                              {assignment.cliente_info.etiquetas.slice(0, 3).join(', ')}
-                              {assignment.cliente_info.etiquetas.length > 3 && ` +${assignment.cliente_info.etiquetas.length - 3} más`}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(assignment.created_at).toLocaleTimeString('es-AR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </CardContent>
 
-      {/* Dialog para ver todas las asignaciones en mapa */}
+                {assignment.es_prospecto ? (
+                  assignment.prospecto && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                      {assignment.prospecto.telefono && (
+                        <div>
+                          <span className="font-medium">Teléfono:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.prospecto.telefono}</span>
+                        </div>
+                      )}
+                      {assignment.prospecto.barrio && (
+                        <div>
+                          <span className="font-medium">Barrio:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.prospecto.barrio}</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  assignment.cliente_info && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                      {assignment.cliente_info.ciudades && assignment.cliente_info.ciudades.length > 0 && (
+                        <div>
+                          <span className="font-medium">Ciudad:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.ciudades.join(', ')}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.provincias && assignment.cliente_info.provincias.length > 0 && (
+                        <div>
+                          <span className="font-medium">Provincia:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.provincias.join(', ')}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.telefonos && assignment.cliente_info.telefonos.length > 0 && (
+                        <div>
+                          <span className="font-medium">Teléfono:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.telefonos.join(', ')}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.score_comercial && (
+                        <div>
+                          <span className="font-medium">Score:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.score_comercial}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.monto_total_vendido && (
+                        <div>
+                          <span className="font-medium">Total vendido:</span>{' '}
+                          <span className="text-muted-foreground">
+                            ${assignment.cliente_info.monto_total_vendido.toLocaleString('es-AR')}
+                          </span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.orders_count && (
+                        <div>
+                          <span className="font-medium">Órdenes:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.orders_count}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.avg_ticket && (
+                        <div>
+                          <span className="font-medium">Ticket promedio:</span>{' '}
+                          <span className="text-muted-foreground">
+                            ${assignment.cliente_info.avg_ticket.toLocaleString('es-AR')}
+                          </span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.participacion !== null && (
+                        <div>
+                          <span className="font-medium">Participación:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.participacion}%</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.days_since_last_purchase !== null && (
+                        <div>
+                          <span className="font-medium">Última compra:</span>{' '}
+                          <span className="text-muted-foreground">
+                            hace {assignment.cliente_info.days_since_last_purchase} días
+                          </span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.first_purchase_at && (
+                        <div>
+                          <span className="font-medium">Primera compra:</span>{' '}
+                          <span className="text-muted-foreground">
+                            {new Date(assignment.cliente_info.first_purchase_at).toLocaleDateString('es-AR')}
+                          </span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.vendedores && assignment.cliente_info.vendedores.length > 0 && (
+                        <div className="md:col-span-2">
+                          <span className="font-medium">Vendedores previos:</span>{' '}
+                          <span className="text-muted-foreground">{assignment.cliente_info.vendedores.join(', ')}</span>
+                        </div>
+                      )}
+                      {assignment.cliente_info.etiquetas && assignment.cliente_info.etiquetas.length > 0 && (
+                        <div className="md:col-span-2">
+                          <span className="font-medium">Productos:</span>{' '}
+                          <span className="text-muted-foreground text-xs">
+                            {assignment.cliente_info.etiquetas.slice(0, 3).join(', ')}
+                            {assignment.cliente_info.etiquetas.length > 3 && ` +${assignment.cliente_info.etiquetas.length - 3} más`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {/* Map dialogs */}
       <Dialog open={showMapAll} onOpenChange={setShowMapAll}>
         <DialogContent className="max-w-[90vw] max-h-[90vh]">
           <DialogHeader>
@@ -528,7 +486,6 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog para ver asignaciones de un vendedor específico */}
       <Dialog open={!!showMapVendedor} onOpenChange={(open) => !open && setShowMapVendedor(null)}>
         <DialogContent className="max-w-[90vw] max-h-[90vh]">
           <DialogHeader>
@@ -540,7 +497,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
           />
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 };
 
