@@ -213,10 +213,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
     locations.forEach((location) => {
       if (selectedIds.includes(location.id)) {
         if (!markers.has(location.id)) {
+          const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : '#E53935';
           const marker = new google.maps.Marker({
             position: { lat: location.lat, lng: location.lng },
             map,
             title: location.name,
+            icon: createColoredMarkerIcon(vendorColor),
             animation: google.maps.Animation.DROP,
           });
 
@@ -226,6 +228,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
               <div style="padding: 8px;">
                 <h3 style="margin: 0 0 4px 0; font-weight: 600;">${location.name}</h3>
                 <p style="margin: 0; font-size: 12px; color: #666;">${location.direccion}</p>
+                ${location.vendedor ? `<p style="margin: 4px 0 0 0; font-size: 12px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${vendorColor};margin-right:4px;vertical-align:middle;"></span>${location.vendedor}</p>` : ''}
               </div>
             `,
           });
