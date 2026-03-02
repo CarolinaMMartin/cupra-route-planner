@@ -285,10 +285,12 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
           if (placeData) {
             const position = { lat: placeData.lat, lng: placeData.lng };
             
+            const vendorColor = getVendorColor(assignment.vendedor.nombre);
             const marker = new google.maps.Marker({
               position: position,
               map: map,
               title: assignment.cliente?.razon_social || 'Cliente',
+              icon: createColoredMarkerIcon(vendorColor),
             });
 
             console.log(`[Map] ✅ Marcador CLIENTE creado:`, {
