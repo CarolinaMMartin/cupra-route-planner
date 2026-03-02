@@ -9,6 +9,8 @@ import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ZonaKPIs from "@/components/clientes/ZonaKPIs";
 
 interface BarrioVentas {
   barrio: string;
