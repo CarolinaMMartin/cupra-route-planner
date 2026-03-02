@@ -333,7 +333,7 @@ const ClientesDashboard = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground">
+              <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">
                 Dashboard de Consultas
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
@@ -507,7 +507,7 @@ const ClientesDashboard = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-secondary">
+              <div className="text-2xl font-semibold text-foreground">
                 {formatCurrency(kpis.totalVentas)}
               </div>
             </CardContent>
@@ -523,7 +523,7 @@ const ClientesDashboard = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">
+              <div className="text-2xl font-semibold text-foreground">
                 {kpis.totalClientes.toLocaleString()}
               </div>
             </CardContent>
@@ -539,7 +539,7 @@ const ClientesDashboard = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">
+              <div className="text-2xl font-semibold text-foreground">
                 {kpis.totalOrdenes.toLocaleString()}
               </div>
             </CardContent>
@@ -555,7 +555,7 @@ const ClientesDashboard = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-secondary">
+              <div className="text-2xl font-semibold text-foreground">
                 {formatCurrency(kpis.ticketPromedio)}
               </div>
             </CardContent>
