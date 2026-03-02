@@ -22,6 +22,7 @@ interface ClientLocation {
   lat: number;
   lng: number;
   direccion: string;
+  vendedor?: string;
 }
 
 // Load Google Maps Script
