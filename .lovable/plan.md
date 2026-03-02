@@ -1,124 +1,69 @@
 
 
-# Plan: Corregir Historial de Interacciones en Detalle de Asignación
+# Analysis: Context Window Usage in generate-recommendations
 
-## Problema Identificado
+## Current Data Sent to AI
 
-Cuando el vendedor abre una tarjeta de asignación desde el "Historial de Asignaciones", la sección **"Historial de Interacciones"** muestra (0) y el mensaje "No hay interacciones registradas aún", a pesar de que en la minivista de la tarjeta SÍ aparece el feedback.
+| Data | Volume | Est. Tokens |
+|------|--------|-------------|
+| System prompt | ~3K chars | ~800 |
+| 80 clients (JSON, 15+ fields each) | ~40-50K chars | ~12K |
+| 30 prospects (JSON, 15+ fields each) | ~15K chars | ~4K |
+| Vendors + filters + instructions | ~3K chars | ~800 |
+| **Total** | **~65K chars** | **~18K tokens** |
 
-### Causa Raíz
+Gemini 2.5 Flash supports ~1M tokens, so technically we're not hitting the limit. **But that's not the real problem.**
 
-En `VendedorDashboard.tsx`, el query para obtener todos los feedbacks (línea 128-131) usa un join con foreign key que **no existe** en la base de datos:
+## The Real Problem: The AI Is Doing Work That Code Should Do
 
-```typescript
-supabase.from("cliente_feedbacks").select(`
-  *,
-  vendedor:profiles!cliente_feedbacks_vendedor_id_fkey(nombre)
-`)
+Right now the AI receives 110 candidates and must:
+1. Figure out which clients belong to which seller (text matching)
+2. Calculate geographic proximity (it guesses from barrio names)
+3. Apply business rules (rotation, exclusion, score thresholds)
+4. Select 8 per vendor
+5. Generate justifications
+
+Steps 1-3 are **deterministic** -- they don't need AI judgment. Sending all that raw data forces the AI to do math and filtering it's bad at, which explains why it sometimes returns 12 instead of 14.
+
+## Proposed Architecture: Pre-Score + AI Selection
+
+```text
+CURRENT:  DB → 110 raw candidates → AI does everything → results
+
+PROPOSED: DB → deterministic pre-scoring → 20-25 top candidates per vendor → AI picks 8 + justifies
 ```
 
-La tabla `cliente_feedbacks` **no tiene una foreign key hacia `profiles`** para `vendedor_id`. Esto causa que el query falle silenciosamente o devuelva datos incorrectos.
+### What code should do (before AI call):
+1. **Seller-client mapping**: Match `vendedor_principal`/`vendedor_actual` to seller UUID deterministically
+2. **Geographic scoring**: Use Haversine (already exists in the function!) to calculate actual distances between candidates
+3. **Cluster detection**: Group candidates into geographic clusters per vendor zone
+4. **Business scoring**: Apply recency, volume, rotation scores numerically
+5. **Pre-rank**: Sort candidates by composite score, send top ~20 per vendor
 
-### Evidencia
+### What AI should do (reduced scope):
+1. From 20 pre-ranked candidates per vendor, select the best 8
+2. Optimize the route/cluster coherence
+3. Generate human-readable justifications
+4. Flag edge cases (e.g., "this client changed vendors recently")
 
-| Query | Estado |
-|-------|--------|
-| `feedbacksRes` (línea 126) - simple query | Funciona correctamente |
-| `allFeedbacksRes` (línea 128-131) - con join | Falla por FK inexistente |
+### Impact:
+- AI context drops from ~18K tokens to ~5K tokens (faster, cheaper, more reliable)
+- Deterministic scoring guarantees correct count (no more 12 vs 14)
+- AI focuses on what it's good at: judgment and language
+- Pre-scored data includes computed distances (not guessed from barrio names)
 
-Los datos existen en la base de datos y el join SQL directo sí funciona, pero la sintaxis de Supabase SDK con `!foreign_key_name` requiere que la FK exista.
+## Implementation Changes
 
-## Archivo a Modificar
+| Component | Change |
+|-----------|--------|
+| Edge function (lines 470-560) | Add `preScoreCandidates()` function that computes numeric scores + distances before AI call |
+| Edge function (lines 566-613) | Reduce prompt to only pre-scored top candidates with computed metrics |
+| Edge function (system prompt) | Simplify: "Pick 8 from these pre-ranked candidates and justify" |
+| DB migration | Add `vendedor_actual` to `clientes` for deterministic seller mapping |
 
-| Archivo | Cambio |
-|---------|--------|
-| `src/pages/VendedorDashboard.tsx` | Corregir query de feedbacks y agregar profiles manualmente |
+## Do you want me to implement this refactor?
 
-## Solución Técnica
+The key decision: should we do this as part of Phase 1 (the vendor-centric rewrite), or as a standalone optimization first?
 
-### Opción Implementada: Query separado + merge manual
-
-Dado que no hay FK definida, se harán dos queries:
-1. Query de todos los feedbacks (sin join)
-2. Query de profiles para los vendedor_ids únicos
-3. Merge manual de la información del vendedor
-
-### Cambios en fetchDashboardData() (líneas 119-160)
-
-```typescript
-// Antes (falla):
-const [clientesRes, prospectosRes, feedbacksRes, allFeedbacksRes] = await Promise.all([
-  // ... otros queries ...
-  supabase.from("cliente_feedbacks").select(`
-    *,
-    vendedor:profiles!cliente_feedbacks_vendedor_id_fkey(nombre)
-  `)
-]);
-
-// Después (funciona):
-const [clientesRes, prospectosRes, feedbacksRes, allFeedbacksRaw] = await Promise.all([
-  // ... otros queries mantienen igual ...
-  supabase.from("cliente_feedbacks").select("*")  // Sin join
-]);
-
-// Obtener vendedor_ids únicos de todos los feedbacks
-const vendedorIds = [...new Set(
-  allFeedbacksRaw.data?.map(f => f.vendedor_id).filter(Boolean) || []
-)];
-
-// Query separado para profiles
-const profilesRes = vendedorIds.length > 0
-  ? await supabase
-      .from("profiles")
-      .select("user_id, nombre")
-      .in("user_id", vendedorIds)
-  : { data: [] };
-
-// Crear mapa de profiles
-const profilesMap = new Map<string, string>();
-profilesRes.data?.forEach(p => profilesMap.set(p.user_id, p.nombre));
-
-// Mapear feedbacks con info del vendedor
-const allFeedbacksData = allFeedbacksRaw.data?.map(f => ({
-  ...f,
-  vendedor: profilesMap.has(f.vendedor_id) 
-    ? { nombre: profilesMap.get(f.vendedor_id) }
-    : undefined
-})) || [];
-```
-
-### Actualizar el mapeo de allFeedbacksMap (líneas 147-160)
-
-```typescript
-// Agrupar todos los feedbacks por cliente/prospecto
-const allFeedbacksMap = new Map<string, FeedbackInfo[]>();
-allFeedbacksData.forEach(f => {
-  const key = f.client_id || f.prospecto_place_id || '';
-  if (key) {
-    if (!allFeedbacksMap.has(key)) {
-      allFeedbacksMap.set(key, []);
-    }
-    allFeedbacksMap.get(key)?.push(f as FeedbackInfo);
-  }
-});
-```
-
-## Resultado Esperado
-
-| Antes | Después |
-|-------|---------|
-| Historial de Interacciones (0) | Historial de Interacciones (N) con todos los feedbacks |
-| "No hay interacciones registradas aún" | Lista completa de feedbacks con vendedor, fecha y detalles |
-
-## Alternativa a Futuro (Opcional)
-
-Si se desea mantener la sintaxis original con join, se podría agregar la FK faltante a la base de datos:
-
-```sql
-ALTER TABLE cliente_feedbacks 
-ADD CONSTRAINT cliente_feedbacks_vendedor_id_fkey 
-FOREIGN KEY (vendedor_id) REFERENCES profiles(user_id);
-```
-
-Sin embargo, la solución con queries separados es más robusta y no requiere cambios en la base de datos.
+My recommendation: **merge it into Phase 1**. The vendor-centric rewrite already requires restructuring the edge function, so adding pre-scoring at the same time avoids touching the file twice.
 
