@@ -539,7 +539,7 @@ const ClientesDashboard = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">
+              <div className="text-2xl font-semibold text-foreground">
                 {kpis.totalOrdenes.toLocaleString()}
               </div>
             </CardContent>
