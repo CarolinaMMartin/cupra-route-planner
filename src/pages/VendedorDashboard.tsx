@@ -329,7 +329,7 @@ const VendedorDashboard = () => {
       {/* Tabs de historial */}
       <Card>
         <CardHeader className="p-3 md:p-6">
-          <CardTitle className="text-base md:text-lg">Historial de Asignaciones</CardTitle>
+          <CardTitle className="text-sm md:text-base font-serif">Historial de Asignaciones</CardTitle>
         </CardHeader>
         <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
           <Tabs defaultValue="todas" className="w-full">
