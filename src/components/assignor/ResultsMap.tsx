@@ -88,6 +88,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
 
     const fetchLocations = async () => {
       setLoading(true);
+      resetVendorColors();
       const service = new google.maps.places.PlacesService(map);
       const fetchedLocations: ClientLocation[] = [];
 
