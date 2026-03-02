@@ -154,6 +154,9 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
         filteredCount: filteredAssignments.length 
       });
 
+      // Reset vendor colors for fresh assignment
+      resetVendorColors();
+
       // ========================================
       // 🔄 RESET COMPLETO: NO persistir datos de render anterior
       // ========================================
@@ -177,9 +180,10 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
       let clientsWithInvalidCoords = 0;
       let clientsWithoutPlaceData = 0;
       
-      // NO hay caché, NO hay datos derivados persistentes
-      // TODO se reconstruye desde filteredAssignments
-      
+      // Pre-assign colors to all vendors so legend is ready
+      const uniqueVendors = new Set(filteredAssignments.map(a => a.vendedor.nombre));
+      uniqueVendors.forEach(v => getVendorColor(v));
+
       console.log('[Map] ✅ Reset completo. Iniciando construcción de marcadores...');
 
       // Crear PlacesService UNA SOLA VEZ
