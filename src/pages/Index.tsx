@@ -86,11 +86,45 @@ const Index = () => {
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-12">
           <div className="flex justify-between items-center py-5">
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-semibold tracking-wide">
-            </h1>
+              <img src={cupraLogo} alt="Cupra Wines" className="h-8 w-auto opacity-90" />
             </div>
 
-            
+            <div className="flex items-center gap-3">
+              {profile.rol === 'asignador' && (
+                <>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => navigate('/clientes')}>
+                    <Store className="w-4 h-4 mr-2" />
+                    Clientes
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => navigate('/prospectos')}>
+                    <ClipboardList className="w-4 h-4 mr-2" />
+                    Prospectos
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => navigate('/supervision')}>
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Supervisión
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => navigate('/areas')}>
+                    <Layers className="w-4 h-4 mr-2" />
+                    Áreas
+                  </Button>
+                  <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={() => navigate('/profiles')}>
+                    <UserCog className="w-4 h-4 mr-2" />
+                    Perfiles
+                  </Button>
+                </>
+              )}
+              {profile.rol === 'vendedor' && (
+                <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />
+              )}
+              <div className="flex items-center gap-2 ml-2 pl-3 border-l border-border/30">
+                <User className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">{profile.nombre}</span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleLogout} className="text-muted-foreground hover:text-foreground">
+                <LogOut className="w-4 h-4" />
+              </Button>
+            </div>
 
 
 
