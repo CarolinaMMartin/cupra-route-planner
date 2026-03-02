@@ -346,6 +346,7 @@ export type Database = {
           ultima_compra: string | null
           ultima_visita: string | null
           updated_at: string | null
+          vendedor_actual: string | null
           vendedor_principal: string | null
         }
         Insert: {
@@ -386,6 +387,7 @@ export type Database = {
           ultima_compra?: string | null
           ultima_visita?: string | null
           updated_at?: string | null
+          vendedor_actual?: string | null
           vendedor_principal?: string | null
         }
         Update: {
@@ -426,6 +428,7 @@ export type Database = {
           ultima_compra?: string | null
           ultima_visita?: string | null
           updated_at?: string | null
+          vendedor_actual?: string | null
           vendedor_principal?: string | null
         }
         Relationships: []

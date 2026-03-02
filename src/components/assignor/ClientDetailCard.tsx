@@ -77,21 +77,17 @@ const ClientDetailCard = ({
               {cliente.dias_desde_ultima_compra || cliente.dias_sin_visita || 0} días
             </Badge>
           </div>
-          {cliente.todos_vendedores && cliente.todos_vendedores.length > 0 && (
+          {(cliente.vendedor_actual || cliente.vendedor_principal) && (
             <div className="text-xs text-muted-foreground">
-              <p className="font-medium mb-1">Vendedores:</p>
-              <div className="flex flex-wrap gap-1">
-                {cliente.todos_vendedores.slice(0, 2).map((v, idx) => (
-                  <Badge key={idx} variant="secondary" className="text-xs">
-                    {v}
-                  </Badge>
-                ))}
-                {cliente.todos_vendedores.length > 2 && (
-                  <Badge variant="secondary" className="text-xs">
-                    +{cliente.todos_vendedores.length - 2}
-                  </Badge>
-                )}
-              </div>
+              <p className="font-medium">
+                Vendedor: {cliente.vendedor_actual || cliente.vendedor_principal}
+              </p>
+              {cliente.vendedor_actual && cliente.vendedor_principal && 
+               cliente.vendedor_actual.toUpperCase() !== cliente.vendedor_principal.toUpperCase() && (
+                <p className="text-orange-500 text-[10px]">
+                  Anterior: {cliente.vendedor_principal}
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -441,15 +437,22 @@ const ClientDetailCard = ({
                     Vendedores
                   </h4>
                   <div className="space-y-2 text-xs pl-6">
-                    {cliente.vendedor_principal && (
+                    {(cliente.vendedor_actual || cliente.vendedor_principal) && (
                       <div>
-                        <span className="text-muted-foreground">Vendedor principal:</span>
-                        <p className="font-medium">{cliente.vendedor_principal}</p>
+                        <span className="text-muted-foreground">Vendedor actual:</span>
+                        <p className="font-medium">{cliente.vendedor_actual || cliente.vendedor_principal}</p>
+                        {cliente.vendedor_actual && cliente.vendedor_principal && 
+                         cliente.vendedor_actual.toUpperCase() !== cliente.vendedor_principal.toUpperCase() && (
+                          <div className="mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3 text-orange-500" />
+                            <span className="text-orange-500">Anterior: {cliente.vendedor_principal}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                     {cliente.todos_vendedores && cliente.todos_vendedores.length > 0 && (
                       <div>
-                        <span className="text-muted-foreground">Todos los vendedores:</span>
+                        <span className="text-muted-foreground">Historial de vendedores:</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {cliente.todos_vendedores.map((v, idx) => (
                             <Badge key={idx} variant="outline" className="text-xs">{v}</Badge>
