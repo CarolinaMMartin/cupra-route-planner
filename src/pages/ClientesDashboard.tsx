@@ -562,6 +562,19 @@ const ClientesDashboard = () => {
           </Card>
         </div>
 
+        {/* Tabs: Rankings / KPIs por Zona */}
+        <Tabs defaultValue="rankings" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="rankings">Top Rankings</TabsTrigger>
+            <TabsTrigger value="zonas">KPIs por Zona</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="zonas">
+            <ZonaKPIs clientesData={filteredData} formatCurrency={formatCurrency} />
+          </TabsContent>
+
+          <TabsContent value="rankings">
+
         {/* Gráficos y Tablas */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Top Barrios */}
