@@ -478,7 +478,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
 
       {/* Map dialogs */}
       <Dialog open={showMapAll} onOpenChange={setShowMapAll}>
-        <DialogContent className="max-w-[90vw] max-h-[90vh]">
+        <DialogContent className="max-w-[90vw] max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>Todas las asignaciones de hoy</DialogTitle>
           </DialogHeader>
