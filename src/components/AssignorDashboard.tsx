@@ -110,8 +110,8 @@ const AssignorDashboard = () => {
 
     try {
       toast({
-        title: "🤖 Analizando con IA...",
-        description: "Estamos generando recomendaciones inteligentes. Esto puede tomar unos segundos.",
+        title: "Analizando con IA...",
+        description: "Generando recomendaciones inteligentes.",
       });
 
       const payload = {
@@ -135,15 +135,15 @@ const AssignorDashboard = () => {
         throw error;
       }
 
-      console.log("✅✅ Respuesta del edge function:", data);
+      console.log("✅ Respuesta del edge function:", data);
 
       if (!data.recomendaciones || data.recomendaciones.length === 0) {
         toast({
           variant: "destructive",
-          title: "❌ Sin recomendaciones",
+          title: "Sin recomendaciones",
           description:
             data.resumen?.descripcion ||
-            "No se encontraron recomendaciones para los filtros seleccionados. Intenta con otros criterios.",
+            "No se encontraron recomendaciones para los filtros seleccionados.",
           duration: 5000,
         });
         setIsLoading(false);
@@ -198,42 +198,31 @@ const AssignorDashboard = () => {
         factores_ia: rec.factores_ia,
       }));
 
-      console.log("mapped", mappedRecommendations);
-
       setRecommendations(mappedRecommendations);
       setAiInsights(data.resumen);
       setFlowStep("preselection");
       setSelectedSucursales([]);
 
       toast({
-        title: "✨ Recomendaciones generadas por IA",
-        description: data.resumen?.descripcion || `Se generaron ${mappedRecommendations.length} recomendaciones`,
+        title: "Recomendaciones generadas",
+        description: data.resumen?.descripcion || `${mappedRecommendations.length} recomendaciones listas`,
       });
     } catch (error: any) {
       console.error("Error:", error);
       let errorMessage = "Error al solicitar recomendaciones";
       if (error.message?.includes("429")) {
-        errorMessage = "Límite de consultas IA alcanzado. Reintenta en unos minutos.";
+        errorMessage = "Límite de consultas alcanzado. Reintenta en unos minutos.";
       } else if (error.message?.includes("402")) {
-        errorMessage = "Créditos de IA agotados. Agrega créditos en Settings → Usage.";
+        errorMessage = "Créditos agotados.";
       }
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: errorMessage,
-      });
+      toast({ variant: "destructive", title: "Error", description: errorMessage });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleContinueToAssignment = () => {
-    setFlowStep("assignment");
-  };
-
-  const handleBackToPreselection = () => {
-    setFlowStep("preselection");
-  };
+  const handleContinueToAssignment = () => setFlowStep("assignment");
+  const handleBackToPreselection = () => setFlowStep("preselection");
 
   const handleBackToRecommendations = () => {
     setShowExitDialog(false);
@@ -244,30 +233,21 @@ const AssignorDashboard = () => {
     setSelectedVendedoresIds([]);
   };
 
-  const handleAssignmentComplete = () => {
-    handleBackToRecommendations();
-  };
+  const handleAssignmentComplete = () => handleBackToRecommendations();
 
-  const handleEditAssignments = () => {
-    setFlowStep("edit-select");
-  };
+  const handleEditAssignments = () => setFlowStep("edit-select");
 
   const handleContinueToEditKanban = (assignments: any[]) => {
     setSelectedExistingAssignments(assignments);
     setFlowStep("edit-kanban");
   };
 
-  const handleBackFromEditKanban = () => {
-    setFlowStep("edit-select");
-  };
+  const handleBackFromEditKanban = () => setFlowStep("edit-select");
 
   const handleEditComplete = () => {
     setFlowStep("recommendations");
     setSelectedExistingAssignments([]);
-    toast({
-      title: "Modificaciones guardadas",
-      description: "Las asignaciones se han actualizado correctamente",
-    });
+    toast({ title: "Modificaciones guardadas", description: "Las asignaciones se actualizaron correctamente" });
   };
 
   const handleClearFilters = () => {
@@ -278,26 +258,6 @@ const AssignorDashboard = () => {
     setSelectedPlacesBarrio([]);
     setSelectedPlacesProvincia("all");
   };
-
-  const { ciudades, provincias, vendedores } = useMemo(() => {
-    const ciudadesSet = new Set<string>();
-    const provinciasSet = new Set<string>();
-    const vendedoresSet = new Set<string>();
-
-    recommendations.forEach((rec: any) => {
-      if (rec.direccion && rec.direccion !== "Sin dirección") ciudadesSet.add(rec.direccion);
-      if (rec.zona && rec.zona !== "Sin zona") provinciasSet.add(rec.zona);
-      if (rec.vendedores && Array.isArray(rec.vendedores)) {
-        rec.vendedores.forEach((v: string) => { if (v) vendedoresSet.add(v); });
-      }
-    });
-
-    return {
-      ciudades: Array.from(ciudadesSet).sort(),
-      provincias: Array.from(provinciasSet).sort(),
-      vendedores: Array.from(vendedoresSet).sort(),
-    };
-  }, [recommendations]);
 
   const filteredRecommendations = useMemo(() => {
     return recommendations.filter((rec: any) => {
@@ -310,69 +270,82 @@ const AssignorDashboard = () => {
       if (selectedPlacesProvincia !== "all") {
         if (!rec.zona || rec.zona !== selectedPlacesProvincia) return false;
       }
-      if (selectedPlacesComuna.length > 0) return true;
       if (selectedPlacesBarrio.length > 0) {
         if (!rec.barrio_principal || !selectedPlacesBarrio.includes(rec.barrio_principal)) return false;
       }
       return true;
     });
-  }, [recommendations, selectedCiudad, selectedProvincia, selectedVendedor, selectedPlacesProvincia]);
+  }, [recommendations, selectedCiudad, selectedProvincia, selectedVendedor, selectedPlacesProvincia, selectedPlacesBarrio]);
 
   const selectedRecommendations = filteredRecommendations.filter((r) => selectedSucursales.includes(r.id));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro de que quieres salir?</AlertDialogTitle>
+            <AlertDialogTitle>¿Salir del flujo?</AlertDialogTitle>
             <AlertDialogDescription>
-              Si vuelves al panel principal, se perderán todas las recomendaciones y selecciones que hayas realizado.
-              Deberás solicitar nuevas recomendaciones con IA si deseas continuar.
+              Se perderán las recomendaciones y selecciones actuales.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Quedarme aquí</AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleBackToRecommendations}>
-              Volver de todas formas
+              Confirmar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {flowStep === "recommendations" && (
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-2 h-12">
-            <TabsTrigger value="nueva" className="gap-2 text-sm">
-              <Plus className="w-4 h-4" />
-              Nueva Asignación
-            </TabsTrigger>
-            <TabsTrigger value="hoy" className="gap-2 text-sm">
-              <Calendar className="w-4 h-4" />
-              Asignaciones de Hoy
-            </TabsTrigger>
-          </TabsList>
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Panel de Asignación</h1>
+            <p className="text-sm text-muted-foreground mt-1">Genera recomendaciones inteligentes y gestiona asignaciones</p>
+          </div>
 
-          <TabsContent value="nueva" className="mt-4">
-            <FilterPanel
-              onRequestRecommendations={handleRequestRecommendations}
-              isLoading={isLoading}
-              placesData={placesData}
-              instruccionesAdicionales={instruccionesAdicionales}
-              onInstruccionesChange={setInstruccionesAdicionales}
-            />
-          </TabsContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="w-full max-w-md">
+              <TabsTrigger value="nueva" className="flex-1 gap-2">
+                <Plus className="w-4 h-4" />
+                Nueva Asignación
+              </TabsTrigger>
+              <TabsTrigger value="hoy" className="flex-1 gap-2">
+                <Calendar className="w-4 h-4" />
+                Asignaciones de Hoy
+              </TabsTrigger>
+            </TabsList>
 
-          <TabsContent value="hoy" className="mt-4">
-            <TodayAssignments onEditAssignments={handleEditAssignments} />
-          </TabsContent>
-        </Tabs>
+            <TabsContent value="nueva">
+              <Card>
+                <CardContent className="p-6">
+                  <FilterPanel
+                    onRequestRecommendations={handleRequestRecommendations}
+                    isLoading={isLoading}
+                    placesData={placesData}
+                    instruccionesAdicionales={instruccionesAdicionales}
+                    onInstruccionesChange={setInstruccionesAdicionales}
+                  />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="hoy">
+              <Card>
+                <CardContent className="p-6">
+                  <TodayAssignments onEditAssignments={handleEditAssignments} />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        </div>
       )}
 
       {flowStep === "edit-select" && (
-        <Card className="shadow-medium">
+        <Card>
           <CardHeader>
-            <CardTitle>Modificar Asignaciones Existentes</CardTitle>
+            <CardTitle>Modificar Asignaciones</CardTitle>
             <CardDescription>Selecciona las asignaciones que deseas modificar</CardDescription>
           </CardHeader>
           <CardContent>
@@ -382,10 +355,10 @@ const AssignorDashboard = () => {
       )}
 
       {flowStep === "edit-kanban" && (
-        <Card className="shadow-medium">
+        <Card>
           <CardHeader>
             <CardTitle>Reasignar Clientes</CardTitle>
-            <CardDescription>Arrastra los clientes entre vendedores para modificar asignaciones</CardDescription>
+            <CardDescription>Arrastra los clientes entre vendedores</CardDescription>
           </CardHeader>
           <CardContent>
             <EditAssignmentsKanban
@@ -398,42 +371,40 @@ const AssignorDashboard = () => {
       )}
 
       {flowStep === "preselection" && recommendations.length > 0 && (
-        <>
+        <div className="space-y-6">
           {aiInsights && vendedoresData.length > 0 && (
             <AIInsightsCard resumen={aiInsights} vendedores={vendedoresData} />
           )}
 
-          <Card className="shadow-medium">
+          <Card>
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>Paso 1: Preselección de Recomendaciones</CardTitle>
+                  <CardTitle>Preselección de Recomendaciones</CardTitle>
                   <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="secondary" onClick={() => setShowExitDialog(true)} className="mr-auto">
-                    ← Volver al Panel Principal
+                  <Button variant="ghost" size="sm" onClick={() => setShowExitDialog(true)}>
+                    ← Volver
                   </Button>
                   <Button
                     variant={viewMode === "list" ? "default" : "outline"}
                     size="sm"
                     onClick={() => setViewMode("list")}
                   >
-                    <List className="w-4 h-4 mr-2" />
-                    Lista
+                    <List className="w-4 h-4" />
                   </Button>
                   <Button
                     variant={viewMode === "map" ? "default" : "outline"}
                     size="sm"
                     onClick={() => setViewMode("map")}
                   >
-                    <MapPin className="w-4 h-4 mr-2" />
-                    Mapa
+                    <MapPin className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               {viewMode === "list" ? (
                 <PreselectionStep
                   recommendations={filteredRecommendations}
@@ -452,16 +423,14 @@ const AssignorDashboard = () => {
               )}
             </CardContent>
           </Card>
-        </>
+        </div>
       )}
 
       {flowStep === "assignment" && (
-        <Card className="shadow-medium">
+        <Card>
           <CardHeader>
-            <CardTitle>Paso 2: Asignación Visual</CardTitle>
-            <CardDescription>
-              Arrastra los clientes desde "Sin asignar" hacia el vendedor correspondiente
-            </CardDescription>
+            <CardTitle>Asignación Visual</CardTitle>
+            <CardDescription>Arrastra los clientes hacia el vendedor correspondiente</CardDescription>
           </CardHeader>
           <CardContent>
             <KanbanAssignment
