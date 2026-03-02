@@ -497,6 +497,7 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
 
       // Actualizar estado con todos los marcadores
       setMarkers(newMarkers);
+      setVendorLegend(getVendorColorMap());
 
       // FINALMENTE: Ajustar el mapa SOLO cuando TODOS los marcadores estén listos
       if (newMarkers.length > 0) {
