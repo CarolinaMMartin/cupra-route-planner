@@ -154,12 +154,15 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
             return new Promise<ClientLocation>((resolve, reject) => {
               service.getDetails({ placeId: sucursal.prospecto_place_id! }, (place, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+                  const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
+                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
                   resolve({
                     id: sucursal.id,
                     name: place.name || sucursal.nombre || "Sin nombre",
                     lat: place.geometry.location.lat(),
                     lng: place.geometry.location.lng(),
                     direccion: place.formatted_address || sucursal.direccion || "",
+                    vendedor,
                   });
                 } else {
                   reject(new Error(`No se pudo obtener ubicación para ${sucursal.nombre}`));
