@@ -115,7 +115,7 @@ const Index = () => {
                 </>
               )}
               {profile.rol === 'vendedor' && (
-                <NotificacionesPanel vendedorId={profile.user_id} onNotificacionClick={handleNotificacionClick} />
+                <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />
               )}
               <div className="flex items-center gap-2 ml-2 pl-3 border-l border-border/30">
                 <User className="w-4 h-4 text-muted-foreground" />
