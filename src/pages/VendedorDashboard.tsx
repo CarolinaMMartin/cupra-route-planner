@@ -460,7 +460,7 @@ const VendedorDashboard = () => {
                           <div className="flex items-start justify-between">
                             <div className="space-y-2 flex-1">
                               <div className="flex items-center gap-2">
-                                <p className="font-semibold">
+                                <p className="text-sm font-medium text-foreground">
                                   {asig.es_prospecto 
                                     ? asig.prospecto_info?.nombre 
                                     : asig.cliente_info?.razon_social}
