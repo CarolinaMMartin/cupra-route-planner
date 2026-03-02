@@ -104,12 +104,15 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
             const isValidLng = lng >= -80 && lng <= -40;
             
             if (isValidLat && isValidLng) {
+              const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
+              if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
               return {
                 id: sucursal.id,
                 name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
                 lat: lat,
                 lng: lng,
                 direccion: sucursal.direccion || sucursal.direccion_principal || "",
+                vendedor,
               };
             } else {
               console.warn(`[ResultsMap] Coordenadas fuera de rango Argentina:`, { id: sucursal.id, lat, lng });
