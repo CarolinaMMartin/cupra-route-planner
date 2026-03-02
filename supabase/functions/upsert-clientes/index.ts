@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
       'participacion_mercado', 'ciudad_principal', 'vendedor_principal',
       'productos_comprados', 'todas_ciudades',
       'todas_direcciones', 'todos_vendedores', 'requiere_visita', 'canal', 'etiquetas',
-      'telefonos', 'emails'
+      'telefonos', 'emails', 'vendedor_actual'
     ];
 
     // PASO 1: Identificar clientes existentes

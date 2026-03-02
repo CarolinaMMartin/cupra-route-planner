@@ -33,6 +33,7 @@ export interface Sucursal {
   direccion_principal?: string;
   provincia_principal?: string;
   vendedor_principal?: string;
+  vendedor_actual?: string;
   productos_comprados?: string[];
   todas_ciudades?: string[];
   todos_barrios?: string[];

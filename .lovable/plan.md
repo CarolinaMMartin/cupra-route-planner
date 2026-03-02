@@ -1,69 +1,48 @@
 
+# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
-# Analysis: Context Window Usage in generate-recommendations
+## Cambios realizados
 
-## Current Data Sent to AI
+### A. DB: Campo `vendedor_actual` en `clientes` ✅
+- Nuevo campo `vendedor_actual` (text) agregado
+- Inicializado desde la última venta registrada en `ventas_cupra`
+- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
 
-| Data | Volume | Est. Tokens |
-|------|--------|-------------|
-| System prompt | ~3K chars | ~800 |
-| 80 clients (JSON, 15+ fields each) | ~40-50K chars | ~12K |
-| 30 prospects (JSON, 15+ fields each) | ~15K chars | ~4K |
-| Vendors + filters + instructions | ~3K chars | ~800 |
-| **Total** | **~65K chars** | **~18K tokens** |
+### B. Pre-scoring determinístico ✅
+- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
+- **score_geo (50%)**: Distancia Haversine al centroide del cluster
+- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
+- **score_comercial (15%)**: Score comercial normalizado (0-100)
+- **score_rotacion (10%)**: Días desde última recomendación
+- Filtra candidatos con feedback negativo automáticamente
+- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
 
-Gemini 2.5 Flash supports ~1M tokens, so technically we're not hitting the limit. **But that's not the real problem.**
+### C. Mapeo nombre→UUID ✅
+- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
+- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
+- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
 
-## The Real Problem: The AI Is Doing Work That Code Should Do
+### D. Prompt reducido centrado en vendedor ✅
+- De ~65K chars a ~5-10K chars (reducción ~80%)
+- Formato tabular compacto con scores pre-calculados
+- IA solo decide ruta óptima y genera justificaciones
+- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
 
-Right now the AI receives 110 candidates and must:
-1. Figure out which clients belong to which seller (text matching)
-2. Calculate geographic proximity (it guesses from barrio names)
-3. Apply business rules (rotation, exclusion, score thresholds)
-4. Select 8 per vendor
-5. Generate justifications
+### E. UI: Vendedor actual vs anterior ✅
+- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
+- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
+- Tipo `Sucursal` extendido con `vendedor_actual`
 
-Steps 1-3 are **deterministic** -- they don't need AI judgment. Sending all that raw data forces the AI to do math and filtering it's bad at, which explains why it sometimes returns 12 instead of 14.
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/generate-recommendations/index.ts` | Reescrito: pre-scoring + prompt reducido + mapeo nombre→UUID |
+| `supabase/functions/upsert-clientes/index.ts` | `vendedor_actual` agregado a `camposVentas` |
+| `src/components/assignor/ClientDetailCard.tsx` | Vendedor actual/anterior en compact y full views |
+| `src/types/sales.ts` | `vendedor_actual` agregado a `Sucursal` |
 
-## Proposed Architecture: Pre-Score + AI Selection
-
-```text
-CURRENT:  DB → 110 raw candidates → AI does everything → results
-
-PROPOSED: DB → deterministic pre-scoring → 20-25 top candidates per vendor → AI picks 8 + justifies
-```
-
-### What code should do (before AI call):
-1. **Seller-client mapping**: Match `vendedor_principal`/`vendedor_actual` to seller UUID deterministically
-2. **Geographic scoring**: Use Haversine (already exists in the function!) to calculate actual distances between candidates
-3. **Cluster detection**: Group candidates into geographic clusters per vendor zone
-4. **Business scoring**: Apply recency, volume, rotation scores numerically
-5. **Pre-rank**: Sort candidates by composite score, send top ~20 per vendor
-
-### What AI should do (reduced scope):
-1. From 20 pre-ranked candidates per vendor, select the best 8
-2. Optimize the route/cluster coherence
-3. Generate human-readable justifications
-4. Flag edge cases (e.g., "this client changed vendors recently")
-
-### Impact:
-- AI context drops from ~18K tokens to ~5K tokens (faster, cheaper, more reliable)
-- Deterministic scoring guarantees correct count (no more 12 vs 14)
-- AI focuses on what it's good at: judgment and language
-- Pre-scored data includes computed distances (not guessed from barrio names)
-
-## Implementation Changes
-
-| Component | Change |
-|-----------|--------|
-| Edge function (lines 470-560) | Add `preScoreCandidates()` function that computes numeric scores + distances before AI call |
-| Edge function (lines 566-613) | Reduce prompt to only pre-scored top candidates with computed metrics |
-| Edge function (system prompt) | Simplify: "Pick 8 from these pre-ranked candidates and justify" |
-| DB migration | Add `vendedor_actual` to `clientes` for deterministic seller mapping |
-
-## Do you want me to implement this refactor?
-
-The key decision: should we do this as part of Phase 1 (the vendor-centric rewrite), or as a standalone optimization first?
-
-My recommendation: **merge it into Phase 1**. The vendor-centric rewrite already requires restructuring the edge function, so adding pre-scoring at the same time avoids touching the file twice.
-
+## Próximos pasos potenciales
+- Planificación temporal (agenda semanal)
+- Reportes y supervisión
+- Pipeline ETL directo sin n8n
+- Agente conversacional
