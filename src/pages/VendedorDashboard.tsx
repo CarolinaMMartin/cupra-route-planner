@@ -276,6 +276,9 @@ const VendedorDashboard = () => {
         </div>
       </div>
 
+      {/* Activaciones del mes */}
+      <ActividadesPanel />
+
       {/* Estadísticas principales */}
       <div className="grid grid-cols-2 gap-2 md:gap-4 lg:grid-cols-4">
         <Card className="p-2 md:p-0">
