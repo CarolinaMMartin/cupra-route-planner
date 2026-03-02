@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import ActividadesResumen from "@/components/assignor/ActividadesResumen";
 
 interface VendedorStats {
   vendedor_id: string;
