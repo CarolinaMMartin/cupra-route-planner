@@ -62,6 +62,7 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [vendorLegend, setVendorLegend] = useState<Map<string, string>>(new Map());
 
   // Filtrar asignaciones si hay filtro de vendedor
   const filteredAssignments = useMemo(() => {
