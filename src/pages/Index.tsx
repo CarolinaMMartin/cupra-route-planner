@@ -76,16 +76,21 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden relative">
-      {/* No watermark — single angel in navbar only */}
+      {/* Angel watermark — ultra subtle institutional seal */}
+      <img
+        src={angelBlanco}
+        alt=""
+        aria-hidden="true"
+        className="angel-watermark fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-auto select-none"
+      />
 
       {/* Header */}
       <header className="bg-background/90 backdrop-blur-xl sticky top-0 z-50 border-b border-border/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
           <div className="flex justify-between items-center h-14">
-            {/* Logo */}
-            <div className="flex items-center gap-2.5">
-              <img src={angelBlanco} alt="" className="h-8 w-auto opacity-40" />
-              <img src={cupraLogo} alt="Cupra Wines" className="h-6 w-auto opacity-70" />
+            {/* Logo only — no angel in header */}
+            <div className="flex items-center">
+              <img src={cupraLogo} alt="Cupra Wines" className="h-7 w-auto opacity-80" />
             </div>
 
             {/* Navigation */}
