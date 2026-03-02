@@ -25,6 +25,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
+import ActividadesPanel from "@/components/vendedor/ActividadesPanel";
 
 interface FeedbackInfo {
   feedback: string;
@@ -274,6 +275,9 @@ const VendedorDashboard = () => {
           </Button>
         </div>
       </div>
+
+      {/* Activaciones del mes */}
+      <ActividadesPanel />
 
       {/* Estadísticas principales */}
       <div className="grid grid-cols-2 gap-2 md:gap-4 lg:grid-cols-4">

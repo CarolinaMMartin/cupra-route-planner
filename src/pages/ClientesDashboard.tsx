@@ -9,6 +9,8 @@ import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import ZonaKPIs from "@/components/clientes/ZonaKPIs";
 
 interface BarrioVentas {
   barrio: string;
@@ -560,6 +562,19 @@ const ClientesDashboard = () => {
           </Card>
         </div>
 
+        {/* Tabs: Rankings / KPIs por Zona */}
+        <Tabs defaultValue="rankings" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 mb-4">
+            <TabsTrigger value="rankings">Top Rankings</TabsTrigger>
+            <TabsTrigger value="zonas">KPIs por Zona</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="zonas">
+            <ZonaKPIs clientesData={filteredData} formatCurrency={formatCurrency} />
+          </TabsContent>
+
+          <TabsContent value="rankings">
+
         {/* Gráficos y Tablas */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Top Barrios */}
@@ -665,6 +680,9 @@ const ClientesDashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

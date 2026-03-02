@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { getGoogleMapsUrl, isManualPlaceId, getGoogleMapsUrlFromCoords } from "@/lib/utils";
+import { getVendorColor, createColoredMarkerIcon, resetVendorColors, getVendorColorMap } from "@/lib/vendorColors";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -61,6 +62,7 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [vendorLegend, setVendorLegend] = useState<Map<string, string>>(new Map());
 
   // Filtrar asignaciones si hay filtro de vendedor
   const filteredAssignments = useMemo(() => {
@@ -152,6 +154,9 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
         filteredCount: filteredAssignments.length 
       });
 
+      // Reset vendor colors for fresh assignment
+      resetVendorColors();
+
       // ========================================
       // 🔄 RESET COMPLETO: NO persistir datos de render anterior
       // ========================================
@@ -175,9 +180,10 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
       let clientsWithInvalidCoords = 0;
       let clientsWithoutPlaceData = 0;
       
-      // NO hay caché, NO hay datos derivados persistentes
-      // TODO se reconstruye desde filteredAssignments
-      
+      // Pre-assign colors to all vendors so legend is ready
+      const uniqueVendors = new Set(filteredAssignments.map(a => a.vendedor.nombre));
+      uniqueVendors.forEach(v => getVendorColor(v));
+
       console.log('[Map] ✅ Reset completo. Iniciando construcción de marcadores...');
 
       // Crear PlacesService UNA SOLA VEZ
@@ -279,10 +285,12 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
           if (placeData) {
             const position = { lat: placeData.lat, lng: placeData.lng };
             
+            const vendorColor = getVendorColor(assignment.vendedor.nombre);
             const marker = new google.maps.Marker({
               position: position,
               map: map,
               title: assignment.cliente?.razon_social || 'Cliente',
+              icon: createColoredMarkerIcon(vendorColor),
             });
 
             console.log(`[Map] ✅ Marcador CLIENTE creado:`, {
@@ -353,10 +361,12 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
         if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
           const position = { lat, lng };
           
+          const vendorColorP = getVendorColor(assignment.vendedor.nombre);
           const marker = new google.maps.Marker({
             position: position,
             map: map,
             title: assignment.prospecto?.nombre || 'Prospecto',
+            icon: createColoredMarkerIcon(vendorColorP),
           });
 
           console.log(`[Map] ✅ Marcador PROSPECTO MANUAL creado:`, {
@@ -430,10 +440,12 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
       // Crear marcadores de PROSPECTOS GOOGLE con los resultados
       prospectoResults.forEach(({ assignment, place }) => {
         if (place?.geometry?.location) {
+          const vendorColorG = getVendorColor(assignment.vendedor.nombre);
           const marker = new google.maps.Marker({
             position: place.geometry.location,
             map: map,
             title: assignment.prospecto?.nombre || 'Prospecto',
+            icon: createColoredMarkerIcon(vendorColorG),
           });
 
           bounds.extend(place.geometry.location);
@@ -485,6 +497,7 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
 
       // Actualizar estado con todos los marcadores
       setMarkers(newMarkers);
+      setVendorLegend(getVendorColorMap());
 
       // FINALMENTE: Ajustar el mapa SOLO cuando TODOS los marcadores estén listos
       if (newMarkers.length > 0) {
@@ -542,6 +555,20 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
         </div>
       )}
       <div ref={mapRef} className="w-full h-full" />
+      {/* Leyenda de vendedores */}
+      {vendorLegend.size > 0 && (
+        <div className="absolute bottom-3 left-3 bg-background/90 backdrop-blur-sm border border-border/60 rounded-lg p-2.5 z-10 max-w-[200px]">
+          <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Vendedores</p>
+          <div className="space-y-1">
+            {Array.from(vendorLegend.entries()).map(([name, color]) => (
+              <div key={name} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full shrink-0 border border-border/40" style={{ backgroundColor: color }} />
+                <span className="text-xs text-foreground truncate">{name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Card>
   );
 };

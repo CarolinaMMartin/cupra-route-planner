@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import ActividadesResumen from "@/components/assignor/ActividadesResumen";
 
 interface VendedorStats {
   vendedor_id: string;
@@ -595,6 +596,9 @@ const SupervisionVendedores = () => {
             </div>
           </CardContent>
         </Card>
+
+        {/* Activaciones por vendedor */}
+        <ActividadesResumen />
 
         {/* KPIs Globales */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
