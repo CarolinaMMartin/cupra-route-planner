@@ -25,6 +25,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
+import ActividadesPanel from "@/components/vendedor/ActividadesPanel";
 
 interface FeedbackInfo {
   feedback: string;
