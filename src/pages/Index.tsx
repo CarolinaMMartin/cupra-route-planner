@@ -2,8 +2,15 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, UserCog, BarChart3, Layers, ClipboardList, Store } from "lucide-react";
+import { LogOut, User, UserCog, BarChart3, Layers, ClipboardList, Store, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import cupraLogo from "@/assets/cupra-logo-new.png";
+import angelBlanco from "@/assets/angel-blanco.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/VendedorKanbanWrapper";
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
