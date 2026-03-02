@@ -6,9 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, MapPin, X, Info, ChevronDown, LayoutGrid, Search } from "lucide-react";
+import { Sparkles, MapPin, X, ChevronDown, LayoutGrid, Search, ChevronRight } from "lucide-react";
 import { MultiSelect } from "@/components/ui/multi-select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -94,15 +93,6 @@ const FilterPanel = ({
 
   const handleAreaChange = async (areaId: string) => {
     setSelectedArea(areaId);
-    if (areaId === 'none') return;
-
-    const area = areas.find(a => a.id === areaId);
-    if (!area) return;
-
-    toast({
-      title: "✅ Área seleccionada",
-      description: `"${area.nombre}" con ${area.vendedores.length} vendedores y ${area.barrios.length} barrios.`
-    });
   };
 
   const handleClearFilters = () => {
@@ -169,7 +159,6 @@ const FilterPanel = ({
       setAreas(areasWithRelations);
     } catch (error) {
       console.error('Error fetching areas:', error);
-      toast({ variant: "destructive", title: "Error", description: "Error al cargar áreas" });
     } finally {
       setIsLoadingAreas(false);
     }
@@ -193,7 +182,6 @@ const FilterPanel = ({
       setSelectedVendedores(mappedVendedores.map(v => v.id));
     } catch (error) {
       console.error('Error fetching vendedores:', error);
-      toast({ variant: "destructive", title: "Error", description: "Error al cargar vendedores" });
     } finally {
       setIsLoadingVendedores(false);
     }
@@ -235,7 +223,7 @@ const FilterPanel = ({
   const handleSubmitCustom = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedVendedores.length === 0) {
-      toast({ variant: "destructive", title: "Error", description: "Debes seleccionar al menos un vendedor" });
+      toast({ variant: "destructive", title: "Error", description: "Seleccioná al menos un vendedor" });
       return;
     }
 
@@ -258,52 +246,52 @@ const FilterPanel = ({
   const selectedAreaData = areas.find(a => a.id === selectedArea);
 
   return (
-    <div className="space-y-5">
-      {/* Mode selector */}
+    <div className="space-y-6">
+      {/* Mode selector — clean toggle cards */}
       <div className="grid grid-cols-2 gap-3">
         <button
           type="button"
           onClick={() => setMode('area')}
-          className={`p-4 rounded-lg border-2 text-left transition-all ${
+          className={`group p-5 rounded-xl text-left transition-all duration-200 ${
             mode === 'area'
-              ? 'border-primary bg-primary/5'
-              : 'border-border hover:border-muted-foreground/30'
+              ? 'bg-primary/10 border border-primary/30 ring-1 ring-primary/20'
+              : 'bg-secondary/50 border border-transparent hover:bg-secondary'
           }`}
         >
-          <div className="flex items-center gap-2 mb-1">
-            <LayoutGrid className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-sm">Por Área</span>
+          <div className="flex items-center gap-2.5 mb-1.5">
+            <LayoutGrid className={`w-4 h-4 ${mode === 'area' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <span className="font-medium text-sm">Por Área</span>
           </div>
-          <p className="text-xs text-muted-foreground">Usá un área predefinida con vendedores y zonas ya configuradas</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">Área predefinida con vendedores y zonas configuradas</p>
         </button>
 
         <button
           type="button"
           onClick={() => setMode('custom')}
-          className={`p-4 rounded-lg border-2 text-left transition-all ${
+          className={`group p-5 rounded-xl text-left transition-all duration-200 ${
             mode === 'custom'
-              ? 'border-primary bg-primary/5'
-              : 'border-border hover:border-muted-foreground/30'
+              ? 'bg-primary/10 border border-primary/30 ring-1 ring-primary/20'
+              : 'bg-secondary/50 border border-transparent hover:bg-secondary'
           }`}
         >
-          <div className="flex items-center gap-2 mb-1">
-            <Search className="w-5 h-5 text-primary" />
-            <span className="font-semibold text-sm">Personalizado</span>
+          <div className="flex items-center gap-2.5 mb-1.5">
+            <Search className={`w-4 h-4 ${mode === 'custom' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <span className="font-medium text-sm">Personalizado</span>
           </div>
-          <p className="text-xs text-muted-foreground">Elegí vendedores y zonas manualmente</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">Selección manual de vendedores y zonas geográficas</p>
         </button>
       </div>
 
       {/* Mode: Area */}
       {mode === 'area' && (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="area-filter">Seleccionar Área</Label>
+            <Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Área</Label>
             <Select value={selectedArea} onValueChange={handleAreaChange} disabled={isLoadingAreas}>
-              <SelectTrigger id="area-filter" className="bg-background">
-                <SelectValue placeholder="Elegí un área..." />
+              <SelectTrigger id="area-filter" className="bg-secondary/50 border-border/50 h-11">
+                <SelectValue placeholder="Seleccionar área..." />
               </SelectTrigger>
-              <SelectContent className="bg-background z-50">
+              <SelectContent className="bg-card border-border">
                 <SelectItem value="none">Sin área seleccionada</SelectItem>
                 {areas.map((area) => (
                   <SelectItem key={area.id} value={area.id}>
@@ -315,32 +303,31 @@ const FilterPanel = ({
           </div>
 
           {selectedAreaData && (
-            <Card className="p-4 bg-muted/30 space-y-2">
-              <div className="flex flex-wrap gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground mr-1">Vendedores:</span>
+            <div className="rounded-xl bg-secondary/30 p-4 space-y-3">
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <span className="text-xs font-medium text-muted-foreground mr-1">Vendedores</span>
                 {vendedores
                   .filter(v => selectedAreaData.vendedores.includes(v.id))
                   .map(v => (
-                    <Badge key={v.id} variant="secondary" className="text-xs">{v.nombre.split(' ')[0]}</Badge>
+                    <Badge key={v.id} variant="secondary" className="text-xs font-normal">{v.nombre.split(' ')[0]}</Badge>
                   ))}
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                <span className="text-xs font-medium text-muted-foreground mr-1">Barrios:</span>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <span className="text-xs font-medium text-muted-foreground mr-1">Barrios</span>
                 {selectedAreaData.barrios.length > 0 ? (
                   selectedAreaData.barrios.slice(0, 5).map(b => (
-                    <Badge key={b} variant="outline" className="text-xs">{b}</Badge>
+                    <Badge key={b} variant="outline" className="text-xs font-normal">{b}</Badge>
                   ))
                 ) : (
                   <span className="text-xs text-muted-foreground">Todos</span>
                 )}
                 {selectedAreaData.barrios.length > 5 && (
-                  <Badge variant="outline" className="text-xs">+{selectedAreaData.barrios.length - 5} más</Badge>
+                  <span className="text-xs text-muted-foreground">+{selectedAreaData.barrios.length - 5}</span>
                 )}
               </div>
-            </Card>
+            </div>
           )}
 
-          {/* AI Instructions for area mode */}
           <AIInstructionsCollapsible
             isOpen={isAIInstructionsOpen}
             onOpenChange={setIsAIInstructionsOpen}
@@ -352,69 +339,73 @@ const FilterPanel = ({
             type="button"
             onClick={handleSubmitArea}
             disabled={isLoading || selectedArea === 'none'}
+            size="lg"
             className="w-full"
           >
-            <Sparkles className="w-4 h-4 mr-2" />
-            {isLoading ? "IA analizando..." : "Generar Recomendaciones con IA"}
+            <Sparkles className="w-4 h-4" />
+            {isLoading ? "Analizando..." : "Generar Recomendaciones"}
           </Button>
         </div>
       )}
 
       {/* Mode: Custom */}
       {mode === 'custom' && (
-        <form onSubmit={handleSubmitCustom} className="space-y-4">
+        <form onSubmit={handleSubmitCustom} className="space-y-5">
           {/* Vendedores collapsible */}
           <Collapsible open={isVendedoresOpen} onOpenChange={setIsVendedoresOpen}>
-            <Card className="p-0 overflow-hidden">
-              <CollapsibleTrigger asChild>
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-sm">Vendedores</span>
-                    <Badge variant="secondary" className="text-xs">
-                      {selectedVendedores.length} de {vendedores.length}
-                    </Badge>
-                  </div>
-                  <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isVendedoresOpen ? 'rotate-180' : ''}`} />
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="px-4 pb-4 space-y-3 border-t">
-                  <div className="flex justify-end pt-3">
-                    <Button type="button" variant="outline" size="sm" onClick={toggleAllVendedores} disabled={isLoadingVendedores}>
-                      {selectedVendedores.length === vendedores.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
-                    </Button>
-                  </div>
-                  {isLoadingVendedores ? (
-                    <p className="text-sm text-muted-foreground">Cargando vendedores...</p>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {vendedores.map(vendedor => (
-                        <label key={vendedor.id} className="flex items-center gap-2 p-2 rounded-md border bg-background cursor-pointer hover:bg-accent/5 transition-colors">
-                          <Checkbox checked={selectedVendedores.includes(vendedor.id)} onCheckedChange={() => toggleVendedor(vendedor.id)} />
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm truncate">{vendedor.nombre}</p>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  )}
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                className="w-full flex items-center justify-between py-3 px-4 rounded-xl bg-secondary/30 hover:bg-secondary/50 transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="text-sm font-medium">Vendedores</span>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedVendedores.length} de {vendedores.length} seleccionados
+                  </span>
                 </div>
-              </CollapsibleContent>
-            </Card>
+                <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isVendedoresOpen ? 'rotate-90' : ''}`} />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="pt-3 space-y-3">
+                <div className="flex justify-end">
+                  <Button type="button" variant="ghost" size="sm" onClick={toggleAllVendedores} disabled={isLoadingVendedores} className="text-xs">
+                    {selectedVendedores.length === vendedores.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                  </Button>
+                </div>
+                {isLoadingVendedores ? (
+                  <p className="text-sm text-muted-foreground">Cargando...</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {vendedores.map(vendedor => (
+                      <label
+                        key={vendedor.id}
+                        className={`flex items-center gap-2.5 p-3 rounded-lg cursor-pointer transition-all duration-150 ${
+                          selectedVendedores.includes(vendedor.id)
+                            ? 'bg-primary/10 border border-primary/20'
+                            : 'bg-secondary/30 border border-transparent hover:bg-secondary/50'
+                        }`}
+                      >
+                        <Checkbox checked={selectedVendedores.includes(vendedor.id)} onCheckedChange={() => toggleVendedor(vendedor.id)} />
+                        <span className="text-sm">{vendedor.nombre}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
           </Collapsible>
 
           {/* Geographic filters */}
-          <Card className="p-4 space-y-3">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-primary" />
-                <span className="font-semibold text-sm">Filtros Geográficos</span>
+                <MapPin className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Filtros Geográficos</span>
               </div>
               {hasActiveFilters && (
-                <Button type="button" variant="ghost" size="sm" onClick={handleClearFilters} className="h-7 px-2 text-xs">
+                <Button type="button" variant="ghost" size="sm" onClick={handleClearFilters} className="h-7 px-2 text-xs text-muted-foreground">
                   <X className="w-3 h-3 mr-1" />
                   Limpiar
                 </Button>
@@ -423,12 +414,12 @@ const FilterPanel = ({
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="provincia-filter" className="text-xs">Provincia</Label>
+                <Label className="text-xs text-muted-foreground">Provincia</Label>
                 <Select value={selectedProvincia} onValueChange={handleProvinciaChange}>
-                  <SelectTrigger id="provincia-filter" className="bg-background h-9">
+                  <SelectTrigger className="bg-secondary/30 border-border/30 h-10">
                     <SelectValue placeholder="Todas" />
                   </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
+                  <SelectContent className="bg-card border-border">
                     <SelectItem value="all">Todas las provincias</SelectItem>
                     {provincias.map((provincia) => (
                       <SelectItem key={provincia} value={provincia}>{provincia}</SelectItem>
@@ -438,7 +429,7 @@ const FilterPanel = ({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Comuna / Distrito</Label>
+                <Label className="text-xs text-muted-foreground">Comuna / Distrito</Label>
                 <MultiSelect
                   options={comunas}
                   selected={selectedComuna}
@@ -449,7 +440,7 @@ const FilterPanel = ({
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs">Barrio</Label>
+                <Label className="text-xs text-muted-foreground">Barrio</Label>
                 <MultiSelect
                   options={barrios}
                   selected={selectedBarrio}
@@ -459,9 +450,8 @@ const FilterPanel = ({
                 />
               </div>
             </div>
-          </Card>
+          </div>
 
-          {/* AI Instructions for custom mode */}
           <AIInstructionsCollapsible
             isOpen={isAIInstructionsOpen}
             onOpenChange={setIsAIInstructionsOpen}
@@ -469,9 +459,9 @@ const FilterPanel = ({
             onChange={onInstruccionesChange}
           />
 
-          <Button type="submit" className="w-full" disabled={isLoading || selectedVendedores.length === 0}>
-            <Sparkles className="w-4 h-4 mr-2" />
-            {isLoading ? "IA analizando..." : "Generar Recomendaciones con IA"}
+          <Button type="submit" size="lg" className="w-full" disabled={isLoading || selectedVendedores.length === 0}>
+            <Sparkles className="w-4 h-4" />
+            {isLoading ? "Analizando..." : "Generar Recomendaciones"}
           </Button>
         </form>
       )}
@@ -479,7 +469,6 @@ const FilterPanel = ({
   );
 };
 
-/* Extracted collapsible AI instructions component */
 function AIInstructionsCollapsible({
   isOpen,
   onOpenChange,
@@ -496,29 +485,25 @@ function AIInstructionsCollapsible({
       <CollapsibleTrigger asChild>
         <button
           type="button"
-          className="w-full flex items-center gap-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="w-full flex items-center gap-2 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <Info className="w-4 h-4" />
+          <ChevronRight className={`w-3.5 h-3.5 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
           <span>Instrucciones adicionales para la IA</span>
-          <span className="text-xs">(Opcional)</span>
-          <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          <span className="text-xs opacity-50">(Opcional)</span>
         </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <Card className="p-4 mt-2 space-y-3">
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription className="text-xs">
-              <strong>Ejemplos:</strong> "Priorizar clientes que compran Malbec", "Solo restaurantes ON_TRADE", "Clientes VIP"
-            </AlertDescription>
-          </Alert>
+        <div className="pt-2 space-y-2">
           <Textarea
-            placeholder="Ej: Priorizar clientes que compran Malbec Gran Reserva..."
+            placeholder="Ej: Priorizar clientes que compran Malbec Gran Reserva, solo restaurantes ON_TRADE..."
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="min-h-[80px] resize-none bg-background text-sm"
+            className="min-h-[80px] resize-none bg-secondary/30 border-border/30 text-sm placeholder:text-muted-foreground/50"
           />
-        </Card>
+          <p className="text-xs text-muted-foreground/60">
+            La IA usará estas instrucciones junto con los filtros seleccionados
+          </p>
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );

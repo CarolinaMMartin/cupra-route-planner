@@ -64,39 +64,39 @@ const Index = () => {
 
   if (isLoading || !session || !profile) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-6">
-          <img src={cupraLogo} alt="Cupra Wines" className="w-32 h-auto mx-auto opacity-50 animate-pulse" />
-          <p className="text-muted-foreground tracking-wide">Cargando...</p>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <img src={cupraLogo} alt="Cupra Wines" className="w-28 h-auto mx-auto opacity-40 animate-pulse" />
+          <p className="text-sm text-muted-foreground tracking-wide">Cargando...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen overflow-x-hidden">
-      <header className="matte-card border-b border-border/40 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-12">
+    <div className="min-h-screen bg-background overflow-x-hidden">
+      {/* Header — clean, minimal, no borders */}
+      <header className="bg-background/80 backdrop-blur-xl sticky top-0 z-50 border-b border-border/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
           <div className="flex justify-between items-center h-14">
-            {/* Left: Logo / Brand */}
-            <div className="flex items-center gap-3">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-10 w-auto" />
+            {/* Logo */}
+            <div className="flex items-center">
+              <img src={cupraLogo} alt="Cupra Wines" className="h-8 w-auto opacity-90" />
             </div>
 
-            {/* Center: Navigation */}
-            <nav className="flex items-center gap-1">
+            {/* Navigation */}
+            <nav className="flex items-center gap-0.5">
               {profile.rol === 'asignador' && (
                 <>
-                  {/* Dashboards dropdown */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground text-sm">
+                      <Button variant="ghost" size="sm" className="gap-1.5 text-sm">
                         <BarChart3 className="w-4 h-4" />
                         <span className="hidden sm:inline">Dashboards</span>
-                        <ChevronDown className="w-3 h-3" />
+                        <ChevronDown className="w-3 h-3 opacity-50" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" className="w-52">
+                    <DropdownMenuContent align="center" className="w-48">
                       <DropdownMenuItem onClick={() => navigate("/clientes-dashboard")} className="gap-2 cursor-pointer">
                         <BarChart3 className="w-4 h-4" />
                         Clientes
@@ -108,23 +108,22 @@ const Index = () => {
                     </DropdownMenuContent>
                   </DropdownMenu>
 
-                  {/* Gestión dropdown */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground hover:text-foreground text-sm">
+                      <Button variant="ghost" size="sm" className="gap-1.5 text-sm">
                         <Layers className="w-4 h-4" />
                         <span className="hidden sm:inline">Gestión</span>
-                        <ChevronDown className="w-3 h-3" />
+                        <ChevronDown className="w-3 h-3 opacity-50" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" className="w-52">
+                    <DropdownMenuContent align="center" className="w-48">
                       <DropdownMenuItem onClick={() => navigate("/areas")} className="gap-2 cursor-pointer">
                         <Layers className="w-4 h-4" />
                         Áreas
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => navigate("/supervision-vendedores")} className="gap-2 cursor-pointer">
                         <ClipboardList className="w-4 h-4" />
-                        Supervisión Vendedores
+                        Supervisión
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => navigate("/profiles")} className="gap-2 cursor-pointer">
@@ -138,11 +137,11 @@ const Index = () => {
 
               {profile.rol === 'vendedor' && (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => navigate("/vendedor-dashboard")} className="gap-1.5 text-muted-foreground hover:text-foreground text-sm">
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/vendedor-dashboard")} className="gap-1.5 text-sm">
                     <BarChart3 className="w-4 h-4" />
                     <span className="hidden sm:inline">Dashboard</span>
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1.5 text-muted-foreground hover:text-foreground text-sm">
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="gap-1.5 text-sm">
                     <Layers className="w-4 h-4" />
                     <span className="hidden sm:inline">Asignaciones</span>
                   </Button>
@@ -150,22 +149,24 @@ const Index = () => {
               )}
             </nav>
 
-            {/* Right: User + Actions */}
-            <div className="flex items-center gap-2">
+            {/* User */}
+            <div className="flex items-center gap-1">
               {profile.rol === 'vendedor' && (
                 <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />
               )}
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
-                    <User className="w-4 h-4" />
+                  <Button variant="ghost" size="sm" className="gap-2">
+                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+                      <User className="w-3.5 h-3.5 text-primary" />
+                    </div>
                     <span className="hidden sm:inline text-sm">{profile.nombre}</span>
-                    <ChevronDown className="w-3 h-3" />
+                    <ChevronDown className="w-3 h-3 opacity-50" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  <div className="px-2 py-1.5">
+                  <div className="px-3 py-2">
                     <p className="text-sm font-medium">{profile.nombre}</p>
                     <p className="text-xs text-muted-foreground capitalize">{profile.rol}</p>
                   </div>
@@ -181,7 +182,7 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-12 py-6 md:py-12">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
         {profile.rol === 'asignador' ? <AssignorDashboard /> : <VendedorKanban ref={kanbanRef} />}
       </main>
     </div>
