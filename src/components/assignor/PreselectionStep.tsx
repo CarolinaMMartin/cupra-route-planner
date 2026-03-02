@@ -25,16 +25,16 @@ const PreselectionStep = ({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Checkbox
             checked={allSelected}
             onCheckedChange={onToggleAll}
-            className="h-5 w-5"
+            className="h-4 w-4"
           />
-          <span className="font-medium">
+          <span className="text-sm font-medium">
             {allSelected ? 'Deseleccionar todos' : 'Seleccionar todos'}
           </span>
-          <Badge variant="secondary">
+          <Badge variant="secondary" className="text-xs">
             {selectedIds.length} de {recommendations.length} seleccionados
           </Badge>
         </div>
@@ -42,7 +42,6 @@ const PreselectionStep = ({
         <Button 
           onClick={onContinue} 
           disabled={selectedIds.length === 0}
-          size="lg"
           className="gap-2"
         >
           Continuar a la Asignación
