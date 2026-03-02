@@ -555,6 +555,20 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
         </div>
       )}
       <div ref={mapRef} className="w-full h-full" />
+      {/* Leyenda de vendedores */}
+      {vendorLegend.size > 0 && (
+        <div className="absolute bottom-3 left-3 bg-background/90 backdrop-blur-sm border border-border/60 rounded-lg p-2.5 z-10 max-w-[200px]">
+          <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Vendedores</p>
+          <div className="space-y-1">
+            {Array.from(vendorLegend.entries()).map(([name, color]) => (
+              <div key={name} className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full shrink-0 border border-border/40" style={{ backgroundColor: color }} />
+                <span className="text-xs text-foreground truncate">{name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Card>
   );
 };
