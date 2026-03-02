@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Loader2, ArrowRight } from "lucide-react";
+import { getVendorColor, createColoredMarkerIcon, resetVendorColors, getVendorColorMap } from "@/lib/vendorColors";
 
 interface ResultsMapProps {
   sucursales: Sucursal[];
@@ -21,6 +22,7 @@ interface ClientLocation {
   lat: number;
   lng: number;
   direccion: string;
+  vendedor?: string;
 }
 
 // Load Google Maps Script
@@ -46,6 +48,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [markers, setMarkers] = useState<Map<string, google.maps.Marker>>(new Map());
   const [locations, setLocations] = useState<ClientLocation[]>([]);
+  const [vendorLegend, setVendorLegend] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,6 +88,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
 
     const fetchLocations = async () => {
       setLoading(true);
+      resetVendorColors();
       const service = new google.maps.places.PlacesService(map);
       const fetchedLocations: ClientLocation[] = [];
 
@@ -100,12 +104,15 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
             const isValidLng = lng >= -80 && lng <= -40;
             
             if (isValidLat && isValidLng) {
+              const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
+              if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
               return {
                 id: sucursal.id,
                 name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
                 lat: lat,
                 lng: lng,
                 direccion: sucursal.direccion || sucursal.direccion_principal || "",
+                vendedor,
               };
             } else {
               console.warn(`[ResultsMap] Coordenadas fuera de rango Argentina:`, { id: sucursal.id, lat, lng });
@@ -124,12 +131,15 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                 const isValidLng = lng >= -80 && lng <= -40;
                 
                 if (isValidLat && isValidLng) {
+                  const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
+                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
                   return {
                     id: sucursal.id,
                     name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
                     lat: lat,
                     lng: lng,
                     direccion: sucursal.direccion || sucursal.direccion_principal || "",
+                    vendedor,
                   };
                 }
               }
@@ -144,12 +154,15 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
             return new Promise<ClientLocation>((resolve, reject) => {
               service.getDetails({ placeId: sucursal.prospecto_place_id! }, (place, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+                  const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
+                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
                   resolve({
                     id: sucursal.id,
                     name: place.name || sucursal.nombre || "Sin nombre",
                     lat: place.geometry.location.lat(),
                     lng: place.geometry.location.lng(),
                     direccion: place.formatted_address || sucursal.direccion || "",
+                    vendedor,
                   });
                 } else {
                   reject(new Error(`No se pudo obtener ubicación para ${sucursal.nombre}`));
@@ -174,6 +187,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
       });
 
       setLocations(fetchedLocations);
+      setVendorLegend(getVendorColorMap());
       setLoading(false);
     };
 
@@ -199,10 +213,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
     locations.forEach((location) => {
       if (selectedIds.includes(location.id)) {
         if (!markers.has(location.id)) {
+          const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : '#E53935';
           const marker = new google.maps.Marker({
             position: { lat: location.lat, lng: location.lng },
             map,
             title: location.name,
+            icon: createColoredMarkerIcon(vendorColor),
             animation: google.maps.Animation.DROP,
           });
 
@@ -212,6 +228,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
               <div style="padding: 8px;">
                 <h3 style="margin: 0 0 4px 0; font-weight: 600;">${location.name}</h3>
                 <p style="margin: 0; font-size: 12px; color: #666;">${location.direccion}</p>
+                ${location.vendedor ? `<p style="margin: 4px 0 0 0; font-size: 12px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${vendorColor};margin-right:4px;vertical-align:middle;"></span>${location.vendedor}</p>` : ''}
               </div>
             `,
           });
@@ -284,23 +301,27 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
 
         <ScrollArea className="flex-1">
           <div className="p-2">
-            {locations.map((location) => {
+            {locations.map((location, idx) => {
               const sucursal = sucursales.find((s) => s.id === location.id);
               const isSelected = selectedIds.includes(location.id);
+              const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : undefined;
 
               return (
                 <div
-                  key={location.id}
+                  key={`${location.id}-${idx}`}
                   className="flex items-start gap-2 p-3 rounded-md hover:bg-accent/50 transition-colors mb-1"
                 >
                   <Checkbox
-                    id={location.id}
+                    id={`loc-${location.id}-${idx}`}
                     checked={isSelected}
                     onCheckedChange={() => handleToggle(location.id)}
                     className="mt-1"
                   />
-                  <label htmlFor={location.id} className="flex-1 cursor-pointer text-sm">
-                    <div className="font-medium text-foreground">{location.name}</div>
+                  <label htmlFor={`loc-${location.id}-${idx}`} className="flex-1 cursor-pointer text-sm">
+                    <div className="font-medium text-foreground flex items-center gap-1.5">
+                      {vendorColor && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: vendorColor }} />}
+                      {location.name}
+                    </div>
                     <div className="text-xs text-muted-foreground mt-1">{location.direccion}</div>
                     {sucursal?.score && (
                       <div className="text-xs text-muted-foreground mt-1">Score: {sucursal.score}</div>
@@ -329,6 +350,21 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
             <div className="text-center">
               <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
               <p className="text-sm text-muted-foreground">Cargando ubicaciones...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Vendor color legend */}
+        {vendorLegend.size > 0 && !loading && (
+          <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm p-3 rounded-lg shadow-lg border z-10 max-h-48 overflow-y-auto">
+            <p className="text-xs font-medium mb-2 text-foreground">Vendedores</p>
+            <div className="space-y-1">
+              {Array.from(vendorLegend.entries()).map(([name, color]) => (
+                <div key={name} className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                  <span className="text-xs text-muted-foreground truncate max-w-[120px]">{name}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
