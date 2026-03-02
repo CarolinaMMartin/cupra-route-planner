@@ -507,7 +507,7 @@ const ClientesDashboard = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-secondary">
+              <div className="text-2xl font-semibold text-foreground">
                 {formatCurrency(kpis.totalVentas)}
               </div>
             </CardContent>
