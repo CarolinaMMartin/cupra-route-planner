@@ -80,7 +80,7 @@ const Index = () => {
           <div className="flex justify-between items-center h-14">
             {/* Left: Logo / Brand */}
             <div className="flex items-center gap-3">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-7 w-auto" />
+              <img src={cupraLogo} alt="Cupra Wines" className="h-10 w-auto" />
             </div>
 
             {/* Center: Navigation */}
