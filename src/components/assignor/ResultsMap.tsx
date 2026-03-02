@@ -301,23 +301,27 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
 
         <ScrollArea className="flex-1">
           <div className="p-2">
-            {locations.map((location) => {
+            {locations.map((location, idx) => {
               const sucursal = sucursales.find((s) => s.id === location.id);
               const isSelected = selectedIds.includes(location.id);
+              const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : undefined;
 
               return (
                 <div
-                  key={location.id}
+                  key={`${location.id}-${idx}`}
                   className="flex items-start gap-2 p-3 rounded-md hover:bg-accent/50 transition-colors mb-1"
                 >
                   <Checkbox
-                    id={location.id}
+                    id={`loc-${location.id}-${idx}`}
                     checked={isSelected}
                     onCheckedChange={() => handleToggle(location.id)}
                     className="mt-1"
                   />
-                  <label htmlFor={location.id} className="flex-1 cursor-pointer text-sm">
-                    <div className="font-medium text-foreground">{location.name}</div>
+                  <label htmlFor={`loc-${location.id}-${idx}`} className="flex-1 cursor-pointer text-sm">
+                    <div className="font-medium text-foreground flex items-center gap-1.5">
+                      {vendorColor && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: vendorColor }} />}
+                      {location.name}
+                    </div>
                     <div className="text-xs text-muted-foreground mt-1">{location.direccion}</div>
                     {sucursal?.score && (
                       <div className="text-xs text-muted-foreground mt-1">Score: {sucursal.score}</div>
