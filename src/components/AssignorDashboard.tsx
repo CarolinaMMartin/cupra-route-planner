@@ -15,7 +15,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MapPin, List, Plus, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FilterPanel from "./assignor/FilterPanel";
-import ResultsList from "./assignor/ResultsList";
 import ResultsMap from "./assignor/ResultsMap";
 import PreselectionStep from "./assignor/PreselectionStep";
 import KanbanAssignment from "./assignor/KanbanAssignment";
