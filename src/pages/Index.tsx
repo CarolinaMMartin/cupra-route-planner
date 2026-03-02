@@ -76,13 +76,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden relative">
-      {/* Angel watermark — ultra subtle institutional seal */}
-      <img
-        src={angelBlanco}
-        alt=""
-        aria-hidden="true"
-        className="angel-watermark fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-auto select-none"
-      />
+      {/* No watermark — single angel in navbar only */}
 
       {/* Header */}
       <header className="bg-background/90 backdrop-blur-xl sticky top-0 z-50 border-b border-border/20">
