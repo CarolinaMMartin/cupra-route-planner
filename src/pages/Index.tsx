@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, User, BarChart3, Layers, ClipboardList, Store, UserCog, ChevronDown } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
+import angelBlanco from "@/assets/angel-blanco.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/VendedorKanbanWrapper";
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
@@ -74,14 +75,23 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
-      {/* Header — clean, minimal, no borders */}
-      <header className="bg-background/80 backdrop-blur-xl sticky top-0 z-50 border-b border-border/30">
+    <div className="min-h-screen bg-background overflow-x-hidden relative">
+      {/* Angel watermark — ultra subtle institutional seal */}
+      <img
+        src={angelBlanco}
+        alt=""
+        aria-hidden="true"
+        className="angel-watermark fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-auto select-none"
+      />
+
+      {/* Header */}
+      <header className="bg-background/90 backdrop-blur-xl sticky top-0 z-50 border-b border-border/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12">
           <div className="flex justify-between items-center h-14">
-            {/* Logo */}
-            <div className="flex items-center">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-8 w-auto opacity-90" />
+            {/* Logo + Angel seal */}
+            <div className="flex items-center gap-3">
+              <img src={angelBlanco} alt="" className="h-7 w-auto opacity-50" />
+              <img src={cupraLogo} alt="Cupra Wines" className="h-7 w-auto opacity-80" />
             </div>
 
             {/* Navigation */}
@@ -158,7 +168,7 @@ const Index = () => {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="sm" className="gap-2">
-                    <div className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center">
+                    <div className="w-6 h-6 rounded-full bg-primary/15 flex items-center justify-center">
                       <User className="w-3.5 h-3.5 text-primary" />
                     </div>
                     <span className="hidden sm:inline text-sm">{profile.nombre}</span>
@@ -182,7 +192,7 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
+      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
         {profile.rol === 'asignador' ? <AssignorDashboard /> : <VendedorKanban ref={kanbanRef} />}
       </main>
     </div>

@@ -1,56 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Enterprise SaaS Dark Palette — Linear / Vercel / Stripe inspired */
-    --background: 240 6% 7%;        /* #0F0F12 */
-    --foreground: 0 0% 93%;         /* #EDEDED */
+    /* Dark Heritage Premium — Wine & Luxury */
+    --background: 240 8% 6%;          /* #0F0F12 */
+    --foreground: 0 0% 93%;           /* #EDEDED */
 
-    --card: 240 5% 11%;             /* #1A1A1F */
+    --card: 240 7% 10%;               /* #16171B */
     --card-foreground: 0 0% 93%;
 
-    --popover: 240 5% 11%;
+    --popover: 240 6% 11%;            /* #1C1D22 */
     --popover-foreground: 0 0% 93%;
 
-    --primary: 220 70% 55%;         /* Blue accent — trust, tech */
-    --primary-foreground: 0 0% 100%;
+    /* Gold accent — muted, elegant */
+    --primary: 37 40% 59%;            /* #C6A46A */
+    --primary-foreground: 240 8% 6%;  /* dark text on gold */
 
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 80%;
+    --secondary: 240 6% 13%;          /* #1C1D22 */
+    --secondary-foreground: 0 0% 62%; /* #9A9A9F */
 
-    --muted: 240 4% 14%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 240 5% 12%;
+    --muted-foreground: 240 2% 44%;   /* #6F7075 */
 
-    --accent: 220 70% 55%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 37 40% 59%;             /* same gold */
+    --accent-foreground: 240 8% 6%;
 
-    --destructive: 0 62% 50%;
+    --destructive: 0 55% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 4% 16%;
-    --input: 240 4% 14%;
-    --ring: 220 70% 55%;
+    --border: 240 5% 15%;
+    --input: 240 5% 13%;
+    --ring: 37 40% 59%;
 
     --radius: 0.75rem;
 
-    /* Shadows — extremely subtle */
-    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-medium: 0 2px 8px rgba(0, 0, 0, 0.4);
-    --shadow-large: 0 4px 16px rgba(0, 0, 0, 0.5);
+    /* Shadows — barely there */
+    --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-medium: 0 2px 10px rgba(0, 0, 0, 0.5);
+    --shadow-large: 0 4px 20px rgba(0, 0, 0, 0.6);
 
-    /* Transitions */
     --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
-    --sidebar-background: 240 6% 7%;
+    --sidebar-background: 240 8% 6%;
     --sidebar-foreground: 0 0% 93%;
-    --sidebar-primary: 220 70% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 4% 14%;
+    --sidebar-primary: 37 40% 59%;
+    --sidebar-primary-foreground: 240 8% 6%;
+    --sidebar-accent: 240 5% 12%;
     --sidebar-accent-foreground: 0 0% 93%;
-    --sidebar-border: 240 4% 16%;
-    --sidebar-ring: 220 70% 55%;
+    --sidebar-border: 240 5% 15%;
+    --sidebar-ring: 37 40% 59%;
   }
 }
 
@@ -67,12 +69,24 @@
     -moz-osx-font-smoothing: grayscale;
   }
   
-  h1, h2, h3, h4, h5, h6 {
+  h1, h2, h3 {
+    font-family: 'Cormorant Garamond', 'Georgia', serif;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+  
+  h4, h5, h6 {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     letter-spacing: -0.02em;
   }
 }
 
 @layer components {
-  /* No decorative utility classes — keep it clean and semantic */
+  /* Heritage utility — angel watermark */
+  .angel-watermark {
+    opacity: 0.03;
+    pointer-events: none;
+    position: fixed;
+    z-index: 0;
+  }
 }
