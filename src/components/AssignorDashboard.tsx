@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import FilterPanel from "./assignor/FilterPanel";
 import ResultsMap from "./assignor/ResultsMap";
 import PreselectionStep from "./assignor/PreselectionStep";
-import KanbanAssignment from "./assignor/KanbanAssignment";
+import TableAssignment from "./assignor/TableAssignment";
 import TodayAssignments from "./assignor/TodayAssignments";
 import AIInsightsCard from "./assignor/AIInsightsCard";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
@@ -310,15 +310,12 @@ const AssignorDashboard = () => {
       )}
 
       {flowStep === "assignment" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-serif text-2xl">Asignación Visual</CardTitle>
-            <CardDescription>Arrastra los clientes hacia el vendedor correspondiente</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <KanbanAssignment selectedRecommendations={selectedRecommendations} selectedVendedoresIds={selectedVendedoresIds} onBack={handleBackToPreselection} onComplete={handleAssignmentComplete} />
-          </CardContent>
-        </Card>
+        <TableAssignment
+          selectedRecommendations={selectedRecommendations}
+          selectedVendedoresIds={selectedVendedoresIds}
+          onBack={handleBackToPreselection}
+          onComplete={handleAssignmentComplete}
+        />
       )}
     </div>
   );
