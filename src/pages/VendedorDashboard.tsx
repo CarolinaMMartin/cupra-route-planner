@@ -283,7 +283,7 @@ const VendedorDashboard = () => {
       <div className="grid grid-cols-2 gap-2 md:gap-4 lg:grid-cols-4">
         <Card className="p-2 md:p-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 md:p-6 md:pb-2">
-            <CardTitle className="text-xs md:text-sm font-medium">Total</CardTitle>
+            <CardTitle className="text-[11px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider">Total</CardTitle>
             <Users className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
