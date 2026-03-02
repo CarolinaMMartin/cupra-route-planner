@@ -30,22 +30,15 @@ type FlowStep = "recommendations" | "preselection" | "assignment" | "edit-select
 
 const AssignorDashboard = () => {
   const {
-    flowStep,
-    setFlowStep,
-    recommendations,
-    setRecommendations,
-    selectedSucursales,
-    setSelectedSucursales,
+    flowStep, setFlowStep,
+    recommendations, setRecommendations,
+    selectedSucursales, setSelectedSucursales,
     toggleSucursal: toggleSucursalStore,
     toggleAllSucursales: toggleAllSucursalesStore,
-    isLoading,
-    setIsLoading,
-    aiInsights,
-    setAiInsights,
-    vendedoresData,
-    setVendedoresData,
-    instruccionesAdicionales,
-    setInstruccionesAdicionales,
+    isLoading, setIsLoading,
+    aiInsights, setAiInsights,
+    vendedoresData, setVendedoresData,
+    instruccionesAdicionales, setInstruccionesAdicionales,
     resetToInitial,
   } = useRecommendationsStore();
 
@@ -68,9 +61,7 @@ const AssignorDashboard = () => {
     try {
       const parsed = new URL(url);
       const q = parsed.searchParams.get("q");
-      if (q && q.startsWith("place_id:")) {
-        return q.replace("place_id:", "");
-      }
+      if (q && q.startsWith("place_id:")) return q.replace("place_id:", "");
       const match = url.match(/place_id:([^&]+)/);
       return match ? match[1] : null;
     } catch (err) {
@@ -82,10 +73,7 @@ const AssignorDashboard = () => {
   useEffect(() => {
     const loadPlacesData = async () => {
       const { data, error } = await supabase.from("places").select("comuna, barrio_principal, provincia_principal");
-      if (error) {
-        console.error("Error loading places:", error);
-        return;
-      }
+      if (error) { console.error("Error loading places:", error); return; }
       setPlacesData(data || []);
     };
     loadPlacesData();
@@ -109,10 +97,7 @@ const AssignorDashboard = () => {
     );
 
     try {
-      toast({
-        title: "Analizando con IA...",
-        description: "Generando recomendaciones inteligentes.",
-      });
+      toast({ title: "Analizando con IA...", description: "Generando recomendaciones inteligentes." });
 
       const payload = {
         vendedores: selectedVendedoresData.ids,
@@ -124,28 +109,11 @@ const AssignorDashboard = () => {
         instrucciones_adicionales: instruccionesAdicionales || null,
       };
 
-      console.log("Payload enviado a Supabase:", JSON.stringify(payload, null, 2));
-
-      const { data, error } = await supabase.functions.invoke("generate-recommendations", {
-        body: payload,
-      });
-
-      if (error) {
-        console.error("Error from edge function:", error);
-        throw error;
-      }
-
-      console.log("✅ Respuesta del edge function:", data);
+      const { data, error } = await supabase.functions.invoke("generate-recommendations", { body: payload });
+      if (error) throw error;
 
       if (!data.recomendaciones || data.recomendaciones.length === 0) {
-        toast({
-          variant: "destructive",
-          title: "Sin recomendaciones",
-          description:
-            data.resumen?.descripcion ||
-            "No se encontraron recomendaciones para los filtros seleccionados.",
-          duration: 5000,
-        });
+        toast({ variant: "destructive", title: "Sin recomendaciones", description: data.resumen?.descripcion || "No se encontraron recomendaciones para los filtros seleccionados.", duration: 5000 });
         setIsLoading(false);
         return;
       }
@@ -158,43 +126,28 @@ const AssignorDashboard = () => {
         tipo_cliente: rec.score_comercial || "Estándar",
         score: rec.priority_score || 0,
         dias_sin_visita: rec.days_since_last_purchase || 0,
-        latitud: rec.lat || null,
-        longitud: rec.long || null,
-        justificacion: rec.ai_reasoning,
-        cuit_dni: rec.cuit_dni,
-        vendedores: rec.vendedores || [],
-        client_id: rec.client_id,
+        latitud: rec.lat || null, longitud: rec.long || null,
+        justificacion: rec.ai_reasoning, cuit_dni: rec.cuit_dni,
+        vendedores: rec.vendedores || [], client_id: rec.client_id,
         es_prospecto: rec.es_prospecto || false,
         prospecto_place_id: rec.prospecto_place_id,
-        tipo_negocio: rec.factores_ia?.tipo_negocio,
-        rating: rec.factores_ia?.rating,
-        website: rec.factores_ia?.website,
-        fantasia: rec.razon_social,
-        primera_compra: rec.first_purchase_at,
-        ultima_compra: rec.last_purchase_at,
+        tipo_negocio: rec.factores_ia?.tipo_negocio, rating: rec.factores_ia?.rating,
+        website: rec.factores_ia?.website, fantasia: rec.razon_social,
+        primera_compra: rec.first_purchase_at, ultima_compra: rec.last_purchase_at,
         dias_desde_ultima_compra: rec.days_since_last_purchase,
-        cantidad_ordenes: rec.orders_count,
-        monto_total_historico: rec.monto_total_vendido,
-        ticket_promedio: rec.avg_ticket,
-        categoria_recencia: rec.score_recencia,
-        categoria_volumen: rec.score_volumen,
-        score_recencia: rec.score_recencia_num,
-        score_volumen: rec.score_volumen_num,
-        score_comercial: rec.priority_score,
+        cantidad_ordenes: rec.orders_count, monto_total_historico: rec.monto_total_vendido,
+        ticket_promedio: rec.avg_ticket, categoria_recencia: rec.score_recencia,
+        categoria_volumen: rec.score_volumen, score_recencia: rec.score_recencia_num,
+        score_volumen: rec.score_volumen_num, score_comercial: rec.priority_score,
         participacion_mercado: rec.participacion,
-        ciudad_principa: rec.ciudades?.[0],
-        provincia_principal: rec.provincias?.[0],
-        productos_comprados: rec.etiquetas || [],
-        todas_ciudades: rec.ciudades || [],
-        todos_vendedores: rec.vendedores || [],
-        etiquetas: rec.etiquetas || [],
-        telefonos: rec.telefonos || [],
-        barrio_principal: rec.barrio_principal,
+        ciudad_principa: rec.ciudades?.[0], provincia_principal: rec.provincias?.[0],
+        productos_comprados: rec.etiquetas || [], todas_ciudades: rec.ciudades || [],
+        todos_vendedores: rec.vendedores || [], etiquetas: rec.etiquetas || [],
+        telefonos: rec.telefonos || [], barrio_principal: rec.barrio_principal,
         direccion_principal: rec.direccion_principal,
         google_maps_link: rec.google_maps_link,
         place_id: getPlaceIdFromUrl(rec.google_maps_link),
-        ai_reasoning: rec.ai_reasoning,
-        score_geografico: rec.score_geografico,
+        ai_reasoning: rec.ai_reasoning, score_geografico: rec.score_geografico,
         factores_ia: rec.factores_ia,
       }));
 
@@ -202,19 +155,11 @@ const AssignorDashboard = () => {
       setAiInsights(data.resumen);
       setFlowStep("preselection");
       setSelectedSucursales([]);
-
-      toast({
-        title: "Recomendaciones generadas",
-        description: data.resumen?.descripcion || `${mappedRecommendations.length} recomendaciones listas`,
-      });
+      toast({ title: "Recomendaciones generadas", description: data.resumen?.descripcion || `${mappedRecommendations.length} recomendaciones listas` });
     } catch (error: any) {
-      console.error("Error:", error);
       let errorMessage = "Error al solicitar recomendaciones";
-      if (error.message?.includes("429")) {
-        errorMessage = "Límite de consultas alcanzado. Reintenta en unos minutos.";
-      } else if (error.message?.includes("402")) {
-        errorMessage = "Créditos agotados.";
-      }
+      if (error.message?.includes("429")) errorMessage = "Límite de consultas alcanzado. Reintenta en unos minutos.";
+      else if (error.message?.includes("402")) errorMessage = "Créditos agotados.";
       toast({ variant: "destructive", title: "Error", description: errorMessage });
     } finally {
       setIsLoading(false);
@@ -223,41 +168,12 @@ const AssignorDashboard = () => {
 
   const handleContinueToAssignment = () => setFlowStep("assignment");
   const handleBackToPreselection = () => setFlowStep("preselection");
-
-  const handleBackToRecommendations = () => {
-    setShowExitDialog(false);
-    resetToInitial();
-    setSelectedCiudad("all");
-    setSelectedProvincia("all");
-    setSelectedVendedor("all");
-    setSelectedVendedoresIds([]);
-  };
-
+  const handleBackToRecommendations = () => { setShowExitDialog(false); resetToInitial(); setSelectedCiudad("all"); setSelectedProvincia("all"); setSelectedVendedor("all"); setSelectedVendedoresIds([]); };
   const handleAssignmentComplete = () => handleBackToRecommendations();
-
   const handleEditAssignments = () => setFlowStep("edit-select");
-
-  const handleContinueToEditKanban = (assignments: any[]) => {
-    setSelectedExistingAssignments(assignments);
-    setFlowStep("edit-kanban");
-  };
-
+  const handleContinueToEditKanban = (assignments: any[]) => { setSelectedExistingAssignments(assignments); setFlowStep("edit-kanban"); };
   const handleBackFromEditKanban = () => setFlowStep("edit-select");
-
-  const handleEditComplete = () => {
-    setFlowStep("recommendations");
-    setSelectedExistingAssignments([]);
-    toast({ title: "Modificaciones guardadas", description: "Las asignaciones se actualizaron correctamente" });
-  };
-
-  const handleClearFilters = () => {
-    setSelectedCiudad("all");
-    setSelectedProvincia("all");
-    setSelectedVendedor("all");
-    setSelectedPlacesComuna([]);
-    setSelectedPlacesBarrio([]);
-    setSelectedPlacesProvincia("all");
-  };
+  const handleEditComplete = () => { setFlowStep("recommendations"); setSelectedExistingAssignments([]); toast({ title: "Modificaciones guardadas", description: "Las asignaciones se actualizaron correctamente" }); };
 
   const filteredRecommendations = useMemo(() => {
     return recommendations.filter((rec: any) => {
@@ -280,29 +196,25 @@ const AssignorDashboard = () => {
   const selectedRecommendations = filteredRecommendations.filter((r) => selectedSucursales.includes(r.id));
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
       <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Salir del flujo?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Se perderán las recomendaciones y selecciones actuales.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Se perderán las recomendaciones y selecciones actuales.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBackToRecommendations}>
-              Confirmar
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleBackToRecommendations}>Confirmar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {flowStep === "recommendations" && (
-        <div className="space-y-6">
+        <div className="space-y-8">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Panel de Asignación</h1>
-            <p className="text-sm text-muted-foreground mt-1">Genera recomendaciones inteligentes y gestiona asignaciones</p>
+            <h1 className="text-3xl font-serif text-foreground tracking-tight">Panel de Asignación</h1>
+            <p className="text-sm text-muted-foreground mt-2">Recomendaciones inteligentes y gestión de asignaciones</p>
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -319,7 +231,7 @@ const AssignorDashboard = () => {
 
             <TabsContent value="nueva">
               <Card>
-                <CardContent className="p-6">
+                <CardContent className="p-8">
                   <FilterPanel
                     onRequestRecommendations={handleRequestRecommendations}
                     isLoading={isLoading}
@@ -333,7 +245,7 @@ const AssignorDashboard = () => {
 
             <TabsContent value="hoy">
               <Card>
-                <CardContent className="p-6">
+                <CardContent className="p-8">
                   <TodayAssignments onEditAssignments={handleEditAssignments} />
                 </CardContent>
               </Card>
@@ -345,7 +257,7 @@ const AssignorDashboard = () => {
       {flowStep === "edit-select" && (
         <Card>
           <CardHeader>
-            <CardTitle>Modificar Asignaciones</CardTitle>
+            <CardTitle className="font-serif text-2xl">Modificar Asignaciones</CardTitle>
             <CardDescription>Selecciona las asignaciones que deseas modificar</CardDescription>
           </CardHeader>
           <CardContent>
@@ -357,21 +269,17 @@ const AssignorDashboard = () => {
       {flowStep === "edit-kanban" && (
         <Card>
           <CardHeader>
-            <CardTitle>Reasignar Clientes</CardTitle>
+            <CardTitle className="font-serif text-2xl">Reasignar Clientes</CardTitle>
             <CardDescription>Arrastra los clientes entre vendedores</CardDescription>
           </CardHeader>
           <CardContent>
-            <EditAssignmentsKanban
-              selectedAssignments={selectedExistingAssignments}
-              onBack={handleBackFromEditKanban}
-              onComplete={handleEditComplete}
-            />
+            <EditAssignmentsKanban selectedAssignments={selectedExistingAssignments} onBack={handleBackFromEditKanban} onComplete={handleEditComplete} />
           </CardContent>
         </Card>
       )}
 
       {flowStep === "preselection" && recommendations.length > 0 && (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {aiInsights && vendedoresData.length > 0 && (
             <AIInsightsCard resumen={aiInsights} vendedores={vendedoresData} />
           )}
@@ -380,46 +288,21 @@ const AssignorDashboard = () => {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle>Preselección de Recomendaciones</CardTitle>
+                  <CardTitle className="font-serif text-2xl">Preselección</CardTitle>
                   <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setShowExitDialog(true)}>
-                    ← Volver
-                  </Button>
-                  <Button
-                    variant={viewMode === "list" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setViewMode("list")}
-                  >
-                    <List className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === "map" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setViewMode("map")}
-                  >
-                    <MapPin className="w-4 h-4" />
-                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setShowExitDialog(true)}>← Volver</Button>
+                  <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}><List className="w-4 h-4" /></Button>
+                  <Button variant={viewMode === "map" ? "default" : "outline"} size="sm" onClick={() => setViewMode("map")}><MapPin className="w-4 h-4" /></Button>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               {viewMode === "list" ? (
-                <PreselectionStep
-                  recommendations={filteredRecommendations}
-                  selectedIds={selectedSucursales}
-                  onToggle={toggleSucursalStore}
-                  onToggleAll={toggleAllSucursalesStore}
-                  onContinue={handleContinueToAssignment}
-                />
+                <PreselectionStep recommendations={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleContinueToAssignment} />
               ) : (
-                <ResultsMap
-                  sucursales={filteredRecommendations}
-                  selectedIds={selectedSucursales}
-                  onToggle={toggleSucursalStore}
-                  onContinue={handleContinueToAssignment}
-                />
+                <ResultsMap sucursales={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onContinue={handleContinueToAssignment} />
               )}
             </CardContent>
           </Card>
@@ -429,16 +312,11 @@ const AssignorDashboard = () => {
       {flowStep === "assignment" && (
         <Card>
           <CardHeader>
-            <CardTitle>Asignación Visual</CardTitle>
+            <CardTitle className="font-serif text-2xl">Asignación Visual</CardTitle>
             <CardDescription>Arrastra los clientes hacia el vendedor correspondiente</CardDescription>
           </CardHeader>
           <CardContent>
-            <KanbanAssignment
-              selectedRecommendations={selectedRecommendations}
-              selectedVendedoresIds={selectedVendedoresIds}
-              onBack={handleBackToPreselection}
-              onComplete={handleAssignmentComplete}
-            />
+            <KanbanAssignment selectedRecommendations={selectedRecommendations} selectedVendedoresIds={selectedVendedoresIds} onBack={handleBackToPreselection} onComplete={handleAssignmentComplete} />
           </CardContent>
         </Card>
       )}

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
+import angelBlanco from "@/assets/angel-blanco.png";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -119,26 +120,28 @@ const Auth = () => {
 
   if (isRecoveryMode) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6 bg-background">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center space-y-4 pt-8">
-            <div className="flex justify-center">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-16 w-auto opacity-80" />
+      <div className="min-h-screen flex items-center justify-center p-6 bg-background relative">
+        <img src={angelBlanco} alt="" aria-hidden="true" className="angel-watermark fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-auto select-none" />
+        <Card className="w-full max-w-md relative z-10">
+          <CardHeader className="text-center space-y-6 pt-10">
+            <div className="flex flex-col items-center gap-4">
+              <img src={angelBlanco} alt="" className="h-12 w-auto opacity-40" />
+              <img src={cupraLogo} alt="Cupra Wines" className="h-10 w-auto opacity-70" />
             </div>
             <div>
-              <CardTitle className="text-xl font-semibold">Nueva Contraseña</CardTitle>
-              <CardDescription className="text-sm mt-1">Ingresa tu nueva contraseña</CardDescription>
+              <CardTitle className="text-2xl font-serif">Nueva Contraseña</CardTitle>
+              <CardDescription className="text-sm mt-2">Ingresa tu nueva contraseña</CardDescription>
             </div>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleUpdatePassword} className="space-y-4">
+          <CardContent className="pb-8">
+            <form onSubmit={handleUpdatePassword} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="new-password" className="text-xs text-muted-foreground">Nueva contraseña</Label>
-                <Input id="new-password" type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} className="bg-secondary/30 border-border/30" />
+                <Label htmlFor="new-password" className="text-xs text-muted-foreground uppercase tracking-wider">Nueva contraseña</Label>
+                <Input id="new-password" type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={6} className="bg-secondary/50 border-border/30" />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="confirm-password" className="text-xs text-muted-foreground">Confirmar contraseña</Label>
-                <Input id="confirm-password" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} className="bg-secondary/30 border-border/30" />
+                <Label htmlFor="confirm-password" className="text-xs text-muted-foreground uppercase tracking-wider">Confirmar contraseña</Label>
+                <Input id="confirm-password" type="password" placeholder="••••••••" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} className="bg-secondary/50 border-border/30" />
               </div>
               <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
                 {isLoading ? "Guardando..." : "Guardar nueva contraseña"}
@@ -151,18 +154,21 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-background">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-4 pt-8">
-          <div className="flex justify-center">
-            <img src={cupraLogo} alt="Cupra Wines" className="h-16 w-auto opacity-80" />
+    <div className="min-h-screen flex items-center justify-center p-6 bg-background relative">
+      <img src={angelBlanco} alt="" aria-hidden="true" className="angel-watermark fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-auto select-none" />
+      
+      <Card className="w-full max-w-md relative z-10">
+        <CardHeader className="text-center space-y-6 pt-10">
+          <div className="flex flex-col items-center gap-4">
+            <img src={angelBlanco} alt="" className="h-12 w-auto opacity-40" />
+            <img src={cupraLogo} alt="Cupra Wines" className="h-10 w-auto opacity-70" />
           </div>
           <div>
-            <CardTitle className="text-xl font-semibold">Sistema de Planificación</CardTitle>
-            <CardDescription className="text-sm mt-1">Gestión de Ventas</CardDescription>
+            <CardTitle className="text-2xl font-serif">Sistema de Planificación</CardTitle>
+            <CardDescription className="text-sm mt-2 tracking-wide">Gestión Estratégica de Ventas</CardDescription>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pb-8">
           <Tabs defaultValue="login" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
@@ -171,11 +177,11 @@ const Auth = () => {
             
             <TabsContent value="login">
               {showResetPassword ? (
-                <form onSubmit={handleResetPassword} className="space-y-4">
+                <form onSubmit={handleResetPassword} className="space-y-5">
                   <p className="text-sm text-muted-foreground text-center mb-4">Ingresa tu email para restablecer tu contraseña.</p>
                   <div className="space-y-2">
-                    <Label htmlFor="reset-email" className="text-xs text-muted-foreground">Email</Label>
-                    <Input id="reset-email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary/30 border-border/30" />
+                    <Label htmlFor="reset-email" className="text-xs text-muted-foreground uppercase tracking-wider">Email</Label>
+                    <Input id="reset-email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary/50 border-border/30" />
                   </div>
                   <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
                     {isLoading ? "Enviando..." : "Enviar email de recuperación"}
@@ -183,14 +189,14 @@ const Auth = () => {
                   <Button type="button" variant="ghost" className="w-full" onClick={() => setShowResetPassword(false)}>Volver</Button>
                 </form>
               ) : (
-                <form onSubmit={handleLogin} className="space-y-4">
+                <form onSubmit={handleLogin} className="space-y-5">
                   <div className="space-y-2">
-                    <Label htmlFor="email" className="text-xs text-muted-foreground">Email</Label>
-                    <Input id="email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary/30 border-border/30" />
+                    <Label htmlFor="email" className="text-xs text-muted-foreground uppercase tracking-wider">Email</Label>
+                    <Input id="email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary/50 border-border/30" />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="password" className="text-xs text-muted-foreground">Contraseña</Label>
-                    <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="bg-secondary/30 border-border/30" />
+                    <Label htmlFor="password" className="text-xs text-muted-foreground uppercase tracking-wider">Contraseña</Label>
+                    <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="bg-secondary/50 border-border/30" />
                   </div>
                   <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
                     {isLoading ? "Cargando..." : "Iniciar Sesión"}
@@ -203,23 +209,23 @@ const Auth = () => {
             </TabsContent>
             
             <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4">
+              <form onSubmit={handleSignup} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="signup-nombre" className="text-xs text-muted-foreground">Nombre</Label>
-                  <Input id="signup-nombre" type="text" placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required className="bg-secondary/30 border-border/30" />
+                  <Label htmlFor="signup-nombre" className="text-xs text-muted-foreground uppercase tracking-wider">Nombre</Label>
+                  <Input id="signup-nombre" type="text" placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required className="bg-secondary/50 border-border/30" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-email" className="text-xs text-muted-foreground">Email</Label>
-                  <Input id="signup-email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary/30 border-border/30" />
+                  <Label htmlFor="signup-email" className="text-xs text-muted-foreground uppercase tracking-wider">Email</Label>
+                  <Input id="signup-email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary/50 border-border/30" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signup-password" className="text-xs text-muted-foreground">Contraseña</Label>
-                  <Input id="signup-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="bg-secondary/30 border-border/30" />
+                  <Label htmlFor="signup-password" className="text-xs text-muted-foreground uppercase tracking-wider">Contraseña</Label>
+                  <Input id="signup-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="bg-secondary/50 border-border/30" />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="rol" className="text-xs text-muted-foreground">Rol</Label>
+                  <Label htmlFor="rol" className="text-xs text-muted-foreground uppercase tracking-wider">Rol</Label>
                   <select id="rol" value={rol} onChange={(e) => setRol(e.target.value as 'asignador' | 'vendedor')}
-                    className="flex h-10 w-full rounded-lg border border-border/30 bg-secondary/30 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    className="flex h-10 w-full rounded-lg border border-border/30 bg-secondary/50 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <option value="vendedor">Vendedor</option>
                     <option value="asignador">Asignador</option>
                   </select>
