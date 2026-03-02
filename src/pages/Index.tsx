@@ -96,7 +96,7 @@ const Index = () => {
           <div className="flex justify-between items-center h-14">
             {/* Logo */}
             <div className="flex items-center gap-2.5">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-6 w-auto opacity-70" />
+              <img src={cupraLogo} alt="Cupra Wines" className="h-9 w-auto opacity-70" />
             </div>
 
             {/* Navigation */}
