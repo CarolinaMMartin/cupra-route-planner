@@ -361,10 +361,12 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
         if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
           const position = { lat, lng };
           
+          const vendorColorP = getVendorColor(assignment.vendedor.nombre);
           const marker = new google.maps.Marker({
             position: position,
             map: map,
             title: assignment.prospecto?.nombre || 'Prospecto',
+            icon: createColoredMarkerIcon(vendorColorP),
           });
 
           console.log(`[Map] ✅ Marcador PROSPECTO MANUAL creado:`, {
