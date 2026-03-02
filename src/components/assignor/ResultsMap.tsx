@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Loader2, ArrowRight } from "lucide-react";
+import { getVendorColor, createColoredMarkerIcon, resetVendorColors, getVendorColorMap } from "@/lib/vendorColors";
 
 interface ResultsMapProps {
   sucursales: Sucursal[];
