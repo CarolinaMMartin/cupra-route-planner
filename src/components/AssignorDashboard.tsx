@@ -310,15 +310,12 @@ const AssignorDashboard = () => {
       )}
 
       {flowStep === "assignment" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-serif text-2xl">Asignación Visual</CardTitle>
-            <CardDescription>Arrastra los clientes hacia el vendedor correspondiente</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <KanbanAssignment selectedRecommendations={selectedRecommendations} selectedVendedoresIds={selectedVendedoresIds} onBack={handleBackToPreselection} onComplete={handleAssignmentComplete} />
-          </CardContent>
-        </Card>
+        <TableAssignment
+          selectedRecommendations={selectedRecommendations}
+          selectedVendedoresIds={selectedVendedoresIds}
+          onBack={handleBackToPreselection}
+          onComplete={handleAssignmentComplete}
+        />
       )}
     </div>
   );
