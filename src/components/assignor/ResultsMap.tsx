@@ -48,6 +48,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [markers, setMarkers] = useState<Map<string, google.maps.Marker>>(new Map());
   const [locations, setLocations] = useState<ClientLocation[]>([]);
+  const [vendorLegend, setVendorLegend] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
