@@ -22,7 +22,7 @@ const AIInsightsCard = ({ resumen, vendedores }: AIInsightsProps) => {
       <CardHeader>
         <div className="flex items-center gap-2">
           <Brain className="w-5 h-5 text-primary" />
-          <CardTitle className="text-lg">Análisis de IA - Lovable</CardTitle>
+          <CardTitle className="text-lg">Análisis de IA</CardTitle>
         </div>
         <CardDescription>Recomendaciones generadas con inteligencia artificial</CardDescription>
       </CardHeader>
