@@ -187,6 +187,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
       });
 
       setLocations(fetchedLocations);
+      setVendorLegend(getVendorColorMap());
       setLoading(false);
     };
 
