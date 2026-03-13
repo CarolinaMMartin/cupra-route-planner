@@ -469,7 +469,7 @@ const SupervisionVendedores = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-foreground">
+              <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">
                 Supervisión de Vendedores
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
@@ -487,9 +487,9 @@ const SupervisionVendedores = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Asignadas</p>
-                  <p className="text-3xl font-bold text-foreground">{kpis.total}</p>
+                  <p className="text-2xl font-bold text-foreground">{kpis.total}</p>
                 </div>
-                <Users className="h-8 w-8 text-muted-foreground" />
+                <Users className="h-6 w-6 text-muted-foreground" />
               </div>
             </CardContent>
           </Card>
@@ -498,9 +498,9 @@ const SupervisionVendedores = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Pendientes</p>
-                  <p className="text-3xl font-bold text-amber-500">{kpis.pendientes}</p>
+                  <p className="text-2xl font-bold text-amber-500">{kpis.pendientes}</p>
                 </div>
-                <Clock className="h-8 w-8 text-amber-500" />
+                <Clock className="h-6 w-6 text-amber-500" />
               </div>
             </CardContent>
           </Card>
@@ -509,9 +509,9 @@ const SupervisionVendedores = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Visitadas</p>
-                  <p className="text-3xl font-bold text-emerald-500">{kpis.visitadas}</p>
+                  <p className="text-2xl font-bold text-emerald-500">{kpis.visitadas}</p>
                 </div>
-                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                <CheckCircle2 className="h-6 w-6 text-emerald-500" />
               </div>
             </CardContent>
           </Card>
@@ -520,9 +520,9 @@ const SupervisionVendedores = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">No Visitadas</p>
-                  <p className="text-3xl font-bold text-rose-500">{kpis.noVisitadas}</p>
+                  <p className="text-2xl font-bold text-rose-500">{kpis.noVisitadas}</p>
                 </div>
-                <XCircle className="h-8 w-8 text-rose-500" />
+                <XCircle className="h-6 w-6 text-rose-500" />
               </div>
             </CardContent>
           </Card>
@@ -531,9 +531,9 @@ const SupervisionVendedores = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Tasa Cumplimiento</p>
-                  <p className="text-3xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
+                  <p className="text-2xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
                 </div>
-                <TrendingUp className="h-8 w-8 text-muted-foreground" />
+                <TrendingUp className="h-6 w-6 text-muted-foreground" />
               </div>
             </CardContent>
           </Card>
