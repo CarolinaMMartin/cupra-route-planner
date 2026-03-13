@@ -487,9 +487,9 @@ const SupervisionVendedores = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Asignadas</p>
-                  <p className="text-3xl font-bold text-foreground">{kpis.total}</p>
+                  <p className="text-2xl font-bold text-foreground">{kpis.total}</p>
                 </div>
-                <Users className="h-8 w-8 text-muted-foreground" />
+                <Users className="h-6 w-6 text-muted-foreground" />
               </div>
             </CardContent>
           </Card>
