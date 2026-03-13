@@ -38,7 +38,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import ActividadesResumen from "@/components/assignor/ActividadesResumen";
 
 interface VendedorStats {
