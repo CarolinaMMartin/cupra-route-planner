@@ -74,7 +74,13 @@ declare namespace google.maps {
 
   namespace event {
     function addListener(instance: any, event: string, handler: (...args: any[]) => void): MapsEventListener;
+    function addListenerOnce(instance: any, event: string, handler: (...args: any[]) => void): MapsEventListener;
     function removeListener(listener: MapsEventListener): void;
+  }
+
+  enum Animation {
+    BOUNCE = 1,
+    DROP = 2,
   }
 
   namespace places {
