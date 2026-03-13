@@ -97,6 +97,7 @@ declare namespace google.maps {
         location?: LatLng;
       };
       name?: string;
+      formatted_address?: string;
     }
 
     enum PlacesServiceStatus {
