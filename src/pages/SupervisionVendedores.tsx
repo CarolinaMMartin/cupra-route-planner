@@ -509,9 +509,9 @@ const SupervisionVendedores = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Visitadas</p>
-                  <p className="text-3xl font-bold text-emerald-500">{kpis.visitadas}</p>
+                  <p className="text-2xl font-bold text-emerald-500">{kpis.visitadas}</p>
                 </div>
-                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                <CheckCircle2 className="h-6 w-6 text-emerald-500" />
               </div>
             </CardContent>
           </Card>
