@@ -26,14 +26,18 @@ interface VendedorActivaciones {
   }>;
 }
 
-const ActividadesResumen = () => {
+interface ActividadesResumenProps {
+  vendedorIdFilter?: string;
+}
+
+const ActividadesResumen = ({ vendedorIdFilter }: ActividadesResumenProps) => {
   const [vendedoresData, setVendedoresData] = useState<VendedorActivaciones[]>([]);
   const [loading, setLoading] = useState(true);
   const [mesOffset, setMesOffset] = useState(0); // 0 = este mes, -1 = mes anterior, etc.
 
   useEffect(() => {
     fetchData();
-  }, [mesOffset]);
+  }, [mesOffset, vendedorIdFilter]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -43,12 +47,18 @@ const ActividadesResumen = () => {
       const startOfMonth = targetDate.toISOString().split('T')[0];
       const endOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0).toISOString().split('T')[0];
 
-      // Fetch all active vendedores
-      const { data: vendedores } = await supabase
+      // Fetch vendedores (filtered if needed)
+      let vendedoresQuery = supabase
         .from('profiles')
         .select('user_id, nombre')
         .eq('rol', 'vendedor')
         .eq('activo', true);
+
+      if (vendedorIdFilter && vendedorIdFilter !== 'all') {
+        vendedoresQuery = vendedoresQuery.eq('user_id', vendedorIdFilter);
+      }
+
+      const { data: vendedores } = await vendedoresQuery;
 
       if (!vendedores) return;
 

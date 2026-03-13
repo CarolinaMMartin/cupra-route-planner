@@ -102,7 +102,6 @@ const SupervisionVendedores = () => {
   const [asignaciones, setAsignaciones] = useState<AsignacionDetalle[]>([]);
   const [feedbackModal, setFeedbackModal] = useState<AsignacionDetalle | null>(null);
   const [openFilters, setOpenFilters] = useState(true);
-  const [openKpis, setOpenKpis] = useState(true);
   const [openActividades, setOpenActividades] = useState(false);
   const [openResumen, setOpenResumen] = useState(false);
   const [openDetalle, setOpenDetalle] = useState(false);
@@ -481,7 +480,66 @@ const SupervisionVendedores = () => {
           <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
         </div>
 
-        {/* 1. Filtros */}
+        {/* 1. Indicadores (KPIs) - Siempre visibles */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Asignadas</p>
+                  <p className="text-3xl font-bold text-foreground">{kpis.total}</p>
+                </div>
+                <Users className="h-8 w-8 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Pendientes</p>
+                  <p className="text-3xl font-bold text-amber-500">{kpis.pendientes}</p>
+                </div>
+                <Clock className="h-8 w-8 text-amber-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Visitadas</p>
+                  <p className="text-3xl font-bold text-emerald-500">{kpis.visitadas}</p>
+                </div>
+                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">No Visitadas</p>
+                  <p className="text-3xl font-bold text-rose-500">{kpis.noVisitadas}</p>
+                </div>
+                <XCircle className="h-8 w-8 text-rose-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Tasa Cumplimiento</p>
+                  <p className="text-3xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 2. Filtros */}
         <Collapsible open={openFilters} onOpenChange={setOpenFilters} className="w-full">
           <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
             <div className="flex items-center gap-2 font-serif text-lg text-foreground">
@@ -544,79 +602,6 @@ const SupervisionVendedores = () => {
           </CollapsibleContent>
         </Collapsible>
 
-        {/* 2. Indicadores (KPIs) */}
-        <Collapsible open={openKpis} onOpenChange={setOpenKpis} className="w-full">
-          <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
-            <div className="flex items-center gap-2 font-serif text-lg text-foreground">
-              <BarChart3 className="h-5 w-5 text-primary" />
-              <span>Indicadores</span>
-              <span className="text-sm font-normal text-muted-foreground ml-2">
-                ({kpis.total} asignadas · {kpis.tasa.toFixed(0)}% cumplimiento)
-              </span>
-            </div>
-            <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openKpis && "rotate-180")} />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <Card className="matte-card">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Asignadas</p>
-                      <p className="text-3xl font-bold text-foreground">{kpis.total}</p>
-                    </div>
-                    <Users className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="matte-card">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Pendientes</p>
-                      <p className="text-3xl font-bold text-amber-500">{kpis.pendientes}</p>
-                    </div>
-                    <Clock className="h-8 w-8 text-amber-500" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="matte-card">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Visitadas</p>
-                      <p className="text-3xl font-bold text-emerald-500">{kpis.visitadas}</p>
-                    </div>
-                    <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="matte-card">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">No Visitadas</p>
-                      <p className="text-3xl font-bold text-rose-500">{kpis.noVisitadas}</p>
-                    </div>
-                    <XCircle className="h-8 w-8 text-rose-500" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card className="matte-card">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Tasa Cumplimiento</p>
-                      <p className="text-3xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
-                    </div>
-                    <TrendingUp className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
         {/* 3. Activaciones por Vendedor */}
         <Collapsible open={openActividades} onOpenChange={setOpenActividades} className="w-full">
           <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
@@ -627,7 +612,7 @@ const SupervisionVendedores = () => {
             <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openActividades && "rotate-180")} />
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-3">
-            <ActividadesResumen />
+            <ActividadesResumen vendedorIdFilter={filters.vendedorId} />
           </CollapsibleContent>
         </Collapsible>
 
