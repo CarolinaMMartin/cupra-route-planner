@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, BarChart3, Layers, ClipboardList, Store, UserCog, ChevronDown } from "lucide-react";
+import { LogOut, User, BarChart3, Layers, ClipboardList, Store, UserCog, ChevronDown, Upload } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import angelBlanco from "@/assets/angel-blanco.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
