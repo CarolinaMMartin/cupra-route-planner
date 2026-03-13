@@ -1,94 +1,110 @@
+# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
+## Cambios realizados
 
-## Plan: Upload Excel + ETL integrado en la app
+### A. DB: Campo `vendedor_actual` en `clientes` ✅
+- Nuevo campo `vendedor_actual` (text) agregado
+- Inicializado desde la última venta registrada en `ventas_cupra`
+- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
 
-### Análisis: n8n vs Lovable
+### B. Pre-scoring determinístico ✅
+- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
+- **score_geo (50%)**: Distancia Haversine al centroide del cluster
+- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
+- **score_comercial (15%)**: Score comercial normalizado (0-100)
+- **score_rotacion (10%)**: Días desde última recomendación
+- Filtra candidatos con feedback negativo automáticamente
+- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
 
-El workflow de n8n hace 3 cosas:
-1. **Parsear Excel** de ventas (mapear columnas con nombres variados)
-2. **Cargar ventas** crudas → `upsert-ventas-cupra`
-3. **Agregar por cliente** (RFM, scores, geografía CABA, arrays) → `upsert-clientes`
+### C. Mapeo nombre→UUID ✅
+- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
+- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
+- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
 
-**Recomendación: hacerlo todo en Lovable.** Las razones:
+### D. Prompt reducido centrado en vendedor ✅
+- De ~65K chars a ~5-10K chars (reducción ~80%)
+- Formato tabular compacto con scores pre-calculados
+- IA solo decide ruta óptima y genera justificaciones
+- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
 
-- La lógica ETL es JavaScript puro (~400 líneas), portable directamente a una edge function
-- Los endpoints de destino (`upsert-ventas-cupra`, `upsert-clientes`) ya existen
-- Eliminamos la dependencia de n8n + Google Drive para la carga de datos
-- El usuario sube el Excel directo en la app, ve progreso y errores en tiempo real
+### E. UI: Vendedor actual vs anterior ✅
+- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
+- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
+- Tipo `Sucursal` extendido con `vendedor_actual`
 
-### Arquitectura
+---
 
-```text
-┌─────────────────────────────────────────────┐
-│  UI: Página "Carga de Datos"                │
-│  ┌─────────────────────────────────┐        │
-│  │  Drop zone / File input (.xlsx) │        │
-│  └──────────────┬──────────────────┘        │
-│                 │ File                       │
-│                 ▼                            │
-│  Frontend: Parse Excel (SheetJS/xlsx)       │
-│  → rows[] crudos                            │
-│                 │                            │
-│                 ▼                            │
-│  Edge Function: process-ventas-excel        │
-│  1. Normalizar campos (fechas, montos...)   │
-│  2. Upsert ventas_cupra (bulk)              │
-│  3. Agregar por client_id (RFM, geo, etc)   │
-│  4. Upsert clientes (protegido)             │
-│  5. Return resumen                          │
-│                 │                            │
-│                 ▼                            │
-│  UI: Resumen de carga                       │
-│  (X ventas, Y clientes, Z errores)          │
-└─────────────────────────────────────────────┘
-```
+# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
 
-### Componentes a crear
+## Cambios realizados
 
-**1. Edge Function `process-ventas-excel`**
-- Recibe `{ rows: [...] }` (filas crudas del Excel ya parseadas en frontend)
-- Porta toda la lógica ETL del n8n:
-  - Normalización de campos con `getFieldValue` (manejo de variantes de nombre de columna)
-  - Conversión de fechas Excel serial → ISO
-  - Conversión de montos con formato argentino
-  - Agregación por `client_id`: RFM, scores, geografía CABA (barrio→comuna), arrays de contacto
-- Escribe directo a `ventas_cupra` y llama la lógica de `upsert-clientes` (protegiendo campos internos)
-- Devuelve resumen: `{ ventas_procesadas, clientes_actualizados, errores[] }`
+### A. Tabs principales ✅
+- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
+- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
 
-**2. Página `CargaDatos.tsx`**
-- Accesible solo para rol `asignador`
-- File input que acepta `.xlsx` / `.xls`
-- Parseo client-side con librería `xlsx` (SheetJS)
-- Envía rows al edge function
-- Muestra progreso y resumen al finalizar
-- Opción de previsualizar primeras filas antes de confirmar
+### B. FilterPanel con dos modos ✅
+- Modo "Por Área": selector de área → ver resumen → generar
+- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
+- Instrucciones IA colapsables en ambos modos
+- Vendedores en Collapsible con badge "X de Y seleccionados"
 
-**3. Ruta + navegación**
-- Nueva ruta `/carga-datos`
-- Botón en el menú del asignador
+### C. RecommendationFilters simplificado ✅
+- De 6 filtros redundantes a solo 1 filtro por vendedor
+- Se muestra solo cuando hay más de 1 vendedor
 
-### Detalle técnico del ETL (portado de n8n)
+### D. TodayAssignments sin Card wrapper ✅
+- Funciona como contenido directo del tab
+- Layout más limpio sin doble Card
 
-La lógica clave que se porta:
-- **`getFieldValue()`**: Busca columnas por nombre exacto, case-insensitive, y normalizado (sin acentos)
-- **`normalizarGeografia()`**: Mapea barrios CABA → comunas, detecta localidades PBA
-- **Agregación RFM**: Primera/última compra, días desde última, score recencia/volumen/comercial
-- **Protección de campos**: Misma lógica que `upsert-clientes` (no sobreescribir `last_recommendation_at`, `excluir_recomendaciones`, etc.)
-
-### Archivos a crear/modificar
-
-| Archivo | Acción |
+## Archivos modificados
+| Archivo | Cambio |
 |---------|--------|
-| `supabase/functions/process-ventas-excel/index.ts` | Crear — ETL completo |
-| `src/pages/CargaDatos.tsx` | Crear — UI de upload |
-| `src/App.tsx` | Modificar — agregar ruta |
-| `supabase/config.toml` | Modificar — registrar función |
-| `package.json` | Agregar dep `xlsx` |
+| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
+| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
+| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
+| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
 
-### Beneficios vs mantener n8n
+---
 
-- **Sin dependencia externa**: No necesitás n8n ni Google Drive
-- **Feedback inmediato**: El usuario ve errores y resumen al instante
-- **Mismo código**: La lógica ETL es idéntica, solo cambia dónde corre
-- **Mantenible**: Un solo lugar para actualizar reglas de negocio
+# Phase 3: Carga de Excel + ETL integrado — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Edge Function `process-ventas-excel` ✅
+- Recibe `{ rows: [...] }` parseadas en frontend con SheetJS
+- **Normalización de campos**: `getFieldValue()` con matching exacto, case-insensitive y NFD-normalized
+- **Conversión de fechas**: Excel serial → ISO, DD/MM/YYYY → ISO
+- **Conversión de montos**: Formato argentino (puntos miles, coma decimal)
+- **Geografía CABA**: 48 barrios mapeados a 15 comunas + detección PBA/GBA
+- **Agregación RFM por cliente**: Primera/última compra, días inactividad, scores recencia/volumen/comercial
+- **Canal**: Detección ON_TRADE vs OFF_TRADE por categorías
+- **Upsert ventas_cupra**: Batches de 500, conflict key existente
+- **Upsert clientes protegido**: No sobreescribe `last_recommendation_at`, `excluir_recomendaciones`, `ultima_visita`
+
+### B. Página `CargaDatos.tsx` ✅
+- Acceso restringido a rol `asignador`
+- Drop zone + file input para `.xlsx` / `.xls`
+- Parseo client-side con `xlsx` (SheetJS)
+- Preview: columnas detectadas + primeras 5 filas
+- Progreso visual durante procesamiento
+- Resumen final: ventas procesadas, clientes actualizados, errores
+
+### C. Navegación ✅
+- Ruta `/carga-datos` en `App.tsx`
+- Menú "Gestión" del asignador: nuevo item "Carga de Datos"
+
+## Archivos creados/modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/process-ventas-excel/index.ts` | Creado — ETL completo |
+| `src/pages/CargaDatos.tsx` | Creado — UI de upload |
+| `src/App.tsx` | Ruta `/carga-datos` |
+| `src/pages/Index.tsx` | Menú con "Carga de Datos" |
+| `supabase/config.toml` | Función registrada |
+| `package.json` | Dependencia `xlsx` |
+
+## Próximos pasos potenciales
+- Planificación temporal (agenda semanal)
+- Reportes y supervisión
+- Agente conversacional
 

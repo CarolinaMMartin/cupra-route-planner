@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, BarChart3, Layers, ClipboardList, Store, UserCog, ChevronDown } from "lucide-react";
+import { LogOut, User, BarChart3, Layers, ClipboardList, Store, UserCog, ChevronDown, Upload } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import angelBlanco from "@/assets/angel-blanco.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
@@ -139,6 +139,10 @@ const Index = () => {
                       <DropdownMenuItem onClick={() => navigate("/supervision-vendedores")} className="gap-2 cursor-pointer">
                         <ClipboardList className="w-4 h-4" />
                         Supervisión
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/carga-datos")} className="gap-2 cursor-pointer">
+                        <Upload className="w-4 h-4" />
+                        Carga de Datos
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => navigate("/profiles")} className="gap-2 cursor-pointer">
