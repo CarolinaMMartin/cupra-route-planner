@@ -97,7 +97,7 @@ const Auth = () => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email, password,
-        options: { data: { nombre, rol }, emailRedirectTo: `${window.location.origin}/` },
+        options: { data: { nombre, rol }, emailRedirectTo: `${window.location.origin}/` }
       });
       if (error) throw error;
       if (data?.user && !data.session) {
@@ -105,13 +105,13 @@ const Auth = () => {
         return;
       }
       toast({ title: "Cuenta creada", description: "Ya puedes iniciar sesión" });
-      setEmail(""); setPassword(""); setNombre("");
+      setEmail("");setPassword("");setNombre("");
     } catch (error: any) {
       let msg = "Error al crear cuenta";
-      if (error.message?.includes("already registered")) msg = "Este correo ya está registrado.";
-      else if (error.message?.includes("Invalid email")) msg = "Email inválido.";
-      else if (error.message?.includes("Password")) msg = "Contraseña: mínimo 6 caracteres.";
-      else if (error.message) msg = error.message;
+      if (error.message?.includes("already registered")) msg = "Este correo ya está registrado.";else
+      if (error.message?.includes("Invalid email")) msg = "Email inválido.";else
+      if (error.message?.includes("Password")) msg = "Contraseña: mínimo 6 caracteres.";else
+      if (error.message) msg = error.message;
       toast({ variant: "destructive", title: "Error", description: msg });
     } finally {
       setIsLoading(false);
@@ -149,8 +149,8 @@ const Auth = () => {
             </form>
           </CardContent>
         </Card>
-      </div>
-    );
+      </div>);
+
   }
 
   return (
@@ -160,7 +160,7 @@ const Auth = () => {
       <Card className="w-full max-w-md relative z-10">
         <CardHeader className="text-center space-y-6 pt-10">
           <div className="flex flex-col items-center gap-4">
-            <img src={angelBlanco} alt="" className="h-12 w-auto opacity-40" />
+            
             <img src={cupraLogo} alt="Cupra Wines" className="h-10 w-auto opacity-70" />
           </div>
           <div>
@@ -176,8 +176,8 @@ const Auth = () => {
             </TabsList>
             
             <TabsContent value="login">
-              {showResetPassword ? (
-                <form onSubmit={handleResetPassword} className="space-y-5">
+              {showResetPassword ?
+              <form onSubmit={handleResetPassword} className="space-y-5">
                   <p className="text-sm text-muted-foreground text-center mb-4">Ingresa tu email para restablecer tu contraseña.</p>
                   <div className="space-y-2">
                     <Label htmlFor="reset-email" className="text-xs text-muted-foreground uppercase tracking-wider">Email</Label>
@@ -187,9 +187,9 @@ const Auth = () => {
                     {isLoading ? "Enviando..." : "Enviar email de recuperación"}
                   </Button>
                   <Button type="button" variant="ghost" className="w-full" onClick={() => setShowResetPassword(false)}>Volver</Button>
-                </form>
-              ) : (
-                <form onSubmit={handleLogin} className="space-y-5">
+                </form> :
+
+              <form onSubmit={handleLogin} className="space-y-5">
                   <div className="space-y-2">
                     <Label htmlFor="email" className="text-xs text-muted-foreground uppercase tracking-wider">Email</Label>
                     <Input id="email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary/50 border-border/30" />
@@ -205,7 +205,7 @@ const Auth = () => {
                     ¿Olvidaste tu contraseña?
                   </Button>
                 </form>
-              )}
+              }
             </TabsContent>
             
             <TabsContent value="signup">
@@ -225,7 +225,7 @@ const Auth = () => {
                 <div className="space-y-2">
                   <Label htmlFor="rol" className="text-xs text-muted-foreground uppercase tracking-wider">Rol</Label>
                   <select id="rol" value={rol} onChange={(e) => setRol(e.target.value as 'asignador' | 'vendedor')}
-                    className="flex h-10 w-full rounded-lg border border-border/30 bg-secondary/50 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  className="flex h-10 w-full rounded-lg border border-border/30 bg-secondary/50 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <option value="vendedor">Vendedor</option>
                     <option value="asignador">Asignador</option>
                   </select>
@@ -238,8 +238,8 @@ const Auth = () => {
           </Tabs>
         </CardContent>
       </Card>
-    </div>
-  );
+    </div>);
+
 };
 
 export default Auth;
