@@ -498,9 +498,9 @@ const SupervisionVendedores = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Pendientes</p>
-                  <p className="text-3xl font-bold text-amber-500">{kpis.pendientes}</p>
+                  <p className="text-2xl font-bold text-amber-500">{kpis.pendientes}</p>
                 </div>
-                <Clock className="h-8 w-8 text-amber-500" />
+                <Clock className="h-6 w-6 text-amber-500" />
               </div>
             </CardContent>
           </Card>
