@@ -37,7 +37,7 @@ const ActividadesResumen = ({ vendedorIdFilter }: ActividadesResumenProps) => {
 
   useEffect(() => {
     fetchData();
-  }, [mesOffset]);
+  }, [mesOffset, vendedorIdFilter]);
 
   const fetchData = async () => {
     setLoading(true);
