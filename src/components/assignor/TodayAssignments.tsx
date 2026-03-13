@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Calendar, Edit, Trash2, MapPin } from "lucide-react";
+import { Users, Calendar, Edit, Trash2, MapPin, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -72,6 +72,12 @@ interface TodayAssignmentsProps {
   onEditAssignments?: () => void;
 }
 
+/** Capitalizes first letter of each word, lowercases the rest */
+const toTitleCase = (str: string) =>
+  str
+    .toLowerCase()
+    .replace(/(?:^|\s|[-/])\S/g, (match) => match.toUpperCase());
+
 const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,33 +98,29 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
       const utcMonth = now.getUTCMonth();
       const utcDate = now.getUTCDate();
       const utcHours = now.getUTCHours();
-      
+
       const argDate = utcHours < 3 ? utcDate - 1 : utcDate;
       const argMonth = argDate < 1 ? utcMonth - 1 : utcMonth;
       const argYear = argMonth < 0 ? utcYear - 1 : utcYear;
-      
-      const startOfDayArg = new Date(Date.UTC(
-        argMonth < 0 ? argYear : utcYear,
-        argMonth < 0 ? 11 : (argDate < 1 ? argMonth : utcMonth),
-        argDate < 1 ? new Date(utcYear, utcMonth, 0).getDate() : argDate,
-        3, 0, 0, 0
-      ));
 
-      console.log('Fetching assignments from (Argentina midnight):', startOfDayArg.toISOString());
+      const startOfDayArg = new Date(
+        Date.UTC(
+          argMonth < 0 ? argYear : utcYear,
+          argMonth < 0 ? 11 : argDate < 1 ? argMonth : utcMonth,
+          argDate < 1 ? new Date(utcYear, utcMonth, 0).getDate() : argDate,
+          3, 0, 0, 0
+        )
+      );
 
       const { data, error } = await supabase
-        .from('asignaciones_vendedores_clientes')
+        .from("asignaciones_vendedores_clientes")
         .select(`
-          id,
-          created_at,
-          es_prospecto,
-          client_id,
-          prospecto_place_id,
+          id, created_at, es_prospecto, client_id, prospecto_place_id,
           vendedor:profiles!asignaciones_vendedores_clientes_vendedor_id_fkey(nombre, email),
           cliente:clientes!asignaciones_vendedores_clientes_client_id_fkey(razon_social, cuit_dni)
         `)
-        .gte('created_at', startOfDayArg.toISOString())
-        .order('created_at', { ascending: false });
+        .gte("created_at", startOfDayArg.toISOString())
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
 
@@ -129,12 +131,12 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
       let prospectosMap = new Map();
       if (prospectoPlaceIds.length > 0) {
         const { data: prospectosData, error: prospectosError } = await supabase
-          .from('prospectos')
-          .select('place_id, nombre, telefono, direccion, barrio, latitud, longitud')
-          .in('place_id', prospectoPlaceIds);
+          .from("prospectos")
+          .select("place_id, nombre, telefono, direccion, barrio, latitud, longitud")
+          .in("place_id", prospectoPlaceIds);
 
         if (!prospectosError && prospectosData) {
-          prospectosMap = new Map(prospectosData.map(p => [p.place_id, p]));
+          prospectosMap = new Map(prospectosData.map((p) => [p.place_id, p]));
         }
       }
 
@@ -146,25 +148,24 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
               return {
                 ...assignment,
                 prospecto: prospectoData || null,
-                cliente_info: { etiquetas: ['Prospecto'] },
+                cliente_info: { etiquetas: ["Prospecto"] },
               };
             } else {
               const { data: clienteInfo, error: infoError } = await supabase
-                .from('clientes_recomendaciones_temporal')
-                .select('*')
-                .eq('cuit_dni', assignment.cliente?.cuit_dni)
+                .from("clientes_recomendaciones_temporal")
+                .select("*")
+                .eq("cuit_dni", assignment.cliente?.cuit_dni)
                 .limit(1)
                 .maybeSingle();
 
               if (infoError) {
-                console.error('Error fetching cliente info:', infoError);
+                console.error("Error fetching cliente info:", infoError);
                 return assignment;
               }
-
               return { ...assignment, cliente_info: clienteInfo };
             }
           } catch (err) {
-            console.error('Error processing assignment:', err);
+            console.error("Error processing assignment:", err);
             return assignment;
           }
         })
@@ -172,7 +173,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
 
       setAssignments(assignmentsWithInfo as any);
     } catch (error) {
-      console.error('Error fetching assignments:', error);
+      console.error("Error fetching assignments:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -191,33 +192,34 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
       const utcMonth = now.getUTCMonth();
       const utcDate = now.getUTCDate();
       const utcHours = now.getUTCHours();
-      
+
       const argDate = utcHours < 3 ? utcDate - 1 : utcDate;
       const argMonth = argDate < 1 ? utcMonth - 1 : utcMonth;
       const argYear = argMonth < 0 ? utcYear - 1 : utcYear;
-      
-      const startOfDayArg = new Date(Date.UTC(
-        argMonth < 0 ? argYear : utcYear,
-        argMonth < 0 ? 11 : (argDate < 1 ? argMonth : utcMonth),
-        argDate < 1 ? new Date(utcYear, utcMonth, 0).getDate() : argDate,
-        3, 0, 0, 0
-      ));
+
+      const startOfDayArg = new Date(
+        Date.UTC(
+          argMonth < 0 ? argYear : utcYear,
+          argMonth < 0 ? 11 : argDate < 1 ? argMonth : utcMonth,
+          argDate < 1 ? new Date(utcYear, utcMonth, 0).getDate() : argDate,
+          3, 0, 0, 0
+        )
+      );
 
       const { error } = await supabase
-        .from('asignaciones_vendedores_clientes')
+        .from("asignaciones_vendedores_clientes")
         .delete()
-        .gte('created_at', startOfDayArg.toISOString());
+        .gte("created_at", startOfDayArg.toISOString());
 
       if (error) throw error;
 
       toast({
-        title: "✅ Asignaciones eliminadas",
-        description: `Se eliminaron todas las asignaciones de hoy (${assignments.length} clientes)`,
+        title: "Asignaciones eliminadas",
+        description: `Se eliminaron ${assignments.length} asignaciones de hoy.`,
       });
-
       setAssignments([]);
     } catch (error) {
-      console.error('Error deleting assignments:', error);
+      console.error("Error deleting assignments:", error);
       toast({
         variant: "destructive",
         title: "Error",
@@ -228,32 +230,44 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
     }
   };
 
-  const assignmentsByVendedor = assignments.reduce((acc, assignment) => {
-    const vendedorNombre = assignment.vendedor?.nombre || 'Vendedor desconocido';
-    if (!acc[vendedorNombre]) {
-      acc[vendedorNombre] = { email: assignment.vendedor?.email || '', clientes: [] };
-    }
-    acc[vendedorNombre].clientes.push(assignment);
-    return acc;
-  }, {} as Record<string, { email: string; clientes: Assignment[] }>);
+  const assignmentsByVendedor = assignments.reduce(
+    (acc, assignment) => {
+      const vendedorNombre = assignment.vendedor?.nombre || "Vendedor desconocido";
+      if (!acc[vendedorNombre]) {
+        acc[vendedorNombre] = { email: assignment.vendedor?.email || "", clientes: [] };
+      }
+      acc[vendedorNombre].clientes.push(assignment);
+      return acc;
+    },
+    {} as Record<string, { email: string; clientes: Assignment[] }>
+  );
 
   if (isLoading) {
-    return <p className="text-muted-foreground p-4">Cargando asignaciones...</p>;
+    return (
+      <div className="flex items-center justify-center py-16">
+        <div className="text-center space-y-2">
+          <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-muted-foreground">Cargando asignaciones…</p>
+        </div>
+      </div>
+    );
   }
 
   if (assignments.length === 0) {
     return (
-      <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/30">
-        <div>
-          <h3 className="font-semibold flex items-center gap-2">
+      <div className="flex items-center justify-between p-6 rounded-xl bg-card border border-border">
+        <div className="space-y-1">
+          <h3 className="font-sans text-sm font-semibold text-foreground flex items-center gap-2">
             <Calendar className="w-4 h-4 text-primary" />
             No hay asignaciones hoy
           </h3>
-          <p className="text-sm text-muted-foreground mt-1">Generá recomendaciones en la pestaña "Nueva Asignación"</p>
+          <p className="text-xs text-muted-foreground">
+            Generá recomendaciones en la pestaña "Nueva Asignación"
+          </p>
         </div>
         {onEditAssignments && (
-          <Button onClick={onEditAssignments} variant="outline" size="sm" className="gap-2">
-            <Edit className="w-4 h-4" />
+          <Button onClick={onEditAssignments} variant="outline" size="sm" className="gap-1.5 h-9">
+            <Edit className="w-3.5 h-3.5" />
             Modificar
           </Button>
         )}
@@ -262,42 +276,57 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header with actions */}
+    <div className="space-y-5">
+      {/* Header bar */}
       <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Total: {assignments.length} cliente{assignments.length !== 1 ? 's' : ''} asignado{assignments.length !== 1 ? 's' : ''}
+        <p className="text-sm text-muted-foreground font-sans">
+          {assignments.length} asignación{assignments.length !== 1 ? "es" : ""} hoy
         </p>
-        <div className="flex gap-2">
-          <Button onClick={() => setShowMapAll(true)} variant="outline" size="sm" className="gap-2">
-            <MapPin className="w-4 h-4" />
-            Ver en mapa
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setShowMapAll(true)}
+            variant="outline"
+            size="sm"
+            className="gap-1.5 h-9"
+          >
+            <MapPin className="w-3.5 h-3.5" />
+            Ver mapa
           </Button>
           {onEditAssignments && (
-            <Button onClick={onEditAssignments} variant="outline" size="sm" className="gap-2">
-              <Edit className="w-4 h-4" />
+            <Button
+              onClick={onEditAssignments}
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-9"
+            >
+              <Edit className="w-3.5 h-3.5" />
               Modificar
             </Button>
           )}
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="gap-2" disabled={isDeleting}>
-                <Trash2 className="w-4 h-4" />
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 h-9 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                disabled={isDeleting}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
                 Borrar todas
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                <AlertDialogTitle className="font-sans">¿Eliminar asignaciones?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Esta acción eliminará todas las asignaciones de hoy ({assignments.length} cliente{assignments.length !== 1 ? 's' : ''}).
-                  Esta acción no se puede deshacer.
+                  Se eliminarán las {assignments.length} asignaciones de hoy. Esta acción no se
+                  puede deshacer.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteAllAssignments}>
-                  Eliminar todo
+                <AlertDialogCancel className="h-9">Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteAllAssignments} className="h-9">
+                  Eliminar
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -305,182 +334,183 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
         </div>
       </div>
 
-      {/* Assignments by vendedor */}
-      {Object.entries(assignmentsByVendedor).map(([vendedorNombre, data]) => (
-        <div key={vendedorNombre} className="border rounded-lg p-4 bg-muted/30">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-primary" />
-                <h3 className="font-semibold">{vendedorNombre}</h3>
+      {/* Vendor groups */}
+      <div className="space-y-4">
+        {Object.entries(assignmentsByVendedor).map(([vendedorNombre, data]) => (
+          <div
+            key={vendedorNombre}
+            className="rounded-xl border border-border bg-card overflow-hidden"
+          >
+            {/* Vendor header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10">
+                  <Users className="w-4 h-4 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-sans text-sm font-semibold text-foreground truncate">
+                    {toTitleCase(vendedorNombre)}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{data.email}</p>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">{data.email}</p>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  onClick={() => setShowMapVendedor(vendedorNombre)}
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 h-8 text-xs"
+                >
+                  <MapPin className="w-3 h-3" />
+                  Ver en mapa
+                </Button>
+                <Badge
+                  variant="secondary"
+                  className="px-2.5 py-0.5 text-xs font-medium tabular-nums"
+                >
+                  {data.clientes.length} cliente{data.clientes.length !== 1 ? "s" : ""}
+                </Badge>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                onClick={() => setShowMapVendedor(vendedorNombre)} 
-                variant="outline" 
-                size="sm" 
-                className="gap-2"
-              >
-                <MapPin className="w-4 h-4" />
-                Ver en mapa
-              </Button>
-              <Badge variant="secondary">
-                {data.clientes.length} cliente{data.clientes.length !== 1 ? 's' : ''}
-              </Badge>
-            </div>
-          </div>
-          <div className="space-y-2">
-            {data.clientes.map((assignment) => (
-              <div key={assignment.id} className="p-3 rounded-lg bg-background border space-y-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-base">
-                        {assignment.es_prospecto 
-                          ? (assignment.prospecto?.nombre || 'Prospecto sin nombre')
-                          : (assignment.cliente?.razon_social || 'Cliente desconocido')
-                        }
-                      </p>
-                      {assignment.es_prospecto && (
-                        <Badge variant="secondary" className="text-xs">NUEVO</Badge>
-                      )}
+
+            {/* Client items */}
+            <div className="divide-y divide-border/40">
+              {data.clientes.map((assignment) => {
+                const clientName = assignment.es_prospecto
+                  ? assignment.prospecto?.nombre || "Prospecto sin nombre"
+                  : assignment.cliente?.razon_social || "Cliente desconocido";
+
+                return (
+                  <div
+                    key={assignment.id}
+                    className="px-5 py-3.5 hover:bg-muted/30 transition-colors"
+                  >
+                    {/* Row 1: Name + time */}
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="font-sans text-[13px] font-medium text-foreground truncate">
+                          {toTitleCase(clientName)}
+                        </p>
+                        {assignment.es_prospecto && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] px-1.5 py-0 h-4 font-medium border-primary/40 text-primary shrink-0"
+                          >
+                            Nuevo
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0 tabular-nums">
+                        <Clock className="w-3 h-3" />
+                        {new Date(assignment.created_at).toLocaleTimeString("es-AR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
                     </div>
+
+                    {/* Row 2: Secondary info */}
                     {assignment.es_prospecto ? (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {assignment.prospecto?.direccion || 'Sin dirección'}
-                        {assignment.prospecto?.barrio && ` • ${assignment.prospecto.barrio}`}
+                      <p className="text-[11px] text-muted-foreground mt-1">
+                        {assignment.prospecto?.direccion || "Sin dirección"}
+                        {assignment.prospecto?.barrio && ` · ${assignment.prospecto.barrio}`}
                       </p>
                     ) : (
-                      <p className="text-xs text-muted-foreground mt-1">CUIT: {assignment.cliente?.cuit_dni}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        CUIT: {assignment.cliente?.cuit_dni}
+                      </p>
                     )}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(assignment.created_at).toLocaleTimeString('es-AR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
-                </div>
 
-                {assignment.es_prospecto ? (
-                  assignment.prospecto && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                      {assignment.prospecto.telefono && (
-                        <div>
-                          <span className="font-medium">Teléfono:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.prospecto.telefono}</span>
-                        </div>
-                      )}
-                      {assignment.prospecto.barrio && (
-                        <div>
-                          <span className="font-medium">Barrio:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.prospecto.barrio}</span>
-                        </div>
-                      )}
-                    </div>
-                  )
-                ) : (
-                  assignment.cliente_info && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                      {assignment.cliente_info.ciudades && assignment.cliente_info.ciudades.length > 0 && (
-                        <div>
-                          <span className="font-medium">Ciudad:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.ciudades.join(', ')}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.provincias && assignment.cliente_info.provincias.length > 0 && (
-                        <div>
-                          <span className="font-medium">Provincia:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.provincias.join(', ')}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.telefonos && assignment.cliente_info.telefonos.length > 0 && (
-                        <div>
-                          <span className="font-medium">Teléfono:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.telefonos.join(', ')}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.score_comercial && (
-                        <div>
-                          <span className="font-medium">Score:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.score_comercial}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.monto_total_vendido && (
-                        <div>
-                          <span className="font-medium">Total vendido:</span>{' '}
-                          <span className="text-muted-foreground">
-                            ${assignment.cliente_info.monto_total_vendido.toLocaleString('es-AR')}
-                          </span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.orders_count && (
-                        <div>
-                          <span className="font-medium">Órdenes:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.orders_count}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.avg_ticket && (
-                        <div>
-                          <span className="font-medium">Ticket promedio:</span>{' '}
-                          <span className="text-muted-foreground">
-                            ${assignment.cliente_info.avg_ticket.toLocaleString('es-AR')}
-                          </span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.participacion !== null && (
-                        <div>
-                          <span className="font-medium">Participación:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.participacion}%</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.days_since_last_purchase !== null && (
-                        <div>
-                          <span className="font-medium">Última compra:</span>{' '}
-                          <span className="text-muted-foreground">
-                            hace {assignment.cliente_info.days_since_last_purchase} días
-                          </span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.first_purchase_at && (
-                        <div>
-                          <span className="font-medium">Primera compra:</span>{' '}
-                          <span className="text-muted-foreground">
-                            {new Date(assignment.cliente_info.first_purchase_at).toLocaleDateString('es-AR')}
-                          </span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.vendedores && assignment.cliente_info.vendedores.length > 0 && (
-                        <div className="md:col-span-2">
-                          <span className="font-medium">Vendedores previos:</span>{' '}
-                          <span className="text-muted-foreground">{assignment.cliente_info.vendedores.join(', ')}</span>
-                        </div>
-                      )}
-                      {assignment.cliente_info.etiquetas && assignment.cliente_info.etiquetas.length > 0 && (
-                        <div className="md:col-span-2">
-                          <span className="font-medium">Productos:</span>{' '}
-                          <span className="text-muted-foreground text-xs">
-                            {assignment.cliente_info.etiquetas.slice(0, 3).join(', ')}
-                            {assignment.cliente_info.etiquetas.length > 3 && ` +${assignment.cliente_info.etiquetas.length - 3} más`}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )
-                )}
-              </div>
-            ))}
+                    {/* Row 3: Detail metadata (collapsed) */}
+                    {assignment.es_prospecto
+                      ? assignment.prospecto && (
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px]">
+                            {assignment.prospecto.telefono && (
+                              <span>
+                                <span className="text-muted-foreground">Tel:</span>{" "}
+                                <span className="text-foreground/80">{assignment.prospecto.telefono}</span>
+                              </span>
+                            )}
+                            {assignment.prospecto.barrio && (
+                              <span>
+                                <span className="text-muted-foreground">Barrio:</span>{" "}
+                                <span className="text-foreground/80">{assignment.prospecto.barrio}</span>
+                              </span>
+                            )}
+                          </div>
+                        )
+                      : assignment.cliente_info && (
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px]">
+                            {assignment.cliente_info.ciudades && assignment.cliente_info.ciudades.length > 0 && (
+                              <span>
+                                <span className="text-muted-foreground">Ciudad:</span>{" "}
+                                <span className="text-foreground/80">
+                                  {assignment.cliente_info.ciudades.join(", ")}
+                                </span>
+                              </span>
+                            )}
+                            {assignment.cliente_info.score_comercial && (
+                              <span>
+                                <span className="text-muted-foreground">Score:</span>{" "}
+                                <span className="text-foreground/80">
+                                  {assignment.cliente_info.score_comercial}
+                                </span>
+                              </span>
+                            )}
+                            {assignment.cliente_info.monto_total_vendido != null && (
+                              <span>
+                                <span className="text-muted-foreground">Vendido:</span>{" "}
+                                <span className="text-foreground/80">
+                                  ${assignment.cliente_info.monto_total_vendido.toLocaleString("es-AR")}
+                                </span>
+                              </span>
+                            )}
+                            {assignment.cliente_info.orders_count != null && (
+                              <span>
+                                <span className="text-muted-foreground">Órdenes:</span>{" "}
+                                <span className="text-foreground/80">{assignment.cliente_info.orders_count}</span>
+                              </span>
+                            )}
+                            {assignment.cliente_info.avg_ticket != null && (
+                              <span>
+                                <span className="text-muted-foreground">Ticket:</span>{" "}
+                                <span className="text-foreground/80">
+                                  ${assignment.cliente_info.avg_ticket.toLocaleString("es-AR")}
+                                </span>
+                              </span>
+                            )}
+                            {assignment.cliente_info.days_since_last_purchase != null && (
+                              <span>
+                                <span className="text-muted-foreground">Última compra:</span>{" "}
+                                <span className="text-foreground/80">
+                                  hace {assignment.cliente_info.days_since_last_purchase} días
+                                </span>
+                              </span>
+                            )}
+                            {assignment.cliente_info.telefonos &&
+                              assignment.cliente_info.telefonos.length > 0 && (
+                                <span>
+                                  <span className="text-muted-foreground">Tel:</span>{" "}
+                                  <span className="text-foreground/80">
+                                    {assignment.cliente_info.telefonos[0]}
+                                  </span>
+                                </span>
+                              )}
+                          </div>
+                        )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
 
       {/* Map dialogs */}
       <Dialog open={showMapAll} onOpenChange={setShowMapAll}>
         <DialogContent className="max-w-[90vw] max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Todas las asignaciones de hoy</DialogTitle>
+            <DialogTitle className="font-sans">Todas las asignaciones de hoy</DialogTitle>
           </DialogHeader>
           <AssignorTodayAssignmentsMap assignments={assignments} />
         </DialogContent>
@@ -489,10 +519,10 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
       <Dialog open={!!showMapVendedor} onOpenChange={(open) => !open && setShowMapVendedor(null)}>
         <DialogContent className="max-w-[90vw] max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Asignaciones de {showMapVendedor}</DialogTitle>
+            <DialogTitle className="font-sans">Asignaciones de {showMapVendedor}</DialogTitle>
           </DialogHeader>
-          <AssignorTodayAssignmentsMap 
-            assignments={assignments} 
+          <AssignorTodayAssignmentsMap
+            assignments={assignments}
             vendedorFilter={showMapVendedor || undefined}
           />
         </DialogContent>
