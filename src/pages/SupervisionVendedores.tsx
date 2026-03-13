@@ -457,7 +457,7 @@ const SupervisionVendedores = () => {
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-3">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -481,358 +481,292 @@ const SupervisionVendedores = () => {
           <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
         </div>
 
-        {/* Panel de Filtros */}
-        <Card className="matte-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Filter className="h-5 w-5" />
-              Filtros
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Fecha de Asignación */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Fecha Asignación (Desde)
-                </label>
-                <Input
-                  type="date"
-                  value={filters.asignadoDesde}
-                  onChange={(e) => handleFilterChange("asignadoDesde", e.target.value)}
-                  className="bg-card"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Fecha Asignación (Hasta)
-                </label>
-                <Input
-                  type="date"
-                  value={filters.asignadoHasta}
-                  onChange={(e) => handleFilterChange("asignadoHasta", e.target.value)}
-                  className="bg-card"
-                />
-              </div>
-
-              {/* Fecha de Visita */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Fecha Visita (Desde)
-                </label>
-                <Input
-                  type="date"
-                  value={filters.visitadoDesde}
-                  onChange={(e) => handleFilterChange("visitadoDesde", e.target.value)}
-                  className="bg-card"
-                  disabled={visitaFiltersDisabled}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Fecha Visita (Hasta)
-                </label>
-                <Input
-                  type="date"
-                  value={filters.visitadoHasta}
-                  onChange={(e) => handleFilterChange("visitadoHasta", e.target.value)}
-                  className="bg-card"
-                  disabled={visitaFiltersDisabled}
-                />
-              </div>
-
-              {/* Vendedor */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Vendedor
-                </label>
-                <Select
-                  value={filters.vendedorId}
-                  onValueChange={(value) => handleFilterChange("vendedorId", value)}
-                >
-                  <SelectTrigger className="bg-card">
-                    <SelectValue placeholder="Todos los vendedores" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los vendedores</SelectItem>
-                    {vendedores.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Estado */}
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Estado
-                </label>
-                <Select
-                  value={filters.estado}
-                  onValueChange={(value) => handleFilterChange("estado", value)}
-                >
-                  <SelectTrigger className="bg-card">
-                    <SelectValue placeholder="Todos los estados" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos los estados</SelectItem>
-                    <SelectItem value="Asignado">Asignado</SelectItem>
-                    <SelectItem value="Por visitar">Por visitar</SelectItem>
-                    <SelectItem value="Visitado">Visitado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Botones */}
-              <div className="flex items-end gap-2">
-                <Button
-                  variant="outline"
-                  onClick={clearFilters}
-                  className="flex-1"
-                >
-                  Limpiar filtros
-                </Button>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={fetchData}
-                  disabled={loading}
-                >
-                  <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                </Button>
-              </div>
+        {/* 1. Filtros */}
+        <Collapsible open={openFilters} onOpenChange={setOpenFilters} className="w-full">
+          <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
+            <div className="flex items-center gap-2 font-serif text-lg text-foreground">
+              <Filter className="h-5 w-5 text-primary" />
+              <span>Filtros de Búsqueda</span>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Activaciones por vendedor */}
-        <ActividadesResumen />
-
-        {/* KPIs Globales */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <Card className="matte-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Asignadas</p>
-                  <p className="text-3xl font-bold text-foreground">{kpis.total}</p>
+            <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openFilters && "rotate-180")} />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <Card className="matte-card border-t-0 rounded-t-none">
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fecha Asignación (Desde)</label>
+                    <Input type="date" value={filters.asignadoDesde} onChange={(e) => handleFilterChange("asignadoDesde", e.target.value)} className="bg-card" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fecha Asignación (Hasta)</label>
+                    <Input type="date" value={filters.asignadoHasta} onChange={(e) => handleFilterChange("asignadoHasta", e.target.value)} className="bg-card" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fecha Visita (Desde)</label>
+                    <Input type="date" value={filters.visitadoDesde} onChange={(e) => handleFilterChange("visitadoDesde", e.target.value)} className="bg-card" disabled={visitaFiltersDisabled} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Fecha Visita (Hasta)</label>
+                    <Input type="date" value={filters.visitadoHasta} onChange={(e) => handleFilterChange("visitadoHasta", e.target.value)} className="bg-card" disabled={visitaFiltersDisabled} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Vendedor</label>
+                    <Select value={filters.vendedorId} onValueChange={(value) => handleFilterChange("vendedorId", value)}>
+                      <SelectTrigger className="bg-card"><SelectValue placeholder="Todos los vendedores" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los vendedores</SelectItem>
+                        {vendedores.map((v) => (<SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Estado</label>
+                    <Select value={filters.estado} onValueChange={(value) => handleFilterChange("estado", value)}>
+                      <SelectTrigger className="bg-card"><SelectValue placeholder="Todos los estados" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los estados</SelectItem>
+                        <SelectItem value="Asignado">Asignado</SelectItem>
+                        <SelectItem value="Por visitar">Por visitar</SelectItem>
+                        <SelectItem value="Visitado">Visitado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <Button variant="outline" onClick={clearFilters} className="flex-1">Limpiar filtros</Button>
+                    <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
+                      <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+                    </Button>
+                  </div>
                 </div>
-                <Users className="h-8 w-8 text-muted-foreground" />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </CollapsibleContent>
+        </Collapsible>
 
-          <Card className="matte-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Pendientes</p>
-                  <p className="text-3xl font-bold text-amber-500">{kpis.pendientes}</p>
-                </div>
-                <Clock className="h-8 w-8 text-amber-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="matte-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Visitadas</p>
-                  <p className="text-3xl font-bold text-emerald-500">{kpis.visitadas}</p>
-                </div>
-                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="matte-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">No Visitadas</p>
-                  <p className="text-3xl font-bold text-rose-500">{kpis.noVisitadas}</p>
-                </div>
-                <XCircle className="h-8 w-8 text-rose-500" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="matte-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Tasa Cumplimiento</p>
-                  <p className="text-3xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-muted-foreground" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Resumen por Vendedor */}
-        <Card className="matte-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Users className="h-5 w-5" />
-              Resumen por Vendedor
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Vendedor</TableHead>
-                  <TableHead className="text-center">Asignadas</TableHead>
-                  <TableHead className="text-center">Pendientes</TableHead>
-                  <TableHead className="text-center">Visitadas</TableHead>
-                  <TableHead className="text-center">No Visitadas</TableHead>
-                  <TableHead className="text-center">Tasa %</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {vendedorStats.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No hay datos para los filtros seleccionados
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  vendedorStats.map((stat) => (
-                    <TableRow
-                      key={stat.vendedor_id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleFilterChange("vendedorId", stat.vendedor_id)}
-                    >
-                      <TableCell className="font-medium">{stat.nombre}</TableCell>
-                      <TableCell className="text-center">{stat.total}</TableCell>
-                      <TableCell className="text-center text-amber-500">{stat.pendientes}</TableCell>
-                      <TableCell className="text-center text-emerald-500">{stat.visitadas}</TableCell>
-                      <TableCell className="text-center text-rose-500">{stat.noVisitadas}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={stat.tasa >= 70 ? "default" : stat.tasa >= 40 ? "secondary" : "destructive"}>
-                          {stat.tasa.toFixed(1)}%
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-
-        {/* Detalle de Asignaciones */}
-        <Card className="matte-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <CheckCircle2 className="h-5 w-5" />
-              Detalle de Asignaciones
-              <span className="text-sm font-normal text-muted-foreground">
-                (Mostrando {asignaciones.length} registros)
+        {/* 2. Indicadores (KPIs) */}
+        <Collapsible open={openKpis} onOpenChange={setOpenKpis} className="w-full">
+          <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
+            <div className="flex items-center gap-2 font-serif text-lg text-foreground">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              <span>Indicadores</span>
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                ({kpis.total} asignadas · {kpis.tasa.toFixed(0)}% cumplimiento)
               </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Cliente/Prospecto</TableHead>
-                  <TableHead>Vendedor</TableHead>
-                  <TableHead className="text-center">F. Asignación</TableHead>
-                  <TableHead className="text-center">F. Visita</TableHead>
-                  <TableHead className="text-center">Tipo Cierre</TableHead>
-                  <TableHead>Detalle</TableHead>
-                  <TableHead className="text-center">Estado</TableHead>
-                  <TableHead className="text-center">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {asignaciones.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
-                      No hay asignaciones para los filtros seleccionados
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  asignaciones.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={a.es_prospecto ? "outline" : "secondary"} className="text-xs">
-                            {a.es_prospecto ? "P" : "C"}
-                          </Badge>
-                          <div>
-                            <p className="font-medium text-sm">{a.cliente_nombre}</p>
-                            <p className="text-xs text-muted-foreground truncate max-w-[200px]">{a.direccion}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm">{a.vendedor_nombre}</TableCell>
-                      <TableCell className="text-center text-sm">{formatDate(a.created_at)}</TableCell>
-                      <TableCell className="text-center text-sm">{formatDate(a.visited_at)}</TableCell>
-                      <TableCell className="text-center">
-                        {a.tipo_cierre ? (
-                          <Badge 
-                            variant="outline"
-                            className={cn(
-                              a.tipo_cierre === 'Visitado' && 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30',
-                              a.tipo_cierre === 'Online' && 'bg-blue-500/20 text-blue-500 border-blue-500/30',
-                              a.tipo_cierre === 'No visitado' && 'bg-amber-500/20 text-amber-600 border-amber-500/30'
-                            )}
-                          >
-                            {a.tipo_cierre}
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-sm max-w-[200px]">
-                        {a.tipo_cierre === 'No visitado' ? (
-                          <span className="text-amber-600 truncate block" title={a.motivo_no_visita || undefined}>
-                            {a.motivo_no_visita || '-'}
-                          </span>
-                        ) : a.tipo_interaccion ? (
-                          <span className="text-muted-foreground truncate block" title={a.tipo_interaccion}>
-                            {a.tipo_interaccion}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">-</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge 
-                          variant={a.estado === "Visitado" ? "default" : a.estado === "Por visitar" ? "secondary" : "outline"}
-                          className={a.estado === "Visitado" ? "bg-emerald-500/20 text-emerald-500" : ""}
-                        >
-                          {a.estado === "Visitado" ? "✓" : a.estado === "Por visitar" ? "⏳" : "○"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {a.tipo_cierre ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setFeedbackModal(a)}
-                            className="gap-1"
-                          >
-                            <Eye className="h-4 w-4" />
-                            Ver
-                          </Button>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">-</span>
-                        )}
-                      </TableCell>
+            </div>
+            <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openKpis && "rotate-180")} />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <Card className="matte-card">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Asignadas</p>
+                      <p className="text-3xl font-bold text-foreground">{kpis.total}</p>
+                    </div>
+                    <Users className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="matte-card">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Pendientes</p>
+                      <p className="text-3xl font-bold text-amber-500">{kpis.pendientes}</p>
+                    </div>
+                    <Clock className="h-8 w-8 text-amber-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="matte-card">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Visitadas</p>
+                      <p className="text-3xl font-bold text-emerald-500">{kpis.visitadas}</p>
+                    </div>
+                    <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="matte-card">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">No Visitadas</p>
+                      <p className="text-3xl font-bold text-rose-500">{kpis.noVisitadas}</p>
+                    </div>
+                    <XCircle className="h-8 w-8 text-rose-500" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="matte-card">
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Tasa Cumplimiento</p>
+                      <p className="text-3xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
+                    </div>
+                    <TrendingUp className="h-8 w-8 text-muted-foreground" />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* 3. Activaciones por Vendedor */}
+        <Collapsible open={openActividades} onOpenChange={setOpenActividades} className="w-full">
+          <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
+            <div className="flex items-center gap-2 font-serif text-lg text-foreground">
+              <Activity className="h-5 w-5 text-primary" />
+              <span>Activaciones por Vendedor</span>
+            </div>
+            <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openActividades && "rotate-180")} />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <ActividadesResumen />
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* 4. Resumen por Vendedor */}
+        <Collapsible open={openResumen} onOpenChange={setOpenResumen} className="w-full">
+          <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
+            <div className="flex items-center gap-2 font-serif text-lg text-foreground">
+              <Users className="h-5 w-5 text-primary" />
+              <span>Resumen por Vendedor</span>
+              {vendedorStats.length > 0 && (
+                <span className="text-sm font-normal text-muted-foreground ml-2">({vendedorStats.length} vendedores)</span>
+              )}
+            </div>
+            <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openResumen && "rotate-180")} />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <Card className="matte-card">
+              <CardContent className="pt-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Vendedor</TableHead>
+                      <TableHead className="text-center">Asignadas</TableHead>
+                      <TableHead className="text-center">Pendientes</TableHead>
+                      <TableHead className="text-center">Visitadas</TableHead>
+                      <TableHead className="text-center">No Visitadas</TableHead>
+                      <TableHead className="text-center">Tasa %</TableHead>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {vendedorStats.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No hay datos para los filtros seleccionados</TableCell>
+                      </TableRow>
+                    ) : (
+                      vendedorStats.map((stat) => (
+                        <TableRow key={stat.vendedor_id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleFilterChange("vendedorId", stat.vendedor_id)}>
+                          <TableCell className="font-medium">{stat.nombre}</TableCell>
+                          <TableCell className="text-center">{stat.total}</TableCell>
+                          <TableCell className="text-center text-amber-500">{stat.pendientes}</TableCell>
+                          <TableCell className="text-center text-emerald-500">{stat.visitadas}</TableCell>
+                          <TableCell className="text-center text-rose-500">{stat.noVisitadas}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={stat.tasa >= 70 ? "default" : stat.tasa >= 40 ? "secondary" : "destructive"}>{stat.tasa.toFixed(1)}%</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {/* 5. Detalle de Asignaciones */}
+        <Collapsible open={openDetalle} onOpenChange={setOpenDetalle} className="w-full">
+          <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
+            <div className="flex items-center gap-2 font-serif text-lg text-foreground">
+              <ClipboardList className="h-5 w-5 text-primary" />
+              <span>Detalle de Asignaciones</span>
+              <span className="text-sm font-normal text-muted-foreground ml-2">({asignaciones.length} registros)</span>
+            </div>
+            <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openDetalle && "rotate-180")} />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-3">
+            <Card className="matte-card">
+              <CardContent className="pt-6">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente/Prospecto</TableHead>
+                      <TableHead>Vendedor</TableHead>
+                      <TableHead className="text-center">F. Asignación</TableHead>
+                      <TableHead className="text-center">F. Visita</TableHead>
+                      <TableHead className="text-center">Tipo Cierre</TableHead>
+                      <TableHead>Detalle</TableHead>
+                      <TableHead className="text-center">Estado</TableHead>
+                      <TableHead className="text-center">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {asignaciones.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No hay asignaciones para los filtros seleccionados</TableCell>
+                      </TableRow>
+                    ) : (
+                      asignaciones.map((a) => (
+                        <TableRow key={a.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Badge variant={a.es_prospecto ? "outline" : "secondary"} className="text-xs">{a.es_prospecto ? "P" : "C"}</Badge>
+                              <div>
+                                <p className="font-medium text-sm">{a.cliente_nombre}</p>
+                                <p className="text-xs text-muted-foreground truncate max-w-[200px]">{a.direccion}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-sm">{a.vendedor_nombre}</TableCell>
+                          <TableCell className="text-center text-sm">{formatDate(a.created_at)}</TableCell>
+                          <TableCell className="text-center text-sm">{formatDate(a.visited_at)}</TableCell>
+                          <TableCell className="text-center">
+                            {a.tipo_cierre ? (
+                              <Badge variant="outline" className={cn(
+                                a.tipo_cierre === 'Visitado' && 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30',
+                                a.tipo_cierre === 'Online' && 'bg-blue-500/20 text-blue-500 border-blue-500/30',
+                                a.tipo_cierre === 'No visitado' && 'bg-amber-500/20 text-amber-600 border-amber-500/30'
+                              )}>{a.tipo_cierre}</Badge>
+                            ) : (<span className="text-muted-foreground text-xs">-</span>)}
+                          </TableCell>
+                          <TableCell className="text-sm max-w-[200px]">
+                            {a.tipo_cierre === 'No visitado' ? (
+                              <span className="text-amber-600 truncate block" title={a.motivo_no_visita || undefined}>{a.motivo_no_visita || '-'}</span>
+                            ) : a.tipo_interaccion ? (
+                              <span className="text-muted-foreground truncate block" title={a.tipo_interaccion}>{a.tipo_interaccion}</span>
+                            ) : (<span className="text-muted-foreground text-xs">-</span>)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={a.estado === "Visitado" ? "default" : a.estado === "Por visitar" ? "secondary" : "outline"}
+                              className={a.estado === "Visitado" ? "bg-emerald-500/20 text-emerald-500" : ""}>
+                              {a.estado === "Visitado" ? "✓" : a.estado === "Por visitar" ? "⏳" : "○"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {a.tipo_cierre ? (
+                              <Button variant="ghost" size="sm" onClick={() => setFeedbackModal(a)} className="gap-1">
+                                <Eye className="h-4 w-4" />Ver
+                              </Button>
+                            ) : (<span className="text-muted-foreground text-xs">-</span>)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       {/* Modal Ver Feedback */}
