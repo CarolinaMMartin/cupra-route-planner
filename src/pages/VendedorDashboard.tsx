@@ -294,11 +294,11 @@ const VendedorDashboard = () => {
 
         <Card className="p-2 md:p-0">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 p-2 md:p-6 md:pb-2">
-            <CardTitle className="text-[11px] md:text-xs font-medium text-muted-foreground uppercase tracking-wider">Pendientes</CardTitle>
-            <Target className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
+            <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pendientes</CardTitle>
+            <Target className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent className="p-2 pt-0 md:p-6 md:pt-0">
-            <div className="text-lg md:text-xl font-semibold text-foreground">{estadisticas.asignacionesActivas}</div>
+            <div className="text-xl md:text-2xl font-bold text-foreground">{estadisticas.asignacionesActivas}</div>
             <p className="text-xs text-muted-foreground hidden md:block">Por atender</p>
           </CardContent>
         </Card>
