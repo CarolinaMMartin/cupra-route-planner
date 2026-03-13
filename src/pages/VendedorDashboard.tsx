@@ -262,8 +262,8 @@ const VendedorDashboard = () => {
         <div className="flex items-center gap-3">
           <img src={cupraLogo} alt="Cupra Wines" className="h-8 md:h-12 w-auto" />
           <div>
-            <h1 className="text-lg md:text-2xl font-serif text-foreground tracking-tight">Mi Dashboard</h1>
-            <p className="text-xs text-muted-foreground hidden md:block">Resumen de asignaciones y actividad</p>
+            <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">Mi Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-1 hidden md:block">Resumen de asignaciones y actividad</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
