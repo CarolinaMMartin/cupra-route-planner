@@ -26,7 +26,11 @@ interface VendedorActivaciones {
   }>;
 }
 
-const ActividadesResumen = () => {
+interface ActividadesResumenProps {
+  vendedorIdFilter?: string;
+}
+
+const ActividadesResumen = ({ vendedorIdFilter }: ActividadesResumenProps) => {
   const [vendedoresData, setVendedoresData] = useState<VendedorActivaciones[]>([]);
   const [loading, setLoading] = useState(true);
   const [mesOffset, setMesOffset] = useState(0); // 0 = este mes, -1 = mes anterior, etc.
