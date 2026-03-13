@@ -480,7 +480,66 @@ const SupervisionVendedores = () => {
           <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
         </div>
 
-        {/* 1. Filtros */}
+        {/* 1. Indicadores (KPIs) - Siempre visibles */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Asignadas</p>
+                  <p className="text-3xl font-bold text-foreground">{kpis.total}</p>
+                </div>
+                <Users className="h-8 w-8 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Pendientes</p>
+                  <p className="text-3xl font-bold text-amber-500">{kpis.pendientes}</p>
+                </div>
+                <Clock className="h-8 w-8 text-amber-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Visitadas</p>
+                  <p className="text-3xl font-bold text-emerald-500">{kpis.visitadas}</p>
+                </div>
+                <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">No Visitadas</p>
+                  <p className="text-3xl font-bold text-rose-500">{kpis.noVisitadas}</p>
+                </div>
+                <XCircle className="h-8 w-8 text-rose-500" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="matte-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Tasa Cumplimiento</p>
+                  <p className="text-3xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-muted-foreground" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 2. Filtros */}
         <Collapsible open={openFilters} onOpenChange={setOpenFilters} className="w-full">
           <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
             <div className="flex items-center gap-2 font-serif text-lg text-foreground">
