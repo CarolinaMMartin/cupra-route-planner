@@ -54,6 +54,7 @@ declare namespace google.maps {
     map?: Map;
     title?: string;
     icon?: Icon | string;
+    animation?: number;
   }
 
   interface LatLngLiteral {
