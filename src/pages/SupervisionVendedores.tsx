@@ -102,7 +102,6 @@ const SupervisionVendedores = () => {
   const [asignaciones, setAsignaciones] = useState<AsignacionDetalle[]>([]);
   const [feedbackModal, setFeedbackModal] = useState<AsignacionDetalle | null>(null);
   const [openFilters, setOpenFilters] = useState(true);
-  const [openKpis, setOpenKpis] = useState(true);
   const [openActividades, setOpenActividades] = useState(false);
   const [openResumen, setOpenResumen] = useState(false);
   const [openDetalle, setOpenDetalle] = useState(false);
