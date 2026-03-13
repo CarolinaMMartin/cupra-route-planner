@@ -289,8 +289,8 @@ const Profiles = () => {
             <div className="flex items-center gap-3">
               <img src={cupraLogo} alt="Cupra Wines" className="h-12 w-auto" />
               <div>
-                <h1 className="text-2xl font-serif font-bold">Cupra Wines</h1>
-                <p className="text-sm text-muted-foreground">Gestión de Perfiles</p>
+                <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">Gestión de Perfiles</h1>
+                <p className="text-sm text-muted-foreground mt-1">Administración de usuarios</p>
               </div>
             </div>
 

@@ -531,9 +531,9 @@ const SupervisionVendedores = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Tasa Cumplimiento</p>
-                  <p className="text-3xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
+                  <p className="text-2xl font-bold text-foreground">{kpis.tasa.toFixed(1)}%</p>
                 </div>
-                <TrendingUp className="h-8 w-8 text-muted-foreground" />
+                <TrendingUp className="h-6 w-6 text-muted-foreground" />
               </div>
             </CardContent>
           </Card>
