@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-namespace */
 
-// Minimal Google Maps type declarations for this project
+// Google Maps type declarations for this project
 
 declare namespace google.maps {
   class Map {
@@ -78,10 +78,10 @@ declare namespace google.maps {
     function removeListener(listener: MapsEventListener): void;
   }
 
-  enum Animation {
-    BOUNCE = 1,
-    DROP = 2,
-  }
+  const Animation: {
+    BOUNCE: number;
+    DROP: number;
+  };
 
   namespace places {
     class PlacesService {
