@@ -50,7 +50,7 @@ declare namespace google.maps {
   }
 
   interface MarkerOptions {
-    position?: LatLngLiteral;
+    position?: LatLngLiteral | LatLng;
     map?: Map;
     title?: string;
     icon?: Icon | string;
