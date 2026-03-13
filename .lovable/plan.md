@@ -1,72 +1,39 @@
 
-# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
-## Cambios realizados
+## Plan: Colapsar secciones en Supervisión de Vendedores
 
-### A. DB: Campo `vendedor_actual` en `clientes` ✅
-- Nuevo campo `vendedor_actual` (text) agregado
-- Inicializado desde la última venta registrada en `ventas_cupra`
-- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
+Reorganizar la página para que cada sección sea un Collapsible que se expande/colapsa con una flecha, manteniendo un layout minimalista.
 
-### B. Pre-scoring determinístico ✅
-- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
-- **score_geo (50%)**: Distancia Haversine al centroide del cluster
-- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
-- **score_comercial (15%)**: Score comercial normalizado (0-100)
-- **score_rotacion (10%)**: Días desde última recomendación
-- Filtra candidatos con feedback negativo automáticamente
-- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
+### Estructura vertical (de arriba a abajo)
 
-### C. Mapeo nombre→UUID ✅
-- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
-- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
-- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
+1. **Header** — sin cambios (titulo + logo)
+2. **Filtros** — colapsable, abierto por defecto
+3. **Indicadores** (KPIs) — colapsable, abierto por defecto
+4. **Activaciones por Vendedor** — colapsable, cerrado por defecto
+5. **Resumen por Vendedor** — colapsable, cerrado por defecto
+6. **Detalle de Asignaciones** — colapsable, cerrado por defecto
 
-### D. Prompt reducido centrado en vendedor ✅
-- De ~65K chars a ~5-10K chars (reducción ~80%)
-- Formato tabular compacto con scores pre-calculados
-- IA solo decide ruta óptima y genera justificaciones
-- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
+### Implementación
 
-### E. UI: Vendedor actual vs anterior ✅
-- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
-- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
-- Tipo `Sucursal` extendido con `vendedor_actual`
+- Usar el componente `Collapsible` de Radix ya disponible en el proyecto
+- Cada sección se convierte en un `Collapsible` con un trigger estilizado como barra horizontal con:
+  - Icono + titulo de la sección
+  - Flecha `ChevronDown` que rota 180° cuando está abierto
+- El contenido actual de cada `Card` se mueve al `CollapsibleContent`
+- Se elimina el wrapper `Card` → `CardHeader` individual; el trigger del collapsible actúa como header
+- Estados: `openFilters`, `openKpis`, `openActividades`, `openResumen`, `openDetalle` con `useState`
 
----
+### Estilo del trigger
 
-# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
+```text
+┌──────────────────────────────────────────────────┐
+│  🔍 Filtros                                   ▼  │
+└──────────────────────────────────────────────────┘
+```
 
-## Cambios realizados
+Una barra `Card`-like con padding, fondo `matte-card`, hover sutil, y la flecha a la derecha. Al expandir, el contenido aparece debajo sin borde superior extra.
 
-### A. Tabs principales ✅
-- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
-- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
+### Archivos a modificar
 
-### B. FilterPanel con dos modos ✅
-- Modo "Por Área": selector de área → ver resumen → generar
-- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
-- Instrucciones IA colapsables en ambos modos
-- Vendedores en Collapsible con badge "X de Y seleccionados"
+- `src/pages/SupervisionVendedores.tsx` — refactor de toda la sección de contenido para usar Collapsible en cada bloque
 
-### C. RecommendationFilters simplificado ✅
-- De 6 filtros redundantes a solo 1 filtro por vendedor
-- Se muestra solo cuando hay más de 1 vendedor
-
-### D. TodayAssignments sin Card wrapper ✅
-- Funciona como contenido directo del tab
-- Layout más limpio sin doble Card
-
-## Archivos modificados
-| Archivo | Cambio |
-|---------|--------|
-| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
-| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
-| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
-| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
-
-## Próximos pasos potenciales
-- Planificación temporal (agenda semanal)
-- Reportes y supervisión
-- Pipeline ETL directo sin n8n
-- Agente conversacional
