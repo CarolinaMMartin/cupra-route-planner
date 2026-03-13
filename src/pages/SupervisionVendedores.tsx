@@ -612,7 +612,7 @@ const SupervisionVendedores = () => {
             <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openActividades && "rotate-180")} />
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-3">
-            <ActividadesResumen />
+            <ActividadesResumen vendedorIdFilter={filters.vendedorId} />
           </CollapsibleContent>
         </Collapsible>
 
