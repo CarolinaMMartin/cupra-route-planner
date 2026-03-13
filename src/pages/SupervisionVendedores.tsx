@@ -520,9 +520,9 @@ const SupervisionVendedores = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">No Visitadas</p>
-                  <p className="text-3xl font-bold text-rose-500">{kpis.noVisitadas}</p>
+                  <p className="text-2xl font-bold text-rose-500">{kpis.noVisitadas}</p>
                 </div>
-                <XCircle className="h-8 w-8 text-rose-500" />
+                <XCircle className="h-6 w-6 text-rose-500" />
               </div>
             </CardContent>
           </Card>
