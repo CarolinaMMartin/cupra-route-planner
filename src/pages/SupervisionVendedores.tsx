@@ -12,7 +12,11 @@ import {
   Filter,
   RefreshCw,
   Eye,
-  XCircle
+  XCircle,
+  ChevronDown,
+  BarChart3,
+  ClipboardList,
+  Activity
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
