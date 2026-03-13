@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.check-pending-assignments]
 verify_jwt = false
+
+[functions.process-ventas-excel]
+verify_jwt = false
