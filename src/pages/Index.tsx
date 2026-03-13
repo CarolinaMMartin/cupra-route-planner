@@ -140,6 +140,10 @@ const Index = () => {
                         <ClipboardList className="w-4 h-4" />
                         Supervisión
                       </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate("/carga-datos")} className="gap-2 cursor-pointer">
+                        <Upload className="w-4 h-4" />
+                        Carga de Datos
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => navigate("/profiles")} className="gap-2 cursor-pointer">
                         <UserCog className="w-4 h-4" />
