@@ -1,4 +1,3 @@
-
 # Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
 ## Cambios realizados
@@ -65,8 +64,47 @@
 | `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
 | `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
 
+---
+
+# Phase 3: Carga de Excel + ETL integrado — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Edge Function `process-ventas-excel` ✅
+- Recibe `{ rows: [...] }` parseadas en frontend con SheetJS
+- **Normalización de campos**: `getFieldValue()` con matching exacto, case-insensitive y NFD-normalized
+- **Conversión de fechas**: Excel serial → ISO, DD/MM/YYYY → ISO
+- **Conversión de montos**: Formato argentino (puntos miles, coma decimal)
+- **Geografía CABA**: 48 barrios mapeados a 15 comunas + detección PBA/GBA
+- **Agregación RFM por cliente**: Primera/última compra, días inactividad, scores recencia/volumen/comercial
+- **Canal**: Detección ON_TRADE vs OFF_TRADE por categorías
+- **Upsert ventas_cupra**: Batches de 500, conflict key existente
+- **Upsert clientes protegido**: No sobreescribe `last_recommendation_at`, `excluir_recomendaciones`, `ultima_visita`
+
+### B. Página `CargaDatos.tsx` ✅
+- Acceso restringido a rol `asignador`
+- Drop zone + file input para `.xlsx` / `.xls`
+- Parseo client-side con `xlsx` (SheetJS)
+- Preview: columnas detectadas + primeras 5 filas
+- Progreso visual durante procesamiento
+- Resumen final: ventas procesadas, clientes actualizados, errores
+
+### C. Navegación ✅
+- Ruta `/carga-datos` en `App.tsx`
+- Menú "Gestión" del asignador: nuevo item "Carga de Datos"
+
+## Archivos creados/modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/process-ventas-excel/index.ts` | Creado — ETL completo |
+| `src/pages/CargaDatos.tsx` | Creado — UI de upload |
+| `src/App.tsx` | Ruta `/carga-datos` |
+| `src/pages/Index.tsx` | Menú con "Carga de Datos" |
+| `supabase/config.toml` | Función registrada |
+| `package.json` | Dependencia `xlsx` |
+
 ## Próximos pasos potenciales
 - Planificación temporal (agenda semanal)
 - Reportes y supervisión
-- Pipeline ETL directo sin n8n
 - Agente conversacional
+
