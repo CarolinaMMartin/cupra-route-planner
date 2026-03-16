@@ -637,6 +637,7 @@ Deno.serve(async (req) => {
     // ============================================================
     const vendorBuckets: Record<string, { activos: ScoredCandidate[]; inactivos: ScoredCandidate[]; perdidos: ScoredCandidate[]; potenciales: ScoredCandidate[] }> = {};
     const vendorAnchors: Map<string, AnchorPoint[]> = new Map();
+    const extraProspectosLoaded: any[] = []; // Accumulate extra prospectos for enrichment lookup
 
     for (const vendedor of vendedoresData) {
       // === STRICT FILTER: Only clients affiliated with THIS vendor ===
@@ -700,6 +701,21 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Fallback #2: if STILL no anchors, use centroid of requested zone (clientPlaces from ANY vendor)
+      if (anchors.length === 0 && clientPlaces && clientPlaces.length > 0) {
+        const validZonePlaces = clientPlaces.filter(p => {
+          const lat = Number(p.lat);
+          const lng = Number(p.long);
+          return lat >= -60 && lat <= -20 && lng >= -80 && lng <= -40;
+        });
+        if (validZonePlaces.length > 0) {
+          const centroidLat = validZonePlaces.reduce((s, p) => s + Number(p.lat), 0) / validZonePlaces.length;
+          const centroidLng = validZonePlaces.reduce((s, p) => s + Number(p.long), 0) / validZonePlaces.length;
+          anchors.push({ lat: centroidLat, lng: centroidLng });
+          console.log(`📌 ${vendedor.nombre}: Using zone centroid as anchor (${centroidLat.toFixed(4)}, ${centroidLng.toFixed(4)})`);
+        }
+      }
+
       vendorAnchors.set(vendedor.user_id, anchors);
       console.log(`⚓ ${vendedor.nombre}: ${anchors.length} anclas`);
 
@@ -726,32 +742,41 @@ Deno.serve(async (req) => {
       if (totalCandidates < 8) {
         console.log(`⚠️ ${vendedor.nombre}: Solo ${totalCandidates} candidatos, necesita 8. Buscando más prospectos...`);
         
-        // Find vendor's top barrio (highest concentration)
-        const barrioCount = new Map<string, number>();
-        for (const c of myValidClients) {
-          const b = placesMap.get(c.client_id)?.barrio_principal || c.barrio_principal;
-          if (b) barrioCount.set(b, (barrioCount.get(b) || 0) + 1);
-        }
-        const topBarrios = [...barrioCount.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
-        console.log(`🏘️ ${vendedor.nombre} barrios top: ${topBarrios.slice(0, 3).join(', ')}`);
-        
-        // Load extra prospects from vendor's top barrios (broader search)
         const existingProspectoIds = new Set(potenciales.map(p => p.client_id));
         const needed = 8 - totalCandidates;
         
-        if (topBarrios.length > 0) {
-          const barrioConds = topBarrios.slice(0, 5).map(b => `barrio.ilike.%${b}%`).join(",");
+        // PRIORITY 1: Use barrios from the REQUEST (what user selected), not vendor's portfolio
+        const searchBarrios = barriosFinales.length > 0 ? barriosFinales : [];
+        
+        // PRIORITY 2: Fallback to vendor's top barrios if no request barrios
+        if (searchBarrios.length === 0) {
+          const barrioCount = new Map<string, number>();
+          for (const c of myValidClients) {
+            const b = placesMap.get(c.client_id)?.barrio_principal || c.barrio_principal;
+            if (b) barrioCount.set(b, (barrioCount.get(b) || 0) + 1);
+          }
+          const topBarrios = [...barrioCount.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+          searchBarrios.push(...topBarrios.slice(0, 5));
+        }
+        
+        console.log(`🏘️ ${vendedor.nombre} buscando prospectos en barrios: ${searchBarrios.slice(0, 5).join(', ')}`);
+        
+        if (searchBarrios.length > 0) {
+          const barrioConds = searchBarrios.slice(0, 5).map((b: string) => `barrio.ilike.%${b}%`).join(",");
           const { data: extraProspectos } = await supabaseClient
             .from("prospectos").select("*")
             .or(barrioConds)
             .order("rating", { ascending: false })
-            .limit(needed * 3);
+            .limit(needed * 5);
           
           const extraFiltered = (extraProspectos || []).filter(p => 
             !prospectosAsignadosHoy.has(p.place_id) && 
             !existingProspectoIds.has(p.place_id) &&
             !p.client_id
           );
+          
+          // Store for enrichment lookup later
+          extraProspectosLoaded.push(...extraFiltered);
           
           // Score and add extra prospects
           const extraScored = preScoreCandidates(
@@ -762,7 +787,7 @@ Deno.serve(async (req) => {
           ).filter(c => !existingProspectoIds.has(c.client_id));
           
           potenciales = [...potenciales, ...extraScored.slice(0, needed)];
-          console.log(`🆕 ${vendedor.nombre}: +${Math.min(extraScored.length, needed)} prospectos extra del barrio top`);
+          console.log(`🆕 ${vendedor.nombre}: +${Math.min(extraScored.length, needed)} prospectos extra del barrio solicitado`);
         }
         
         // If STILL not enough, load prospects from same provincia without barrio filter
@@ -774,13 +799,16 @@ Deno.serve(async (req) => {
           const { data: provinciaProspectos } = await supabaseClient
             .from("prospectos").select("*")
             .order("rating", { ascending: false })
-            .limit(stillNeeded * 3);
+            .limit(stillNeeded * 5);
           
           const provinciaFiltered = (provinciaProspectos || []).filter(p => 
             !prospectosAsignadosHoy.has(p.place_id) && 
             !allExistingIds.has(p.place_id) &&
             !p.client_id
           );
+          
+          // Store for enrichment lookup later
+          extraProspectosLoaded.push(...provinciaFiltered);
           
           const provinciaScored = preScoreCandidates(
             [], provinciaFiltered, placesMap,
@@ -992,7 +1020,7 @@ Respetá la cuota y priorizá la densidad geográfica.`;
       }
 
       const clienteCompleto = clienteLookup.get(rec.client_id);
-      const prospectoCompleto = !clienteCompleto ? prospectos.find(p => p.place_id === rec.client_id) : null;
+      const prospectoCompleto = !clienteCompleto ? (prospectos.find(p => p.place_id === rec.client_id) || extraProspectosLoaded.find(p => p.place_id === rec.client_id)) : null;
       if (!clienteCompleto && !prospectoCompleto) continue;
 
       const esProspecto = !clienteCompleto;
