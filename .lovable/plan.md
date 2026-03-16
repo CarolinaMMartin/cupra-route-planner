@@ -1,160 +1,98 @@
-# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
-## Cambios realizados
 
-### A. DB: Campo `vendedor_actual` en `clientes` ✅
-- Nuevo campo `vendedor_actual` (text) agregado
-- Inicializado desde la última venta registrada en `ventas_cupra`
-- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
+# Plan: Corrección de 3 bugs críticos en el motor
 
-### B. Pre-scoring determinístico ✅
-- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
-- **score_geo (50%)**: Distancia Haversine al centroide del cluster
-- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
-- **score_comercial (15%)**: Score comercial normalizado (0-100)
-- **score_rotacion (10%)**: Días desde última recomendación
-- Filtra candidatos con feedback negativo automáticamente
-- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
+## Bugs encontrados
 
-### C. Mapeo nombre→UUID ✅
-- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
-- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
-- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
+### Bug 1: Montos de venta absurdos ($ 2.263 trillones)
+**Causa raíz**: La función `toNumberCurrency` en `process-ventas-excel` trata los puntos como separador de miles y los elimina. Pero `xlsx` entrega los números ya parseados como JavaScript numbers (ej: `34710.74`). Al convertir a string → `"34710.74"` → elimina el punto → `"3471074"` → el valor se multiplica x100 o más.
 
-### D. Prompt reducido centrado en vendedor ✅
-- De ~65K chars a ~5-10K chars (reducción ~80%)
-- Formato tabular compacto con scores pre-calculados
-- IA solo decide ruta óptima y genera justificaciones
-- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
+**Dato**: 99 de 1176 filas tienen valores > $100M. El promedio real debería ser ~$50.000, pero el promedio actual es $1.26 cuatrillones.
 
-### E. UI: Vendedor actual vs anterior ✅
-- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
-- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
-- Tipo `Sucursal` extendido con `vendedor_actual`
+**Fix**: Modificar `toNumberCurrency` para detectar si el valor ya es un número JS válido y retornarlo directamente, sin manipular separadores.
+
+### Bug 2: Mismos clientes recomendados para Pablo Y Pilar
+**Causa raíz**: La función `validateAndFixDistribution` no deduplica entre vendedores. Cada vendedor recibe los mismos candidatos (GARDINER, BYB, MARKEN, DON JULIO, etc.) porque comparten la misma zona y la IA los selecciona para ambos.
+
+**Dato**: De 16 recomendaciones totales, 6 clientes aparecen duplicados (uno por cada vendedor).
+
+**Fix**: Después de asignar las 8 recs del primer vendedor, excluir esos `client_id` del pool del segundo vendedor.
+
+### Bug 3: "Recomendó cualquier cosa" para Palermo
+**Causa raíz**: Con los montos inflados, el ranking por `monto_total_historico` está corrupto. Los clientes con montos absurdos aparecen como "top" sin importar su zona real. Además, sin deduplicación entre vendedores, las anclas son las mismas para ambos → ambos reciben la misma ruta.
+
+**Fix**: Se resuelve al corregir los bugs 1 y 2. Después de re-subir el Excel con el parser arreglado, los rankings y anclas serán correctos.
 
 ---
 
-# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
+## Acciones
 
-## Cambios realizados
+### 1. Fix parser `toNumberCurrency` en `process-ventas-excel`
 
-### A. Tabs principales ✅
-- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
-- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
+```typescript
+const toNumberCurrency = (v: any): number | null => {
+  if (isEmpty(v)) return null;
+  // Si xlsx ya lo parseó como número, usarlo directamente
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const s = String(v).trim();
+  // Si es un número JS limpio (sin separadores de miles)
+  const directParse = Number(s);
+  if (Number.isFinite(directParse)) return directParse;
+  // Formato argentino: 1.234.567,89 → eliminar puntos, reemplazar coma
+  const cleaned = s.replace(/[^\d,.\-]/g, '').replace(/\s+/g, '');
+  // Detectar formato: si tiene coma seguida de 1-2 dígitos al final → coma es decimal
+  if (/,\d{1,2}$/.test(cleaned)) {
+    return Number(cleaned.replace(/\./g, '').replace(',', '.')) || null;
+  }
+  // Si tiene punto seguido de 1-2 dígitos al final → punto es decimal
+  if (/\.\d{1,2}$/.test(cleaned)) {
+    return Number(cleaned.replace(/,/g, '')) || null;
+  }
+  return Number(cleaned.replace(/[.,]/g, '')) || null;
+};
+```
 
-### B. FilterPanel con dos modos ✅
-- Modo "Por Área": selector de área → ver resumen → generar
-- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
-- Instrucciones IA colapsables en ambos modos
-- Vendedores en Collapsible con badge "X de Y seleccionados"
+### 2. Deduplicación cross-vendor en `generate-recommendations`
 
-### C. RecommendationFilters simplificado ✅
-- De 6 filtros redundantes a solo 1 filtro por vendedor
-- Se muestra solo cuando hay más de 1 vendedor
+En la sección 13 (validate), después de procesar cada vendedor, agregar sus `client_id` a un set global y excluirlos del siguiente:
 
-### D. TodayAssignments sin Card wrapper ✅
-- Funciona como contenido directo del tab
-- Layout más limpio sin doble Card
+```typescript
+const globalPickedIds = new Set<string>();
+for (const vendedor of vendedoresData) {
+  // Filtrar candidatos ya asignados a otro vendedor
+  const filteredBuckets = {
+    activos: vendorBuckets[vendedor.user_id].activos.filter(c => !globalPickedIds.has(c.client_id)),
+    inactivos: vendorBuckets[vendedor.user_id].inactivos.filter(c => !globalPickedIds.has(c.client_id)),
+    perdidos: vendorBuckets[vendedor.user_id].perdidos.filter(c => !globalPickedIds.has(c.client_id)),
+    potenciales: vendorBuckets[vendedor.user_id].potenciales.filter(c => !globalPickedIds.has(c.client_id)),
+  };
+  const vendorRecs = validateAndFixDistribution(..., filteredBuckets, ...);
+  vendorRecs.forEach(r => globalPickedIds.add(r.client_id));
+  validatedRecs.push(...vendorRecs);
+}
+```
 
-## Archivos modificados
-| Archivo | Cambio |
-|---------|--------|
-| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
-| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
-| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
-| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
+### 3. Limpiar datos corruptos (migración SQL)
 
----
+```sql
+TRUNCATE TABLE ventas_cupra;
+-- Reset campos agregados en clientes
+UPDATE clientes SET 
+  monto_total_historico = 0, ticket_promedio = 0, cantidad_ordenes = 0,
+  participacion_mercado = 0, score_comercial = NULL, score_recencia = NULL, score_volumen = NULL;
+-- Limpiar recomendaciones corruptas
+TRUNCATE TABLE recomendaciones_ia;
+```
 
-# Phase 3: Carga de Excel + ETL integrado — IMPLEMENTADO
-
-## Cambios realizados
-
-### A. Edge Function `process-ventas-excel` ✅
-- Recibe `{ rows: [...] }` parseadas en frontend con SheetJS
-- **Normalización de campos**: `getFieldValue()` con matching exacto, case-insensitive y NFD-normalized
-- **Conversión de fechas**: Excel serial → ISO, DD/MM/YYYY → ISO
-- **Conversión de montos**: Formato argentino (puntos miles, coma decimal)
-- **Geografía CABA**: 48 barrios mapeados a 15 comunas + detección PBA/GBA
-- **Agregación RFM por cliente**: Primera/última compra, días inactividad, scores recencia/volumen/comercial
-- **Canal**: Detección ON_TRADE vs OFF_TRADE por categorías
-- **Upsert ventas_cupra**: Batches de 500, conflict key existente
-- **Upsert clientes protegido**: No sobreescribe `last_recommendation_at`, `excluir_recomendaciones`, `ultima_visita`
-
-### B. Página `CargaDatos.tsx` ✅
-- Acceso restringido a rol `asignador`
-- Drop zone + file input para `.xlsx` / `.xls`
-- Parseo client-side con `xlsx` (SheetJS)
-- Preview: columnas detectadas + primeras 5 filas
-- Progreso visual durante procesamiento
-- Resumen final: ventas procesadas, clientes actualizados, errores
-
-### C. Navegación ✅
-- Ruta `/carga-datos` en `App.tsx`
-- Menú "Gestión" del asignador: nuevo item "Carga de Datos"
-
-## Archivos creados/modificados
-| Archivo | Cambio |
-|---------|--------|
-| `supabase/functions/process-ventas-excel/index.ts` | Creado — ETL completo |
-| `src/pages/CargaDatos.tsx` | Creado — UI de upload |
-| `src/App.tsx` | Ruta `/carga-datos` |
-| `src/pages/Index.tsx` | Menú con "Carga de Datos" |
-| `supabase/config.toml` | Función registrada |
-| `package.json` | Dependencia `xlsx` |
-
-## Próximos pasos potenciales
-- Planificación temporal (agenda semanal)
-- Reportes y supervisión
-- Agente conversacional
+Después de esto, el usuario re-sube el Excel y los datos quedan correctos.
 
 ---
 
-# Phase 4: CUPRA Smart Route v4 — Anclaje Geográfico + Cuota 5-1-1-1 — IMPLEMENTADO
+## Archivos a modificar
 
-## Cambios realizados
-
-### A. Vista SQL `v_clientes_priorizacion` ✅
-- Extensión `unaccent` habilitada para normalización de nombres
-- Vista combina `clientes` + `prospectos` con clasificación por estado comercial (ACTIVO/INACTIVO/PERDIDO/POTENCIAL)
-- `vendedor_afin_id` calculado con `UPPER(UNACCENT())` para matching robusto
-- Función `get_vendedor_barrios_top()` para obtener top 3 barrios por vendedor
-
-### B. Edge Function refactorizada ✅
-- **Centroide eliminado**: Ya no se usa `centerLat`/`centerLong`
-- **Algoritmo de Anclaje**: Top 5 clientes ACTIVOS del vendedor definen "anclas" del día
-- **Scoring magnético**: Distancia al ancla más cercana en vez de al centroide
-- **Penalización solapamiento**: -100 puntos si candidato < 300m de ancla de OTRO vendedor
-- **Cubetas 15-5-5-5**: 15 Activos + 5 Inactivos + 5 Perdidos + 5 Potenciales enviados a IA
-- **Filtro 15 días eliminado**: La IA decide según categoría de estado
-- **Nuevo prompt 5-1-1-1**: Distribución estricta 5 Activos + 1 Inactivo + 1 Perdido + 1 Potencial
-- **Barrios top del vendedor**: Incluidos en el contexto del prompt
-- **Validación post-IA**: Si la IA no cumple cuota, se completa determinísticamente
-- **`estado_comercial`** incluido en la respuesta para el frontend
-
-### C. Frontend — Tipo `Sucursal` extendido ✅
-- Nuevo campo `estado_cliente?: 'ACTIVO' | 'INACTIVO' | 'PERDIDO' | 'POTENCIAL'`
-- `AssignorDashboard.tsx` mapea `estado_comercial` desde la respuesta
-
-### D. `vendorColors.ts` — Funciones de estado ✅
-- `getStateColor(estado)`: Verde/Amarillo/Rojo/Azul
-- `classifyClientState(dias, esProspecto)`: Clasificación frontend
-- `createStateMarkerIcon(estado, vendorColor?, scale)`: SVG con relleno=estado + borde=vendedor
-- `getStateLegend()`: Para leyendas de mapa
-- `calcularDistanciaKmFrontend()`: Para detección de solapamiento
-
-### E. Mapas actualizados ✅
-- **`ResultsMap.tsx`**: Marcadores con relleno=estado + borde=vendedor. Leyenda doble (estados + vendedores). Detección solapamiento < 200m con icono ⚠️
-- **`VendedorAssignmentsMap.tsx`**: Marcadores por estado (mono-vendedor, sin borde). Leyenda de estados
-- **`AssignorTodayAssignmentsMap.tsx`**: Pendiente actualización con marcadores por estado
-
-## Archivos modificados
 | Archivo | Cambio |
 |---------|--------|
-| Migración SQL | `unaccent` + vista + función `get_vendedor_barrios_top` |
-| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: anclas, cubetas, prompt 5-1-1-1, validación |
-| `src/types/sales.ts` | `estado_cliente` en `Sucursal` |
-| `src/lib/vendorColors.ts` | Funciones de estado + marcadores duales |
-| `src/components/AssignorDashboard.tsx` | Mapeo `estado_cliente` |
-| `src/components/assignor/ResultsMap.tsx` | Marcadores estado+vendedor, solapamiento |
-| `src/components/vendedor/VendedorAssignmentsMap.tsx` | Marcadores por estado |
+| Migración SQL | Truncar `ventas_cupra` + `recomendaciones_ia`, resetear campos de `clientes` |
+| `supabase/functions/process-ventas-excel/index.ts` | Fix `toNumberCurrency` para no corromper números ya parseados |
+| `supabase/functions/generate-recommendations/index.ts` | Deduplicación cross-vendor con `globalPickedIds` |
+
