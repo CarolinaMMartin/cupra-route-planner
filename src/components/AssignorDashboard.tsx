@@ -152,40 +152,51 @@ const AssignorDashboard = () => {
         return;
       }
 
-      const mappedRecommendations: Sucursal[] = (data.recomendaciones || []).map((rec: any) => ({
-        id: rec.request_id + "-" + (rec.client_id || rec.prospecto_place_id),
-        nombre: rec.razon_social,
-        direccion: rec.ciudades?.[0] || "Sin dirección",
-        zona: rec.provincias?.[0] || "Sin zona",
-        tipo_cliente: rec.score_comercial || "Estándar",
-        score: rec.priority_score || 0,
-        dias_sin_visita: rec.days_since_last_purchase || 0,
-        latitud: rec.lat || null, longitud: rec.long || null,
-        justificacion: rec.ai_reasoning, cuit_dni: rec.cuit_dni,
-        vendedores: rec.vendedores || [], client_id: rec.client_id,
-        es_prospecto: rec.es_prospecto || false,
-        prospecto_place_id: rec.prospecto_place_id,
-        tipo_negocio: rec.factores_ia?.tipo_negocio, rating: rec.factores_ia?.rating,
-        website: rec.factores_ia?.website, fantasia: rec.razon_social,
-        primera_compra: rec.first_purchase_at, ultima_compra: rec.last_purchase_at,
-        dias_desde_ultima_compra: rec.days_since_last_purchase,
-        cantidad_ordenes: rec.orders_count, monto_total_historico: rec.monto_total_vendido,
-        ticket_promedio: rec.avg_ticket, categoria_recencia: rec.score_recencia,
-        categoria_volumen: rec.score_volumen, score_recencia: rec.score_recencia_num,
-        score_volumen: rec.score_volumen_num, score_comercial: rec.priority_score,
-        participacion_mercado: rec.participacion,
-        ciudad_principa: rec.ciudades?.[0], provincia_principal: rec.provincias?.[0],
-        productos_comprados: rec.etiquetas || [], todas_ciudades: rec.ciudades || [],
-        todos_vendedores: rec.vendedores || [], etiquetas: rec.etiquetas || [],
-        telefonos: rec.telefonos || [], barrio_principal: rec.barrio_principal,
-        direccion_principal: rec.direccion_principal,
-        google_maps_link: rec.google_maps_link,
-        place_id: getPlaceIdFromUrl(rec.google_maps_link),
-        ai_reasoning: rec.ai_reasoning, score_geografico: rec.score_geografico,
-        factores_ia: rec.factores_ia,
-        vendedor_recomendado_id: rec.vendedor_recomendado_id,
-        estado_cliente: rec.estado_comercial || (rec.es_prospecto ? 'POTENCIAL' : undefined),
-      }));
+      const vendedorNombrePorId = new Map(
+        selectedVendedoresData.ids.map((id, idx) => [id, selectedVendedoresData.nombres[idx] || id]),
+      );
+
+      const mappedRecommendations: Sucursal[] = (data.recomendaciones || []).map((rec: any) => {
+        const vendedorRecomendadoNombre = rec.vendedor_recomendado_id
+          ? vendedorNombrePorId.get(rec.vendedor_recomendado_id)
+          : undefined;
+
+        return ({
+          id: rec.request_id + "-" + (rec.client_id || rec.prospecto_place_id),
+          nombre: rec.razon_social,
+          direccion: rec.ciudades?.[0] || "Sin dirección",
+          zona: rec.provincias?.[0] || "Sin zona",
+          tipo_cliente: rec.score_comercial || "Estándar",
+          score: rec.priority_score || 0,
+          dias_sin_visita: rec.days_since_last_purchase || 0,
+          latitud: rec.lat || null, longitud: rec.long || null,
+          justificacion: rec.ai_reasoning, cuit_dni: rec.cuit_dni,
+          vendedores: rec.vendedores || [], client_id: rec.client_id,
+          es_prospecto: rec.es_prospecto || false,
+          prospecto_place_id: rec.prospecto_place_id,
+          tipo_negocio: rec.factores_ia?.tipo_negocio, rating: rec.factores_ia?.rating,
+          website: rec.factores_ia?.website, fantasia: rec.razon_social,
+          primera_compra: rec.first_purchase_at, ultima_compra: rec.last_purchase_at,
+          dias_desde_ultima_compra: rec.days_since_last_purchase,
+          cantidad_ordenes: rec.orders_count, monto_total_historico: rec.monto_total_vendido,
+          ticket_promedio: rec.avg_ticket, categoria_recencia: rec.score_recencia,
+          categoria_volumen: rec.score_volumen, score_recencia: rec.score_recencia_num,
+          score_volumen: rec.score_volumen_num, score_comercial: rec.priority_score,
+          participacion_mercado: rec.participacion,
+          ciudad_principa: rec.ciudades?.[0], provincia_principal: rec.provincias?.[0],
+          productos_comprados: rec.etiquetas || [], todas_ciudades: rec.ciudades || [],
+          todos_vendedores: rec.vendedores || [], etiquetas: rec.etiquetas || [],
+          telefonos: rec.telefonos || [], barrio_principal: rec.barrio_principal,
+          direccion_principal: rec.direccion_principal,
+          google_maps_link: rec.google_maps_link,
+          place_id: getPlaceIdFromUrl(rec.google_maps_link),
+          ai_reasoning: rec.ai_reasoning, score_geografico: rec.score_geografico,
+          factores_ia: rec.factores_ia,
+          vendedor_recomendado_id: rec.vendedor_recomendado_id,
+          vendedor_actual: vendedorRecomendadoNombre || rec.vendedor_actual || rec.vendedor_principal,
+          estado_cliente: rec.estado_comercial || (rec.es_prospecto ? 'POTENCIAL' : undefined),
+        });
+      });
 
       setRecommendations(mappedRecommendations);
       setAiInsights(data.resumen);

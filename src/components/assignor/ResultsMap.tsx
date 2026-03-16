@@ -94,6 +94,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       const service = new google.maps.places.PlacesService(map);
       const fetchedLocations: ClientLocation[] = [];
 
+      const resolveRecommendedVendor = (sucursal: Sucursal) => {
+        const recommendedVendor = sucursal.vendedor_actual || sucursal.vendedor_recomendado_id;
+        const historicalVendor = sucursal.vendedor_principal;
+        return recommendedVendor || historicalVendor || "Sin vendedor";
+      };
+
       const promises = sucursales.map(async (sucursal) => {
         try {
           // If we have lat/lng, validate and use them directly
@@ -106,7 +112,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
             const isValidLng = lng >= -80 && lng <= -40;
             
             if (isValidLat && isValidLng) {
-              const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
+              const vendedor = resolveRecommendedVendor(sucursal);
               if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
               const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
               return {
@@ -135,7 +141,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                 const isValidLng = lng >= -80 && lng <= -40;
                 
                 if (isValidLat && isValidLng) {
-                  const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
+                  const vendedor = resolveRecommendedVendor(sucursal);
                   if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
                   const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
                   return {
@@ -160,7 +166,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
             return new Promise<ClientLocation>((resolve, reject) => {
               service.getDetails({ placeId: sucursal.prospecto_place_id! }, (place, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-                  const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
+                  const vendedor = resolveRecommendedVendor(sucursal);
                   if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
                   const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
                   resolve({
