@@ -189,6 +189,30 @@ Deno.serve(async (req) => {
 
     console.log(`📦 Recibidas ${rows.length} filas del Excel`);
 
+    // ============ FASE 0: Lookup CUIT → client_id existente ============
+    const allCuits = new Set<string>();
+    for (const row of rows) {
+      const cuit = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
+      if (cuit) allCuits.add(cuit);
+    }
+
+    const cuitToClientId = new Map<string, string>();
+    if (allCuits.size > 0) {
+      const cuitArray = Array.from(allCuits);
+      // Query in batches of 500 to avoid URL length limits
+      for (let i = 0; i < cuitArray.length; i += 500) {
+        const batch = cuitArray.slice(i, i + 500);
+        const { data: existingByCuit } = await supabase
+          .from('clientes')
+          .select('client_id, cuit_dni')
+          .in('cuit_dni', batch);
+        for (const c of existingByCuit || []) {
+          if (c.cuit_dni) cuitToClientId.set(c.cuit_dni, c.client_id);
+        }
+      }
+      console.log(`🔍 Fase 0: ${cuitToClientId.size} CUITs encontrados en DB de ${allCuits.size} únicos`);
+    }
+
     // ============ FASE 1: Normalizar ventas individuales ============
     const ventas: any[] = [];
     const clientesMap = new Map<string, any>();
@@ -197,7 +221,8 @@ Deno.serve(async (req) => {
     for (const row of rows) {
       const idCandidato = normalizeClientId(getFieldValue(row, ['Id', 'id', 'ID', 'client_id', 'Número Externo', 'Numero Externo']));
       const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
-      const client_id = idCandidato || cuit_dni;
+      // Prioridad: ID explícito > lookup por CUIT en DB > CUIT como fallback
+      const client_id = idCandidato || (cuit_dni && cuitToClientId.get(cuit_dni)) || cuit_dni;
       const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
       const fantasia = toStr(getFieldValue(row, ['Fantasia', 'Fantasía', 'fantasia']));
       const direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Domicilio', 'Calle']));
