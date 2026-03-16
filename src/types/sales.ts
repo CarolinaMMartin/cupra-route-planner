@@ -60,6 +60,8 @@ export interface Sucursal {
   };
   telefonos?: string[];
   emails?: string[];
+  // Vendedor recomendado por IA
+  vendedor_recomendado_id?: string;
   // Link a Google Maps
   google_maps_link?: string;
   place_id?: string;

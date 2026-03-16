@@ -149,6 +149,7 @@ const AssignorDashboard = () => {
         place_id: getPlaceIdFromUrl(rec.google_maps_link),
         ai_reasoning: rec.ai_reasoning, score_geografico: rec.score_geografico,
         factores_ia: rec.factores_ia,
+        vendedor_recomendado_id: rec.vendedor_recomendado_id,
       }));
 
       setRecommendations(mappedRecommendations);

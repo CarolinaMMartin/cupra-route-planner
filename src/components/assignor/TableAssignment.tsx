@@ -33,7 +33,7 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
-import { Save, Search, ChevronDown, Info } from "lucide-react";
+import { Save, Search, ChevronDown, Info, ArrowLeft } from "lucide-react";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -95,15 +95,23 @@ const TableAssignment = ({
       }));
       setVendedores(mapped);
 
-      // Pre-assign based on vendedor_principal
+      // Pre-assign based on vendedor_recomendado_id (AI recommendation) first, then fallback to vendedor_principal
       const nombreToId = new Map<string, string>();
       mapped.forEach((v) => nombreToId.set(v.nombre.toUpperCase().trim(), v.id));
+
+      const vendedorIdSet = new Set(mapped.map((v) => v.id));
 
       const initialMap: Record<string, string | null> = {};
       selectedRecommendations.forEach((rec) => {
         let assignedId: string | null = null;
 
-        if (rec.vendedor_principal) {
+        // Priority 1: AI-recommended vendor
+        if (rec.vendedor_recomendado_id && vendedorIdSet.has(rec.vendedor_recomendado_id)) {
+          assignedId = rec.vendedor_recomendado_id;
+        }
+
+        // Fallback: vendedor_principal name match
+        if (!assignedId && rec.vendedor_principal) {
           const vid = nombreToId.get(rec.vendedor_principal.toUpperCase().trim());
           if (vid) assignedId = vid;
         }
@@ -381,22 +389,30 @@ const TableAssignment = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-serif text-foreground tracking-tight">Asignar Clientes</h1>
-        <div className="flex items-center gap-2 mt-1">
-          <p className="text-sm text-muted-foreground">
-            Selecciona clientes y asignalos a un vendedor rápido y eficientemente
-          </p>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Info className="w-4 h-4 text-muted-foreground cursor-help" />
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Usa los checkboxes para seleccionar clientes, luego elige "Asignar a" para asignarlos masivamente.</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5">
+            <ArrowLeft className="w-4 h-4" />
+            Volver
+          </Button>
+          <div>
+            <h1 className="text-3xl font-serif text-foreground tracking-tight">Asignar Clientes</h1>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-sm text-muted-foreground">
+                Selecciona clientes y asignalos a un vendedor rápido y eficientemente
+              </p>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="w-4 h-4 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Usa los checkboxes para seleccionar clientes, luego elige "Asignar a" para asignarlos masivamente.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </div>
         </div>
       </div>
 
