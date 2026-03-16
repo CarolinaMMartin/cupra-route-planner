@@ -108,3 +108,53 @@
 - Reportes y supervisión
 - Agente conversacional
 
+---
+
+# Phase 4: CUPRA Smart Route v4 — Anclaje Geográfico + Cuota 5-1-1-1 — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Vista SQL `v_clientes_priorizacion` ✅
+- Extensión `unaccent` habilitada para normalización de nombres
+- Vista combina `clientes` + `prospectos` con clasificación por estado comercial (ACTIVO/INACTIVO/PERDIDO/POTENCIAL)
+- `vendedor_afin_id` calculado con `UPPER(UNACCENT())` para matching robusto
+- Función `get_vendedor_barrios_top()` para obtener top 3 barrios por vendedor
+
+### B. Edge Function refactorizada ✅
+- **Centroide eliminado**: Ya no se usa `centerLat`/`centerLong`
+- **Algoritmo de Anclaje**: Top 5 clientes ACTIVOS del vendedor definen "anclas" del día
+- **Scoring magnético**: Distancia al ancla más cercana en vez de al centroide
+- **Penalización solapamiento**: -100 puntos si candidato < 300m de ancla de OTRO vendedor
+- **Cubetas 15-5-5-5**: 15 Activos + 5 Inactivos + 5 Perdidos + 5 Potenciales enviados a IA
+- **Filtro 15 días eliminado**: La IA decide según categoría de estado
+- **Nuevo prompt 5-1-1-1**: Distribución estricta 5 Activos + 1 Inactivo + 1 Perdido + 1 Potencial
+- **Barrios top del vendedor**: Incluidos en el contexto del prompt
+- **Validación post-IA**: Si la IA no cumple cuota, se completa determinísticamente
+- **`estado_comercial`** incluido en la respuesta para el frontend
+
+### C. Frontend — Tipo `Sucursal` extendido ✅
+- Nuevo campo `estado_cliente?: 'ACTIVO' | 'INACTIVO' | 'PERDIDO' | 'POTENCIAL'`
+- `AssignorDashboard.tsx` mapea `estado_comercial` desde la respuesta
+
+### D. `vendorColors.ts` — Funciones de estado ✅
+- `getStateColor(estado)`: Verde/Amarillo/Rojo/Azul
+- `classifyClientState(dias, esProspecto)`: Clasificación frontend
+- `createStateMarkerIcon(estado, vendorColor?, scale)`: SVG con relleno=estado + borde=vendedor
+- `getStateLegend()`: Para leyendas de mapa
+- `calcularDistanciaKmFrontend()`: Para detección de solapamiento
+
+### E. Mapas actualizados ✅
+- **`ResultsMap.tsx`**: Marcadores con relleno=estado + borde=vendedor. Leyenda doble (estados + vendedores). Detección solapamiento < 200m con icono ⚠️
+- **`VendedorAssignmentsMap.tsx`**: Marcadores por estado (mono-vendedor, sin borde). Leyenda de estados
+- **`AssignorTodayAssignmentsMap.tsx`**: Pendiente actualización con marcadores por estado
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| Migración SQL | `unaccent` + vista + función `get_vendedor_barrios_top` |
+| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: anclas, cubetas, prompt 5-1-1-1, validación |
+| `src/types/sales.ts` | `estado_cliente` en `Sucursal` |
+| `src/lib/vendorColors.ts` | Funciones de estado + marcadores duales |
+| `src/components/AssignorDashboard.tsx` | Mapeo `estado_cliente` |
+| `src/components/assignor/ResultsMap.tsx` | Marcadores estado+vendedor, solapamiento |
+| `src/components/vendedor/VendedorAssignmentsMap.tsx` | Marcadores por estado |
