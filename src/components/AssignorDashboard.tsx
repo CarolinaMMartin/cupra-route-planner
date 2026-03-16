@@ -152,14 +152,9 @@ const AssignorDashboard = () => {
         return;
       }
 
-      const vendedorNombrePorId = new Map(
-        selectedVendedoresData.ids.map((id, idx) => [id, selectedVendedoresData.nombres[idx] || id]),
-      );
-
       const mappedRecommendations: Sucursal[] = (data.recomendaciones || []).map((rec: any) => {
-        const vendedorRecomendadoNombre = rec.vendedor_recomendado_id
-          ? vendedorNombrePorId.get(rec.vendedor_recomendado_id)
-          : undefined;
+        // Use vendedor_recomendado_nombre from API response (resolved in edge function)
+        const vendedorNombre = rec.vendedor_recomendado_nombre || rec.vendedor_principal || undefined;
 
         return ({
           id: rec.request_id + "-" + (rec.client_id || rec.prospecto_place_id),
@@ -193,7 +188,7 @@ const AssignorDashboard = () => {
           ai_reasoning: rec.ai_reasoning, score_geografico: rec.score_geografico,
           factores_ia: rec.factores_ia,
           vendedor_recomendado_id: rec.vendedor_recomendado_id,
-          vendedor_actual: vendedorRecomendadoNombre || rec.vendedor_actual || rec.vendedor_principal,
+          vendedor_actual: vendedorNombre || rec.vendedor_actual,
           estado_cliente: rec.estado_comercial || (rec.es_prospecto ? 'POTENCIAL' : undefined),
         });
       });

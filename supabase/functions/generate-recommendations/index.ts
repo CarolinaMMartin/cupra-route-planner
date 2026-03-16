@@ -1050,6 +1050,10 @@ Respetá la cuota y priorizá la densidad geográfica.`;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const enrichedRecommendations = [];
 
+    // Build vendedor name lookup
+    const vendedorNameLookup = new Map<string, string>();
+    vendedoresData.forEach(v => vendedorNameLookup.set(v.user_id, v.nombre));
+
     // Merge all client sources for lookup
     const allClientes = [...allClientesEnZona, ...portfolioClients];
     const clienteLookup = new Map<string, any>();
@@ -1062,6 +1066,11 @@ Respetá la cuota y priorizá la densidad geográfica.`;
       });
     });
 
+    // Build a combined prospect lookup for enrichment
+    const allProspectosLookup = new Map<string, any>();
+    prospectos.forEach(p => allProspectosLookup.set(p.place_id, p));
+    extraProspectosLoaded.forEach(p => { if (!allProspectosLookup.has(p.place_id)) allProspectosLookup.set(p.place_id, p); });
+
     for (const rec of validatedRecs) {
       let vendedorId = rec.vendedor_id;
       if (!vendedorId || !uuidRegex.test(vendedorId) || !validVendedorIds.has(vendedorId)) {
@@ -1069,13 +1078,19 @@ Respetá la cuota y priorizá la densidad geográfica.`;
         if (!vendedorId) continue;
       }
 
+      const vendedorNombre = vendedorNameLookup.get(vendedorId) || 'Desconocido';
       const clienteCompleto = clienteLookup.get(rec.client_id);
-      const prospectoCompleto = !clienteCompleto ? (prospectos.find(p => p.place_id === rec.client_id) || extraProspectosLoaded.find(p => p.place_id === rec.client_id)) : null;
-      if (!clienteCompleto && !prospectoCompleto) continue;
+      const prospectoCompleto = !clienteCompleto ? allProspectosLookup.get(rec.client_id) : null;
+      
+      // Fallback: build minimal prospect from globalCandidateMap if not found in prospectos
+      const candidateInfo = globalCandidateMap.get(rec.client_id);
+      if (!clienteCompleto && !prospectoCompleto && !candidateInfo) {
+        console.warn(`⚠️ Enrichment skip: ${rec.client_id} not found in any lookup`);
+        continue;
+      }
 
       const esProspecto = !clienteCompleto;
       const place = !esProspecto ? placesMap.get(rec.client_id) : null;
-      const candidateInfo = globalCandidateMap.get(rec.client_id);
       const estado_comercial = candidateInfo?.estado_comercial || (esProspecto ? 'POTENCIAL' : classifyEstado(clienteCompleto?.dias_desde_ultima_compra));
 
       if (esProspecto && prospectoCompleto) {
@@ -1084,6 +1099,7 @@ Respetá la cuota y priorizá la densidad geográfica.`;
           client_id: null,
           prospecto_place_id: prospectoCompleto.place_id,
           vendedor_recomendado_id: vendedorId,
+          vendedor_recomendado_nombre: vendedorNombre,
           razon_social: prospectoCompleto.nombre,
           cuit_dni: null,
           priority_score: Math.round(rec.score_final),
@@ -1109,12 +1125,46 @@ Respetá la cuota y priorizá la densidad geográfica.`;
           last_recomendation: new Date().toISOString(),
           ultima_sugerencia: new Date().toISOString(),
         });
+      } else if (esProspecto && candidateInfo) {
+        // Fallback: prospect found only in scored candidates (not in original prospectos arrays)
+        enrichedRecommendations.push({
+          request_id,
+          client_id: null,
+          prospecto_place_id: candidateInfo.client_id,
+          vendedor_recomendado_id: vendedorId,
+          vendedor_recomendado_nombre: vendedorNombre,
+          razon_social: candidateInfo.razon_social,
+          cuit_dni: null,
+          priority_score: Math.round(rec.score_final),
+          score_geografico: Math.round(rec.factores?.score_proximidad || 0),
+          ai_reasoning: rec.justificacion,
+          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating },
+          justificacion: rec.justificacion,
+          es_prospecto: true,
+          estado_comercial: candidateInfo.estado_comercial,
+          monto_total_vendido: 0, orders_count: 0, avg_ticket: 0,
+          first_purchase_at: null, last_purchase_at: null, days_since_last_purchase: null, participacion: 0,
+          score_volumen_num: null, score_recencia_num: null,
+          score_volumen: "NUEVO", score_recencia: "NUEVO", score_comercial: "NUEVO",
+          lat: candidateInfo.lat, long: candidateInfo.long,
+          ciudades: [], provincias: [],
+          barrio_principal: candidateInfo.barrio,
+          direccion_principal: candidateInfo.direccion,
+          google_maps_link: candidateInfo.lat && candidateInfo.long ? `https://www.google.com/maps/search/?api=1&query=${candidateInfo.lat},${candidateInfo.long}` : null,
+          vendedores: [], vendedor_principal: null,
+          etiquetas: ["NUEVO", "PROSPECTO"],
+          telefonos: [],
+          created_at: new Date().toISOString(),
+          last_recomendation: new Date().toISOString(),
+          ultima_sugerencia: new Date().toISOString(),
+        });
       } else if (clienteCompleto) {
         enrichedRecommendations.push({
           request_id,
           client_id: rec.client_id,
           prospecto_place_id: null,
           vendedor_recomendado_id: vendedorId,
+          vendedor_recomendado_nombre: vendedorNombre,
           razon_social: clienteCompleto.razon_social,
           cuit_dni: clienteCompleto.cuit_dni,
           priority_score: Math.round(rec.score_final),
@@ -1154,7 +1204,7 @@ Respetá la cuota y priorizá la densidad geográfica.`;
     }
 
     // Save to DB
-    const recommendationsForDb = enrichedRecommendations.map(({ lat, long, estado_comercial, ...rest }) => rest);
+    const recommendationsForDb = enrichedRecommendations.map(({ lat, long, estado_comercial, vendedor_recomendado_nombre, ...rest }) => rest);
     const { error: insertError } = await supabaseClient.from("recomendaciones_ia").insert(recommendationsForDb);
     if (insertError) { console.error("❌ Error insertando:", insertError); throw insertError; }
 
