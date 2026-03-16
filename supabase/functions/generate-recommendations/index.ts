@@ -234,6 +234,7 @@ function preScoreCandidates(
   for (const p of prospectos) {
     const lat = p.latitud ? Number(p.latitud) : null;
     const long = p.longitud ? Number(p.longitud) : null;
+    if (!isWithinRadiusFromCenter(lat, long, zoneCenter)) continue;
 
     let distancia_km = 999;
     let score_geo = 0;
