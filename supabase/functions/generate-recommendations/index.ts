@@ -150,12 +150,13 @@ function preScoreCandidates(
   maxRadiusKm: number = MAX_DISTANCE_TO_ZONE_CENTER_KM,
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
+  
 
   for (const c of clientes) {
     const place = placesMap.get(c.client_id);
     const lat = place?.lat ? Number(place.lat) : null;
     const long = place?.long ? Number(place.long) : null;
-    if (!isWithinRadiusFromCenter(lat, long, zoneCenter, maxRadiusKm)) continue;
+    // Don't filter vendor's own clients by zone radius — they're already pre-filtered to be in zone
     const estado = classifyEstado(c.dias_desde_ultima_compra);
 
     let distancia_km = 999;
@@ -303,6 +304,7 @@ function preScoreCandidates(
     });
   }
 
+  
   candidates.sort((a, b) => b.score_total - a.score_total);
   return candidates;
 }
@@ -358,6 +360,7 @@ function validateAndFixDistribution(
     pickedIds.add(r.client_id);
   }
 
+  // Soft targets: 5-1-1-1 is ideal but not restrictive. Prioritize existing clients.
   const targets: Record<string, number> = { ACTIVO: 5, INACTIVO: 1, PERDIDO: 1, POTENCIAL: 1 };
   const bucketMap: Record<string, ScoredCandidate[]> = {
     ACTIVO: buckets.activos,
@@ -366,6 +369,7 @@ function validateAndFixDistribution(
     POTENCIAL: buckets.potenciales,
   };
 
+  // First pass: fill each category up to its soft target
   for (const [estado, target] of Object.entries(targets)) {
     while (picked[estado].length < target) {
       const available = bucketMap[estado].find(c => !pickedIds.has(c.client_id) && !globalPickedIds.has(c.client_id));
@@ -388,7 +392,8 @@ function validateAndFixDistribution(
     }
   }
 
-  const result = [...picked.ACTIVO.slice(0, 5), ...picked.INACTIVO.slice(0, 1), ...picked.PERDIDO.slice(0, 1), ...picked.POTENCIAL.slice(0, 1)];
+  // Combine all picked so far
+  const result = [...picked.ACTIVO, ...picked.INACTIVO, ...picked.PERDIDO, ...picked.POTENCIAL];
 
   if (result.length < 8) {
     const allBuckets = [...buckets.activos, ...buckets.inactivos, ...buckets.perdidos, ...buckets.potenciales];
@@ -465,7 +470,7 @@ Deno.serve(async (req) => {
       instrucciones_adicionales,
     } = await req.json();
 
-    console.log("🔧 Version: v7-geo-expansion");
+    console.log("🔧 Version: v7b-no-radius-clients");
     console.log("📥 Request recibido:", { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones });
 
     // ---- 1. Resolve area filters ----
@@ -889,28 +894,30 @@ Deno.serve(async (req) => {
 
       return `
 ### VENDEDOR: ${v.nombre} (ID: ${v.user_id})
-Cuota OBLIGATORIA: 8 visitas. Ideal: 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL. Si faltan candidatos en una categoría, completá con POTENCIAL hasta llegar a 8.
+Seleccioná 8 visitas para este vendedor. Guía de distribución IDEAL (flexible, no obligatoria): 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL.
+PRIORIDAD: Clientes existentes de la cartera del vendedor tienen prioridad sobre prospectos nuevos. Solo completá con POTENCIALES/prospectos si no hay suficientes clientes en las otras categorías.
 IMPORTANTE: Todos los clientes (no prospectos) listados abajo pertenecen a la cartera de ${v.nombre}.
 
-ACTIVOS (${activos.length} candidatos - elegir 5):
+ACTIVOS (${activos.length} candidatos):
 ${activos.length > 0 ? activos.map(formatCandidate).join('\n') : '(sin candidatos activos en cartera)'}
 
-INACTIVOS (${inactivos.length} candidatos - elegir 1):
+INACTIVOS (${inactivos.length} candidatos):
 ${inactivos.length > 0 ? inactivos.map(formatCandidate).join('\n') : '(sin candidatos inactivos en cartera)'}
 
-PERDIDOS (${perdidos.length} candidatos - elegir 1):
+PERDIDOS (${perdidos.length} candidatos):
 ${perdidos.length > 0 ? perdidos.map(formatCandidate).join('\n') : '(sin candidatos perdidos en cartera)'}
 
-POTENCIALES/PROSPECTOS (${potenciales.length} candidatos - elegir 1):
+POTENCIALES/PROSPECTOS (${potenciales.length} candidatos):
 ${potenciales.length > 0 ? potenciales.map(formatCandidate).join('\n') : '(sin prospectos disponibles)'}`;
     }).join('\n\n');
 
     const prompt = `${vendorSections}
 
 ${instrucciones_adicionales ? `\nINSTRUCCIONES ADICIONALES DEL ASIGNADOR:\n${instrucciones_adicionales}\n` : ''}
-TOTAL ESPERADO: ${vendedoresData.length * 8} recomendaciones (8 por vendedor, distribución 5-1-1-1).
+TOTAL ESPERADO: ${vendedoresData.length * 8} recomendaciones (8 por vendedor).
+Distribución 5-1-1-1 es una GUÍA FLEXIBLE: priorizá clientes existentes y completá con prospectos solo si es necesario.
 IMPORTANTE: Cada client_id debe aparecer UNA SOLA VEZ en toda la respuesta. NO repitas clientes entre vendedores.
-Respetá la cuota y priorizá la densidad geográfica.`;
+Priorizá la densidad geográfica y la cercanía entre visitas.`;
 
     console.log(`📏 Prompt: ${prompt.length} chars`);
 
