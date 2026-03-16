@@ -316,9 +316,10 @@ CONTEXTO: Vendemos vinos en canales ON_TRADE (restaurantes/bares) y OFF_TRADE (v
 REGLAS DE ORO (ESTRICTAS):
 1. CUOTA OBLIGATORIA: Seleccioná EXACTAMENTE 8 visitas por vendedor. Distribución ideal: 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL.
 2. Si una categoría NO tiene candidatos suficientes, completá con POTENCIAL/PROSPECTO hasta llegar a 8. NUNCA devuelvas menos de 8 por vendedor.
-3. DENSIDAD sobre distancia: Priorizá puntos que estén cerca de los Activos elegidos. Rutas densas, no viajes largos.
-4. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor. Tu trabajo es elegir la mejor combinación geográfica.
-5. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
+3. GEO-RESTRICCIÓN DURA: Todas las recomendaciones deben estar dentro del radio operativo de la zona solicitada (máximo 1km del centro de zona).
+4. DENSIDAD sobre distancia: Priorizá puntos que estén cerca de los Activos elegidos. Rutas densas, no viajes largos.
+5. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor. Tu trabajo es elegir la mejor combinación geográfica.
+6. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
    - Para Inactivo/Perdido/Potencial explicá por qué visitarlo HOY (cercanía a ruta, potencial recuperación, etc.)
 6. TRANSFERENCIA: Si el cliente era de otro vendedor, mencionalo.
 7. NUNCA repitas el mismo client_id para distintos vendedores.
