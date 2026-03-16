@@ -379,17 +379,30 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
         )}
 
         {/* Vendor color legend */}
-        {vendorLegend.size > 0 && !loading && (
-          <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm p-3 rounded-lg shadow-lg border z-10 max-h-48 overflow-y-auto">
-            <p className="text-xs font-medium mb-2 text-foreground">Vendedores</p>
-            <div className="space-y-1">
-              {Array.from(vendorLegend.entries()).map(([name, color]) => (
-                <div key={name} className="flex items-center gap-2">
+        {!loading && (
+          <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm p-3 rounded-lg shadow-lg border z-10 max-h-64 overflow-y-auto">
+            <p className="text-xs font-medium mb-2 text-foreground">Estado Comercial</p>
+            <div className="space-y-1 mb-3">
+              {getStateLegend().map(({ estado, color, label }) => (
+                <div key={estado} className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                  <span className="text-xs text-muted-foreground truncate max-w-[120px]">{name}</span>
+                  <span className="text-xs text-muted-foreground">{label}</span>
                 </div>
               ))}
             </div>
+            {vendorLegend.size > 0 && (
+              <>
+                <p className="text-xs font-medium mb-2 text-foreground border-t pt-2">Vendedores (borde)</p>
+                <div className="space-y-1">
+                  {Array.from(vendorLegend.entries()).map(([name, color]) => (
+                    <div key={name} className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full flex-shrink-0 border-2" style={{ borderColor: color, backgroundColor: 'transparent' }} />
+                      <span className="text-xs text-muted-foreground truncate max-w-[120px]">{name}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
         </div>
