@@ -112,7 +112,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
             const isValidLng = lng >= -80 && lng <= -40;
             
             if (isValidLat && isValidLng) {
-              const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
+              const vendedor = resolveRecommendedVendor(sucursal);
               if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
               const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
               return {
