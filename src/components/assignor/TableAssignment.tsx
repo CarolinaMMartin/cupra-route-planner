@@ -95,15 +95,23 @@ const TableAssignment = ({
       }));
       setVendedores(mapped);
 
-      // Pre-assign based on vendedor_principal
+      // Pre-assign based on vendedor_recomendado_id (AI recommendation) first, then fallback to vendedor_principal
       const nombreToId = new Map<string, string>();
       mapped.forEach((v) => nombreToId.set(v.nombre.toUpperCase().trim(), v.id));
+
+      const vendedorIdSet = new Set(mapped.map((v) => v.id));
 
       const initialMap: Record<string, string | null> = {};
       selectedRecommendations.forEach((rec) => {
         let assignedId: string | null = null;
 
-        if (rec.vendedor_principal) {
+        // Priority 1: AI-recommended vendor
+        if (rec.vendedor_recomendado_id && vendedorIdSet.has(rec.vendedor_recomendado_id)) {
+          assignedId = rec.vendedor_recomendado_id;
+        }
+
+        // Fallback: vendedor_principal name match
+        if (!assignedId && rec.vendedor_principal) {
           const vid = nombreToId.get(rec.vendedor_principal.toUpperCase().trim());
           if (vid) assignedId = vid;
         }
