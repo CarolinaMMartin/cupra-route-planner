@@ -81,6 +81,16 @@ const AssignorDashboard = () => {
 
   const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
   const [showExitDialog, setShowExitDialog] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelRecommendations = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+    toast({ title: "Cancelado", description: "Generación de recomendaciones detenida." });
+  };
 
   const handleRequestRecommendations = async (
     filters: any,
