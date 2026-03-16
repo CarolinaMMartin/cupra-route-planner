@@ -227,23 +227,21 @@ const ClientesDashboard = () => {
     return { totalVentas, totalClientes, totalOrdenes, ticketPromedio };
   }, [filteredData]);
 
-  // Top barrios (con dedupe case-insensitive para evitar duplicados Palermo/PALERMO)
+  // Top barrios - usar barrio_principal (único) para evitar inflación por múltiples barrios
   const topBarrios = useMemo(() => {
     const barriosMap = new Map<string, { display: string; ventas: number }>();
     filteredData.forEach(cliente => {
-      const barrios = getClienteBarrios(cliente);
-      const monto = cliente.monto_total_historico || 0;
-      barrios.forEach((barrio: string) => {
-        if (barrio) {
-          const key = normalize(barrio);
-          const existing = barriosMap.get(key);
-          if (existing) {
-            existing.ventas += Number(monto);
-          } else {
-            barriosMap.set(key, { display: barrio, ventas: Number(monto) });
-          }
+      const barrio = cliente.barrio_principal;
+      const monto = Number(cliente.monto_total_historico || 0);
+      if (barrio) {
+        const key = normalize(barrio);
+        const existing = barriosMap.get(key);
+        if (existing) {
+          existing.ventas += monto;
+        } else {
+          barriosMap.set(key, { display: barrio, ventas: monto });
         }
-      });
+      }
     });
     return Array.from(barriosMap.values())
       .map(({ display, ventas }) => ({ barrio: display, ventas }))
