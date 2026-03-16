@@ -156,7 +156,13 @@ function preScoreCandidates(
     const place = placesMap.get(c.client_id);
     const lat = place?.lat ? Number(place.lat) : null;
     const long = place?.long ? Number(place.long) : null;
-    // Don't filter vendor's own clients by zone radius — they're already pre-filtered to be in zone
+    // Filter clients by distance to nearest anchor (vendor's own clients cluster) instead of zone center
+    if (lat !== null && long !== null && myAnchors.length > 0) {
+      const minDistToAnchor = Math.min(...myAnchors.map(a => calcularDistanciaKm(a.lat, a.lng, lat, long)));
+      if (minDistToAnchor > maxRadiusKm) continue;
+    } else if (!isWithinRadiusFromCenter(lat, long, zoneCenter, maxRadiusKm)) {
+      continue;
+    }
     const estado = classifyEstado(c.dias_desde_ultima_compra);
 
     let distancia_km = 999;
