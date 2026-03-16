@@ -422,6 +422,7 @@ Deno.serve(async (req) => {
       instrucciones_adicionales,
     } = await req.json();
 
+    console.log("🔧 Version: v5-strict-filter");
     console.log("📥 Request recibido:", { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones });
 
     // ---- 1. Resolve area filters ----
