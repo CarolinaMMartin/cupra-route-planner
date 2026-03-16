@@ -205,7 +205,9 @@ const ClientesDashboard = () => {
       const matchBarrio = selectedBarrio === "all" || 
         barriosCliente.some(b => normalize(b) === normalize(selectedBarrio));
       
-      const matchVendedor = selectedVendedor === "all" || (cliente.todos_vendedores || []).includes(selectedVendedor);
+      // Filtrar por vendedor_actual (único) para evitar que un cliente aparezca en múltiples vendedores
+      const vendedorCliente = cliente.vendedor_actual || cliente.vendedor_principal;
+      const matchVendedor = selectedVendedor === "all" || vendedorCliente === selectedVendedor;
       const matchCanal = selectedCanal === "all" || cliente.canal === selectedCanal;
       const matchSearch = searchTerm === "" || 
         (cliente.razon_social || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
