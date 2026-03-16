@@ -752,6 +752,7 @@ Deno.serve(async (req) => {
         feedbacksMapClientes, feedbacksMapProspectos,
         vendedor.user_id, vendedor.nombre,
         sellerNameMap, myAnchors, otherAnchors,
+        zoneCenter,
       );
 
       const activos = scored.filter(c => c.estado_comercial === 'ACTIVO').slice(0, 15);
