@@ -333,12 +333,16 @@ Deno.serve(async (req) => {
     }
 
     const allClientIds = clientesEnriquecidos.map(c => String(c.client_id));
-    const { data: existingClients } = await supabase
-      .from('clientes')
-      .select('client_id')
-      .in('client_id', allClientIds);
+    let existingSet = new Set<string>();
 
-    const existingSet = new Set((existingClients || []).map(c => c.client_id));
+    if (allClientIds.length > 0) {
+      const { data: existingClients } = await supabase
+        .from('clientes')
+        .select('client_id')
+        .in('client_id', allClientIds);
+
+      existingSet = new Set((existingClients || []).map(c => c.client_id));
+    }
 
     const newClients = clientesEnriquecidos.filter(c => !existingSet.has(String(c.client_id)));
     const updateClients = clientesEnriquecidos.filter(c => existingSet.has(String(c.client_id)));
