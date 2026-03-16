@@ -503,20 +503,28 @@ Deno.serve(async (req) => {
     }
 
     // ---- 4b. ALSO load vendor portfolio clients NOT in zone (for fallback) ----
-    // Get all vendor names to find their clients anywhere
-    const vendorNames = vendedoresData.map(v => v.nombre);
+    // Instead of querying by exact profile name (which fails when Excel name ≠ profile name),
+    // load a broad set of clients and use JS-based isClientAffiliated for matching.
     let portfolioClients: any[] = [];
-    if (vendorNames.length > 0) {
-      // Build OR conditions for todos_vendedores matching
-      const nameConditions = vendorNames.map(n => `todos_vendedores.cs.{"${n}"}`).join(",");
+    {
+      // Load clients with any vendedor set, not already in zone
+      const excludeFilter = clientIdsEnZona.length > 0 ? clientIdsEnZona.join(",") : "NONE";
       const { data: extraClients } = await supabaseClient
         .from("clientes").select("*")
-        .or(nameConditions)
         .or("excluir_recomendaciones.is.null,excluir_recomendaciones.eq.false")
-        .not("client_id", "in", `(${clientIdsEnZona.length > 0 ? clientIdsEnZona.join(",") : "NONE"})`)
+        .not("vendedor_actual", "is", null)
+        .not("client_id", "in", `(${excludeFilter})`)
         .order("monto_total_historico", { ascending: false })
-        .limit(200);
-      portfolioClients = extraClients || [];
+        .limit(500);
+      
+      // Filter in JS using isClientAffiliated to handle name mismatches
+      const selectedVendorIds = new Set(vendedoresData.map(v => v.user_id));
+      portfolioClients = (extraClients || []).filter(c => {
+        for (const vid of selectedVendorIds) {
+          if (isClientAffiliated(c, vid, sellerNameMap)) return true;
+        }
+        return false;
+      });
       
       // Also load their places
       if (portfolioClients.length > 0) {
