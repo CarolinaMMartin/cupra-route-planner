@@ -299,9 +299,35 @@ Deno.serve(async (req) => {
     // ============ FASE 3: Upsert ventas ============
     const results = { ventas_procesadas: 0, ventas_errores: 0, clientes_actualizados: 0, clientes_errores: 0, errores: [] as string[] };
 
+    const ventasByConflictKey = new Map<string, any>();
+    const ventasSinClaveConflicto: any[] = [];
+    let ventasDuplicadas = 0;
+
+    for (const venta of ventas) {
+      const conflictKey = buildVentaConflictKey(venta);
+      if (!conflictKey) {
+        ventasSinClaveConflicto.push(venta);
+        continue;
+      }
+
+      const existingVenta = ventasByConflictKey.get(conflictKey);
+      if (!existingVenta) {
+        ventasByConflictKey.set(conflictKey, venta);
+      } else {
+        ventasDuplicadas += 1;
+        ventasByConflictKey.set(conflictKey, mergeVentaDuplicate(existingVenta, venta));
+      }
+    }
+
+    const ventasParaUpsert = [...ventasByConflictKey.values(), ...ventasSinClaveConflicto];
+
+    if (ventasDuplicadas > 0) {
+      console.log(`♻️ ${ventasDuplicadas} filas duplicadas detectadas y consolidadas antes del upsert`);
+    }
+
     // Batch ventas in chunks of 500
-    for (let i = 0; i < ventas.length; i += 500) {
-      const batch = ventas.slice(i, i + 500);
+    for (let i = 0; i < ventasParaUpsert.length; i += 500) {
+      const batch = ventasParaUpsert.slice(i, i + 500);
       const { error } = await supabase.from('ventas_cupra').upsert(batch, {
         onConflict: 'ticket,letra,fecha_emision,client_id,codigo_producto',
         ignoreDuplicates: false,
