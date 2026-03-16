@@ -129,6 +129,25 @@ function normalizarGeografia(ciudadRaw: string | null): GeoResult {
   return { barrio: null, comuna: null, ciudad: ubicacion, provincia: 'BUENOS AIRES' };
 }
 
+const countNonEmptyValues = (obj: Record<string, any>): number => {
+  return Object.values(obj).reduce((acc, value) => acc + (isEmpty(value) ? 0 : 1), 0);
+};
+
+const buildVentaConflictKey = (venta: Record<string, any>): string | null => {
+  const targetFields = ['ticket', 'letra', 'fecha_emision', 'client_id', 'codigo_producto'];
+  const values = targetFields.map(field => venta[field]);
+
+  if (values.some(value => isEmpty(value))) return null;
+
+  return values
+    .map(value => String(value).trim().toUpperCase())
+    .join('||');
+};
+
+const mergeVentaDuplicate = (current: Record<string, any>, incoming: Record<string, any>) => {
+  return countNonEmptyValues(incoming) >= countNonEmptyValues(current) ? incoming : current;
+};
+
 // === MAIN ===
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
