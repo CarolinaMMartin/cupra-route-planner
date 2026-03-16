@@ -107,6 +107,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
             if (isValidLat && isValidLng) {
               const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
               if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
+              const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
               return {
                 id: sucursal.id,
                 name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
@@ -114,6 +115,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                 lng: lng,
                 direccion: sucursal.direccion || sucursal.direccion_principal || "",
                 vendedor,
+                estado_cliente,
               };
             } else {
               console.warn(`[ResultsMap] Coordenadas fuera de rango Argentina:`, { id: sucursal.id, lat, lng });
