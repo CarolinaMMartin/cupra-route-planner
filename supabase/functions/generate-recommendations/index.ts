@@ -528,6 +528,9 @@ Deno.serve(async (req) => {
     if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditions.push(`comuna.ilike.%${c}%`));
     if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditions.push(`barrio_principal.ilike.%${b}%`));
     if (geoConditions.length > 0) placesQuery = placesQuery.or(geoConditions.join(","));
+    
+    // Track whether user specified a geographic filter — affects radius filtering behavior
+    const hasGeoFilter = !!(provincia && provincia !== "all") || geoConditions.length > 0;
 
     const { data: clientPlaces, error: placesError } = await placesQuery;
     if (placesError) throw placesError;
