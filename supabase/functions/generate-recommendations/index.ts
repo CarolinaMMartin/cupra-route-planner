@@ -422,6 +422,7 @@ Deno.serve(async (req) => {
       instrucciones_adicionales,
     } = await req.json();
 
+    console.log("🔧 Version: v5-strict-filter");
     console.log("📥 Request recibido:", { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones });
 
     // ---- 1. Resolve area filters ----
@@ -444,6 +445,7 @@ Deno.serve(async (req) => {
     }
 
     // ---- 2. Load vendor profiles ----
+    // Load SELECTED vendors
     const { data: vendedoresData, error: vendedoresError } = await supabaseClient
       .from("profiles")
       .select("user_id, nombre, email, id")
@@ -456,8 +458,18 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    console.log(`✅ Vendedores: ${vendedoresData.length} → ${vendedoresData.map(v => v.nombre).join(', ')}`);
-    const sellerNameMap = buildSellerNameMap(vendedoresData);
+    console.log(`✅ Vendedores seleccionados: ${vendedoresData.length} → ${vendedoresData.map(v => v.nombre).join(', ')}`);
+
+    // Load ALL vendor profiles for global seller name resolution (Bug fix #3)
+    const { data: allVendorProfiles } = await supabaseClient
+      .from("profiles")
+      .select("user_id, nombre")
+      .eq("rol", "vendedor")
+      .eq("activo", true);
+    
+    // Build sellerNameMap from ALL vendors, not just selected ones
+    const sellerNameMap = buildSellerNameMap(allVendorProfiles || vendedoresData);
+    console.log(`🗂️ sellerNameMap: ${sellerNameMap.size / 2} vendedores totales (incluye no seleccionados)`);
 
     // ---- 3. Load client_places (geography) ----
     let placesQuery = supabaseClient.from("client_places").select("*").eq("is_primary", true);
@@ -491,20 +503,28 @@ Deno.serve(async (req) => {
     }
 
     // ---- 4b. ALSO load vendor portfolio clients NOT in zone (for fallback) ----
-    // Get all vendor names to find their clients anywhere
-    const vendorNames = vendedoresData.map(v => v.nombre);
+    // Instead of querying by exact profile name (which fails when Excel name ≠ profile name),
+    // load a broad set of clients and use JS-based isClientAffiliated for matching.
     let portfolioClients: any[] = [];
-    if (vendorNames.length > 0) {
-      // Build OR conditions for todos_vendedores matching
-      const nameConditions = vendorNames.map(n => `todos_vendedores.cs.{"${n}"}`).join(",");
+    {
+      // Load clients with any vendedor set, not already in zone
+      const excludeFilter = clientIdsEnZona.length > 0 ? clientIdsEnZona.join(",") : "NONE";
       const { data: extraClients } = await supabaseClient
         .from("clientes").select("*")
-        .or(nameConditions)
         .or("excluir_recomendaciones.is.null,excluir_recomendaciones.eq.false")
-        .not("client_id", "in", `(${clientIdsEnZona.length > 0 ? clientIdsEnZona.join(",") : "NONE"})`)
+        .not("vendedor_actual", "is", null)
+        .not("client_id", "in", `(${excludeFilter})`)
         .order("monto_total_historico", { ascending: false })
-        .limit(200);
-      portfolioClients = extraClients || [];
+        .limit(500);
+      
+      // Filter in JS using isClientAffiliated to handle name mismatches
+      const selectedVendorIds = new Set(vendedoresData.map(v => v.user_id));
+      portfolioClients = (extraClients || []).filter(c => {
+        for (const vid of selectedVendorIds) {
+          if (isClientAffiliated(c, vid, sellerNameMap)) return true;
+        }
+        return false;
+      });
       
       // Also load their places
       if (portfolioClients.length > 0) {
@@ -622,6 +642,15 @@ Deno.serve(async (req) => {
       // === STRICT FILTER: Only clients affiliated with THIS vendor ===
       const myClientsInZone = allClientesEnZona.filter(c => isClientAffiliated(c, vendedor.user_id, sellerNameMap));
       const myClientsOutside = portfolioClients.filter(c => isClientAffiliated(c, vendedor.user_id, sellerNameMap));
+      
+      // Log excluded clients (belong to OTHER vendors)
+      const excludedFromZone = allClientesEnZona.filter(c => !isClientAffiliated(c, vendedor.user_id, sellerNameMap) && !c.es_prospecto);
+      if (excludedFromZone.length > 0) {
+        const sample = excludedFromZone.slice(0, 5).map(c => 
+          `${c.razon_social || c.fantasia} → ${c.vendedor_actual || c.vendedor_principal || '?'}`
+        );
+        console.log(`🔍 ${vendedor.nombre}: ${excludedFromZone.length} clientes excluidos (cartera ajena): ${sample.join(', ')}`);
+      }
       
       // Merge: zone clients first, then outside clients (for fallback)
       const outsideIds = new Set(myClientsOutside.map(c => c.client_id));
