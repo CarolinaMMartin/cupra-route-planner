@@ -21,6 +21,7 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 const MAX_DISTANCE_TO_ZONE_CENTER_KM = 1;
+const EXPANSION_RADIUS_KM = 2;
 
 function isWithinRadiusFromCenter(
   lat: number | null,
