@@ -155,7 +155,7 @@ function preScoreCandidates(
     const place = placesMap.get(c.client_id);
     const lat = place?.lat ? Number(place.lat) : null;
     const long = place?.long ? Number(place.long) : null;
-    if (!isWithinRadiusFromCenter(lat, long, zoneCenter, maxRadiusKm)) continue;
+    // Don't filter vendor's own clients by zone radius — they're already pre-filtered to be in zone
     const estado = classifyEstado(c.dias_desde_ultima_compra);
 
     let distancia_km = 999;
