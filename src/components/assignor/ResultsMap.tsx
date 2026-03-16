@@ -95,9 +95,14 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       const fetchedLocations: ClientLocation[] = [];
 
       const resolveRecommendedVendor = (sucursal: Sucursal) => {
-        const recommendedVendor = sucursal.vendedor_actual || sucursal.vendedor_recomendado_id;
-        const historicalVendor = sucursal.vendedor_principal;
-        return recommendedVendor || historicalVendor || "Sin vendedor";
+        // Prefer vendedor_actual (already resolved to name in AssignorDashboard)
+        // Never show a UUID — skip vendedor_recomendado_id (it's a UUID)
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}/i;
+        const candidates = [
+          sucursal.vendedor_actual,
+          sucursal.vendedor_principal,
+        ].filter(Boolean).filter(v => !uuidRegex.test(v!));
+        return candidates[0] || "Sin vendedor";
       };
 
       const promises = sucursales.map(async (sucursal) => {
