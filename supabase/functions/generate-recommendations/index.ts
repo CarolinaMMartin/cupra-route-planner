@@ -701,6 +701,21 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Fallback #2: if STILL no anchors, use centroid of requested zone (clientPlaces from ANY vendor)
+      if (anchors.length === 0 && clientPlaces && clientPlaces.length > 0) {
+        const validZonePlaces = clientPlaces.filter(p => {
+          const lat = Number(p.lat);
+          const lng = Number(p.long);
+          return lat >= -60 && lat <= -20 && lng >= -80 && lng <= -40;
+        });
+        if (validZonePlaces.length > 0) {
+          const centroidLat = validZonePlaces.reduce((s, p) => s + Number(p.lat), 0) / validZonePlaces.length;
+          const centroidLng = validZonePlaces.reduce((s, p) => s + Number(p.long), 0) / validZonePlaces.length;
+          anchors.push({ lat: centroidLat, lng: centroidLng });
+          console.log(`📌 ${vendedor.nombre}: Using zone centroid as anchor (${centroidLat.toFixed(4)}, ${centroidLng.toFixed(4)})`);
+        }
+      }
+
       vendorAnchors.set(vendedor.user_id, anchors);
       console.log(`⚓ ${vendedor.nombre}: ${anchors.length} anclas`);
 
