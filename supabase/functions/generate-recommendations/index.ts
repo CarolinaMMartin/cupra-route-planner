@@ -321,8 +321,8 @@ REGLAS DE ORO (ESTRICTAS):
 5. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor. Tu trabajo es elegir la mejor combinación geográfica.
 6. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
    - Para Inactivo/Perdido/Potencial explicá por qué visitarlo HOY (cercanía a ruta, potencial recuperación, etc.)
-6. TRANSFERENCIA: Si el cliente era de otro vendedor, mencionalo.
-7. NUNCA repitas el mismo client_id para distintos vendedores.
+7. TRANSFERENCIA: Si el cliente era de otro vendedor, mencionalo.
+8. NUNCA repitas el mismo client_id para distintos vendedores.
 
 Los candidatos vienen PRE-FILTRADOS por cartera del vendedor y PRE-RANKEADOS. Tu trabajo es elegir la mejor combinación respetando la cuota de 8 por vendedor.
 
