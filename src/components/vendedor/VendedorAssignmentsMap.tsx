@@ -155,9 +155,9 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
                   <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px; color: #000;">
                     ${cliente.razon_social}
                   </h3>
-                  <div style="margin-bottom: 8px;">
+                   <div style="margin-bottom: 8px;">
                     <span style="display: inline-block; padding: 2px 8px; background: ${
-                      estado === "Visitado" ? "#22c55e" : "#ef4444"
+                      getStateColor(estado)
                     }; color: white; border-radius: 4px; font-size: 12px;">
                       ${estado}
                     </span>
