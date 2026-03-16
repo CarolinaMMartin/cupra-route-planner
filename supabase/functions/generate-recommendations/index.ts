@@ -20,6 +20,19 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
   return R * c;
 }
 
+const MAX_DISTANCE_TO_ZONE_CENTER_KM = 1;
+
+function isWithinRadiusFromCenter(
+  lat: number | null,
+  lng: number | null,
+  center: AnchorPoint | null,
+  maxDistanceKm = MAX_DISTANCE_TO_ZONE_CENTER_KM,
+): boolean {
+  if (!center) return true;
+  if (lat === null || lng === null) return false;
+  return calcularDistanciaKm(center.lat, center.lng, lat, lng) <= maxDistanceKm;
+}
+
 function buildSellerNameMap(vendedoresData: any[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const v of vendedoresData) {
@@ -132,6 +145,7 @@ function preScoreCandidates(
   sellerNameMap: Map<string, string>,
   myAnchors: AnchorPoint[],
   otherAnchors: AnchorPoint[],
+  zoneCenter: AnchorPoint | null,
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
 
@@ -139,6 +153,7 @@ function preScoreCandidates(
     const place = placesMap.get(c.client_id);
     const lat = place?.lat ? Number(place.lat) : null;
     const long = place?.long ? Number(place.long) : null;
+    if (!isWithinRadiusFromCenter(lat, long, zoneCenter)) continue;
     const estado = classifyEstado(c.dias_desde_ultima_compra);
 
     let distancia_km = 999;
@@ -219,6 +234,7 @@ function preScoreCandidates(
   for (const p of prospectos) {
     const lat = p.latitud ? Number(p.latitud) : null;
     const long = p.longitud ? Number(p.longitud) : null;
+    if (!isWithinRadiusFromCenter(lat, long, zoneCenter)) continue;
 
     let distancia_km = 999;
     let score_geo = 0;
@@ -300,12 +316,13 @@ CONTEXTO: Vendemos vinos en canales ON_TRADE (restaurantes/bares) y OFF_TRADE (v
 REGLAS DE ORO (ESTRICTAS):
 1. CUOTA OBLIGATORIA: Seleccioná EXACTAMENTE 8 visitas por vendedor. Distribución ideal: 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL.
 2. Si una categoría NO tiene candidatos suficientes, completá con POTENCIAL/PROSPECTO hasta llegar a 8. NUNCA devuelvas menos de 8 por vendedor.
-3. DENSIDAD sobre distancia: Priorizá puntos que estén cerca de los Activos elegidos. Rutas densas, no viajes largos.
-4. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor. Tu trabajo es elegir la mejor combinación geográfica.
-5. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
+3. GEO-RESTRICCIÓN DURA: Todas las recomendaciones deben estar dentro del radio operativo de la zona solicitada (máximo 1km del centro de zona).
+4. DENSIDAD sobre distancia: Priorizá puntos que estén cerca de los Activos elegidos. Rutas densas, no viajes largos.
+5. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor. Tu trabajo es elegir la mejor combinación geográfica.
+6. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
    - Para Inactivo/Perdido/Potencial explicá por qué visitarlo HOY (cercanía a ruta, potencial recuperación, etc.)
-6. TRANSFERENCIA: Si el cliente era de otro vendedor, mencionalo.
-7. NUNCA repitas el mismo client_id para distintos vendedores.
+7. TRANSFERENCIA: Si el cliente era de otro vendedor, mencionalo.
+8. NUNCA repitas el mismo client_id para distintos vendedores.
 
 Los candidatos vienen PRE-FILTRADOS por cartera del vendedor y PRE-RANKEADOS. Tu trabajo es elegir la mejor combinación respetando la cuota de 8 por vendedor.
 
@@ -394,6 +411,30 @@ function validateAndFixDistribution(
     }
   }
 
+  // Último recurso para cuota obligatoria: permitir reutilizar candidatos de otro vendedor
+  if (result.length < 8) {
+    const allBuckets = [...buckets.activos, ...buckets.inactivos, ...buckets.perdidos, ...buckets.potenciales];
+    for (const c of allBuckets) {
+      if (result.length >= 8) break;
+      if (pickedIds.has(c.client_id)) continue;
+      result.push({
+        client_id: c.client_id,
+        vendedor_id: vendedorId,
+        prioridad: 'media',
+        justificacion: `Completado por cuota obligatoria (reuso controlado): ${c.razon_social} (${c.estado_comercial})`,
+        score_final: c.score_total,
+        factores: {
+          score_comercial: c.score_comercial,
+          score_recencia: c.score_rotacion,
+          score_proximidad: c.score_geo,
+          distancia_km: c.distancia_km,
+          potencial_venta: c.monto_total_historico || 0,
+        },
+      });
+      pickedIds.add(c.client_id);
+    }
+  }
+
   return result.slice(0, 8);
 }
 
@@ -422,7 +463,7 @@ Deno.serve(async (req) => {
       instrucciones_adicionales,
     } = await req.json();
 
-    console.log("🔧 Version: v5-strict-filter");
+    console.log("🔧 Version: v6-zone-1km-quota");
     console.log("📥 Request recibido:", { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones });
 
     // ---- 1. Resolve area filters ----
@@ -607,6 +648,26 @@ Deno.serve(async (req) => {
 
     console.log(`🆕 Prospectos: ${prospectosPreDedup} → ${prospectos.length} after semantic dedup`);
 
+    const zoneCoords: AnchorPoint[] = [
+      ...(clientPlaces || [])
+        .map((p: any) => ({ lat: Number(p.lat), lng: Number(p.long) }))
+        .filter((p: AnchorPoint) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat >= -60 && p.lat <= -20 && p.lng >= -80 && p.lng <= -40),
+      ...prospectos
+        .map((p: any) => ({ lat: Number(p.latitud), lng: Number(p.longitud) }))
+        .filter((p: AnchorPoint) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat >= -60 && p.lat <= -20 && p.lng >= -80 && p.lng <= -40),
+    ];
+
+    const zoneCenter: AnchorPoint | null = zoneCoords.length > 0
+      ? {
+          lat: zoneCoords.reduce((sum, p) => sum + p.lat, 0) / zoneCoords.length,
+          lng: zoneCoords.reduce((sum, p) => sum + p.lng, 0) / zoneCoords.length,
+        }
+      : null;
+
+    if (zoneCenter) {
+      console.log(`🎯 Centro de zona: ${zoneCenter.lat.toFixed(4)}, ${zoneCenter.lng.toFixed(4)} | radio máximo ${MAX_DISTANCE_TO_ZONE_CENTER_KM}km`);
+    }
+
     if (allClientesEnZona.length === 0 && portfolioClients.length === 0 && prospectos.length === 0) {
       return new Response(JSON.stringify({
         recomendaciones: [], resumen: { total_recomendaciones: 0, descripcion: "No se encontraron candidatos en la zona.", distribucion_por_vendedor: {}, zonas_priorizadas: [] }
@@ -653,13 +714,8 @@ Deno.serve(async (req) => {
         console.log(`🔍 ${vendedor.nombre}: ${excludedFromZone.length} clientes excluidos (cartera ajena): ${sample.join(', ')}`);
       }
       
-      // Merge: zone clients first, then outside clients (for fallback)
-      const outsideIds = new Set(myClientsOutside.map(c => c.client_id));
-      const zoneIds = new Set(myClientsInZone.map(c => c.client_id));
-      const myClients = [
-        ...myClientsInZone,
-        ...myClientsOutside.filter(c => !zoneIds.has(c.client_id)),
-      ];
+      // Regla estricta de zona: SOLO clientes en la zona solicitada
+      const myClients = [...myClientsInZone];
 
       // Exclude clients with no real sales (cantidad_ordenes > 0) unless they have vendedor_actual set
       const myValidClients = myClients.filter(c => 
@@ -701,19 +757,10 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Fallback #2: if STILL no anchors, use centroid of requested zone (clientPlaces from ANY vendor)
-      if (anchors.length === 0 && clientPlaces && clientPlaces.length > 0) {
-        const validZonePlaces = clientPlaces.filter(p => {
-          const lat = Number(p.lat);
-          const lng = Number(p.long);
-          return lat >= -60 && lat <= -20 && lng >= -80 && lng <= -40;
-        });
-        if (validZonePlaces.length > 0) {
-          const centroidLat = validZonePlaces.reduce((s, p) => s + Number(p.lat), 0) / validZonePlaces.length;
-          const centroidLng = validZonePlaces.reduce((s, p) => s + Number(p.long), 0) / validZonePlaces.length;
-          anchors.push({ lat: centroidLat, lng: centroidLng });
-          console.log(`📌 ${vendedor.nombre}: Using zone centroid as anchor (${centroidLat.toFixed(4)}, ${centroidLng.toFixed(4)})`);
-        }
+      // Fallback #2: si no tiene anclas propias, usar centro de la zona solicitada
+      if (anchors.length === 0 && zoneCenter) {
+        anchors.push({ lat: zoneCenter.lat, lng: zoneCenter.lng });
+        console.log(`📌 ${vendedor.nombre}: using zone center as anchor (${zoneCenter.lat.toFixed(4)}, ${zoneCenter.lng.toFixed(4)})`);
       }
 
       vendorAnchors.set(vendedor.user_id, anchors);
@@ -730,12 +777,13 @@ Deno.serve(async (req) => {
         feedbacksMapClientes, feedbacksMapProspectos,
         vendedor.user_id, vendedor.nombre,
         sellerNameMap, myAnchors, otherAnchors,
+        zoneCenter,
       );
 
       const activos = scored.filter(c => c.estado_comercial === 'ACTIVO').slice(0, 15);
-      const inactivos = scored.filter(c => c.estado_comercial === 'INACTIVO').slice(0, 5);
-      const perdidos = scored.filter(c => c.estado_comercial === 'PERDIDO').slice(0, 5);
-      let potenciales = scored.filter(c => c.estado_comercial === 'POTENCIAL').slice(0, 5);
+      const inactivos = scored.filter(c => c.estado_comercial === 'INACTIVO').slice(0, 8);
+      const perdidos = scored.filter(c => c.estado_comercial === 'PERDIDO').slice(0, 8);
+      let potenciales = scored.filter(c => c.estado_comercial === 'POTENCIAL').slice(0, 80);
 
       // === GUARANTEE 8: Expand prospect pool if total candidates < 8 ===
       const totalCandidates = activos.length + inactivos.length + perdidos.length + potenciales.length;
@@ -784,6 +832,7 @@ Deno.serve(async (req) => {
             feedbacksMapClientes, feedbacksMapProspectos,
             vendedor.user_id, vendedor.nombre,
             sellerNameMap, myAnchors, otherAnchors,
+            zoneCenter,
           ).filter(c => !existingProspectoIds.has(c.client_id));
           
           potenciales = [...potenciales, ...extraScored.slice(0, needed)];
@@ -815,6 +864,7 @@ Deno.serve(async (req) => {
             feedbacksMapClientes, feedbacksMapProspectos,
             vendedor.user_id, vendedor.nombre,
             sellerNameMap, myAnchors, otherAnchors,
+            zoneCenter,
           ).filter(c => !allExistingIds.has(c.client_id));
           
           potenciales = [...potenciales, ...provinciaScored.slice(0, stillNeeded)];

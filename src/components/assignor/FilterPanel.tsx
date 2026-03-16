@@ -11,7 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
-interface Vendedor { id: string; nombre: string; email: string; }
+interface Vendedor { id: string; profileId: string; nombre: string; email: string; }
 interface Area { id: string; nombre: string; vendedores: string[]; barrios: string[]; }
 
 interface FilterPanelProps {
@@ -99,7 +99,7 @@ const FilterPanel = ({
     try {
       const { data, error } = await supabase.from('profiles').select('id, user_id, nombre, email').eq('rol', 'vendedor').eq('activo', true);
       if (error) throw error;
-      const mapped = (data || []).map(v => ({ id: v.user_id, nombre: v.nombre, email: v.email }));
+      const mapped = (data || []).map(v => ({ id: v.user_id, profileId: v.id, nombre: v.nombre, email: v.email }));
       setVendedores(mapped);
       setSelectedVendedores(mapped.map(v => v.id));
     } catch (error) { console.error('Error fetching vendedores:', error); }
@@ -116,8 +116,16 @@ const FilterPanel = ({
   const handleSubmitArea = () => {
     const area = areas.find(a => a.id === selectedArea);
     if (!area) return;
-    const nombres = vendedores.filter(v => area.vendedores.includes(v.id)).map(v => v.nombre);
-    onRequestRecommendations({ area_id: selectedArea, cantidad_vendedores: area.vendedores.length }, { ids: area.vendedores, nombres }, { comuna: null, barrio: area.barrios.length > 0 ? area.barrios : null, provincia: null });
+
+    const areaVendedores = vendedores.filter(v => area.vendedores.includes(v.profileId));
+    const ids = areaVendedores.map(v => v.id);
+    const nombres = areaVendedores.map(v => v.nombre);
+
+    onRequestRecommendations(
+      { area_id: selectedArea, cantidad_vendedores: ids.length },
+      { ids, nombres },
+      { comuna: null, barrio: area.barrios.length > 0 ? area.barrios : null, provincia: null }
+    );
   };
 
   const handleSubmitCustom = (e: React.FormEvent) => {
@@ -186,7 +194,7 @@ const FilterPanel = ({
             <div className="rounded-xl bg-secondary/20 p-5 space-y-3">
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-xs font-medium text-muted-foreground mr-1">Vendedores</span>
-                {vendedores.filter(v => selectedAreaData.vendedores.includes(v.id)).map(v => (
+                {vendedores.filter(v => selectedAreaData.vendedores.includes(v.profileId)).map(v => (
                   <Badge key={v.id} variant="secondary" className="text-xs font-normal">{v.nombre.split(' ')[0]}</Badge>
                 ))}
               </div>
