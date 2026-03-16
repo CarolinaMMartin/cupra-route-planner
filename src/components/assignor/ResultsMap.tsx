@@ -310,7 +310,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       <div className="flex flex-col md:flex-row h-[600px] w-full rounded-lg overflow-hidden border border-border bg-card">
         {/* Sidebar */}
         <div className="w-full md:w-1/4 md:border-r border-border bg-card flex flex-col md:max-h-[600px]">
-          <div className="p-4 border-b border-border">
+          <div className="p-4 border-b border-border space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-foreground flex items-center gap-2">
                 <MapPin className="h-4 w-4" />
@@ -320,6 +320,18 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                 {selectedIds.length} de {sucursales.length}
               </Badge>
             </div>
+            {onToggleAll && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs"
+                onClick={onToggleAll}
+              >
+                {selectedIds.length === sucursales.length && sucursales.length > 0
+                  ? 'Deseleccionar todos'
+                  : 'Seleccionar todos'}
+              </Button>
+            )}
           </div>
 
         <ScrollArea className="flex-1">
