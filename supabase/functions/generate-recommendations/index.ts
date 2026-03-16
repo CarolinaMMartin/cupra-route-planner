@@ -20,6 +20,19 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
   return R * c;
 }
 
+const MAX_DISTANCE_TO_ZONE_CENTER_KM = 1;
+
+function isWithinRadiusFromCenter(
+  lat: number | null,
+  lng: number | null,
+  center: AnchorPoint | null,
+  maxDistanceKm = MAX_DISTANCE_TO_ZONE_CENTER_KM,
+): boolean {
+  if (!center) return true;
+  if (lat === null || lng === null) return false;
+  return calcularDistanciaKm(center.lat, center.lng, lat, lng) <= maxDistanceKm;
+}
+
 function buildSellerNameMap(vendedoresData: any[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const v of vendedoresData) {
