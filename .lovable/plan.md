@@ -1,74 +1,160 @@
+# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
-Diagnóstico detallado (estado actual, con evidencia)
+## Cambios realizados
 
-1) El filtro por vendedor NO es estricto (causa principal)
-- En `generate-recommendations`, hoy se filtra fuerte por geografía (`client_places`, `prospectos`) pero NO por vendedor al armar candidatos.
-- SQL efectivo actual:
-  - `client_places` por barrio/comuna/provincia
-  - `clientes` por `client_id IN zona`, `excluir_recomendaciones=false`, `monto_total_historico not null`
-  - `prospectos` por zona (hasta 200)
-- Luego el vendedor solo pesa en `score_vendedor` (25%), pero no excluye cartera ajena.
-- Resultado real visto en DB (última corrida `c1a8be75...`):
-  - Palermo: 20 clientes vs 205 prospectos.
-  - Para Pablo: 8 recomendaciones, 0 activos, 0 inactivos, 4 perdidos, 4 potenciales.
-  - Para Pablo, 0 clientes recomendados con vendedor actual/principal Pablo.
+### A. DB: Campo `vendedor_actual` en `clientes` ✅
+- Nuevo campo `vendedor_actual` (text) agregado
+- Inicializado desde la última venta registrada en `ventas_cupra`
+- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
 
-2) Se está pasando demasiado contexto “contaminado” a la IA
-- El prompt recibe buckets por vendedor, pero buckets construidos desde un universo compartido (no estricto por vendedor).
-- Logs: ambos vendedores entran con conteos similares (4A/2I/5P/5Pot), luego la selección se degrada.
-- Faltan validaciones duras antes de IA para “cliente pertenece a Pablo/Pilar”.
+### B. Pre-scoring determinístico ✅
+- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
+- **score_geo (50%)**: Distancia Haversine al centroide del cluster
+- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
+- **score_comercial (15%)**: Score comercial normalizado (0-100)
+- **score_rotacion (10%)**: Días desde última recomendación
+- Filtra candidatos con feedback negativo automáticamente
+- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
 
-3) Duplicados “mismo lugar” siguen siendo posibles
-- La deduplicación global actual es por `client_id`/`place_id`, no por lugar real.
-- Caso real detectado: “DON JULIO - CHICO SRL” (cliente) y “Don Julio Parrilla” (prospecto) ~60m (mismo lugar práctico).
-- También existe bug de unicidad en validación IA: no se descartan explícitamente picks repetidos del mismo `client_id` dentro del mismo vendedor (explica warning React de keys duplicadas).
+### C. Mapeo nombre→UUID ✅
+- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
+- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
+- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
 
-4) Valores comerciales aún inconsistentes
-- Aunque se arregló el parser monetario, hay desalineación fuerte:
-  - `sum(clientes.monto_total_historico)=437.464.738,86`
-  - `sum(ventas_cupra.facturacion_ars)=267.087.553,38`
-- Causa técnica: `process-ventas-excel` agrega métricas de clientes ANTES de deduplicar ventas; luego `ventas_cupra` se upsertea deduplicada.
-- Resultado: ranking comercial/anclas se sesgan.
+### D. Prompt reducido centrado en vendedor ✅
+- De ~65K chars a ~5-10K chars (reducción ~80%)
+- Formato tabular compacto con scores pre-calculados
+- IA solo decide ruta óptima y genera justificaciones
+- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
 
-5) “N/A” en clientes
-- Hay clientes recomendados con `monto_total=0`, `cantidad_ordenes=0`, `ultima_compra null` (ej. `client_id=40`), que pasan filtros actuales.
-- En UI además hay checks falsy (`if (!value)`) que muestran `N/A` para cero.
+### E. UI: Vendedor actual vs anterior ✅
+- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
+- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
+- Tipo `Sucursal` extendido con `vendedor_actual`
 
-Qué se le está pasando hoy a la IA
-- Secciones por vendedor con candidatos y campos:
-  - `estado`, `score`, `distancia`, `barrio`, `vendedor_actual`, `días`, `ticket`, feedback.
-- Problema: esos candidatos no vienen prefiltrados de forma estricta por cartera del vendedor, por eso “analiza bien” sobre un input mal armado.
+---
 
-Plan de corrección (diagnóstico -> solución)
+# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
 
-Fase A — Filtro estricto previo a IA (núcleo)
-1. En backend, separar universo por vendedor ANTES de score:
-   - `clientes` del vendedor: match por `vendedor_actual`/`vendedor_principal`/`todos_vendedores` normalizados (unaccent+upper).
-   - Geografía en AND (vendedor + Palermo), no solo barrio global.
-2. Si no alcanza cuota 5-1-1-1, fallback controlado:
-   - primero cartera histórica del vendedor en zona cercana,
-   - luego prospectos cercanos a anclas del vendedor (no cualquier prospecto).
+## Cambios realizados
 
-Fase B — Deduplicación real de lugares
-3. Excluir prospectos que representen clientes existentes:
-   - por `prospectos.client_id` cuando exista,
-   - y por similitud nombre + distancia (<100m) contra clientes candidatos.
-4. En validación post-IA, bloquear duplicados por `client_id/place_id` y por “fingerprint de lugar” (nombre normalizado + geohash/buffer).
+### A. Tabs principales ✅
+- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
+- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
 
-Fase C — Corrección de datos comerciales
-5. Ajustar ETL para calcular métricas de `clientes` desde ventas ya deduplicadas (misma base que `ventas_cupra`).
-6. Recalcular clientes completos (rebuild) y recién ahí regenerar recomendaciones.
-   - Si querés, hacemos limpieza controlada + nueva carga de Excel luego del fix.
+### B. FilterPanel con dos modos ✅
+- Modo "Por Área": selector de área → ver resumen → generar
+- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
+- Instrucciones IA colapsables en ambos modos
+- Vendedores en Collapsible con badge "X de Y seleccionados"
 
-Fase D — Robustez UX/validación
-7. Excluir de recomendación clientes sin ventas reales (`cantidad_ordenes>0`, `ultima_compra not null`) salvo modo explícito.
-8. Corregir UI para que 0 no se renderice como `N/A`.
-9. Agregar trazas de auditoría por request:
-   - “candidatos iniciales”, “candidatos tras filtro vendedor”, “enviados a IA”, “descartados por duplicado”.
+### C. RecommendationFilters simplificado ✅
+- De 6 filtros redundantes a solo 1 filtro por vendedor
+- Se muestra solo cuando hay más de 1 vendedor
 
-Archivos a intervenir en implementación
-- `supabase/functions/generate-recommendations/index.ts` (filtros estrictos, dedup semántica, validación anti-duplicados)
-- `supabase/functions/process-ventas-excel/index.ts` (agregación desde ventas deduplicadas)
-- SQL de soporte (normalización/unaccent y posible helper de matching semántico)
-- `src/components/assignor/ClientDetailCard.tsx` (render de 0 vs N/A)
-- `src/components/AssignorDashboard.tsx` (id único robusto para lista/preselección)
+### D. TodayAssignments sin Card wrapper ✅
+- Funciona como contenido directo del tab
+- Layout más limpio sin doble Card
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
+| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
+| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
+| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
+
+---
+
+# Phase 3: Carga de Excel + ETL integrado — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Edge Function `process-ventas-excel` ✅
+- Recibe `{ rows: [...] }` parseadas en frontend con SheetJS
+- **Normalización de campos**: `getFieldValue()` con matching exacto, case-insensitive y NFD-normalized
+- **Conversión de fechas**: Excel serial → ISO, DD/MM/YYYY → ISO
+- **Conversión de montos**: Formato argentino (puntos miles, coma decimal)
+- **Geografía CABA**: 48 barrios mapeados a 15 comunas + detección PBA/GBA
+- **Agregación RFM por cliente**: Primera/última compra, días inactividad, scores recencia/volumen/comercial
+- **Canal**: Detección ON_TRADE vs OFF_TRADE por categorías
+- **Upsert ventas_cupra**: Batches de 500, conflict key existente
+- **Upsert clientes protegido**: No sobreescribe `last_recommendation_at`, `excluir_recomendaciones`, `ultima_visita`
+
+### B. Página `CargaDatos.tsx` ✅
+- Acceso restringido a rol `asignador`
+- Drop zone + file input para `.xlsx` / `.xls`
+- Parseo client-side con `xlsx` (SheetJS)
+- Preview: columnas detectadas + primeras 5 filas
+- Progreso visual durante procesamiento
+- Resumen final: ventas procesadas, clientes actualizados, errores
+
+### C. Navegación ✅
+- Ruta `/carga-datos` en `App.tsx`
+- Menú "Gestión" del asignador: nuevo item "Carga de Datos"
+
+## Archivos creados/modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/process-ventas-excel/index.ts` | Creado — ETL completo |
+| `src/pages/CargaDatos.tsx` | Creado — UI de upload |
+| `src/App.tsx` | Ruta `/carga-datos` |
+| `src/pages/Index.tsx` | Menú con "Carga de Datos" |
+| `supabase/config.toml` | Función registrada |
+| `package.json` | Dependencia `xlsx` |
+
+## Próximos pasos potenciales
+- Planificación temporal (agenda semanal)
+- Reportes y supervisión
+- Agente conversacional
+
+---
+
+# Phase 4: CUPRA Smart Route v4 — Anclaje Geográfico + Cuota 5-1-1-1 — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Vista SQL `v_clientes_priorizacion` ✅
+- Extensión `unaccent` habilitada para normalización de nombres
+- Vista combina `clientes` + `prospectos` con clasificación por estado comercial (ACTIVO/INACTIVO/PERDIDO/POTENCIAL)
+- `vendedor_afin_id` calculado con `UPPER(UNACCENT())` para matching robusto
+- Función `get_vendedor_barrios_top()` para obtener top 3 barrios por vendedor
+
+### B. Edge Function refactorizada ✅
+- **Centroide eliminado**: Ya no se usa `centerLat`/`centerLong`
+- **Algoritmo de Anclaje**: Top 5 clientes ACTIVOS del vendedor definen "anclas" del día
+- **Scoring magnético**: Distancia al ancla más cercana en vez de al centroide
+- **Penalización solapamiento**: -100 puntos si candidato < 300m de ancla de OTRO vendedor
+- **Cubetas 15-5-5-5**: 15 Activos + 5 Inactivos + 5 Perdidos + 5 Potenciales enviados a IA
+- **Filtro 15 días eliminado**: La IA decide según categoría de estado
+- **Nuevo prompt 5-1-1-1**: Distribución estricta 5 Activos + 1 Inactivo + 1 Perdido + 1 Potencial
+- **Barrios top del vendedor**: Incluidos en el contexto del prompt
+- **Validación post-IA**: Si la IA no cumple cuota, se completa determinísticamente
+- **`estado_comercial`** incluido en la respuesta para el frontend
+
+### C. Frontend — Tipo `Sucursal` extendido ✅
+- Nuevo campo `estado_cliente?: 'ACTIVO' | 'INACTIVO' | 'PERDIDO' | 'POTENCIAL'`
+- `AssignorDashboard.tsx` mapea `estado_comercial` desde la respuesta
+
+### D. `vendorColors.ts` — Funciones de estado ✅
+- `getStateColor(estado)`: Verde/Amarillo/Rojo/Azul
+- `classifyClientState(dias, esProspecto)`: Clasificación frontend
+- `createStateMarkerIcon(estado, vendorColor?, scale)`: SVG con relleno=estado + borde=vendedor
+- `getStateLegend()`: Para leyendas de mapa
+- `calcularDistanciaKmFrontend()`: Para detección de solapamiento
+
+### E. Mapas actualizados ✅
+- **`ResultsMap.tsx`**: Marcadores con relleno=estado + borde=vendedor. Leyenda doble (estados + vendedores). Detección solapamiento < 200m con icono ⚠️
+- **`VendedorAssignmentsMap.tsx`**: Marcadores por estado (mono-vendedor, sin borde). Leyenda de estados
+- **`AssignorTodayAssignmentsMap.tsx`**: Pendiente actualización con marcadores por estado
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| Migración SQL | `unaccent` + vista + función `get_vendedor_barrios_top` |
+| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: anclas, cubetas, prompt 5-1-1-1, validación |
+| `src/types/sales.ts` | `estado_cliente` en `Sucursal` |
+| `src/lib/vendorColors.ts` | Funciones de estado + marcadores duales |
+| `src/components/AssignorDashboard.tsx` | Mapeo `estado_cliente` |
+| `src/components/assignor/ResultsMap.tsx` | Marcadores estado+vendedor, solapamiento |
+| `src/components/vendedor/VendedorAssignmentsMap.tsx` | Marcadores por estado |
