@@ -33,7 +33,7 @@ import {
   PaginationPrevious,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
-import { Save, Search, ChevronDown, Info } from "lucide-react";
+import { Save, Search, ChevronDown, Info, ArrowLeft } from "lucide-react";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
