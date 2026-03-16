@@ -445,6 +445,7 @@ Deno.serve(async (req) => {
     }
 
     // ---- 2. Load vendor profiles ----
+    // Load SELECTED vendors
     const { data: vendedoresData, error: vendedoresError } = await supabaseClient
       .from("profiles")
       .select("user_id, nombre, email, id")
@@ -457,8 +458,18 @@ Deno.serve(async (req) => {
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    console.log(`✅ Vendedores: ${vendedoresData.length} → ${vendedoresData.map(v => v.nombre).join(', ')}`);
-    const sellerNameMap = buildSellerNameMap(vendedoresData);
+    console.log(`✅ Vendedores seleccionados: ${vendedoresData.length} → ${vendedoresData.map(v => v.nombre).join(', ')}`);
+
+    // Load ALL vendor profiles for global seller name resolution (Bug fix #3)
+    const { data: allVendorProfiles } = await supabaseClient
+      .from("profiles")
+      .select("user_id, nombre")
+      .eq("rol", "vendedor")
+      .eq("activo", true);
+    
+    // Build sellerNameMap from ALL vendors, not just selected ones
+    const sellerNameMap = buildSellerNameMap(allVendorProfiles || vendedoresData);
+    console.log(`🗂️ sellerNameMap: ${sellerNameMap.size / 2} vendedores totales (incluye no seleccionados)`);
 
     // ---- 3. Load client_places (geography) ----
     let placesQuery = supabaseClient.from("client_places").select("*").eq("is_primary", true);
