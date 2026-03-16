@@ -814,7 +814,7 @@ Deno.serve(async (req) => {
 
       return `
 ### VENDEDOR: ${v.nombre} (ID: ${v.user_id})
-Cuota: 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL = 8
+Cuota OBLIGATORIA: 8 visitas. Ideal: 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL. Si faltan candidatos en una categoría, completá con POTENCIAL hasta llegar a 8.
 IMPORTANTE: Todos los clientes (no prospectos) listados abajo pertenecen a la cartera de ${v.nombre}.
 
 ACTIVOS (${activos.length} candidatos - elegir 5):

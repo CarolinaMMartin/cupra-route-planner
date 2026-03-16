@@ -99,7 +99,7 @@ const FilterPanel = ({
     try {
       const { data, error } = await supabase.from('profiles').select('id, user_id, nombre, email').eq('rol', 'vendedor').eq('activo', true);
       if (error) throw error;
-      const mapped = (data || []).map(v => ({ id: v.id, nombre: v.nombre, email: v.email }));
+      const mapped = (data || []).map(v => ({ id: v.user_id, nombre: v.nombre, email: v.email }));
       setVendedores(mapped);
       setSelectedVendedores(mapped.map(v => v.id));
     } catch (error) { console.error('Error fetching vendedores:', error); }
