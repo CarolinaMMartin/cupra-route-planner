@@ -7,8 +7,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  DropdownMenuTrigger } from
+"@/components/ui/dropdown-menu";
 import { LogOut, User, BarChart3, Layers, ClipboardList, Store, UserCog, ChevronDown, Upload } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import angelBlanco from "@/assets/angel-blanco.png";
@@ -70,8 +70,8 @@ const Index = () => {
           <img src={cupraLogo} alt="Cupra Wines" className="w-28 h-auto mx-auto opacity-40 animate-pulse" />
           <p className="text-sm text-muted-foreground tracking-wide">Cargando...</p>
         </div>
-      </div>
-    );
+      </div>);
+
   }
 
   return (
@@ -86,9 +86,9 @@ const Index = () => {
           left: '50%',
           transform: 'translate(-50%, -50%)',
           width: '340px',
-          height: 'auto',
-        }}
-      />
+          height: 'auto'
+        }} />
+      
 
       {/* Header */}
       <header className="bg-background/90 backdrop-blur-xl sticky top-0 z-50 border-b border-border/20">
@@ -96,13 +96,13 @@ const Index = () => {
           <div className="flex justify-between items-center h-14">
             {/* Logo */}
             <div className="flex items-center gap-2.5">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-9 w-auto opacity-70" />
+              
             </div>
 
             {/* Navigation */}
             <nav className="flex items-center gap-0.5">
-              {profile.rol === 'asignador' && (
-                <>
+              {profile.rol === 'asignador' &&
+              <>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="gap-1.5 text-sm">
@@ -152,10 +152,10 @@ const Index = () => {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
-              )}
+              }
 
-              {profile.rol === 'vendedor' && (
-                <>
+              {profile.rol === 'vendedor' &&
+              <>
                   <Button variant="ghost" size="sm" onClick={() => navigate("/vendedor-dashboard")} className="gap-1.5 text-sm">
                     <BarChart3 className="w-4 h-4" />
                     <span className="hidden sm:inline">Dashboard</span>
@@ -165,14 +165,14 @@ const Index = () => {
                     <span className="hidden sm:inline">Asignaciones</span>
                   </Button>
                 </>
-              )}
+              }
             </nav>
 
             {/* User */}
             <div className="flex items-center gap-1">
-              {profile.rol === 'vendedor' && (
-                <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />
-              )}
+              {profile.rol === 'vendedor' &&
+              <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />
+              }
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -204,8 +204,8 @@ const Index = () => {
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
         {profile.rol === 'asignador' ? <AssignorDashboard /> : <VendedorKanban ref={kanbanRef} />}
       </main>
-    </div>
-  );
+    </div>);
+
 };
 
 export default Index;
