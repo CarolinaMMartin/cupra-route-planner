@@ -174,8 +174,9 @@ const ClientesDashboard = () => {
   const vendedores = useMemo(() => {
     const uniqueVendedores = new Set<string>();
     clientesData.forEach(cliente => {
-      const vendedoresList = cliente.todos_vendedores || [cliente.vendedor_principal];
-      vendedoresList.forEach((v: string) => v && uniqueVendedores.add(v));
+      // Usar vendedor_actual (único) para evitar duplicación multi-vendedor
+      const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
+      if (vendedor) uniqueVendedores.add(vendedor);
     });
     return Array.from(uniqueVendedores).sort();
   }, [clientesData]);
