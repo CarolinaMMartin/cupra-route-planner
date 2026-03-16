@@ -1204,7 +1204,7 @@ Respetá la cuota y priorizá la densidad geográfica.`;
     }
 
     // Save to DB
-    const recommendationsForDb = enrichedRecommendations.map(({ lat, long, estado_comercial, ...rest }) => rest);
+    const recommendationsForDb = enrichedRecommendations.map(({ lat, long, estado_comercial, vendedor_recomendado_nombre, ...rest }) => rest);
     const { error: insertError } = await supabaseClient.from("recomendaciones_ia").insert(recommendationsForDb);
     if (insertError) { console.error("❌ Error insertando:", insertError); throw insertError; }
 

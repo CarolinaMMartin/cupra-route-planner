@@ -188,7 +188,7 @@ const AssignorDashboard = () => {
           ai_reasoning: rec.ai_reasoning, score_geografico: rec.score_geografico,
           factores_ia: rec.factores_ia,
           vendedor_recomendado_id: rec.vendedor_recomendado_id,
-          vendedor_actual: vendedorRecomendadoNombre || rec.vendedor_actual || rec.vendedor_principal,
+          vendedor_actual: vendedorNombre || rec.vendedor_actual,
           estado_cliente: rec.estado_comercial || (rec.es_prospecto ? 'POTENCIAL' : undefined),
         });
       });
