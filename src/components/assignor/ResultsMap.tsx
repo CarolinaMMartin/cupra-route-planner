@@ -193,6 +193,21 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
         }
       });
 
+      // Detect overlaps: markers from different vendors within 200m
+      for (let i = 0; i < fetchedLocations.length; i++) {
+        for (let j = i + 1; j < fetchedLocations.length; j++) {
+          const a = fetchedLocations[i];
+          const b = fetchedLocations[j];
+          if (a.vendedor && b.vendedor && a.vendedor !== b.vendedor) {
+            const dist = calcularDistanciaKmFrontend(a.lat, a.lng, b.lat, b.lng);
+            if (dist < 0.2) {
+              a.hasOverlap = true;
+              b.hasOverlap = true;
+            }
+          }
+        }
+      }
+
       setLocations(fetchedLocations);
       setVendorLegend(getVendorColorMap());
       setLoading(false);
