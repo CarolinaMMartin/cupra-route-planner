@@ -94,6 +94,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       const service = new google.maps.places.PlacesService(map);
       const fetchedLocations: ClientLocation[] = [];
 
+      const resolveRecommendedVendor = (sucursal: Sucursal) => {
+        const recommendedVendor = sucursal.vendedor_actual || sucursal.vendedor_recomendado_id;
+        const historicalVendor = sucursal.vendedor_principal;
+        return recommendedVendor || historicalVendor || "Sin vendedor";
+      };
+
       const promises = sucursales.map(async (sucursal) => {
         try {
           // If we have lat/lng, validate and use them directly
