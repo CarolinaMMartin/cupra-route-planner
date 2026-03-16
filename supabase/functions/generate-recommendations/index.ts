@@ -468,7 +468,7 @@ Deno.serve(async (req) => {
       instrucciones_adicionales,
     } = await req.json();
 
-    console.log("🔧 Version: v7-geo-expansion");
+    console.log("🔧 Version: v7b-no-radius-clients");
     console.log("📥 Request recibido:", { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones });
 
     // ---- 1. Resolve area filters ----
