@@ -623,6 +623,26 @@ Deno.serve(async (req) => {
 
     console.log(`🆕 Prospectos: ${prospectosPreDedup} → ${prospectos.length} after semantic dedup`);
 
+    const zoneCoords: AnchorPoint[] = [
+      ...(clientPlaces || [])
+        .map((p: any) => ({ lat: Number(p.lat), lng: Number(p.long) }))
+        .filter((p: AnchorPoint) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat >= -60 && p.lat <= -20 && p.lng >= -80 && p.lng <= -40),
+      ...prospectos
+        .map((p: any) => ({ lat: Number(p.latitud), lng: Number(p.longitud) }))
+        .filter((p: AnchorPoint) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat >= -60 && p.lat <= -20 && p.lng >= -80 && p.lng <= -40),
+    ];
+
+    const zoneCenter: AnchorPoint | null = zoneCoords.length > 0
+      ? {
+          lat: zoneCoords.reduce((sum, p) => sum + p.lat, 0) / zoneCoords.length,
+          lng: zoneCoords.reduce((sum, p) => sum + p.lng, 0) / zoneCoords.length,
+        }
+      : null;
+
+    if (zoneCenter) {
+      console.log(`🎯 Centro de zona: ${zoneCenter.lat.toFixed(4)}, ${zoneCenter.lng.toFixed(4)} | radio máximo ${MAX_DISTANCE_TO_ZONE_CENTER_KM}km`);
+    }
+
     if (allClientesEnZona.length === 0 && portfolioClients.length === 0 && prospectos.length === 0) {
       return new Response(JSON.stringify({
         recomendaciones: [], resumen: { total_recomendaciones: 0, descripcion: "No se encontraron candidatos en la zona.", distribucion_por_vendedor: {}, zonas_priorizadas: [] }
