@@ -20,8 +20,8 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
   return R * c;
 }
 
-const MAX_DISTANCE_TO_ZONE_CENTER_KM = 1;
-const EXPANSION_RADIUS_KM = 2;
+const MAX_DISTANCE_TO_ZONE_CENTER_KM = 1.5;
+const EXPANSION_RADIUS_KM = 2.5;
 
 function isWithinRadiusFromCenter(
   lat: number | null,
@@ -148,6 +148,7 @@ function preScoreCandidates(
   otherAnchors: AnchorPoint[],
   zoneCenter: AnchorPoint | null,
   maxRadiusKm: number = MAX_DISTANCE_TO_ZONE_CENTER_KM,
+  applyRadiusToClients: boolean = true,
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
   
@@ -156,7 +157,9 @@ function preScoreCandidates(
     const place = placesMap.get(c.client_id);
     const lat = place?.lat ? Number(place.lat) : null;
     const long = place?.long ? Number(place.long) : null;
-    // Don't filter vendor's own clients by zone radius — they're already pre-filtered to be in zone
+    // Only apply radius filter to clients when a geo filter was specified
+    // (otherwise the client_places query already loaded ALL clients, no zone restriction)
+    if (applyRadiusToClients && !isWithinRadiusFromCenter(lat, long, zoneCenter, maxRadiusKm)) continue;
     const estado = classifyEstado(c.dias_desde_ultima_compra);
 
     let distancia_km = 999;
@@ -470,7 +473,7 @@ Deno.serve(async (req) => {
       instrucciones_adicionales,
     } = await req.json();
 
-    console.log("🔧 Version: v7b-no-radius-clients");
+    console.log("🔧 Version: v8b-smart-radius");
     console.log("📥 Request recibido:", { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones });
 
     // ---- 1. Resolve area filters ----
@@ -527,6 +530,9 @@ Deno.serve(async (req) => {
     if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditions.push(`comuna.ilike.%${c}%`));
     if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditions.push(`barrio_principal.ilike.%${b}%`));
     if (geoConditions.length > 0) placesQuery = placesQuery.or(geoConditions.join(","));
+    
+    // Track whether user specified a geographic filter — affects radius filtering behavior
+    const hasGeoFilter = !!(provincia && provincia !== "all") || geoConditions.length > 0;
 
     const { data: clientPlaces, error: placesError } = await placesQuery;
     if (placesError) throw placesError;
@@ -779,12 +785,20 @@ Deno.serve(async (req) => {
         .filter(([id]) => id !== vendedor.user_id)
         .flatMap(([, anch]) => anch);
 
+      // Per-vendor zone center: centroid of vendor's anchors (more precise than global zone center)
+      const vendorZoneCenter: AnchorPoint | null = myAnchors.length > 0
+        ? {
+            lat: myAnchors.reduce((sum, a) => sum + a.lat, 0) / myAnchors.length,
+            lng: myAnchors.reduce((sum, a) => sum + a.lng, 0) / myAnchors.length,
+          }
+        : zoneCenter;
+
       const scored = preScoreCandidates(
         myValidClients, prospectos, placesMap,
         feedbacksMapClientes, feedbacksMapProspectos,
         vendedor.user_id, vendedor.nombre,
         sellerNameMap, myAnchors, otherAnchors,
-        zoneCenter,
+        vendorZoneCenter, MAX_DISTANCE_TO_ZONE_CENTER_KM, hasGeoFilter,
       );
 
       const activos = scored.filter(c => c.estado_comercial === 'ACTIVO').slice(0, 15);
@@ -794,7 +808,8 @@ Deno.serve(async (req) => {
 
       // === GUARANTEE 8: Expand prospect pool if total candidates < 8 ===
       const totalCandidates = activos.length + inactivos.length + perdidos.length + potenciales.length;
-      if (totalCandidates < 8 && zoneCenter) {
+      if (totalCandidates < 8 && (vendorZoneCenter || zoneCenter)) {
+        const expansionCenter = vendorZoneCenter || zoneCenter!;
         console.log(`⚠️ ${vendedor.nombre}: Solo ${totalCandidates} candidatos, necesita 8. Buscando más prospectos por proximidad geográfica...`);
         
         const existingProspectoIds = new Set(potenciales.map(p => p.client_id));
@@ -807,10 +822,10 @@ Deno.serve(async (req) => {
         
         const { data: geoProspectos } = await supabaseClient
           .from("prospectos").select("*")
-          .gte("latitud", zoneCenter.lat - deltaLat)
-          .lte("latitud", zoneCenter.lat + deltaLat)
-          .gte("longitud", zoneCenter.lng - deltaLng)
-          .lte("longitud", zoneCenter.lng + deltaLng)
+          .gte("latitud", expansionCenter.lat - deltaLat)
+          .lte("latitud", expansionCenter.lat + deltaLat)
+          .gte("longitud", expansionCenter.lng - deltaLng)
+          .lte("longitud", expansionCenter.lng + deltaLng)
           .order("rating", { ascending: false })
           .limit(needed * 5);
         
@@ -823,13 +838,13 @@ Deno.serve(async (req) => {
         
         extraProspectosLoaded.push(...geoFiltered);
         
-        // Score with RELAXED radius (2km instead of 1km)
+        // Score with RELAXED radius
         const geoScored = preScoreCandidates(
           [], geoFiltered, placesMap,
           feedbacksMapClientes, feedbacksMapProspectos,
           vendedor.user_id, vendedor.nombre,
           sellerNameMap, myAnchors, otherAnchors,
-          zoneCenter, EXPANSION_RADIUS_KM,
+          expansionCenter, EXPANSION_RADIUS_KM,
         ).filter(c => !allExistingIds.has(c.client_id));
         
         potenciales = [...potenciales, ...geoScored.slice(0, needed)];
@@ -846,10 +861,10 @@ Deno.serve(async (req) => {
           
           const { data: widerProspectos } = await supabaseClient
             .from("prospectos").select("*")
-            .gte("latitud", zoneCenter.lat - deltaLat2)
-            .lte("latitud", zoneCenter.lat + deltaLat2)
-            .gte("longitud", zoneCenter.lng - deltaLng2)
-            .lte("longitud", zoneCenter.lng + deltaLng2)
+            .gte("latitud", expansionCenter.lat - deltaLat2)
+            .lte("latitud", expansionCenter.lat + deltaLat2)
+            .gte("longitud", expansionCenter.lng - deltaLng2)
+            .lte("longitud", expansionCenter.lng + deltaLng2)
             .order("rating", { ascending: false })
             .limit(stillNeeded * 5);
           
@@ -866,7 +881,7 @@ Deno.serve(async (req) => {
             feedbacksMapClientes, feedbacksMapProspectos,
             vendedor.user_id, vendedor.nombre,
             sellerNameMap, myAnchors, otherAnchors,
-            zoneCenter, 3,
+            expansionCenter, 3,
           ).filter(c => !allIds2.has(c.client_id));
           
           potenciales = [...potenciales, ...widerScored.slice(0, stillNeeded)];
