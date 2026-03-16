@@ -1091,7 +1091,6 @@ Respetá la cuota y priorizá la densidad geográfica.`;
 
       const esProspecto = !clienteCompleto;
       const place = !esProspecto ? placesMap.get(rec.client_id) : null;
-      const candidateInfo = globalCandidateMap.get(rec.client_id);
       const estado_comercial = candidateInfo?.estado_comercial || (esProspecto ? 'POTENCIAL' : classifyEstado(clienteCompleto?.dias_desde_ultima_compra));
 
       if (esProspecto && prospectoCompleto) {
@@ -1100,6 +1099,7 @@ Respetá la cuota y priorizá la densidad geográfica.`;
           client_id: null,
           prospecto_place_id: prospectoCompleto.place_id,
           vendedor_recomendado_id: vendedorId,
+          vendedor_recomendado_nombre: vendedorNombre,
           razon_social: prospectoCompleto.nombre,
           cuit_dni: null,
           priority_score: Math.round(rec.score_final),
@@ -1125,12 +1125,46 @@ Respetá la cuota y priorizá la densidad geográfica.`;
           last_recomendation: new Date().toISOString(),
           ultima_sugerencia: new Date().toISOString(),
         });
+      } else if (esProspecto && candidateInfo) {
+        // Fallback: prospect found only in scored candidates (not in original prospectos arrays)
+        enrichedRecommendations.push({
+          request_id,
+          client_id: null,
+          prospecto_place_id: candidateInfo.client_id,
+          vendedor_recomendado_id: vendedorId,
+          vendedor_recomendado_nombre: vendedorNombre,
+          razon_social: candidateInfo.razon_social,
+          cuit_dni: null,
+          priority_score: Math.round(rec.score_final),
+          score_geografico: Math.round(rec.factores?.score_proximidad || 0),
+          ai_reasoning: rec.justificacion,
+          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating },
+          justificacion: rec.justificacion,
+          es_prospecto: true,
+          estado_comercial: candidateInfo.estado_comercial,
+          monto_total_vendido: 0, orders_count: 0, avg_ticket: 0,
+          first_purchase_at: null, last_purchase_at: null, days_since_last_purchase: null, participacion: 0,
+          score_volumen_num: null, score_recencia_num: null,
+          score_volumen: "NUEVO", score_recencia: "NUEVO", score_comercial: "NUEVO",
+          lat: candidateInfo.lat, long: candidateInfo.long,
+          ciudades: [], provincias: [],
+          barrio_principal: candidateInfo.barrio,
+          direccion_principal: candidateInfo.direccion,
+          google_maps_link: candidateInfo.lat && candidateInfo.long ? `https://www.google.com/maps/search/?api=1&query=${candidateInfo.lat},${candidateInfo.long}` : null,
+          vendedores: [], vendedor_principal: null,
+          etiquetas: ["NUEVO", "PROSPECTO"],
+          telefonos: [],
+          created_at: new Date().toISOString(),
+          last_recomendation: new Date().toISOString(),
+          ultima_sugerencia: new Date().toISOString(),
+        });
       } else if (clienteCompleto) {
         enrichedRecommendations.push({
           request_id,
           client_id: rec.client_id,
           prospecto_place_id: null,
           vendedor_recomendado_id: vendedorId,
+          vendedor_recomendado_nombre: vendedorNombre,
           razon_social: clienteCompleto.razon_social,
           cuit_dni: clienteCompleto.cuit_dni,
           priority_score: Math.round(rec.score_final),
