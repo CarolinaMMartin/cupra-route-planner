@@ -304,9 +304,7 @@ function preScoreCandidates(
     });
   }
 
-  const clientCount = candidates.filter(c => !c.es_prospecto).length;
-  const prospectCount = candidates.filter(c => c.es_prospecto).length;
-  console.log(`  📊 preScore output: ${clientCount} clientes + ${prospectCount} prospectos = ${candidates.length} total`);
+  
   candidates.sort((a, b) => b.score_total - a.score_total);
   return candidates;
 }
