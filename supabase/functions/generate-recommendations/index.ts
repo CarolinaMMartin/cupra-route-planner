@@ -473,7 +473,7 @@ Deno.serve(async (req) => {
       instrucciones_adicionales,
     } = await req.json();
 
-    console.log("🔧 Version: v8-vendor-zone-center");
+    console.log("🔧 Version: v8b-smart-radius");
     console.log("📥 Request recibido:", { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones });
 
     // ---- 1. Resolve area filters ----
