@@ -166,7 +166,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
             return new Promise<ClientLocation>((resolve, reject) => {
               service.getDetails({ placeId: sucursal.prospecto_place_id! }, (place, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-                  const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
+                  const vendedor = resolveRecommendedVendor(sucursal);
                   if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
                   const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
                   resolve({
