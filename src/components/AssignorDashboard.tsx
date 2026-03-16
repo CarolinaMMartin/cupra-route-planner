@@ -296,7 +296,7 @@ const AssignorDashboard = () => {
               {viewMode === "list" ? (
                 <PreselectionStep recommendations={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleContinueToAssignment} />
               ) : (
-                <ResultsMap sucursales={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onContinue={handleContinueToAssignment} />
+                <ResultsMap sucursales={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleContinueToAssignment} />
               )}
             </CardContent>
           </Card>
