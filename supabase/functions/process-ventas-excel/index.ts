@@ -232,7 +232,7 @@ Deno.serve(async (req) => {
     }
 
     // ============ FASE 1: Normalizar ventas individuales ============
-    const ventas: any[] = [];
+    const ventasRaw: any[] = [];
     const clientesMap = new Map<string, any>();
     let ventasSinClientId = 0;
 

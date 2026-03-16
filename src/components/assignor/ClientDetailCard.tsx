@@ -41,8 +41,8 @@ const ClientDetailCard = ({
 }: ClientDetailCardProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const formatCurrency = (value?: number) => {
-    if (!value) return 'N/A';
+  const formatCurrency = (value?: number | null) => {
+    if (value === undefined || value === null) return 'N/A';
     return new Intl.NumberFormat('es-AR', { 
       style: 'currency', 
       currency: 'ARS',
