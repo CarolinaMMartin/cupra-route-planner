@@ -1,76 +1,205 @@
+# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
+## Cambios realizados
 
-# Plan v9: Zona Caliente por Vendedor + Mix Estratégico
+### A. DB: Campo `vendedor_actual` en `clientes` ✅
+- Nuevo campo `vendedor_actual` (text) agregado
+- Inicializado desde la última venta registrada en `ventas_cupra`
+- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
 
-## Archivo: `supabase/functions/generate-recommendations/index.ts`
+### B. Pre-scoring determinístico ✅
+- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
+- **score_geo (50%)**: Distancia Haversine al centroide del cluster
+- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
+- **score_comercial (15%)**: Score comercial normalizado (0-100)
+- **score_rotacion (10%)**: Días desde última recomendación
+- Filtra candidatos con feedback negativo automáticamente
+- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
 
-### Resumen de cambios
+### C. Mapeo nombre→UUID ✅
+- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
+- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
+- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
 
-Reescribir la lógica de scoring y selección para que cada vendedor tenga su propio "hotspot" calculado exclusivamente desde sus clientes, con radio duro de 1.5km, prioridad clientes sobre prospectos, y las 3 correcciones de seguridad.
+### D. Prompt reducido centrado en vendedor ✅
+- De ~65K chars a ~5-10K chars (reducción ~80%)
+- Formato tabular compacto con scores pre-calculados
+- IA solo decide ruta óptima y genera justificaciones
+- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
 
----
-
-### Cambio 1: Hotspot per-vendor (reemplaza zoneCenter global)
-
-**Líneas 664-682** (cálculo de `zoneCenter` global) se mantiene SOLO como fallback. La lógica principal se mueve al loop per-vendor (líneas 788-802):
-
-- Calcular `vendorHotspot` = centroide de los clientes propios del vendedor que tienen coordenadas Y están en la zona filtrada.
-- **Fallback (corrección #1):** Si el vendedor tiene 0 clientes en zona → `vendorHotspot` = centroide de los `clientPlaces` que matchean el filtro geográfico (es decir, el centro del barrio/comuna seleccionado). Esto habilita "Modo Conquista" con solo prospectos.
-
-### Cambio 2: Radio duro 1.5km para TODOS (clientes y prospectos)
-
-- Eliminar `applyRadiusToClients` parameter de `preScoreCandidates`.
-- SIEMPRE filtrar por `isWithinRadiusFromCenter(lat, long, vendorHotspot, 1.5)` tanto para clientes como prospectos.
-- Constante: `HARD_RADIUS_KM = 1.5`, `MAX_EXPANSION_KM = 2.0`.
-
-### Cambio 3: Pool lineal — clientes primero, prospectos después
-
-Reemplazar buckets separados (activos/inactivos/perdidos/potenciales) por dos pools:
-
-```text
-Pool 1: CLIENTES (ACTIVO + INACTIVO + PERDIDO) dentro de 1.5km del hotspot
-  → Ordenados por score_total
-Pool 2: PROSPECTOS (POTENCIAL) dentro de 1.5km del hotspot
-  → Ordenados por distancia al hotspot (más cerca primero)
-```
-
-Llenado: tomar hasta 8 del Pool 1. Si < 8, completar con Pool 2. Si aún < 8, expandir Pool 2 a 2km (nunca más).
-
-### Cambio 4: Mix estratégico — al menos 1 recuperación (corrección #2)
-
-Dentro del Pool 1, después de seleccionar los top 7 por score, verificar si hay al menos 1 cliente con `dias_desde_ultima_compra > 90` (PERDIDO). Si no lo hay pero existe uno disponible en el radio, swapear el #7 por el mejor PERDIDO. Esto garantiza proactividad de recuperación sin ser rígido.
-
-### Cambio 5: `validateAndFixDistribution` simplificado
-
-Reemplazar la lógica de targets 5-1-1-1 por:
-1. Tomar recs válidas de la IA (que estén en candidateMap y no en globalPickedIds).
-2. Si < 8, completar linealmente: primero clientes por score, luego prospectos por distancia.
-3. Forzar al menos 1 PERDIDO/INACTIVO si existe (corrección #2).
-4. Mantener `globalPickedIds` para deduplicación cross-vendor (corrección #3).
-
-### Cambio 6: Expansión geográfica simplificada
-
-Eliminar expansiones de 2.5km y 3km. Solo:
-- Si < 8 candidatos en 1.5km del hotspot → buscar prospectos en bounding box de 2km del **vendorHotspot** (no del zoneCenter global).
-- Cap absoluto: 2km. Nunca más.
-
-### Cambio 7: Prompt actualizado
-
-```
-"Elegí 8 visitas priorizando clientes existentes de la cartera.
-Completá con prospectos SOLO si no hay suficientes clientes.
-Incluí al menos 1 cliente que lleve >90 días sin comprar si existe.
-Todos deben estar geográficamente concentrados."
-```
-
-### Cambio 8: Version bump a `v9-hotzone`
+### E. UI: Vendedor actual vs anterior ✅
+- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
+- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
+- Tipo `Sucursal` extendido con `vendedor_actual`
 
 ---
 
-### Resultado esperado
+# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Tabs principales ✅
+- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
+- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
+
+### B. FilterPanel con dos modos ✅
+- Modo "Por Área": selector de área → ver resumen → generar
+- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
+- Instrucciones IA colapsables en ambos modos
+- Vendedores en Collapsible con badge "X de Y seleccionados"
+
+### C. RecommendationFilters simplificado ✅
+- De 6 filtros redundantes a solo 1 filtro por vendedor
+- Se muestra solo cuando hay más de 1 vendedor
+
+### D. TodayAssignments sin Card wrapper ✅
+- Funciona como contenido directo del tab
+- Layout más limpio sin doble Card
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
+| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
+| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
+| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
+
+---
+
+# Phase 3: Carga de Excel + ETL integrado — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Edge Function `process-ventas-excel` ✅
+- Recibe `{ rows: [...] }` parseadas en frontend con SheetJS
+- **Normalización de campos**: `getFieldValue()` con matching exacto, case-insensitive y NFD-normalized
+- **Conversión de fechas**: Excel serial → ISO, DD/MM/YYYY → ISO
+- **Conversión de montos**: Formato argentino (puntos miles, coma decimal)
+- **Geografía CABA**: 48 barrios mapeados a 15 comunas + detección PBA/GBA
+- **Agregación RFM por cliente**: Primera/última compra, días inactividad, scores recencia/volumen/comercial
+- **Canal**: Detección ON_TRADE vs OFF_TRADE por categorías
+- **Upsert ventas_cupra**: Batches de 500, conflict key existente
+- **Upsert clientes protegido**: No sobreescribe `last_recommendation_at`, `excluir_recomendaciones`, `ultima_visita`
+
+### B. Página `CargaDatos.tsx` ✅
+- Acceso restringido a rol `asignador`
+- Drop zone + file input para `.xlsx` / `.xls`
+- Parseo client-side con `xlsx` (SheetJS)
+- Preview: columnas detectadas + primeras 5 filas
+- Progreso visual durante procesamiento
+- Resumen final: ventas procesadas, clientes actualizados, errores
+
+### C. Navegación ✅
+- Ruta `/carga-datos` en `App.tsx`
+- Menú "Gestión" del asignador: nuevo item "Carga de Datos"
+
+## Archivos creados/modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/process-ventas-excel/index.ts` | Creado — ETL completo |
+| `src/pages/CargaDatos.tsx` | Creado — UI de upload |
+| `src/App.tsx` | Ruta `/carga-datos` |
+| `src/pages/Index.tsx` | Menú con "Carga de Datos" |
+| `supabase/config.toml` | Función registrada |
+| `package.json` | Dependencia `xlsx` |
+
+## Próximos pasos potenciales
+- Planificación temporal (agenda semanal)
+- Reportes y supervisión
+- Agente conversacional
+
+---
+
+# Phase 4: CUPRA Smart Route v4 — Anclaje Geográfico + Cuota 5-1-1-1 — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Vista SQL `v_clientes_priorizacion` ✅
+- Extensión `unaccent` habilitada para normalización de nombres
+- Vista combina `clientes` + `prospectos` con clasificación por estado comercial (ACTIVO/INACTIVO/PERDIDO/POTENCIAL)
+- `vendedor_afin_id` calculado con `UPPER(UNACCENT())` para matching robusto
+- Función `get_vendedor_barrios_top()` para obtener top 3 barrios por vendedor
+
+### B. Edge Function refactorizada ✅
+- **Centroide eliminado**: Ya no se usa `centerLat`/`centerLong`
+- **Algoritmo de Anclaje**: Top 5 clientes ACTIVOS del vendedor definen "anclas" del día
+- **Scoring magnético**: Distancia al ancla más cercana en vez de al centroide
+- **Penalización solapamiento**: -100 puntos si candidato < 300m de ancla de OTRO vendedor
+- **Cubetas 15-5-5-5**: 15 Activos + 5 Inactivos + 5 Perdidos + 5 Potenciales enviados a IA
+- **Filtro 15 días eliminado**: La IA decide según categoría de estado
+- **Nuevo prompt 5-1-1-1**: Distribución estricta 5 Activos + 1 Inactivo + 1 Perdido + 1 Potencial
+- **Barrios top del vendedor**: Incluidos en el contexto del prompt
+- **Validación post-IA**: Si la IA no cumple cuota, se completa determinísticamente
+- **`estado_comercial`** incluido en la respuesta para el frontend
+
+### C. Frontend — Tipo `Sucursal` extendido ✅
+- Nuevo campo `estado_cliente?: 'ACTIVO' | 'INACTIVO' | 'PERDIDO' | 'POTENCIAL'`
+- `AssignorDashboard.tsx` mapea `estado_comercial` desde la respuesta
+
+### D. `vendorColors.ts` — Funciones de estado ✅
+- `getStateColor(estado)`: Verde/Amarillo/Rojo/Azul
+- `classifyClientState(dias, esProspecto)`: Clasificación frontend
+- `createStateMarkerIcon(estado, vendorColor?, scale)`: SVG con relleno=estado + borde=vendedor
+- `getStateLegend()`: Para leyendas de mapa
+- `calcularDistanciaKmFrontend()`: Para detección de solapamiento
+
+### E. Mapas actualizados ✅
+- **`ResultsMap.tsx`**: Marcadores con relleno=estado + borde=vendedor. Leyenda doble (estados + vendedores). Detección solapamiento < 200m con icono ⚠️
+- **`VendedorAssignmentsMap.tsx`**: Marcadores por estado (mono-vendedor, sin borde). Leyenda de estados
+- **`AssignorTodayAssignmentsMap.tsx`**: Pendiente actualización con marcadores por estado
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| Migración SQL | `unaccent` + vista + función `get_vendedor_barrios_top` |
+| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: anclas, cubetas, prompt 5-1-1-1, validación |
+| `src/types/sales.ts` | `estado_cliente` en `Sucursal` |
+| `src/lib/vendorColors.ts` | Funciones de estado + marcadores duales |
+| `src/components/AssignorDashboard.tsx` | Mapeo `estado_cliente` |
+| `src/components/assignor/ResultsMap.tsx` | Marcadores estado+vendedor, solapamiento |
+| `src/components/vendedor/VendedorAssignmentsMap.tsx` | Marcadores por estado |
+
+---
+
+# Phase 5: v9-hotzone — Zona Caliente por Vendedor + Mix Estratégico — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Hotspot per-vendor (reemplaza zoneCenter global) ✅
+- `calculateCentroid()` calcula el centro de los clientes propios del vendedor
+- **Fallback (corrección #1):** Si vendor tiene 0 clientes → usa centroide de `clientPlaces` del filtro geo (centro del barrio/comuna)
+- Habilita "Modo Conquista" con solo prospectos en zona nueva
+
+### B. Radio duro 1.5km para TODOS ✅
+- `HARD_RADIUS_KM = 1.5` aplicado a clientes Y prospectos
+- `MAX_EXPANSION_KM = 2.0` — expansión máxima absoluta
+- Eliminadas expansiones de 2.5km y 3km
+
+### C. Pool lineal — clientes primero, prospectos después ✅
+- `scoreClients()` — Pool 1: ACTIVO+INACTIVO+PERDIDO, ordenados por score_total
+- `scoreProspects()` — Pool 2: POTENCIAL, ordenados por distancia al hotspot (más cerca primero)
+- `validateAndFill()` — Llena 8 slots: primero Pool 1, luego Pool 2
+
+### D. Mix estratégico — al menos 1 recuperación (corrección #2) ✅
+- Si no hay cliente con >90 días sin compra en los 8 seleccionados, swapea el #8 por el mejor PERDIDO disponible
+- Garantiza proactividad de recuperación sin cuota rígida
+
+### E. Deduplicación cross-vendor mantenida (corrección #3) ✅
+- `globalPickedIds` impide asignar mismo cliente a 2 vendedores
+
+### F. Prompt simplificado ✅
+- Sin distribución 5-1-1-1
+- "Priorizá clientes existentes, completá con prospectos, incluí al menos 1 recuperación"
+
+### G. Version bump: `v9-hotzone` ✅
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: hotspot per-vendor, radio duro, pool lineal, recovery swap |
+
+## Resultado esperado
 - Todas las recomendaciones dentro de 1.5-2km del hotspot real del vendedor
 - Clientes existentes priorizados, prospectos solo como relleno
-- Al menos 1 visita de recuperación (PERDIDO/INACTIVO) si existe en zona
-- Deduplicación cross-vendor mantenida
+- Al menos 1 visita de recuperación si existe en zona
 - Modo conquista funcional (vendedor sin clientes en zona nueva)
-
