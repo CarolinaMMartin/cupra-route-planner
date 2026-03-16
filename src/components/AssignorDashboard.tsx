@@ -272,6 +272,7 @@ const AssignorDashboard = () => {
                   <FilterPanel
                     onRequestRecommendations={handleRequestRecommendations}
                     isLoading={isLoading}
+                    onCancel={handleCancelRecommendations}
                     placesData={placesData}
                     instruccionesAdicionales={instruccionesAdicionales}
                     onInstruccionesChange={setInstruccionesAdicionales}
