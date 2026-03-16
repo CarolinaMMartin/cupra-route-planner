@@ -194,7 +194,7 @@ const FilterPanel = ({
             <div className="rounded-xl bg-secondary/20 p-5 space-y-3">
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-xs font-medium text-muted-foreground mr-1">Vendedores</span>
-                {vendedores.filter(v => selectedAreaData.vendedores.includes(v.id)).map(v => (
+                {vendedores.filter(v => selectedAreaData.vendedores.includes(v.profileId)).map(v => (
                   <Badge key={v.id} variant="secondary" className="text-xs font-normal">{v.nombre.split(' ')[0]}</Badge>
                 ))}
               </div>
