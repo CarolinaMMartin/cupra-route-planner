@@ -150,7 +150,7 @@ function preScoreCandidates(
   maxRadiusKm: number = MAX_DISTANCE_TO_ZONE_CENTER_KM,
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
-  console.log(`  📊 preScore input: ${clientes.length} clientes, ${prospectos.length} prospectos, maxRadius=${maxRadiusKm}km`);
+  
 
   for (const c of clientes) {
     const place = placesMap.get(c.client_id);
