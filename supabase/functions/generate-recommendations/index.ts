@@ -839,6 +839,7 @@ Deno.serve(async (req) => {
             feedbacksMapClientes, feedbacksMapProspectos,
             vendedor.user_id, vendedor.nombre,
             sellerNameMap, myAnchors, otherAnchors,
+            zoneCenter,
           ).filter(c => !allExistingIds.has(c.client_id));
           
           potenciales = [...potenciales, ...provinciaScored.slice(0, stillNeeded)];
