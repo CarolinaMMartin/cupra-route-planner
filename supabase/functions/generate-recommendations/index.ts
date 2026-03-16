@@ -298,16 +298,16 @@ const RECOMMENDATION_SYSTEM_PROMPT = `Eres el Planificador Estratégico de CUPRA
 CONTEXTO: Vendemos vinos en canales ON_TRADE (restaurantes/bares) y OFF_TRADE (vinotecas/retailers).
 
 REGLAS DE ORO (ESTRICTAS):
-1. CUOTA 5-1-1-1: Seleccioná EXACTAMENTE 8 visitas por vendedor: 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL.
-2. DENSIDAD sobre distancia: Priorizá puntos que estén cerca de los Activos elegidos. Rutas densas, no viajes largos.
-3. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor. Tu trabajo es elegir la mejor combinación geográfica.
-4. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
+1. CUOTA OBLIGATORIA: Seleccioná EXACTAMENTE 8 visitas por vendedor. Distribución ideal: 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL.
+2. Si una categoría NO tiene candidatos suficientes, completá con POTENCIAL/PROSPECTO hasta llegar a 8. NUNCA devuelvas menos de 8 por vendedor.
+3. DENSIDAD sobre distancia: Priorizá puntos que estén cerca de los Activos elegidos. Rutas densas, no viajes largos.
+4. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor. Tu trabajo es elegir la mejor combinación geográfica.
+5. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
    - Para Inactivo/Perdido/Potencial explicá por qué visitarlo HOY (cercanía a ruta, potencial recuperación, etc.)
-5. TRANSFERENCIA: Si el cliente era de otro vendedor, mencionalo.
-6. Si una categoría no tiene suficientes candidatos, completá con la categoría más cercana disponible.
+6. TRANSFERENCIA: Si el cliente era de otro vendedor, mencionalo.
 7. NUNCA repitas el mismo client_id para distintos vendedores.
 
-Los candidatos vienen PRE-FILTRADOS por cartera del vendedor y PRE-RANKEADOS. Tu trabajo es elegir la mejor combinación respetando la cuota 5-1-1-1.
+Los candidatos vienen PRE-FILTRADOS por cartera del vendedor y PRE-RANKEADOS. Tu trabajo es elegir la mejor combinación respetando la cuota de 8 por vendedor.
 
 FORMATO: Usá la tool "generate_recommendations" con la estructura indicada.`;
 
@@ -719,12 +719,85 @@ Deno.serve(async (req) => {
       const activos = scored.filter(c => c.estado_comercial === 'ACTIVO').slice(0, 15);
       const inactivos = scored.filter(c => c.estado_comercial === 'INACTIVO').slice(0, 5);
       const perdidos = scored.filter(c => c.estado_comercial === 'PERDIDO').slice(0, 5);
-      const potenciales = scored.filter(c => c.estado_comercial === 'POTENCIAL').slice(0, 5);
+      let potenciales = scored.filter(c => c.estado_comercial === 'POTENCIAL').slice(0, 5);
+
+      // === GUARANTEE 8: Expand prospect pool if total candidates < 8 ===
+      const totalCandidates = activos.length + inactivos.length + perdidos.length + potenciales.length;
+      if (totalCandidates < 8) {
+        console.log(`⚠️ ${vendedor.nombre}: Solo ${totalCandidates} candidatos, necesita 8. Buscando más prospectos...`);
+        
+        // Find vendor's top barrio (highest concentration)
+        const barrioCount = new Map<string, number>();
+        for (const c of myValidClients) {
+          const b = placesMap.get(c.client_id)?.barrio_principal || c.barrio_principal;
+          if (b) barrioCount.set(b, (barrioCount.get(b) || 0) + 1);
+        }
+        const topBarrios = [...barrioCount.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+        console.log(`🏘️ ${vendedor.nombre} barrios top: ${topBarrios.slice(0, 3).join(', ')}`);
+        
+        // Load extra prospects from vendor's top barrios (broader search)
+        const existingProspectoIds = new Set(potenciales.map(p => p.client_id));
+        const needed = 8 - totalCandidates;
+        
+        if (topBarrios.length > 0) {
+          const barrioConds = topBarrios.slice(0, 5).map(b => `barrio.ilike.%${b}%`).join(",");
+          const { data: extraProspectos } = await supabaseClient
+            .from("prospectos").select("*")
+            .or(barrioConds)
+            .order("rating", { ascending: false })
+            .limit(needed * 3);
+          
+          const extraFiltered = (extraProspectos || []).filter(p => 
+            !prospectosAsignadosHoy.has(p.place_id) && 
+            !existingProspectoIds.has(p.place_id) &&
+            !p.client_id
+          );
+          
+          // Score and add extra prospects
+          const extraScored = preScoreCandidates(
+            [], extraFiltered, placesMap,
+            feedbacksMapClientes, feedbacksMapProspectos,
+            vendedor.user_id, vendedor.nombre,
+            sellerNameMap, myAnchors, otherAnchors,
+          ).filter(c => !existingProspectoIds.has(c.client_id));
+          
+          potenciales = [...potenciales, ...extraScored.slice(0, needed)];
+          console.log(`🆕 ${vendedor.nombre}: +${Math.min(extraScored.length, needed)} prospectos extra del barrio top`);
+        }
+        
+        // If STILL not enough, load prospects from same provincia without barrio filter
+        const totalAfterExpansion = activos.length + inactivos.length + perdidos.length + potenciales.length;
+        if (totalAfterExpansion < 8) {
+          const stillNeeded = 8 - totalAfterExpansion;
+          const allExistingIds = new Set([...activos, ...inactivos, ...perdidos, ...potenciales].map(c => c.client_id));
+          
+          const { data: provinciaProspectos } = await supabaseClient
+            .from("prospectos").select("*")
+            .order("rating", { ascending: false })
+            .limit(stillNeeded * 3);
+          
+          const provinciaFiltered = (provinciaProspectos || []).filter(p => 
+            !prospectosAsignadosHoy.has(p.place_id) && 
+            !allExistingIds.has(p.place_id) &&
+            !p.client_id
+          );
+          
+          const provinciaScored = preScoreCandidates(
+            [], provinciaFiltered, placesMap,
+            feedbacksMapClientes, feedbacksMapProspectos,
+            vendedor.user_id, vendedor.nombre,
+            sellerNameMap, myAnchors, otherAnchors,
+          ).filter(c => !allExistingIds.has(c.client_id));
+          
+          potenciales = [...potenciales, ...provinciaScored.slice(0, stillNeeded)];
+          console.log(`🌍 ${vendedor.nombre}: +${Math.min(provinciaScored.length, stillNeeded)} prospectos extra (provincia)`);
+        }
+      }
 
       vendorBuckets[vendedor.user_id] = { activos, inactivos, perdidos, potenciales };
-      console.log(`📊 ${vendedor.nombre}: ${activos.length}A ${inactivos.length}I ${perdidos.length}P ${potenciales.length}Pot`);
+      const finalTotal = activos.length + inactivos.length + perdidos.length + potenciales.length;
+      console.log(`📊 ${vendedor.nombre}: ${activos.length}A ${inactivos.length}I ${perdidos.length}P ${potenciales.length}Pot = ${finalTotal} total`);
 
-      // If vendor has NO clients at all in zone, log warning
       if (activos.length === 0 && inactivos.length === 0 && perdidos.length === 0) {
         console.log(`⚠️ ${vendedor.nombre}: SIN clientes propios en esta zona. Solo recibirá prospectos.`);
       }
@@ -741,7 +814,7 @@ Deno.serve(async (req) => {
 
       return `
 ### VENDEDOR: ${v.nombre} (ID: ${v.user_id})
-Cuota: 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL = 8
+Cuota OBLIGATORIA: 8 visitas. Ideal: 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL. Si faltan candidatos en una categoría, completá con POTENCIAL hasta llegar a 8.
 IMPORTANTE: Todos los clientes (no prospectos) listados abajo pertenecen a la cartera de ${v.nombre}.
 
 ACTIVOS (${activos.length} candidatos - elegir 5):

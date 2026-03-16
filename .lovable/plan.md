@@ -1,78 +1,160 @@
+# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
+## Cambios realizados
 
-# Diagnóstico y Plan: Distribución 8 por vendedor + "Desconocido"
+### A. DB: Campo `vendedor_actual` en `clientes` ✅
+- Nuevo campo `vendedor_actual` (text) agregado
+- Inicializado desde la última venta registrada en `ventas_cupra`
+- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
 
-## Diagnóstico
+### B. Pre-scoring determinístico ✅
+- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
+- **score_geo (50%)**: Distancia Haversine al centroide del cluster
+- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
+- **score_comercial (15%)**: Score comercial normalizado (0-100)
+- **score_rotacion (10%)**: Días desde última recomendación
+- Filtra candidatos con feedback negativo automáticamente
+- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
 
-### Bug 1: "Desconocido" en distribución por vendedor
+### C. Mapeo nombre→UUID ✅
+- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
+- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
+- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
 
-**Causa raíz:** Desajuste de IDs entre frontend y backend.
+### D. Prompt reducido centrado en vendedor ✅
+- De ~65K chars a ~5-10K chars (reducción ~80%)
+- Formato tabular compacto con scores pre-calculados
+- IA solo decide ruta óptima y genera justificaciones
+- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
 
-- `FilterPanel.tsx` línea 102: carga perfiles y usa `v.id` (PK de tabla `profiles`) como identificador.
-- `AssignorDashboard.tsx` línea 100: construye `vendedoresData` con esos mismos `profile.id` como `{ id, nombre }`.
-- La Edge Function devuelve `vendedor_recomendado_id` usando `user_id` (FK a `auth.users`), NO `profile.id`.
-- `AIInsightsCard.tsx` línea 17: busca `vendedores.find(v => v.id === id)` — compara `profile.id` contra `user_id` → nunca matchea → "Desconocido".
+### E. UI: Vendedor actual vs anterior ✅
+- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
+- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
+- Tipo `Sucursal` extendido con `vendedor_actual`
 
-**Fix:** En `FilterPanel.tsx`, usar `user_id` en vez de `id` al construir los datos de vendedores. O alternativamente, en `AssignorDashboard.tsx` mapear correctamente.
+---
 
-### Bug 2: No llega a 8 por vendedor (25 en vez de 32)
+# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
 
-**Causa raíz:** El pool de candidatos es insuficiente. El sistema actual:
+## Cambios realizados
 
-1. Carga clientes en zona geográfica (barrios/comunas seleccionados)
-2. Carga portfolio del vendedor fuera de zona (fallback)
-3. Carga prospectos en zona
-4. Filtra por cartera del vendedor (solo sus clientes)
-5. Arma buckets: máx 15 activos, 5 inactivos, 5 perdidos, 5 potenciales
+### A. Tabs principales ✅
+- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
+- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
 
-**Problema:** Si un vendedor tiene pocos clientes en la zona seleccionada Y pocos prospectos disponibles, los buckets quedan vacíos y `validateAndFixDistribution` no puede completar a 8.
+### B. FilterPanel con dos modos ✅
+- Modo "Por Área": selector de área → ver resumen → generar
+- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
+- Instrucciones IA colapsables en ambos modos
+- Vendedores en Collapsible con badge "X de Y seleccionados"
 
-**Ejemplo concreto:** Si Ignacio tiene 6 clientes propios en la zona y solo hay 1 prospecto disponible → máximo 7, no 8.
+### C. RecommendationFilters simplificado ✅
+- De 6 filtros redundantes a solo 1 filtro por vendedor
+- Se muestra solo cuando hay más de 1 vendedor
 
-### Solución propuesta: Lógica "Barrio Concentración + Completar con Prospectos"
+### D. TodayAssignments sin Card wrapper ✅
+- Funciona como contenido directo del tab
+- Layout más limpio sin doble Card
 
-El eje nuevo es: **para cada vendedor, encontrar dónde tiene más concentración y asegurar 8 visitas SÍ O SÍ.**
-
-## Plan de cambios
-
-### 1. Fix "Desconocido" — `FilterPanel.tsx`
-- Cambiar línea 102 para usar `user_id` en vez de `id`:
-  ```
-  const mapped = (data || []).map(v => ({ id: v.user_id, nombre: v.nombre, email: v.email }));
-  ```
-- Esto alinea todos los IDs del flujo con `user_id`, que es lo que usa la Edge Function.
-
-### 2. Garantizar 8 por vendedor — Edge Function `generate-recommendations`
-
-**Cambios en la lógica de carga de candidatos (paso 8, per-vendor):**
-
-a. **Detectar barrio de concentración del vendedor:** Antes de armar buckets, agrupar los clientes del vendedor por barrio y encontrar el "barrio top" (donde tiene más clientes activos).
-
-b. **Expandir pool de prospectos por vendor:** Si después de armar buckets el total es < 8, cargar prospectos adicionales del barrio de concentración del vendedor (sin límite de los filtros geográficos originales del request).
-
-c. **Fallback agresivo en `validateAndFixDistribution`:** Si después de la IA + validación sigue sin llegar a 8:
-   - Buscar más prospectos del barrio top del vendedor
-   - Si aún faltan, buscar prospectos de barrios adyacentes (misma provincia)
-   - Crear candidatos "potenciales" sintéticos si es absolutamente necesario (último recurso)
-
-d. **Relajar la regla 5-1-1-1 como fallback:** Si no hay inactivos/perdidos suficientes, la regla pasa a ser "completar con la categoría disponible más cercana". Esto ya está parcialmente implementado (línea 374-395) pero necesita ser más agresivo con prospectos.
-
-**Cambios específicos en el código:**
-
-1. **Nuevo paso "8b"** después de `preScoreCandidates`: Contar candidatos totales por vendor. Si < 8, hacer una query adicional de prospectos en el barrio top del vendor (o barrios cercanos a sus anchors).
-
-2. **Modificar `validateAndFixDistribution`**: Recibir el pool completo de prospectos como parámetro adicional. Si después de intentar llenar con buckets existentes sigue < 8, iterar sobre prospectos ordenados por distancia a los anchors del vendor.
-
-3. **Prompt ajustado**: Agregar instrucción "Si una categoría no tiene candidatos suficientes, completá con POTENCIAL/PROSPECTO hasta llegar a 8. NUNCA devuelvas menos de 8 por vendedor."
-
-### 3. Fix secundario: `AssignorDashboard.tsx`
-- Actualizar `setVendedoresData` para que use los mismos IDs que vienen del FilterPanel (ya corregidos con `user_id`).
-
-### Archivos a modificar
-
+## Archivos modificados
 | Archivo | Cambio |
 |---------|--------|
-| `src/components/assignor/FilterPanel.tsx` | Usar `user_id` en vez de `id` |
-| `supabase/functions/generate-recommendations/index.ts` | Expandir pool de prospectos per-vendor, garantizar 8 |
-| `src/components/assignor/AIInsightsCard.tsx` | Sin cambios (se arregla solo con el fix de IDs) |
+| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
+| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
+| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
+| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
 
+---
+
+# Phase 3: Carga de Excel + ETL integrado — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Edge Function `process-ventas-excel` ✅
+- Recibe `{ rows: [...] }` parseadas en frontend con SheetJS
+- **Normalización de campos**: `getFieldValue()` con matching exacto, case-insensitive y NFD-normalized
+- **Conversión de fechas**: Excel serial → ISO, DD/MM/YYYY → ISO
+- **Conversión de montos**: Formato argentino (puntos miles, coma decimal)
+- **Geografía CABA**: 48 barrios mapeados a 15 comunas + detección PBA/GBA
+- **Agregación RFM por cliente**: Primera/última compra, días inactividad, scores recencia/volumen/comercial
+- **Canal**: Detección ON_TRADE vs OFF_TRADE por categorías
+- **Upsert ventas_cupra**: Batches de 500, conflict key existente
+- **Upsert clientes protegido**: No sobreescribe `last_recommendation_at`, `excluir_recomendaciones`, `ultima_visita`
+
+### B. Página `CargaDatos.tsx` ✅
+- Acceso restringido a rol `asignador`
+- Drop zone + file input para `.xlsx` / `.xls`
+- Parseo client-side con `xlsx` (SheetJS)
+- Preview: columnas detectadas + primeras 5 filas
+- Progreso visual durante procesamiento
+- Resumen final: ventas procesadas, clientes actualizados, errores
+
+### C. Navegación ✅
+- Ruta `/carga-datos` en `App.tsx`
+- Menú "Gestión" del asignador: nuevo item "Carga de Datos"
+
+## Archivos creados/modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/process-ventas-excel/index.ts` | Creado — ETL completo |
+| `src/pages/CargaDatos.tsx` | Creado — UI de upload |
+| `src/App.tsx` | Ruta `/carga-datos` |
+| `src/pages/Index.tsx` | Menú con "Carga de Datos" |
+| `supabase/config.toml` | Función registrada |
+| `package.json` | Dependencia `xlsx` |
+
+## Próximos pasos potenciales
+- Planificación temporal (agenda semanal)
+- Reportes y supervisión
+- Agente conversacional
+
+---
+
+# Phase 4: CUPRA Smart Route v4 — Anclaje Geográfico + Cuota 5-1-1-1 — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Vista SQL `v_clientes_priorizacion` ✅
+- Extensión `unaccent` habilitada para normalización de nombres
+- Vista combina `clientes` + `prospectos` con clasificación por estado comercial (ACTIVO/INACTIVO/PERDIDO/POTENCIAL)
+- `vendedor_afin_id` calculado con `UPPER(UNACCENT())` para matching robusto
+- Función `get_vendedor_barrios_top()` para obtener top 3 barrios por vendedor
+
+### B. Edge Function refactorizada ✅
+- **Centroide eliminado**: Ya no se usa `centerLat`/`centerLong`
+- **Algoritmo de Anclaje**: Top 5 clientes ACTIVOS del vendedor definen "anclas" del día
+- **Scoring magnético**: Distancia al ancla más cercana en vez de al centroide
+- **Penalización solapamiento**: -100 puntos si candidato < 300m de ancla de OTRO vendedor
+- **Cubetas 15-5-5-5**: 15 Activos + 5 Inactivos + 5 Perdidos + 5 Potenciales enviados a IA
+- **Filtro 15 días eliminado**: La IA decide según categoría de estado
+- **Nuevo prompt 5-1-1-1**: Distribución estricta 5 Activos + 1 Inactivo + 1 Perdido + 1 Potencial
+- **Barrios top del vendedor**: Incluidos en el contexto del prompt
+- **Validación post-IA**: Si la IA no cumple cuota, se completa determinísticamente
+- **`estado_comercial`** incluido en la respuesta para el frontend
+
+### C. Frontend — Tipo `Sucursal` extendido ✅
+- Nuevo campo `estado_cliente?: 'ACTIVO' | 'INACTIVO' | 'PERDIDO' | 'POTENCIAL'`
+- `AssignorDashboard.tsx` mapea `estado_comercial` desde la respuesta
+
+### D. `vendorColors.ts` — Funciones de estado ✅
+- `getStateColor(estado)`: Verde/Amarillo/Rojo/Azul
+- `classifyClientState(dias, esProspecto)`: Clasificación frontend
+- `createStateMarkerIcon(estado, vendorColor?, scale)`: SVG con relleno=estado + borde=vendedor
+- `getStateLegend()`: Para leyendas de mapa
+- `calcularDistanciaKmFrontend()`: Para detección de solapamiento
+
+### E. Mapas actualizados ✅
+- **`ResultsMap.tsx`**: Marcadores con relleno=estado + borde=vendedor. Leyenda doble (estados + vendedores). Detección solapamiento < 200m con icono ⚠️
+- **`VendedorAssignmentsMap.tsx`**: Marcadores por estado (mono-vendedor, sin borde). Leyenda de estados
+- **`AssignorTodayAssignmentsMap.tsx`**: Pendiente actualización con marcadores por estado
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| Migración SQL | `unaccent` + vista + función `get_vendedor_barrios_top` |
+| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: anclas, cubetas, prompt 5-1-1-1, validación |
+| `src/types/sales.ts` | `estado_cliente` en `Sucursal` |
+| `src/lib/vendorColors.ts` | Funciones de estado + marcadores duales |
+| `src/components/AssignorDashboard.tsx` | Mapeo `estado_cliente` |
+| `src/components/assignor/ResultsMap.tsx` | Marcadores estado+vendedor, solapamiento |
+| `src/components/vendedor/VendedorAssignmentsMap.tsx` | Marcadores por estado |
