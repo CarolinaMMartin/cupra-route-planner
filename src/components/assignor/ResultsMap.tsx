@@ -12,6 +12,7 @@ interface ResultsMapProps {
   sucursales: Sucursal[];
   selectedIds: string[];
   onToggle: (id: string) => void;
+  onToggleAll?: () => void;
   onContinue?: () => void;
 }
 
