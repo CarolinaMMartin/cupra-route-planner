@@ -296,53 +296,9 @@ Deno.serve(async (req) => {
 
     console.log(`🧮 ${clientesEnriquecidos.length} clientes agregados, $${Math.round(totalGlobal).toLocaleString()} total`);
 
-    // ============ FASE 3: Upsert ventas ============
+    // ============ FASE 3: Upsert clientes PRIMERO (para satisfacer FK de ventas) ============
     const results = { ventas_procesadas: 0, ventas_errores: 0, clientes_actualizados: 0, clientes_errores: 0, errores: [] as string[] };
 
-    const ventasByConflictKey = new Map<string, any>();
-    const ventasSinClaveConflicto: any[] = [];
-    let ventasDuplicadas = 0;
-
-    for (const venta of ventas) {
-      const conflictKey = buildVentaConflictKey(venta);
-      if (!conflictKey) {
-        ventasSinClaveConflicto.push(venta);
-        continue;
-      }
-
-      const existingVenta = ventasByConflictKey.get(conflictKey);
-      if (!existingVenta) {
-        ventasByConflictKey.set(conflictKey, venta);
-      } else {
-        ventasDuplicadas += 1;
-        ventasByConflictKey.set(conflictKey, mergeVentaDuplicate(existingVenta, venta));
-      }
-    }
-
-    const ventasParaUpsert = [...ventasByConflictKey.values(), ...ventasSinClaveConflicto];
-
-    if (ventasDuplicadas > 0) {
-      console.log(`♻️ ${ventasDuplicadas} filas duplicadas detectadas y consolidadas antes del upsert`);
-    }
-
-    // Batch ventas in chunks of 500
-    for (let i = 0; i < ventasParaUpsert.length; i += 500) {
-      const batch = ventasParaUpsert.slice(i, i + 500);
-      const { error } = await supabase.from('ventas_cupra').upsert(batch, {
-        onConflict: 'ticket,letra,fecha_emision,client_id,codigo_producto',
-        ignoreDuplicates: false,
-      });
-      if (error) {
-        console.error(`❌ Ventas batch ${i}:`, error.message);
-        results.ventas_errores += batch.length;
-        results.errores.push(`Ventas batch ${i}: ${error.message}`);
-      } else {
-        results.ventas_procesadas += batch.length;
-      }
-    }
-
-    // ============ FASE 4: Upsert clientes (protegido) ============
-    // Get existing client_ids to protect internal fields
     const allClientIds = clientesEnriquecidos.map(c => String(c.client_id));
     const { data: existingClients } = await supabase
       .from('clientes')
@@ -384,7 +340,7 @@ Deno.serve(async (req) => {
     ];
 
     for (const c of updateClients) {
-      const updateData: Record<string, any> = { client_id: String(c.client_id) };
+      const updateData: Record<string, any> = {};
       for (const campo of camposVentas) {
         updateData[campo] = (c as any)[campo];
       }
@@ -394,6 +350,51 @@ Deno.serve(async (req) => {
         results.errores.push(`Update ${c.client_id}: ${error.message}`);
       } else {
         results.clientes_actualizados++;
+      }
+    }
+
+    console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
+
+    // ============ FASE 4: Upsert ventas (después de clientes para respetar FK) ============
+    const ventasByConflictKey = new Map<string, any>();
+    const ventasSinClaveConflicto: any[] = [];
+    let ventasDuplicadas = 0;
+
+    for (const venta of ventas) {
+      const conflictKey = buildVentaConflictKey(venta);
+      if (!conflictKey) {
+        ventasSinClaveConflicto.push(venta);
+        continue;
+      }
+
+      const existingVenta = ventasByConflictKey.get(conflictKey);
+      if (!existingVenta) {
+        ventasByConflictKey.set(conflictKey, venta);
+      } else {
+        ventasDuplicadas += 1;
+        ventasByConflictKey.set(conflictKey, mergeVentaDuplicate(existingVenta, venta));
+      }
+    }
+
+    const ventasParaUpsert = [...ventasByConflictKey.values(), ...ventasSinClaveConflicto];
+
+    if (ventasDuplicadas > 0) {
+      console.log(`♻️ ${ventasDuplicadas} filas duplicadas consolidadas`);
+    }
+
+    // Batch ventas in chunks of 500
+    for (let i = 0; i < ventasParaUpsert.length; i += 500) {
+      const batch = ventasParaUpsert.slice(i, i + 500);
+      const { error } = await supabase.from('ventas_cupra').upsert(batch, {
+        onConflict: 'ticket,letra,fecha_emision,client_id,codigo_producto',
+        ignoreDuplicates: false,
+      });
+      if (error) {
+        console.error(`❌ Ventas batch ${i}:`, error.message);
+        results.ventas_errores += batch.length;
+        results.errores.push(`Ventas batch ${i}: ${error.message}`);
+      } else {
+        results.ventas_procesadas += batch.length;
       }
     }
 
