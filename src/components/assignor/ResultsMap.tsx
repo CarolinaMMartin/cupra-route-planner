@@ -161,6 +161,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                 if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
                   const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
                   if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
+                  const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
                   resolve({
                     id: sucursal.id,
                     name: place.name || sucursal.nombre || "Sin nombre",
@@ -168,6 +169,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                     lng: place.geometry.location.lng(),
                     direccion: place.formatted_address || sucursal.direccion || "",
                     vendedor,
+                    estado_cliente,
                   });
                 } else {
                   reject(new Error(`No se pudo obtener ubicación para ${sucursal.nombre}`));
