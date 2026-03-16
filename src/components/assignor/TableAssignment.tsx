@@ -95,22 +95,58 @@ const TableAssignment = ({
       }));
       setVendedores(mapped);
 
-      // Pre-assign based on vendedor_recomendado_id (AI recommendation) first, then fallback to vendedor_principal
+      // Pre-assign based on AI recommendation (from payload or DB), then fallback to historical vendedor
       const nombreToId = new Map<string, string>();
       mapped.forEach((v) => nombreToId.set(v.nombre.toUpperCase().trim(), v.id));
-
       const vendedorIdSet = new Set(mapped.map((v) => v.id));
+
+      // Recover AI recommended vendor from DB as fallback (useful for persisted flows)
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const requestIds = Array.from(
+        new Set(
+          selectedRecommendations
+            .map((rec) => rec.id?.slice(0, 36))
+            .filter((id): id is string => Boolean(id) && uuidRegex.test(id))
+        )
+      );
+
+      const aiByRecommendationKey = new Map<string, string>();
+      if (requestIds.length > 0) {
+        const { data: aiRows, error: aiRowsError } = await supabase
+          .from("recomendaciones_ia")
+          .select("request_id, client_id, prospecto_place_id, vendedor_recomendado_id")
+          .in("request_id", requestIds);
+
+        if (aiRowsError) {
+          console.warn("No se pudo recuperar vendedor recomendado de IA", aiRowsError);
+        } else {
+          (aiRows || []).forEach((row) => {
+            const entityId = row.client_id || row.prospecto_place_id;
+            if (row.request_id && entityId && row.vendedor_recomendado_id) {
+              aiByRecommendationKey.set(`${row.request_id}-${entityId}`, row.vendedor_recomendado_id);
+            }
+          });
+        }
+      }
 
       const initialMap: Record<string, string | null> = {};
       selectedRecommendations.forEach((rec) => {
         let assignedId: string | null = null;
 
-        // Priority 1: AI-recommended vendor
+        // Priority 1: AI-recommended vendor from current payload
         if (rec.vendedor_recomendado_id && vendedorIdSet.has(rec.vendedor_recomendado_id)) {
           assignedId = rec.vendedor_recomendado_id;
         }
 
-        // Fallback: vendedor_principal name match
+        // Priority 2: AI-recommended vendor recovered from DB by request_id + entity_id
+        if (!assignedId) {
+          const dbRecommended = aiByRecommendationKey.get(rec.id);
+          if (dbRecommended && vendedorIdSet.has(dbRecommended)) {
+            assignedId = dbRecommended;
+          }
+        }
+
+        // Fallback: previous historical vendedor
         if (!assignedId && rec.vendedor_principal) {
           const vid = nombreToId.get(rec.vendedor_principal.toUpperCase().trim());
           if (vid) assignedId = vid;
@@ -119,7 +155,10 @@ const TableAssignment = ({
         if (!assignedId && rec.vendedores?.length) {
           for (const name of rec.vendedores) {
             const vid = nombreToId.get(name.toUpperCase().trim());
-            if (vid) { assignedId = vid; break; }
+            if (vid) {
+              assignedId = vid;
+              break;
+            }
           }
         }
 
