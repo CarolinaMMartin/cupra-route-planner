@@ -191,21 +191,23 @@ Deno.serve(async (req) => {
 
     // ============ FASE 1: Normalizar ventas individuales ============
     const ventas: any[] = [];
-    const clientesMap = new Map<number, any>();
+    const clientesMap = new Map<string, any>();
+    let ventasSinClientId = 0;
 
     for (const row of rows) {
-      const client_id = toInt(getFieldValue(row, ['Id', 'id', 'ID', 'client_id']));
-      const cuit_dni = toStr(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
+      const idCandidato = normalizeClientId(getFieldValue(row, ['Id', 'id', 'ID', 'client_id', 'Número Externo', 'Numero Externo']));
+      const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
+      const client_id = idCandidato || cuit_dni;
       const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
       const fantasia = toStr(getFieldValue(row, ['Fantasia', 'Fantasía', 'fantasia']));
-      const direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Domicilio']));
+      const direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Domicilio', 'Calle']));
       const ciudad_raw = toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad']));
       const vendedor = toStr(getFieldValue(row, ['Vendedor', 'vendedor']));
       const fecha_emision = getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision']);
-      const facturacion = toNumberCurrency(getFieldValue(row, ['Facturación Ar$', 'Facturacion Ar$', 'Facturación Ars', 'Facturacion Ars', 'facturacion_ars']));
-      const producto = toStr(getFieldValue(row, ['Nombre', 'nombre']));
-      const cajas = toInt(getFieldValue(row, ['Cajas', 'cajas']));
-      const categorias = toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias']));
+      const facturacion = toNumberCurrency(getFieldValue(row, ['Facturación Ar$', 'Facturacion Ar$', 'Facturación Ars', 'Facturacion Ars', 'facturacion_ars', 'Precio Total Final', 'Precio Total Neto']));
+      const producto = toStr(getFieldValue(row, ['Nombre', 'nombre', 'Etiqueta', 'Variante']));
+      const cajas = toInt(getFieldValue(row, ['Cajas', 'cajas', 'Cantidad']));
+      const categorias = toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias', 'Categorías Cliente', 'Categorias Cliente']));
       const telefono = toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono', 'Tel']));
       const celular = toStr(getFieldValue(row, ['Celular', 'celular', 'Cel', 'Movil', 'Móvil']));
       const correo = toStr(getFieldValue(row, ['Correo', 'correo', 'Email', 'email', 'Mail']));
@@ -217,17 +219,20 @@ Deno.serve(async (req) => {
       const pais = toStr(getFieldValue(row, ['País', 'Pais', 'pais']));
       const fecha_iso = toYmdFromExcelOrText(fecha_emision);
 
+      if (!client_id) {
+        ventasSinClientId += 1;
+        continue;
+      }
+
       // Build venta record
       ventas.push({
-        client_id: client_id || cuit_dni || 'UNKNOWN',
+        client_id,
         ticket, letra, fecha_emision: fecha_iso, cuit_dni, razon_social, fantasia,
         cajas, codigo_producto, nombre: producto, marca, facturacion_ars: facturacion,
         vendedor, telefono, celular, correo, direccion, ciudad: ciudad_raw,
         provincia: provincia_raw, pais, categorias,
       });
 
-      // Aggregate for client
-      if (!client_id) continue;
       const geo = normalizarGeografia(ciudad_raw);
 
       if (!clientesMap.has(client_id)) {
