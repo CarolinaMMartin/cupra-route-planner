@@ -354,7 +354,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                   />
                   <label htmlFor={`loc-${location.id}-${idx}`} className="flex-1 cursor-pointer text-sm">
                     <div className="font-medium text-foreground flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border" style={{ backgroundColor: stateColor, borderColor: vendorColor || 'transparent' }} />
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: vendorColor }} />
                       {location.name}
                       {location.hasOverlap && <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-500" />}
                     </div>
