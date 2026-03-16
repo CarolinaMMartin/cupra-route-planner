@@ -1020,7 +1020,7 @@ Respetá la cuota y priorizá la densidad geográfica.`;
       }
 
       const clienteCompleto = clienteLookup.get(rec.client_id);
-      const prospectoCompleto = !clienteCompleto ? prospectos.find(p => p.place_id === rec.client_id) : null;
+      const prospectoCompleto = !clienteCompleto ? (prospectos.find(p => p.place_id === rec.client_id) || extraProspectosLoaded.find(p => p.place_id === rec.client_id)) : null;
       if (!clienteCompleto && !prospectoCompleto) continue;
 
       const esProspecto = !clienteCompleto;
