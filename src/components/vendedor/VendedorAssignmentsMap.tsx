@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { MapPin } from "lucide-react";
-import { createStateMarkerIcon, classifyClientState, getStateLegend } from "@/lib/vendorColors";
+import { createStateMarkerIcon, classifyClientState, getStateLegend, getStateColor } from "@/lib/vendorColors";
 
 interface VendedorAssignmentsMapProps {
   assignments: Record<string, ClienteAsignado[]>;
