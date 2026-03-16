@@ -264,20 +264,21 @@ const ClientesDashboard = () => {
       .slice(0, 10);
   }, [filteredData]);
 
-  // Top vendedores
+  // Top vendedores - usar vendedor_actual (único) para evitar doble conteo en clientes multi-vendedor
   const topVendedores = useMemo(() => {
-    const vendedoresMap = new Map<string, number>();
+    const vendedoresMap = new Map<string, { ventas: number; clientes: number }>();
     filteredData.forEach(cliente => {
-      const vendedoresList = cliente.todos_vendedores || [cliente.vendedor_principal];
-      const monto = cliente.monto_total_historico || 0;
-      vendedoresList.forEach((vendedor: string) => {
-        if (vendedor) {
-          vendedoresMap.set(vendedor, (vendedoresMap.get(vendedor) || 0) + Number(monto));
-        }
-      });
+      const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
+      const monto = Number(cliente.monto_total_historico || 0);
+      if (vendedor) {
+        const existing = vendedoresMap.get(vendedor) || { ventas: 0, clientes: 0 };
+        existing.ventas += monto;
+        existing.clientes += 1;
+        vendedoresMap.set(vendedor, existing);
+      }
     });
     return Array.from(vendedoresMap.entries())
-      .map(([vendedor, ventas]) => ({ vendedor, ventas }))
+      .map(([vendedor, data]) => ({ vendedor, ventas: data.ventas, clientes: data.clientes }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
   }, [filteredData]);
