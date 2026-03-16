@@ -742,32 +742,41 @@ Deno.serve(async (req) => {
       if (totalCandidates < 8) {
         console.log(`⚠️ ${vendedor.nombre}: Solo ${totalCandidates} candidatos, necesita 8. Buscando más prospectos...`);
         
-        // Find vendor's top barrio (highest concentration)
-        const barrioCount = new Map<string, number>();
-        for (const c of myValidClients) {
-          const b = placesMap.get(c.client_id)?.barrio_principal || c.barrio_principal;
-          if (b) barrioCount.set(b, (barrioCount.get(b) || 0) + 1);
-        }
-        const topBarrios = [...barrioCount.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
-        console.log(`🏘️ ${vendedor.nombre} barrios top: ${topBarrios.slice(0, 3).join(', ')}`);
-        
-        // Load extra prospects from vendor's top barrios (broader search)
         const existingProspectoIds = new Set(potenciales.map(p => p.client_id));
         const needed = 8 - totalCandidates;
         
-        if (topBarrios.length > 0) {
-          const barrioConds = topBarrios.slice(0, 5).map(b => `barrio.ilike.%${b}%`).join(",");
+        // PRIORITY 1: Use barrios from the REQUEST (what user selected), not vendor's portfolio
+        const searchBarrios = barriosFinales.length > 0 ? barriosFinales : [];
+        
+        // PRIORITY 2: Fallback to vendor's top barrios if no request barrios
+        if (searchBarrios.length === 0) {
+          const barrioCount = new Map<string, number>();
+          for (const c of myValidClients) {
+            const b = placesMap.get(c.client_id)?.barrio_principal || c.barrio_principal;
+            if (b) barrioCount.set(b, (barrioCount.get(b) || 0) + 1);
+          }
+          const topBarrios = [...barrioCount.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
+          searchBarrios.push(...topBarrios.slice(0, 5));
+        }
+        
+        console.log(`🏘️ ${vendedor.nombre} buscando prospectos en barrios: ${searchBarrios.slice(0, 5).join(', ')}`);
+        
+        if (searchBarrios.length > 0) {
+          const barrioConds = searchBarrios.slice(0, 5).map((b: string) => `barrio.ilike.%${b}%`).join(",");
           const { data: extraProspectos } = await supabaseClient
             .from("prospectos").select("*")
             .or(barrioConds)
             .order("rating", { ascending: false })
-            .limit(needed * 3);
+            .limit(needed * 5);
           
           const extraFiltered = (extraProspectos || []).filter(p => 
             !prospectosAsignadosHoy.has(p.place_id) && 
             !existingProspectoIds.has(p.place_id) &&
             !p.client_id
           );
+          
+          // Store for enrichment lookup later
+          extraProspectosLoaded.push(...extraFiltered);
           
           // Score and add extra prospects
           const extraScored = preScoreCandidates(
@@ -778,7 +787,7 @@ Deno.serve(async (req) => {
           ).filter(c => !existingProspectoIds.has(c.client_id));
           
           potenciales = [...potenciales, ...extraScored.slice(0, needed)];
-          console.log(`🆕 ${vendedor.nombre}: +${Math.min(extraScored.length, needed)} prospectos extra del barrio top`);
+          console.log(`🆕 ${vendedor.nombre}: +${Math.min(extraScored.length, needed)} prospectos extra del barrio solicitado`);
         }
         
         // If STILL not enough, load prospects from same provincia without barrio filter
@@ -790,13 +799,16 @@ Deno.serve(async (req) => {
           const { data: provinciaProspectos } = await supabaseClient
             .from("prospectos").select("*")
             .order("rating", { ascending: false })
-            .limit(stillNeeded * 3);
+            .limit(stillNeeded * 5);
           
           const provinciaFiltered = (provinciaProspectos || []).filter(p => 
             !prospectosAsignadosHoy.has(p.place_id) && 
             !allExistingIds.has(p.place_id) &&
             !p.client_id
           );
+          
+          // Store for enrichment lookup later
+          extraProspectosLoaded.push(...provinciaFiltered);
           
           const provinciaScored = preScoreCandidates(
             [], provinciaFiltered, placesMap,
