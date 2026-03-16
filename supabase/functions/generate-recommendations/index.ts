@@ -637,6 +637,7 @@ Deno.serve(async (req) => {
     // ============================================================
     const vendorBuckets: Record<string, { activos: ScoredCandidate[]; inactivos: ScoredCandidate[]; perdidos: ScoredCandidate[]; potenciales: ScoredCandidate[] }> = {};
     const vendorAnchors: Map<string, AnchorPoint[]> = new Map();
+    const extraProspectosLoaded: any[] = []; // Accumulate extra prospectos for enrichment lookup
 
     for (const vendedor of vendedoresData) {
       // === STRICT FILTER: Only clients affiliated with THIS vendor ===
