@@ -150,6 +150,7 @@ const AssignorDashboard = () => {
         ai_reasoning: rec.ai_reasoning, score_geografico: rec.score_geografico,
         factores_ia: rec.factores_ia,
         vendedor_recomendado_id: rec.vendedor_recomendado_id,
+        estado_cliente: rec.estado_comercial || (rec.es_prospecto ? 'POTENCIAL' : undefined),
       }));
 
       setRecommendations(mappedRecommendations);
