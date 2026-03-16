@@ -116,8 +116,16 @@ const FilterPanel = ({
   const handleSubmitArea = () => {
     const area = areas.find(a => a.id === selectedArea);
     if (!area) return;
-    const nombres = vendedores.filter(v => area.vendedores.includes(v.id)).map(v => v.nombre);
-    onRequestRecommendations({ area_id: selectedArea, cantidad_vendedores: area.vendedores.length }, { ids: area.vendedores, nombres }, { comuna: null, barrio: area.barrios.length > 0 ? area.barrios : null, provincia: null });
+
+    const areaVendedores = vendedores.filter(v => area.vendedores.includes(v.profileId));
+    const ids = areaVendedores.map(v => v.id);
+    const nombres = areaVendedores.map(v => v.nombre);
+
+    onRequestRecommendations(
+      { area_id: selectedArea, cantidad_vendedores: ids.length },
+      { ids, nombres },
+      { comuna: null, barrio: area.barrios.length > 0 ? area.barrios : null, provincia: null }
+    );
   };
 
   const handleSubmitCustom = (e: React.FormEvent) => {
