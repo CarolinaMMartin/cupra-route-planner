@@ -643,6 +643,15 @@ Deno.serve(async (req) => {
       const myClientsInZone = allClientesEnZona.filter(c => isClientAffiliated(c, vendedor.user_id, sellerNameMap));
       const myClientsOutside = portfolioClients.filter(c => isClientAffiliated(c, vendedor.user_id, sellerNameMap));
       
+      // Log excluded clients (belong to OTHER vendors)
+      const excludedFromZone = allClientesEnZona.filter(c => !isClientAffiliated(c, vendedor.user_id, sellerNameMap) && !c.es_prospecto);
+      if (excludedFromZone.length > 0) {
+        const sample = excludedFromZone.slice(0, 5).map(c => 
+          `${c.razon_social || c.fantasia} → ${c.vendedor_actual || c.vendedor_principal || '?'}`
+        );
+        console.log(`🔍 ${vendedor.nombre}: ${excludedFromZone.length} clientes excluidos (cartera ajena): ${sample.join(', ')}`);
+      }
+      
       // Merge: zone clients first, then outside clients (for fallback)
       const outsideIds = new Set(myClientsOutside.map(c => c.client_id));
       const zoneIds = new Set(myClientsInZone.map(c => c.client_id));
