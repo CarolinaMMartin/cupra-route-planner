@@ -428,30 +428,22 @@ const TableAssignment = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={onBack} className="gap-1.5">
-            <ArrowLeft className="w-4 h-4" />
-            Volver
-          </Button>
-          <div>
-            <h1 className="text-3xl font-serif text-foreground tracking-tight">Asignar Clientes</h1>
-            <div className="flex items-center gap-2 mt-1">
-              <p className="text-sm text-muted-foreground">
-                Selecciona clientes y asignalos a un vendedor rápido y eficientemente
-              </p>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="w-4 h-4 text-muted-foreground cursor-help" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Usa los checkboxes para seleccionar clientes, luego elige "Asignar a" para asignarlos masivamente.</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </div>
+      <div>
+        <h1 className="text-3xl font-serif text-foreground tracking-tight">Asignar Clientes</h1>
+        <div className="flex items-center gap-2 mt-1">
+          <p className="text-sm text-muted-foreground">
+            Selecciona clientes y asignalos a un vendedor rápido y eficientemente
+          </p>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="w-4 h-4 text-muted-foreground cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Usa los checkboxes para seleccionar clientes, luego elige "Asignar a" para asignarlos masivamente.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
