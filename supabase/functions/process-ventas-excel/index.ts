@@ -327,6 +327,11 @@ Deno.serve(async (req) => {
     // ============ FASE 3: Upsert clientes PRIMERO (para satisfacer FK de ventas) ============
     const results = { ventas_procesadas: 0, ventas_errores: 0, clientes_actualizados: 0, clientes_errores: 0, errores: [] as string[] };
 
+    if (ventasSinClientId > 0) {
+      results.ventas_errores += ventasSinClientId;
+      results.errores.push(`Filas omitidas sin client_id/CUIT válido: ${ventasSinClientId}`);
+    }
+
     const allClientIds = clientesEnriquecidos.map(c => String(c.client_id));
     const { data: existingClients } = await supabase
       .from('clientes')
