@@ -17,6 +17,7 @@ interface Area { id: string; nombre: string; vendedores: string[]; barrios: stri
 interface FilterPanelProps {
   onRequestRecommendations: (filters: any, selectedVendedoresData: { ids: string[], nombres: string[] }, placesFilters: any) => void;
   isLoading: boolean;
+  onCancel?: () => void;
   placesData: Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>;
   instruccionesAdicionales: string;
   onInstruccionesChange: (value: string) => void;
