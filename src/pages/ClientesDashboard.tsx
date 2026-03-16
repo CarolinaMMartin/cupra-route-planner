@@ -174,8 +174,9 @@ const ClientesDashboard = () => {
   const vendedores = useMemo(() => {
     const uniqueVendedores = new Set<string>();
     clientesData.forEach(cliente => {
-      const vendedoresList = cliente.todos_vendedores || [cliente.vendedor_principal];
-      vendedoresList.forEach((v: string) => v && uniqueVendedores.add(v));
+      // Usar vendedor_actual (único) para evitar duplicación multi-vendedor
+      const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
+      if (vendedor) uniqueVendedores.add(vendedor);
     });
     return Array.from(uniqueVendedores).sort();
   }, [clientesData]);
@@ -204,7 +205,9 @@ const ClientesDashboard = () => {
       const matchBarrio = selectedBarrio === "all" || 
         barriosCliente.some(b => normalize(b) === normalize(selectedBarrio));
       
-      const matchVendedor = selectedVendedor === "all" || (cliente.todos_vendedores || []).includes(selectedVendedor);
+      // Filtrar por vendedor_actual (único) para evitar que un cliente aparezca en múltiples vendedores
+      const vendedorCliente = cliente.vendedor_actual || cliente.vendedor_principal;
+      const matchVendedor = selectedVendedor === "all" || vendedorCliente === selectedVendedor;
       const matchCanal = selectedCanal === "all" || cliente.canal === selectedCanal;
       const matchSearch = searchTerm === "" || 
         (cliente.razon_social || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -224,23 +227,21 @@ const ClientesDashboard = () => {
     return { totalVentas, totalClientes, totalOrdenes, ticketPromedio };
   }, [filteredData]);
 
-  // Top barrios (con dedupe case-insensitive para evitar duplicados Palermo/PALERMO)
+  // Top barrios - usar barrio_principal (único) para evitar inflación por múltiples barrios
   const topBarrios = useMemo(() => {
     const barriosMap = new Map<string, { display: string; ventas: number }>();
     filteredData.forEach(cliente => {
-      const barrios = getClienteBarrios(cliente);
-      const monto = cliente.monto_total_historico || 0;
-      barrios.forEach((barrio: string) => {
-        if (barrio) {
-          const key = normalize(barrio);
-          const existing = barriosMap.get(key);
-          if (existing) {
-            existing.ventas += Number(monto);
-          } else {
-            barriosMap.set(key, { display: barrio, ventas: Number(monto) });
-          }
+      const barrio = cliente.barrio_principal;
+      const monto = Number(cliente.monto_total_historico || 0);
+      if (barrio) {
+        const key = normalize(barrio);
+        const existing = barriosMap.get(key);
+        if (existing) {
+          existing.ventas += monto;
+        } else {
+          barriosMap.set(key, { display: barrio, ventas: monto });
         }
-      });
+      }
     });
     return Array.from(barriosMap.values())
       .map(({ display, ventas }) => ({ barrio: display, ventas }))
@@ -261,20 +262,21 @@ const ClientesDashboard = () => {
       .slice(0, 10);
   }, [filteredData]);
 
-  // Top vendedores
+  // Top vendedores - usar vendedor_actual (único) para evitar doble conteo en clientes multi-vendedor
   const topVendedores = useMemo(() => {
-    const vendedoresMap = new Map<string, number>();
+    const vendedoresMap = new Map<string, { ventas: number; clientes: number }>();
     filteredData.forEach(cliente => {
-      const vendedoresList = cliente.todos_vendedores || [cliente.vendedor_principal];
-      const monto = cliente.monto_total_historico || 0;
-      vendedoresList.forEach((vendedor: string) => {
-        if (vendedor) {
-          vendedoresMap.set(vendedor, (vendedoresMap.get(vendedor) || 0) + Number(monto));
-        }
-      });
+      const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
+      const monto = Number(cliente.monto_total_historico || 0);
+      if (vendedor) {
+        const existing = vendedoresMap.get(vendedor) || { ventas: 0, clientes: 0 };
+        existing.ventas += monto;
+        existing.clientes += 1;
+        vendedoresMap.set(vendedor, existing);
+      }
     });
     return Array.from(vendedoresMap.entries())
-      .map(([vendedor, ventas]) => ({ vendedor, ventas }))
+      .map(([vendedor, data]) => ({ vendedor, ventas: data.ventas, clientes: data.clientes }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
   }, [filteredData]);
@@ -667,9 +669,14 @@ const ClientesDashboard = () => {
                       <Badge variant="secondary" className="shrink-0">
                         {index + 1}
                       </Badge>
-                      <span className="text-sm font-medium text-foreground truncate">
-                        {vendedor.vendedor}
-                      </span>
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-foreground truncate block">
+                          {vendedor.vendedor}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {vendedor.clientes} clientes
+                        </span>
+                      </div>
                     </div>
                     <span className="text-sm font-semibold text-accent ml-2 shrink-0">
                       {formatCurrency(vendedor.ventas)}

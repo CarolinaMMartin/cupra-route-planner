@@ -58,8 +58,9 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
       zona.ventas += Number(cliente.monto_total_historico || 0);
       zona.ordenes += Number(cliente.cantidad_ordenes || 0);
       
-      const vendedores = cliente.todos_vendedores || [cliente.vendedor_principal];
-      vendedores.forEach((v: string) => v && zona.vendedores.add(v));
+      // Usar vendedor_actual (único) para evitar inflación multi-vendedor
+      const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
+      if (vendedor) zona.vendedores.add(vendedor);
     });
 
     return Array.from(zonaMap.values())
