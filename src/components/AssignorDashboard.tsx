@@ -268,15 +268,7 @@ const AssignorDashboard = () => {
       )}
 
       {flowStep === "edit-kanban" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-serif text-2xl">Reasignar Clientes</CardTitle>
-            <CardDescription>Arrastra los clientes entre vendedores</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EditAssignmentsKanban selectedAssignments={selectedExistingAssignments} onBack={handleBackFromEditKanban} onComplete={handleEditComplete} />
-          </CardContent>
-        </Card>
+        <EditAssignmentsTable selectedAssignments={selectedExistingAssignments} onBack={handleBackFromEditKanban} onComplete={handleEditComplete} />
       )}
 
       {flowStep === "preselection" && recommendations.length > 0 && (
