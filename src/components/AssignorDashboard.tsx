@@ -21,7 +21,7 @@ import TableAssignment from "@/components/assignor/TableAssignment";
 import TodayAssignments from "./assignor/TodayAssignments";
 import AIInsightsCard from "./assignor/AIInsightsCard";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
-import EditAssignmentsKanban from "./assignor/EditAssignmentsKanban";
+import EditAssignmentsTable from "./assignor/EditAssignmentsTable";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useRecommendationsStore } from "@/hooks/useRecommendationsStore";
