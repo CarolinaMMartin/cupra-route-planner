@@ -6,9 +6,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Loader2, ArrowRight } from "lucide-react";
-import { getVendorColor, createColoredMarkerIcon, resetVendorColors, getVendorColorMap } from "@/lib/vendorColors";
-
+import { MapPin, Loader2, ArrowRight, AlertTriangle } from "lucide-react";
+import { getVendorColor, createStateMarkerIcon, resetVendorColors, getVendorColorMap, getStateLegend, classifyClientState, getStateColor, calcularDistanciaKmFrontend } from "@/lib/vendorColors";
 interface ResultsMapProps {
   sucursales: Sucursal[];
   selectedIds: string[];
@@ -23,6 +22,8 @@ interface ClientLocation {
   lng: number;
   direccion: string;
   vendedor?: string;
+  estado_cliente?: string;
+  hasOverlap?: boolean;
 }
 
 // Load Google Maps Script
@@ -106,6 +107,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
             if (isValidLat && isValidLng) {
               const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
               if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
+              const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
               return {
                 id: sucursal.id,
                 name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
@@ -113,6 +115,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                 lng: lng,
                 direccion: sucursal.direccion || sucursal.direccion_principal || "",
                 vendedor,
+                estado_cliente,
               };
             } else {
               console.warn(`[ResultsMap] Coordenadas fuera de rango Argentina:`, { id: sucursal.id, lat, lng });
@@ -133,6 +136,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                 if (isValidLat && isValidLng) {
                   const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
                   if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
+                  const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
                   return {
                     id: sucursal.id,
                     name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
@@ -140,6 +144,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                     lng: lng,
                     direccion: sucursal.direccion || sucursal.direccion_principal || "",
                     vendedor,
+                    estado_cliente,
                   };
                 }
               }
@@ -156,6 +161,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                 if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
                   const vendedor = sucursal.vendedor_principal || sucursal.vendedor_actual || "Sin vendedor";
                   if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
+                  const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
                   resolve({
                     id: sucursal.id,
                     name: place.name || sucursal.nombre || "Sin nombre",
@@ -163,6 +169,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                     lng: place.geometry.location.lng(),
                     direccion: place.formatted_address || sucursal.direccion || "",
                     vendedor,
+                    estado_cliente,
                   });
                 } else {
                   reject(new Error(`No se pudo obtener ubicación para ${sucursal.nombre}`));
@@ -185,6 +192,21 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
           fetchedLocations.push(result.value);
         }
       });
+
+      // Detect overlaps: markers from different vendors within 200m
+      for (let i = 0; i < fetchedLocations.length; i++) {
+        for (let j = i + 1; j < fetchedLocations.length; j++) {
+          const a = fetchedLocations[i];
+          const b = fetchedLocations[j];
+          if (a.vendedor && b.vendedor && a.vendedor !== b.vendedor) {
+            const dist = calcularDistanciaKmFrontend(a.lat, a.lng, b.lat, b.lng);
+            if (dist < 0.2) {
+              a.hasOverlap = true;
+              b.hasOverlap = true;
+            }
+          }
+        }
+      }
 
       setLocations(fetchedLocations);
       setVendorLegend(getVendorColorMap());
@@ -213,12 +235,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
     locations.forEach((location) => {
       if (selectedIds.includes(location.id)) {
         if (!markers.has(location.id)) {
-          const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : '#E53935';
+          const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : undefined;
           const marker = new google.maps.Marker({
             position: { lat: location.lat, lng: location.lng },
             map,
             title: location.name,
-            icon: createColoredMarkerIcon(vendorColor),
+            icon: createStateMarkerIcon(location.estado_cliente, vendorColor),
             animation: google.maps.Animation.DROP,
           });
 
@@ -305,6 +327,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
               const sucursal = sucursales.find((s) => s.id === location.id);
               const isSelected = selectedIds.includes(location.id);
               const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : undefined;
+              const stateColor = getStateColor(location.estado_cliente);
 
               return (
                 <div
@@ -319,8 +342,9 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                   />
                   <label htmlFor={`loc-${location.id}-${idx}`} className="flex-1 cursor-pointer text-sm">
                     <div className="font-medium text-foreground flex items-center gap-1.5">
-                      {vendorColor && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: vendorColor }} />}
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border" style={{ backgroundColor: stateColor, borderColor: vendorColor || 'transparent' }} />
                       {location.name}
+                      {location.hasOverlap && <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 text-amber-500" />}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">{location.direccion}</div>
                     {sucursal?.score && (
@@ -355,17 +379,30 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
         )}
 
         {/* Vendor color legend */}
-        {vendorLegend.size > 0 && !loading && (
-          <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm p-3 rounded-lg shadow-lg border z-10 max-h-48 overflow-y-auto">
-            <p className="text-xs font-medium mb-2 text-foreground">Vendedores</p>
-            <div className="space-y-1">
-              {Array.from(vendorLegend.entries()).map(([name, color]) => (
-                <div key={name} className="flex items-center gap-2">
+        {!loading && (
+          <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm p-3 rounded-lg shadow-lg border z-10 max-h-64 overflow-y-auto">
+            <p className="text-xs font-medium mb-2 text-foreground">Estado Comercial</p>
+            <div className="space-y-1 mb-3">
+              {getStateLegend().map(({ estado, color, label }) => (
+                <div key={estado} className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                  <span className="text-xs text-muted-foreground truncate max-w-[120px]">{name}</span>
+                  <span className="text-xs text-muted-foreground">{label}</span>
                 </div>
               ))}
             </div>
+            {vendorLegend.size > 0 && (
+              <>
+                <p className="text-xs font-medium mb-2 text-foreground border-t pt-2">Vendedores (borde)</p>
+                <div className="space-y-1">
+                  {Array.from(vendorLegend.entries()).map(([name, color]) => (
+                    <div key={name} className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full flex-shrink-0 border-2" style={{ borderColor: color, backgroundColor: 'transparent' }} />
+                      <span className="text-xs text-muted-foreground truncate max-w-[120px]">{name}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
         </div>

@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { MapPin } from "lucide-react";
+import { createStateMarkerIcon, classifyClientState, getStateLegend, getStateColor } from "@/lib/vendorColors";
 
 interface VendedorAssignmentsMapProps {
   assignments: Record<string, ClienteAsignado[]>;
@@ -139,10 +140,13 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
           }
           
           if (position && mapsUrl) {
+            const esProspecto = !!(cliente as any).es_prospecto;
+            const estado = classifyClientState(cliente.dias_desde_ultima_compra, esProspecto);
             const marker = new google.maps.Marker({
               position,
               map: map,
               title: cliente.razon_social,
+              icon: createStateMarkerIcon(estado),
             });
 
             const infoWindow = new google.maps.InfoWindow({
@@ -151,9 +155,9 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
                   <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px; color: #000;">
                     ${cliente.razon_social}
                   </h3>
-                  <div style="margin-bottom: 8px;">
+                   <div style="margin-bottom: 8px;">
                     <span style="display: inline-block; padding: 2px 8px; background: ${
-                      estado === "Visitado" ? "#22c55e" : "#ef4444"
+                      getStateColor(estado)
                     }; color: white; border-radius: 4px; font-size: 12px;">
                       ${estado}
                     </span>
@@ -230,10 +234,10 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
         )}
         <div ref={mapRef} className="w-full h-full rounded-lg" />
         
-        {/* Filtros con checkboxes */}
+        {/* Filtros + leyenda de estados */}
         <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm p-4 rounded-lg shadow-lg border z-10">
           <p className="text-sm font-medium mb-3">Filtrar clientes</p>
-          <div className="space-y-3">
+          <div className="space-y-3 mb-3">
             <div className="flex items-center space-x-2">
               <Checkbox 
                 id="por_visitar" 
@@ -250,6 +254,15 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
               />
               <Label htmlFor="visitado" className="text-sm cursor-pointer">Visitados</Label>
             </div>
+          </div>
+          <p className="text-xs font-medium mb-2 border-t pt-2">Estado Comercial</p>
+          <div className="space-y-1">
+            {getStateLegend().map(({ estado, color, label }) => (
+              <div key={estado} className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-xs text-muted-foreground">{label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>

@@ -62,6 +62,8 @@ export interface Sucursal {
   emails?: string[];
   // Vendedor recomendado por IA
   vendedor_recomendado_id?: string;
+  // Estado comercial del cliente
+  estado_cliente?: 'ACTIVO' | 'INACTIVO' | 'PERDIDO' | 'POTENCIAL';
   // Link a Google Maps
   google_maps_link?: string;
   place_id?: string;

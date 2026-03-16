@@ -1081,7 +1081,37 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_clientes_priorizacion: {
+        Row: {
+          barrio: string | null
+          cuit_dni: string | null
+          dias_desde_ultima_compra: number | null
+          direccion: string | null
+          entity_id: string | null
+          es_prospecto: boolean | null
+          estado_comercial: string | null
+          excluir_recomendaciones: boolean | null
+          fantasia: string | null
+          google_maps_link: string | null
+          last_recommendation_at: string | null
+          lat: number | null
+          long: number | null
+          monto_total_historico: number | null
+          prospecto_place_id: string | null
+          provincia_principal: string | null
+          rating: number | null
+          razon_social: string | null
+          score_comercial: number | null
+          ticket_promedio: number | null
+          tipo_negocio: string | null
+          todos_vendedores: string[] | null
+          vendedor_actual: string | null
+          vendedor_afin_id: string | null
+          vendedor_afin_nombre: string | null
+          vendedor_principal: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       clean_old_recommendations: { Args: never; Returns: undefined }
@@ -1089,6 +1119,11 @@ export type Database = {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
       }
+      get_vendedor_barrios_top: {
+        Args: { top_n?: number; vendedor_user_id: string }
+        Returns: string[]
+      }
+      unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
       app_role: "asignador" | "vendedor"
