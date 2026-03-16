@@ -156,8 +156,9 @@ function preScoreCandidates(
     const place = placesMap.get(c.client_id);
     const lat = place?.lat ? Number(place.lat) : null;
     const long = place?.long ? Number(place.long) : null;
-    // Filter ALL candidates (clients + prospects) by distance to zone center
-    if (!isWithinRadiusFromCenter(lat, long, zoneCenter, maxRadiusKm)) continue;
+    // Only apply radius filter to clients when a geo filter was specified
+    // (otherwise the client_places query already loaded ALL clients, no zone restriction)
+    if (applyRadiusToClients && !isWithinRadiusFromCenter(lat, long, zoneCenter, maxRadiusKm)) continue;
     const estado = classifyEstado(c.dias_desde_ultima_compra);
 
     let distancia_km = 999;
