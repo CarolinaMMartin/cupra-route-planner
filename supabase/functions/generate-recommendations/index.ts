@@ -1050,6 +1050,10 @@ Respetá la cuota y priorizá la densidad geográfica.`;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const enrichedRecommendations = [];
 
+    // Build vendedor name lookup
+    const vendedorNameLookup = new Map<string, string>();
+    vendedoresData.forEach(v => vendedorNameLookup.set(v.user_id, v.nombre));
+
     // Merge all client sources for lookup
     const allClientes = [...allClientesEnZona, ...portfolioClients];
     const clienteLookup = new Map<string, any>();
@@ -1062,6 +1066,11 @@ Respetá la cuota y priorizá la densidad geográfica.`;
       });
     });
 
+    // Build a combined prospect lookup for enrichment
+    const allProspectosLookup = new Map<string, any>();
+    prospectos.forEach(p => allProspectosLookup.set(p.place_id, p));
+    extraProspectosLoaded.forEach(p => { if (!allProspectosLookup.has(p.place_id)) allProspectosLookup.set(p.place_id, p); });
+
     for (const rec of validatedRecs) {
       let vendedorId = rec.vendedor_id;
       if (!vendedorId || !uuidRegex.test(vendedorId) || !validVendedorIds.has(vendedorId)) {
@@ -1069,9 +1078,16 @@ Respetá la cuota y priorizá la densidad geográfica.`;
         if (!vendedorId) continue;
       }
 
+      const vendedorNombre = vendedorNameLookup.get(vendedorId) || 'Desconocido';
       const clienteCompleto = clienteLookup.get(rec.client_id);
-      const prospectoCompleto = !clienteCompleto ? (prospectos.find(p => p.place_id === rec.client_id) || extraProspectosLoaded.find(p => p.place_id === rec.client_id)) : null;
-      if (!clienteCompleto && !prospectoCompleto) continue;
+      const prospectoCompleto = !clienteCompleto ? allProspectosLookup.get(rec.client_id) : null;
+      
+      // Fallback: build minimal prospect from globalCandidateMap if not found in prospectos
+      const candidateInfo = globalCandidateMap.get(rec.client_id);
+      if (!clienteCompleto && !prospectoCompleto && !candidateInfo) {
+        console.warn(`⚠️ Enrichment skip: ${rec.client_id} not found in any lookup`);
+        continue;
+      }
 
       const esProspecto = !clienteCompleto;
       const place = !esProspecto ? placesMap.get(rec.client_id) : null;
