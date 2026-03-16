@@ -21,6 +21,7 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 const MAX_DISTANCE_TO_ZONE_CENTER_KM = 1;
+const EXPANSION_RADIUS_KM = 2;
 
 function isWithinRadiusFromCenter(
   lat: number | null,
@@ -146,6 +147,7 @@ function preScoreCandidates(
   myAnchors: AnchorPoint[],
   otherAnchors: AnchorPoint[],
   zoneCenter: AnchorPoint | null,
+  maxRadiusKm: number = MAX_DISTANCE_TO_ZONE_CENTER_KM,
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
 
@@ -153,7 +155,7 @@ function preScoreCandidates(
     const place = placesMap.get(c.client_id);
     const lat = place?.lat ? Number(place.lat) : null;
     const long = place?.long ? Number(place.long) : null;
-    if (!isWithinRadiusFromCenter(lat, long, zoneCenter)) continue;
+    if (!isWithinRadiusFromCenter(lat, long, zoneCenter, maxRadiusKm)) continue;
     const estado = classifyEstado(c.dias_desde_ultima_compra);
 
     let distancia_km = 999;
@@ -234,7 +236,7 @@ function preScoreCandidates(
   for (const p of prospectos) {
     const lat = p.latitud ? Number(p.latitud) : null;
     const long = p.longitud ? Number(p.longitud) : null;
-    if (!isWithinRadiusFromCenter(lat, long, zoneCenter)) continue;
+    if (!isWithinRadiusFromCenter(lat, long, zoneCenter, maxRadiusKm)) continue;
 
     let distancia_km = 999;
     let score_geo = 0;
@@ -463,7 +465,7 @@ Deno.serve(async (req) => {
       instrucciones_adicionales,
     } = await req.json();
 
-    console.log("🔧 Version: v6-zone-1km-quota");
+    console.log("🔧 Version: v7-geo-expansion");
     console.log("📥 Request recibido:", { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones });
 
     // ---- 1. Resolve area filters ----
@@ -787,88 +789,83 @@ Deno.serve(async (req) => {
 
       // === GUARANTEE 8: Expand prospect pool if total candidates < 8 ===
       const totalCandidates = activos.length + inactivos.length + perdidos.length + potenciales.length;
-      if (totalCandidates < 8) {
-        console.log(`⚠️ ${vendedor.nombre}: Solo ${totalCandidates} candidatos, necesita 8. Buscando más prospectos...`);
+      if (totalCandidates < 8 && zoneCenter) {
+        console.log(`⚠️ ${vendedor.nombre}: Solo ${totalCandidates} candidatos, necesita 8. Buscando más prospectos por proximidad geográfica...`);
         
         const existingProspectoIds = new Set(potenciales.map(p => p.client_id));
+        const allExistingIds = new Set([...activos, ...inactivos, ...perdidos, ...potenciales].map(c => c.client_id));
         const needed = 8 - totalCandidates;
         
-        // PRIORITY 1: Use barrios from the REQUEST (what user selected), not vendor's portfolio
-        const searchBarrios = barriosFinales.length > 0 ? barriosFinales : [];
+        // EXPANSION 1: Bounding box ~2km around zone center
+        const deltaLat = 0.018; // ~2km
+        const deltaLng = 0.022; // ~2km at latitude -34
         
-        // PRIORITY 2: Fallback to vendor's top barrios if no request barrios
-        if (searchBarrios.length === 0) {
-          const barrioCount = new Map<string, number>();
-          for (const c of myValidClients) {
-            const b = placesMap.get(c.client_id)?.barrio_principal || c.barrio_principal;
-            if (b) barrioCount.set(b, (barrioCount.get(b) || 0) + 1);
-          }
-          const topBarrios = [...barrioCount.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]);
-          searchBarrios.push(...topBarrios.slice(0, 5));
-        }
+        const { data: geoProspectos } = await supabaseClient
+          .from("prospectos").select("*")
+          .gte("latitud", zoneCenter.lat - deltaLat)
+          .lte("latitud", zoneCenter.lat + deltaLat)
+          .gte("longitud", zoneCenter.lng - deltaLng)
+          .lte("longitud", zoneCenter.lng + deltaLng)
+          .order("rating", { ascending: false })
+          .limit(needed * 5);
         
-        console.log(`🏘️ ${vendedor.nombre} buscando prospectos en barrios: ${searchBarrios.slice(0, 5).join(', ')}`);
+        const geoFiltered = (geoProspectos || []).filter(p => 
+          !prospectosAsignadosHoy.has(p.place_id) && 
+          !allExistingIds.has(p.place_id) &&
+          !existingProspectoIds.has(p.place_id) &&
+          !p.client_id
+        );
         
-        if (searchBarrios.length > 0) {
-          const barrioConds = searchBarrios.slice(0, 5).map((b: string) => `barrio.ilike.%${b}%`).join(",");
-          const { data: extraProspectos } = await supabaseClient
+        extraProspectosLoaded.push(...geoFiltered);
+        
+        // Score with RELAXED radius (2km instead of 1km)
+        const geoScored = preScoreCandidates(
+          [], geoFiltered, placesMap,
+          feedbacksMapClientes, feedbacksMapProspectos,
+          vendedor.user_id, vendedor.nombre,
+          sellerNameMap, myAnchors, otherAnchors,
+          zoneCenter, EXPANSION_RADIUS_KM,
+        ).filter(c => !allExistingIds.has(c.client_id));
+        
+        potenciales = [...potenciales, ...geoScored.slice(0, needed)];
+        console.log(`🆕 ${vendedor.nombre}: +${Math.min(geoScored.length, needed)} prospectos extra (geo ${EXPANSION_RADIUS_KM}km)`);
+        
+        // EXPANSION 2: If STILL not enough, wider search (3km)
+        const totalAfterGeo = activos.length + inactivos.length + perdidos.length + potenciales.length;
+        if (totalAfterGeo < 8) {
+          const stillNeeded = 8 - totalAfterGeo;
+          const allIds2 = new Set([...activos, ...inactivos, ...perdidos, ...potenciales].map(c => c.client_id));
+          
+          const deltaLat2 = 0.027; // ~3km
+          const deltaLng2 = 0.033;
+          
+          const { data: widerProspectos } = await supabaseClient
             .from("prospectos").select("*")
-            .or(barrioConds)
-            .order("rating", { ascending: false })
-            .limit(needed * 5);
-          
-          const extraFiltered = (extraProspectos || []).filter(p => 
-            !prospectosAsignadosHoy.has(p.place_id) && 
-            !existingProspectoIds.has(p.place_id) &&
-            !p.client_id
-          );
-          
-          // Store for enrichment lookup later
-          extraProspectosLoaded.push(...extraFiltered);
-          
-          // Score and add extra prospects
-          const extraScored = preScoreCandidates(
-            [], extraFiltered, placesMap,
-            feedbacksMapClientes, feedbacksMapProspectos,
-            vendedor.user_id, vendedor.nombre,
-            sellerNameMap, myAnchors, otherAnchors,
-            zoneCenter,
-          ).filter(c => !existingProspectoIds.has(c.client_id));
-          
-          potenciales = [...potenciales, ...extraScored.slice(0, needed)];
-          console.log(`🆕 ${vendedor.nombre}: +${Math.min(extraScored.length, needed)} prospectos extra del barrio solicitado`);
-        }
-        
-        // If STILL not enough, load prospects from same provincia without barrio filter
-        const totalAfterExpansion = activos.length + inactivos.length + perdidos.length + potenciales.length;
-        if (totalAfterExpansion < 8) {
-          const stillNeeded = 8 - totalAfterExpansion;
-          const allExistingIds = new Set([...activos, ...inactivos, ...perdidos, ...potenciales].map(c => c.client_id));
-          
-          const { data: provinciaProspectos } = await supabaseClient
-            .from("prospectos").select("*")
+            .gte("latitud", zoneCenter.lat - deltaLat2)
+            .lte("latitud", zoneCenter.lat + deltaLat2)
+            .gte("longitud", zoneCenter.lng - deltaLng2)
+            .lte("longitud", zoneCenter.lng + deltaLng2)
             .order("rating", { ascending: false })
             .limit(stillNeeded * 5);
           
-          const provinciaFiltered = (provinciaProspectos || []).filter(p => 
+          const widerFiltered = (widerProspectos || []).filter(p => 
             !prospectosAsignadosHoy.has(p.place_id) && 
-            !allExistingIds.has(p.place_id) &&
+            !allIds2.has(p.place_id) &&
             !p.client_id
           );
           
-          // Store for enrichment lookup later
-          extraProspectosLoaded.push(...provinciaFiltered);
+          extraProspectosLoaded.push(...widerFiltered);
           
-          const provinciaScored = preScoreCandidates(
-            [], provinciaFiltered, placesMap,
+          const widerScored = preScoreCandidates(
+            [], widerFiltered, placesMap,
             feedbacksMapClientes, feedbacksMapProspectos,
             vendedor.user_id, vendedor.nombre,
             sellerNameMap, myAnchors, otherAnchors,
-            zoneCenter,
-          ).filter(c => !allExistingIds.has(c.client_id));
+            zoneCenter, 3,
+          ).filter(c => !allIds2.has(c.client_id));
           
-          potenciales = [...potenciales, ...provinciaScored.slice(0, stillNeeded)];
-          console.log(`🌍 ${vendedor.nombre}: +${Math.min(provinciaScored.length, stillNeeded)} prospectos extra (provincia)`);
+          potenciales = [...potenciales, ...widerScored.slice(0, stillNeeded)];
+          console.log(`🌍 ${vendedor.nombre}: +${Math.min(widerScored.length, stillNeeded)} prospectos extra (wider 3km)`);
         }
       }
 

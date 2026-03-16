@@ -1,75 +1,160 @@
+# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
+## Cambios realizados
 
-# Diagnóstico y Plan: Solo 1 de 8 recomendaciones + colores del mapa
+### A. DB: Campo `vendedor_actual` en `clientes` ✅
+- Nuevo campo `vendedor_actual` (text) agregado
+- Inicializado desde la última venta registrada en `ventas_cupra`
+- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
 
-## Diagnóstico
+### B. Pre-scoring determinístico ✅
+- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
+- **score_geo (50%)**: Distancia Haversine al centroide del cluster
+- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
+- **score_comercial (15%)**: Score comercial normalizado (0-100)
+- **score_rotacion (10%)**: Días desde última recomendación
+- Filtra candidatos con feedback negativo automáticamente
+- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
 
-### Bug principal: Solo 1 recomendación guardada (debería ser 8)
+### C. Mapeo nombre→UUID ✅
+- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
+- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
+- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
 
-Los logs muestran la secuencia exacta del fallo:
+### D. Prompt reducido centrado en vendedor ✅
+- De ~65K chars a ~5-10K chars (reducción ~80%)
+- Formato tabular compacto con scores pre-calculados
+- IA solo decide ruta óptima y genera justificaciones
+- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
 
-```text
-📊 IGNACIO CAMPOMAR: 0A 0I 0P 1Pot = 1 total
-🎯 IA seleccionó 8 recomendaciones
-✅ IGNACIO CAMPOMAR: 1 recs (0A-0I-0P-1Pot)
-✅ 1 recomendaciones guardadas
-```
+### E. UI: Vendedor actual vs anterior ✅
+- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
+- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
+- Tipo `Sucursal` extendido con `vendedor_actual`
 
-**Paso 1:** El vendedor tiene 20 clientes en zona pero TODOS son de otros vendedores (97 excluidos por cartera ajena). Solo queda 1 prospecto POTENCIAL.
+---
 
-**Paso 2:** La expansión busca más prospectos pero falla:
-- `barriosFinales` está vacío (el request no tiene filtro de barrio)
-- Fallback: usa barrios del portfolio del vendedor → "Wilde, Gerli, Palermo, Canning, Ciudad Evita"
-- Estos barrios están lejos del centro de zona (-34.6242, -58.5028 = Monte Castro)
-- `preScoreCandidates` aplica `isWithinRadiusFromCenter` (1km) → descarta TODOS los prospectos extra
-- Resultado: +0 prospectos del barrio, +0 de provincia
+# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
 
-**Paso 3:** La IA recibe 1 candidato, inventa 7 ficticios con `client_id` inexistentes.
+## Cambios realizados
 
-**Paso 4:** `validateAndFixDistribution` solo encuentra 1 candidato real en los buckets → devuelve 1.
+### A. Tabs principales ✅
+- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
+- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
 
-### Causa raíz
-La expansión de prospectos busca por **nombre de barrio** en la DB, pero luego `preScoreCandidates` filtra por **radio 1km desde el centro de zona**. Si los barrios buscados no coinciden geográficamente con el centro de zona, se descartan todos. Necesita buscar prospectos **por proximidad geográfica**, no por nombre de barrio.
+### B. FilterPanel con dos modos ✅
+- Modo "Por Área": selector de área → ver resumen → generar
+- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
+- Instrucciones IA colapsables en ambos modos
+- Vendedores en Collapsible con badge "X de Y seleccionados"
 
-### Bug del mapa: colores no diferencian vendedores
-El mapa funciona correctamente en código — `resolveRecommendedVendor` extrae el nombre y `getVendorColor` asigna colores únicos. Pero con solo 1 recomendación guardada, solo hay 1 vendedor visible → 1 color. Cuando se arregle el bug principal (8 por vendedor × 2 vendedores = 16), los colores se diferenciarán automáticamente.
+### C. RecommendationFilters simplificado ✅
+- De 6 filtros redundantes a solo 1 filtro por vendedor
+- Se muestra solo cuando hay más de 1 vendedor
 
-## Plan de ejecución
+### D. TodayAssignments sin Card wrapper ✅
+- Funciona como contenido directo del tab
+- Layout más limpio sin doble Card
 
-### Archivo: `supabase/functions/generate-recommendations/index.ts`
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
+| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
+| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
+| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
 
-**Cambio 1: Expansión por proximidad geográfica (no por barrio)**
+---
 
-Reemplazar la lógica de expansión (líneas 790-872). En lugar de buscar prospectos por nombre de barrio con `.or(barrioConds)`, buscar por rango de lat/lng alrededor del centro de zona:
+# Phase 3: Carga de Excel + ETL integrado — IMPLEMENTADO
 
-```
-// Calcular bounding box de ~2km alrededor del centro de zona
-const deltaLat = 0.018; // ~2km
-const deltaLng = 0.022; // ~2km a latitud -34
-query = supabase.from("prospectos").select("*")
-  .gte("latitud", zoneCenter.lat - deltaLat)
-  .lte("latitud", zoneCenter.lat + deltaLat)
-  .gte("longitud", zoneCenter.lng - deltaLng)
-  .lte("longitud", zoneCenter.lng + deltaLng)
-  .limit(needed * 5);
-```
+## Cambios realizados
 
-Esto garantiza que los prospectos cargados ya están dentro del radio operativo y no serán descartados por `isWithinRadiusFromCenter`.
+### A. Edge Function `process-ventas-excel` ✅
+- Recibe `{ rows: [...] }` parseadas en frontend con SheetJS
+- **Normalización de campos**: `getFieldValue()` con matching exacto, case-insensitive y NFD-normalized
+- **Conversión de fechas**: Excel serial → ISO, DD/MM/YYYY → ISO
+- **Conversión de montos**: Formato argentino (puntos miles, coma decimal)
+- **Geografía CABA**: 48 barrios mapeados a 15 comunas + detección PBA/GBA
+- **Agregación RFM por cliente**: Primera/última compra, días inactividad, scores recencia/volumen/comercial
+- **Canal**: Detección ON_TRADE vs OFF_TRADE por categorías
+- **Upsert ventas_cupra**: Batches de 500, conflict key existente
+- **Upsert clientes protegido**: No sobreescribe `last_recommendation_at`, `excluir_recomendaciones`, `ultima_visita`
 
-**Cambio 2: Fallback sin filtro geo si la búsqueda por proximidad no alcanza**
+### B. Página `CargaDatos.tsx` ✅
+- Acceso restringido a rol `asignador`
+- Drop zone + file input para `.xlsx` / `.xls`
+- Parseo client-side con `xlsx` (SheetJS)
+- Preview: columnas detectadas + primeras 5 filas
+- Progreso visual durante procesamiento
+- Resumen final: ventas procesadas, clientes actualizados, errores
 
-Si después de la búsqueda por proximidad todavía hay <8 candidatos, buscar prospectos sin filtro geográfico y ordenados por distancia al centro de zona (calculada en JS), aceptando hasta 2km.
+### C. Navegación ✅
+- Ruta `/carga-datos` en `App.tsx`
+- Menú "Gestión" del asignador: nuevo item "Carga de Datos"
 
-**Cambio 3: Aumentar radio de expansión a 2km**
+## Archivos creados/modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/process-ventas-excel/index.ts` | Creado — ETL completo |
+| `src/pages/CargaDatos.tsx` | Creado — UI de upload |
+| `src/App.tsx` | Ruta `/carga-datos` |
+| `src/pages/Index.tsx` | Menú con "Carga de Datos" |
+| `supabase/config.toml` | Función registrada |
+| `package.json` | Dependencia `xlsx` |
 
-Durante la expansión, usar `MAX_DISTANCE_TO_ZONE_CENTER_KM * 2` (2km) en lugar de 1km para `preScoreCandidates`, ya que el objetivo es llenar la cuota.
+## Próximos pasos potenciales
+- Planificación temporal (agenda semanal)
+- Reportes y supervisión
+- Agente conversacional
 
-**Cambio 4: Versión bump a v7**
+---
 
-Cambiar el tag de versión para tracking en logs.
+# Phase 4: CUPRA Smart Route v4 — Anclaje Geográfico + Cuota 5-1-1-1 — IMPLEMENTADO
 
-### Resultado esperado
-- 8 recomendaciones por vendedor, siempre
-- Prospectos concentrados geográficamente cerca del centro de zona
-- Mapa con colores diferenciados por vendedor (ya funciona, solo necesita datos correctos)
+## Cambios realizados
 
+### A. Vista SQL `v_clientes_priorizacion` ✅
+- Extensión `unaccent` habilitada para normalización de nombres
+- Vista combina `clientes` + `prospectos` con clasificación por estado comercial (ACTIVO/INACTIVO/PERDIDO/POTENCIAL)
+- `vendedor_afin_id` calculado con `UPPER(UNACCENT())` para matching robusto
+- Función `get_vendedor_barrios_top()` para obtener top 3 barrios por vendedor
+
+### B. Edge Function refactorizada ✅
+- **Centroide eliminado**: Ya no se usa `centerLat`/`centerLong`
+- **Algoritmo de Anclaje**: Top 5 clientes ACTIVOS del vendedor definen "anclas" del día
+- **Scoring magnético**: Distancia al ancla más cercana en vez de al centroide
+- **Penalización solapamiento**: -100 puntos si candidato < 300m de ancla de OTRO vendedor
+- **Cubetas 15-5-5-5**: 15 Activos + 5 Inactivos + 5 Perdidos + 5 Potenciales enviados a IA
+- **Filtro 15 días eliminado**: La IA decide según categoría de estado
+- **Nuevo prompt 5-1-1-1**: Distribución estricta 5 Activos + 1 Inactivo + 1 Perdido + 1 Potencial
+- **Barrios top del vendedor**: Incluidos en el contexto del prompt
+- **Validación post-IA**: Si la IA no cumple cuota, se completa determinísticamente
+- **`estado_comercial`** incluido en la respuesta para el frontend
+
+### C. Frontend — Tipo `Sucursal` extendido ✅
+- Nuevo campo `estado_cliente?: 'ACTIVO' | 'INACTIVO' | 'PERDIDO' | 'POTENCIAL'`
+- `AssignorDashboard.tsx` mapea `estado_comercial` desde la respuesta
+
+### D. `vendorColors.ts` — Funciones de estado ✅
+- `getStateColor(estado)`: Verde/Amarillo/Rojo/Azul
+- `classifyClientState(dias, esProspecto)`: Clasificación frontend
+- `createStateMarkerIcon(estado, vendorColor?, scale)`: SVG con relleno=estado + borde=vendedor
+- `getStateLegend()`: Para leyendas de mapa
+- `calcularDistanciaKmFrontend()`: Para detección de solapamiento
+
+### E. Mapas actualizados ✅
+- **`ResultsMap.tsx`**: Marcadores con relleno=estado + borde=vendedor. Leyenda doble (estados + vendedores). Detección solapamiento < 200m con icono ⚠️
+- **`VendedorAssignmentsMap.tsx`**: Marcadores por estado (mono-vendedor, sin borde). Leyenda de estados
+- **`AssignorTodayAssignmentsMap.tsx`**: Pendiente actualización con marcadores por estado
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| Migración SQL | `unaccent` + vista + función `get_vendedor_barrios_top` |
+| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: anclas, cubetas, prompt 5-1-1-1, validación |
+| `src/types/sales.ts` | `estado_cliente` en `Sucursal` |
+| `src/lib/vendorColors.ts` | Funciones de estado + marcadores duales |
+| `src/components/AssignorDashboard.tsx` | Mapeo `estado_cliente` |
+| `src/components/assignor/ResultsMap.tsx` | Marcadores estado+vendedor, solapamiento |
+| `src/components/vendedor/VendedorAssignmentsMap.tsx` | Marcadores por estado |
