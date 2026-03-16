@@ -669,9 +669,14 @@ const ClientesDashboard = () => {
                       <Badge variant="secondary" className="shrink-0">
                         {index + 1}
                       </Badge>
-                      <span className="text-sm font-medium text-foreground truncate">
-                        {vendedor.vendedor}
-                      </span>
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-foreground truncate block">
+                          {vendedor.vendedor}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {vendedor.clientes} clientes
+                        </span>
+                      </div>
                     </div>
                     <span className="text-sm font-semibold text-accent ml-2 shrink-0">
                       {formatCurrency(vendedor.ventas)}
