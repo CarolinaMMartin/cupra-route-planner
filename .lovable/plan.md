@@ -158,3 +158,48 @@
 | `src/components/AssignorDashboard.tsx` | Mapeo `estado_cliente` |
 | `src/components/assignor/ResultsMap.tsx` | Marcadores estado+vendedor, solapamiento |
 | `src/components/vendedor/VendedorAssignmentsMap.tsx` | Marcadores por estado |
+
+---
+
+# Phase 5: v9-hotzone — Zona Caliente por Vendedor + Mix Estratégico — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Hotspot per-vendor (reemplaza zoneCenter global) ✅
+- `calculateCentroid()` calcula el centro de los clientes propios del vendedor
+- **Fallback (corrección #1):** Si vendor tiene 0 clientes → usa centroide de `clientPlaces` del filtro geo (centro del barrio/comuna)
+- Habilita "Modo Conquista" con solo prospectos en zona nueva
+
+### B. Radio duro 1.5km para TODOS ✅
+- `HARD_RADIUS_KM = 1.5` aplicado a clientes Y prospectos
+- `MAX_EXPANSION_KM = 2.0` — expansión máxima absoluta
+- Eliminadas expansiones de 2.5km y 3km
+
+### C. Pool lineal — clientes primero, prospectos después ✅
+- `scoreClients()` — Pool 1: ACTIVO+INACTIVO+PERDIDO, ordenados por score_total
+- `scoreProspects()` — Pool 2: POTENCIAL, ordenados por distancia al hotspot (más cerca primero)
+- `validateAndFill()` — Llena 8 slots: primero Pool 1, luego Pool 2
+
+### D. Mix estratégico — al menos 1 recuperación (corrección #2) ✅
+- Si no hay cliente con >90 días sin compra en los 8 seleccionados, swapea el #8 por el mejor PERDIDO disponible
+- Garantiza proactividad de recuperación sin cuota rígida
+
+### E. Deduplicación cross-vendor mantenida (corrección #3) ✅
+- `globalPickedIds` impide asignar mismo cliente a 2 vendedores
+
+### F. Prompt simplificado ✅
+- Sin distribución 5-1-1-1
+- "Priorizá clientes existentes, completá con prospectos, incluí al menos 1 recuperación"
+
+### G. Version bump: `v9-hotzone` ✅
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: hotspot per-vendor, radio duro, pool lineal, recovery swap |
+
+## Resultado esperado
+- Todas las recomendaciones dentro de 1.5-2km del hotspot real del vendedor
+- Clientes existentes priorizados, prospectos solo como relleno
+- Al menos 1 visita de recuperación si existe en zona
+- Modo conquista funcional (vendedor sin clientes en zona nueva)
