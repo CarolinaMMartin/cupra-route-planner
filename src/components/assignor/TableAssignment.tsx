@@ -505,10 +505,14 @@ const TableAssignment = ({
           />
         </div>
 
-        {/* Save */}
+        <Button variant="outline" onClick={onBack} className="gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Volver
+        </Button>
+
         <Button onClick={handleSave} disabled={isLoading} className="gap-2">
           <Save className="w-4 h-4" />
-          Guardar asignaciones
+          Guardar
         </Button>
       </div>
 
