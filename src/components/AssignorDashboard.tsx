@@ -152,14 +152,9 @@ const AssignorDashboard = () => {
         return;
       }
 
-      const vendedorNombrePorId = new Map(
-        selectedVendedoresData.ids.map((id, idx) => [id, selectedVendedoresData.nombres[idx] || id]),
-      );
-
       const mappedRecommendations: Sucursal[] = (data.recomendaciones || []).map((rec: any) => {
-        const vendedorRecomendadoNombre = rec.vendedor_recomendado_id
-          ? vendedorNombrePorId.get(rec.vendedor_recomendado_id)
-          : undefined;
+        // Use vendedor_recomendado_nombre from API response (resolved in edge function)
+        const vendedorNombre = rec.vendedor_recomendado_nombre || rec.vendedor_principal || undefined;
 
         return ({
           id: rec.request_id + "-" + (rec.client_id || rec.prospecto_place_id),
