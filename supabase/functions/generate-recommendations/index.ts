@@ -757,13 +757,33 @@ Respetá la cuota y priorizá la densidad geográfica.`;
     });
 
     let validatedRecs: any[] = [];
+    // Cross-vendor deduplication: track globally picked client_ids
+    const globalPickedIds = new Set<string>();
+
     for (const vendedor of vendedoresData) {
+      // Filter out clients already assigned to a previous vendor
+      const rawBuckets = vendorBuckets[vendedor.user_id] || { activos: [], inactivos: [], perdidos: [], potenciales: [] };
+      const filteredBuckets = {
+        activos: rawBuckets.activos.filter(c => !globalPickedIds.has(c.client_id)),
+        inactivos: rawBuckets.inactivos.filter(c => !globalPickedIds.has(c.client_id)),
+        perdidos: rawBuckets.perdidos.filter(c => !globalPickedIds.has(c.client_id)),
+        potenciales: rawBuckets.potenciales.filter(c => !globalPickedIds.has(c.client_id)),
+      };
+
+      // Also filter AI recs to exclude already-picked ids
+      const filteredAiRecs = aiRecommendations.recomendaciones.filter(
+        (r: any) => !globalPickedIds.has(r.client_id)
+      );
+
       const vendorRecs = validateAndFixDistribution(
-        aiRecommendations.recomendaciones,
-        vendorBuckets[vendedor.user_id] || { activos: [], inactivos: [], perdidos: [], potenciales: [] },
+        filteredAiRecs,
+        filteredBuckets,
         vendedor.user_id,
         allCandidateIds,
       );
+
+      // Add this vendor's picks to the global set
+      vendorRecs.forEach((r: any) => globalPickedIds.add(r.client_id));
       validatedRecs.push(...vendorRecs);
 
       // Log distribution
@@ -771,7 +791,7 @@ Respetá la cuota y priorizá la densidad geográfica.`;
       const b = vendorBuckets[vendedor.user_id];
       if (b) [...b.activos, ...b.inactivos, ...b.perdidos, ...b.potenciales].forEach(c => candidateMap.set(c.client_id, c));
       const dist = { A: 0, I: 0, P: 0, Pot: 0 };
-      vendorRecs.forEach(r => {
+      vendorRecs.forEach((r: any) => {
         const c = candidateMap.get(r.client_id);
         if (c?.estado_comercial === 'ACTIVO') dist.A++;
         else if (c?.estado_comercial === 'INACTIVO') dist.I++;

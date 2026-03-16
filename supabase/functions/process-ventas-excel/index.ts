@@ -49,8 +49,26 @@ const toFloat = (v: any): number | null => {
 };
 const toNumberCurrency = (v: any): number | null => {
   if (isEmpty(v)) return null;
-  const cleaned = String(v).replace(/[^\d,.\- ]/g, '').replace(/\s+/g, '').replace(/\./g, '').replace(/,/g, '.');
-  const n = Number(cleaned);
+  // If xlsx already parsed it as a JS number, use it directly
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const s = String(v).trim();
+  // Try direct parse first (handles "34710.74" from xlsx)
+  const directParse = Number(s);
+  if (Number.isFinite(directParse)) return directParse;
+  // Clean non-numeric chars
+  const cleaned = s.replace(/[^\d,.\-]/g, '').replace(/\s+/g, '');
+  // Argentine format: comma as decimal (1.234.567,89)
+  if (/,\d{1,2}$/.test(cleaned)) {
+    const n = Number(cleaned.replace(/\./g, '').replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+  }
+  // US format: dot as decimal (1,234,567.89)
+  if (/\.\d{1,2}$/.test(cleaned)) {
+    const n = Number(cleaned.replace(/,/g, ''));
+    return Number.isFinite(n) ? n : null;
+  }
+  // No clear decimal separator - treat as integer
+  const n = Number(cleaned.replace(/[.,]/g, ''));
   return Number.isFinite(n) ? n : null;
 };
 
