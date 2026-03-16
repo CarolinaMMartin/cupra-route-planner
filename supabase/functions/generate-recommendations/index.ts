@@ -756,9 +756,9 @@ Deno.serve(async (req) => {
       );
 
       const activos = scored.filter(c => c.estado_comercial === 'ACTIVO').slice(0, 15);
-      const inactivos = scored.filter(c => c.estado_comercial === 'INACTIVO').slice(0, 5);
-      const perdidos = scored.filter(c => c.estado_comercial === 'PERDIDO').slice(0, 5);
-      let potenciales = scored.filter(c => c.estado_comercial === 'POTENCIAL').slice(0, 5);
+      const inactivos = scored.filter(c => c.estado_comercial === 'INACTIVO').slice(0, 8);
+      const perdidos = scored.filter(c => c.estado_comercial === 'PERDIDO').slice(0, 8);
+      let potenciales = scored.filter(c => c.estado_comercial === 'POTENCIAL').slice(0, 80);
 
       // === GUARANTEE 8: Expand prospect pool if total candidates < 8 ===
       const totalCandidates = activos.length + inactivos.length + perdidos.length + potenciales.length;
