@@ -140,10 +140,12 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
           }
           
           if (position && mapsUrl) {
+            const estado = classifyClientState(cliente.dias_desde_ultima_compra, cliente.es_prospecto);
             const marker = new google.maps.Marker({
               position,
               map: map,
               title: cliente.razon_social,
+              icon: createStateMarkerIcon(estado),
             });
 
             const infoWindow = new google.maps.InfoWindow({
