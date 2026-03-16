@@ -236,12 +236,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
     locations.forEach((location) => {
       if (selectedIds.includes(location.id)) {
         if (!markers.has(location.id)) {
-          const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : undefined;
+          const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : '#999999';
           const marker = new google.maps.Marker({
             position: { lat: location.lat, lng: location.lng },
             map,
             title: location.name,
-            icon: createStateMarkerIcon(location.estado_cliente, vendorColor),
+            icon: createColoredMarkerIcon(vendorColor),
             animation: google.maps.Animation.DROP,
           });
 
