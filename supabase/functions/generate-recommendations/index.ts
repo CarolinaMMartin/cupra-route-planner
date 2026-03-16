@@ -892,28 +892,30 @@ Deno.serve(async (req) => {
 
       return `
 ### VENDEDOR: ${v.nombre} (ID: ${v.user_id})
-Cuota OBLIGATORIA: 8 visitas. Ideal: 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL. Si faltan candidatos en una categoría, completá con POTENCIAL hasta llegar a 8.
+Seleccioná 8 visitas para este vendedor. Guía de distribución IDEAL (flexible, no obligatoria): 5 ACTIVOS + 1 INACTIVO + 1 PERDIDO + 1 POTENCIAL.
+PRIORIDAD: Clientes existentes de la cartera del vendedor tienen prioridad sobre prospectos nuevos. Solo completá con POTENCIALES/prospectos si no hay suficientes clientes en las otras categorías.
 IMPORTANTE: Todos los clientes (no prospectos) listados abajo pertenecen a la cartera de ${v.nombre}.
 
-ACTIVOS (${activos.length} candidatos - elegir 5):
+ACTIVOS (${activos.length} candidatos):
 ${activos.length > 0 ? activos.map(formatCandidate).join('\n') : '(sin candidatos activos en cartera)'}
 
-INACTIVOS (${inactivos.length} candidatos - elegir 1):
+INACTIVOS (${inactivos.length} candidatos):
 ${inactivos.length > 0 ? inactivos.map(formatCandidate).join('\n') : '(sin candidatos inactivos en cartera)'}
 
-PERDIDOS (${perdidos.length} candidatos - elegir 1):
+PERDIDOS (${perdidos.length} candidatos):
 ${perdidos.length > 0 ? perdidos.map(formatCandidate).join('\n') : '(sin candidatos perdidos en cartera)'}
 
-POTENCIALES/PROSPECTOS (${potenciales.length} candidatos - elegir 1):
+POTENCIALES/PROSPECTOS (${potenciales.length} candidatos):
 ${potenciales.length > 0 ? potenciales.map(formatCandidate).join('\n') : '(sin prospectos disponibles)'}`;
     }).join('\n\n');
 
     const prompt = `${vendorSections}
 
 ${instrucciones_adicionales ? `\nINSTRUCCIONES ADICIONALES DEL ASIGNADOR:\n${instrucciones_adicionales}\n` : ''}
-TOTAL ESPERADO: ${vendedoresData.length * 8} recomendaciones (8 por vendedor, distribución 5-1-1-1).
+TOTAL ESPERADO: ${vendedoresData.length * 8} recomendaciones (8 por vendedor).
+Distribución 5-1-1-1 es una GUÍA FLEXIBLE: priorizá clientes existentes y completá con prospectos solo si es necesario.
 IMPORTANTE: Cada client_id debe aparecer UNA SOLA VEZ en toda la respuesta. NO repitas clientes entre vendedores.
-Respetá la cuota y priorizá la densidad geográfica.`;
+Priorizá la densidad geográfica y la cercanía entre visitas.`;
 
     console.log(`📏 Prompt: ${prompt.length} chars`);
 
