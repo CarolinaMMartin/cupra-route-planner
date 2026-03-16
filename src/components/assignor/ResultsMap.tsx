@@ -327,6 +327,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
               const sucursal = sucursales.find((s) => s.id === location.id);
               const isSelected = selectedIds.includes(location.id);
               const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : undefined;
+              const stateColor = getStateColor(location.estado_cliente);
 
               return (
                 <div
@@ -341,8 +342,9 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
                   />
                   <label htmlFor={`loc-${location.id}-${idx}`} className="flex-1 cursor-pointer text-sm">
                     <div className="font-medium text-foreground flex items-center gap-1.5">
-                      {vendorColor && <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: vendorColor }} />}
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0 border" style={{ backgroundColor: stateColor, borderColor: vendorColor || 'transparent' }} />
                       {location.name}
+                      {location.hasOverlap && <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" title="Solapamiento geográfico" />}
                     </div>
                     <div className="text-xs text-muted-foreground mt-1">{location.direccion}</div>
                     {sucursal?.score && (
