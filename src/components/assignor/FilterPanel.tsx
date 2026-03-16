@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, MapPin, X, ChevronRight, LayoutGrid, Search } from "lucide-react";
+import { Sparkles, MapPin, X, ChevronRight, LayoutGrid, Search, Square } from "lucide-react";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -17,13 +17,14 @@ interface Area { id: string; nombre: string; vendedores: string[]; barrios: stri
 interface FilterPanelProps {
   onRequestRecommendations: (filters: any, selectedVendedoresData: { ids: string[], nombres: string[] }, placesFilters: any) => void;
   isLoading: boolean;
+  onCancel?: () => void;
   placesData: Array<{ comuna: string | null, barrio_principal: string | null, provincia_principal: string | null }>;
   instruccionesAdicionales: string;
   onInstruccionesChange: (value: string) => void;
 }
 
 const FilterPanel = ({
-  onRequestRecommendations, isLoading, placesData,
+  onRequestRecommendations, isLoading, onCancel, placesData,
   instruccionesAdicionales, onInstruccionesChange
 }: FilterPanelProps) => {
   const [mode, setMode] = useState<'area' | 'custom'>('area');
@@ -201,10 +202,17 @@ const FilterPanel = ({
 
           <AIInstructionsCollapsible isOpen={isAIInstructionsOpen} onOpenChange={setIsAIInstructionsOpen} value={instruccionesAdicionales} onChange={onInstruccionesChange} />
 
-          <Button type="button" onClick={handleSubmitArea} disabled={isLoading || selectedArea === 'none'} size="lg" className="w-full">
-            <Sparkles className="w-4 h-4" />
-            {isLoading ? "Analizando..." : "Generar Recomendaciones"}
-          </Button>
+          {isLoading ? (
+            <Button type="button" onClick={onCancel} variant="destructive" size="lg" className="w-full">
+              <Square className="w-4 h-4" />
+              Detener
+            </Button>
+          ) : (
+            <Button type="button" onClick={handleSubmitArea} disabled={selectedArea === 'none'} size="lg" className="w-full">
+              <Sparkles className="w-4 h-4" />
+              Generar Recomendaciones
+            </Button>
+          )}
         </div>
       )}
 
@@ -285,10 +293,17 @@ const FilterPanel = ({
 
           <AIInstructionsCollapsible isOpen={isAIInstructionsOpen} onOpenChange={setIsAIInstructionsOpen} value={instruccionesAdicionales} onChange={onInstruccionesChange} />
 
-          <Button type="submit" disabled={isLoading || selectedVendedores.length === 0} size="lg" className="w-full">
-            <Sparkles className="w-4 h-4" />
-            {isLoading ? "Analizando..." : "Generar Recomendaciones"}
-          </Button>
+          {isLoading ? (
+            <Button type="button" onClick={onCancel} variant="destructive" size="lg" className="w-full">
+              <Square className="w-4 h-4" />
+              Detener
+            </Button>
+          ) : (
+            <Button type="submit" disabled={selectedVendedores.length === 0} size="lg" className="w-full">
+              <Sparkles className="w-4 h-4" />
+              Generar Recomendaciones
+            </Button>
+          )}
         </form>
       )}
     </div>

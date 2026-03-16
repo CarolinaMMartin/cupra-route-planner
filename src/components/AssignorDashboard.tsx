@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -81,6 +81,16 @@ const AssignorDashboard = () => {
 
   const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
   const [showExitDialog, setShowExitDialog] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelRecommendations = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+    toast({ title: "Cancelado", description: "Generación de recomendaciones detenida." });
+  };
 
   const handleRequestRecommendations = async (
     filters: any,
@@ -109,8 +119,32 @@ const AssignorDashboard = () => {
         instrucciones_adicionales: instruccionesAdicionales || null,
       };
 
-      const { data, error } = await supabase.functions.invoke("generate-recommendations", { body: payload });
-      if (error) throw error;
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token || supabaseKey;
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/generate-recommendations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+          'apikey': supabaseKey,
+        },
+        body: JSON.stringify(payload),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      abortControllerRef.current = null;
 
       if (!data.recomendaciones || data.recomendaciones.length === 0) {
         toast({ variant: "destructive", title: "Sin recomendaciones", description: data.resumen?.descripcion || "No se encontraron recomendaciones para los filtros seleccionados.", duration: 5000 });
@@ -159,6 +193,7 @@ const AssignorDashboard = () => {
       setSelectedSucursales([]);
       toast({ title: "Recomendaciones generadas", description: data.resumen?.descripcion || `${mappedRecommendations.length} recomendaciones listas` });
     } catch (error: any) {
+      if (error.name === 'AbortError') return;
       let errorMessage = "Error al solicitar recomendaciones";
       if (error.message?.includes("429")) errorMessage = "Límite de consultas alcanzado. Reintenta en unos minutos.";
       else if (error.message?.includes("402")) errorMessage = "Créditos agotados.";
@@ -237,6 +272,7 @@ const AssignorDashboard = () => {
                   <FilterPanel
                     onRequestRecommendations={handleRequestRecommendations}
                     isLoading={isLoading}
+                    onCancel={handleCancelRecommendations}
                     placesData={placesData}
                     instruccionesAdicionales={instruccionesAdicionales}
                     onInstruccionesChange={setInstruccionesAdicionales}
