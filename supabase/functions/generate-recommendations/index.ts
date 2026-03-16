@@ -153,6 +153,7 @@ function preScoreCandidates(
   console.log(`  📊 preScore input: ${clientes.length} clientes, ${prospectos.length} prospectos, maxRadius=${maxRadiusKm}km`);
 
   for (const c of clientes) {
+    const place = placesMap.get(c.client_id);
     const lat = place?.lat ? Number(place.lat) : null;
     const long = place?.long ? Number(place.long) : null;
     // Don't filter vendor's own clients by zone radius — they're already pre-filtered to be in zone
