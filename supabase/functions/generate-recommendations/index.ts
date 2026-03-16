@@ -153,6 +153,7 @@ function preScoreCandidates(
     const place = placesMap.get(c.client_id);
     const lat = place?.lat ? Number(place.lat) : null;
     const long = place?.long ? Number(place.long) : null;
+    if (!isWithinRadiusFromCenter(lat, long, zoneCenter)) continue;
     const estado = classifyEstado(c.dias_desde_ultima_compra);
 
     let distancia_km = 999;
