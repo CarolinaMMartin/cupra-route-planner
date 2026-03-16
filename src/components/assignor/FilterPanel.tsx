@@ -202,10 +202,17 @@ const FilterPanel = ({
 
           <AIInstructionsCollapsible isOpen={isAIInstructionsOpen} onOpenChange={setIsAIInstructionsOpen} value={instruccionesAdicionales} onChange={onInstruccionesChange} />
 
-          <Button type="button" onClick={handleSubmitArea} disabled={isLoading || selectedArea === 'none'} size="lg" className="w-full">
-            <Sparkles className="w-4 h-4" />
-            {isLoading ? "Analizando..." : "Generar Recomendaciones"}
-          </Button>
+          {isLoading ? (
+            <Button type="button" onClick={onCancel} variant="destructive" size="lg" className="w-full">
+              <Square className="w-4 h-4" />
+              Detener
+            </Button>
+          ) : (
+            <Button type="button" onClick={handleSubmitArea} disabled={selectedArea === 'none'} size="lg" className="w-full">
+              <Sparkles className="w-4 h-4" />
+              Generar Recomendaciones
+            </Button>
+          )}
         </div>
       )}
 
