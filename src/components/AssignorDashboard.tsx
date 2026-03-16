@@ -193,6 +193,7 @@ const AssignorDashboard = () => {
       setSelectedSucursales([]);
       toast({ title: "Recomendaciones generadas", description: data.resumen?.descripcion || `${mappedRecommendations.length} recomendaciones listas` });
     } catch (error: any) {
+      if (error.name === 'AbortError') return;
       let errorMessage = "Error al solicitar recomendaciones";
       if (error.message?.includes("429")) errorMessage = "Límite de consultas alcanzado. Reintenta en unos minutos.";
       else if (error.message?.includes("402")) errorMessage = "Créditos agotados.";
