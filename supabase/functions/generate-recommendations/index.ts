@@ -780,12 +780,20 @@ Deno.serve(async (req) => {
         .filter(([id]) => id !== vendedor.user_id)
         .flatMap(([, anch]) => anch);
 
+      // Per-vendor zone center: centroid of vendor's anchors (more precise than global zone center)
+      const vendorZoneCenter: AnchorPoint | null = myAnchors.length > 0
+        ? {
+            lat: myAnchors.reduce((sum, a) => sum + a.lat, 0) / myAnchors.length,
+            lng: myAnchors.reduce((sum, a) => sum + a.lng, 0) / myAnchors.length,
+          }
+        : zoneCenter;
+
       const scored = preScoreCandidates(
         myValidClients, prospectos, placesMap,
         feedbacksMapClientes, feedbacksMapProspectos,
         vendedor.user_id, vendedor.nombre,
         sellerNameMap, myAnchors, otherAnchors,
-        zoneCenter,
+        vendorZoneCenter,
       );
 
       const activos = scored.filter(c => c.estado_comercial === 'ACTIVO').slice(0, 15);
