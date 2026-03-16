@@ -148,6 +148,7 @@ function preScoreCandidates(
   otherAnchors: AnchorPoint[],
   zoneCenter: AnchorPoint | null,
   maxRadiusKm: number = MAX_DISTANCE_TO_ZONE_CENTER_KM,
+  applyRadiusToClients: boolean = true,
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
   
