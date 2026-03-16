@@ -856,10 +856,10 @@ Deno.serve(async (req) => {
           
           const { data: widerProspectos } = await supabaseClient
             .from("prospectos").select("*")
-            .gte("latitud", zoneCenter.lat - deltaLat2)
-            .lte("latitud", zoneCenter.lat + deltaLat2)
-            .gte("longitud", zoneCenter.lng - deltaLng2)
-            .lte("longitud", zoneCenter.lng + deltaLng2)
+            .gte("latitud", expansionCenter.lat - deltaLat2)
+            .lte("latitud", expansionCenter.lat + deltaLat2)
+            .gte("longitud", expansionCenter.lng - deltaLng2)
+            .lte("longitud", expansionCenter.lng + deltaLng2)
             .order("rating", { ascending: false })
             .limit(stillNeeded * 5);
           
@@ -876,7 +876,7 @@ Deno.serve(async (req) => {
             feedbacksMapClientes, feedbacksMapProspectos,
             vendedor.user_id, vendedor.nombre,
             sellerNameMap, myAnchors, otherAnchors,
-            zoneCenter, 3,
+            expansionCenter, 3,
           ).filter(c => !allIds2.has(c.client_id));
           
           potenciales = [...potenciales, ...widerScored.slice(0, stillNeeded)];
