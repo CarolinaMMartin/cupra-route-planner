@@ -339,8 +339,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
             {locations.map((location, idx) => {
               const sucursal = sucursales.find((s) => s.id === location.id);
               const isSelected = selectedIds.includes(location.id);
-              const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : undefined;
-              const stateColor = getStateColor(location.estado_cliente);
+              const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : '#999999';
 
               return (
                 <div
