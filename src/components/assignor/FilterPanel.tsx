@@ -11,7 +11,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 
-interface Vendedor { id: string; nombre: string; email: string; }
+interface Vendedor { id: string; profileId: string; nombre: string; email: string; }
 interface Area { id: string; nombre: string; vendedores: string[]; barrios: string[]; }
 
 interface FilterPanelProps {
