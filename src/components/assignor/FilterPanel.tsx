@@ -24,7 +24,7 @@ interface FilterPanelProps {
 }
 
 const FilterPanel = ({
-  onRequestRecommendations, isLoading, placesData,
+  onRequestRecommendations, isLoading, onCancel, placesData,
   instruccionesAdicionales, onInstruccionesChange
 }: FilterPanelProps) => {
   const [mode, setMode] = useState<'area' | 'custom'>('area');
