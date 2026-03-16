@@ -54,6 +54,29 @@ const toNumberCurrency = (v: any): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+const normalizeClientId = (v: any): string | null => {
+  if (isEmpty(v)) return null;
+  const raw = String(v).trim();
+  if (!raw) return null;
+
+  if (/^[\d.,]+$/.test(raw)) {
+    const normalized = raw.replace(/,/g, '.');
+    const asNum = Number(normalized);
+    if (Number.isFinite(asNum)) {
+      return Number.isInteger(asNum) ? String(asNum) : normalized.replace(/\.0+$/, '');
+    }
+  }
+
+  return raw;
+};
+
+const normalizeCuit = (v: any): string | null => {
+  const s = toStr(v);
+  if (!s) return null;
+  const digits = s.replace(/\D/g, '');
+  return digits || s;
+};
+
 function getFieldValue(obj: Record<string, any>, fieldNames: string[]): any {
   for (const f of fieldNames) {
     if (obj[f] !== undefined) return obj[f];
