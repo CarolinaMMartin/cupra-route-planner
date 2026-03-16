@@ -689,13 +689,8 @@ Deno.serve(async (req) => {
         console.log(`🔍 ${vendedor.nombre}: ${excludedFromZone.length} clientes excluidos (cartera ajena): ${sample.join(', ')}`);
       }
       
-      // Merge: zone clients first, then outside clients (for fallback)
-      const outsideIds = new Set(myClientsOutside.map(c => c.client_id));
-      const zoneIds = new Set(myClientsInZone.map(c => c.client_id));
-      const myClients = [
-        ...myClientsInZone,
-        ...myClientsOutside.filter(c => !zoneIds.has(c.client_id)),
-      ];
+      // Regla estricta de zona: SOLO clientes en la zona solicitada
+      const myClients = [...myClientsInZone];
 
       // Exclude clients with no real sales (cantidad_ordenes > 0) unless they have vendedor_actual set
       const myValidClients = myClients.filter(c => 
