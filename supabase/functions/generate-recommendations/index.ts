@@ -358,6 +358,7 @@ function validateAndFixDistribution(
     pickedIds.add(r.client_id);
   }
 
+  // Soft targets: 5-1-1-1 is ideal but not restrictive. Prioritize existing clients.
   const targets: Record<string, number> = { ACTIVO: 5, INACTIVO: 1, PERDIDO: 1, POTENCIAL: 1 };
   const bucketMap: Record<string, ScoredCandidate[]> = {
     ACTIVO: buckets.activos,
@@ -366,6 +367,7 @@ function validateAndFixDistribution(
     POTENCIAL: buckets.potenciales,
   };
 
+  // First pass: fill each category up to its soft target
   for (const [estado, target] of Object.entries(targets)) {
     while (picked[estado].length < target) {
       const available = bucketMap[estado].find(c => !pickedIds.has(c.client_id) && !globalPickedIds.has(c.client_id));
@@ -388,7 +390,8 @@ function validateAndFixDistribution(
     }
   }
 
-  const result = [...picked.ACTIVO.slice(0, 5), ...picked.INACTIVO.slice(0, 1), ...picked.PERDIDO.slice(0, 1), ...picked.POTENCIAL.slice(0, 1)];
+  // Combine all picked so far
+  const result = [...picked.ACTIVO, ...picked.INACTIVO, ...picked.PERDIDO, ...picked.POTENCIAL];
 
   if (result.length < 8) {
     const allBuckets = [...buckets.activos, ...buckets.inactivos, ...buckets.perdidos, ...buckets.potenciales];
