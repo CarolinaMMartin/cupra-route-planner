@@ -45,7 +45,7 @@ const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
   });
 };
 
-const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMapProps) => {
+const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue }: ResultsMapProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
   const [markers, setMarkers] = useState<Map<string, google.maps.Marker>>(new Map());
