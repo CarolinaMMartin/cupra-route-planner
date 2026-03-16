@@ -145,6 +145,7 @@ function preScoreCandidates(
   sellerNameMap: Map<string, string>,
   myAnchors: AnchorPoint[],
   otherAnchors: AnchorPoint[],
+  zoneCenter: AnchorPoint | null,
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
 
