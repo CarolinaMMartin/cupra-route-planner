@@ -817,10 +817,10 @@ Deno.serve(async (req) => {
         
         const { data: geoProspectos } = await supabaseClient
           .from("prospectos").select("*")
-          .gte("latitud", zoneCenter.lat - deltaLat)
-          .lte("latitud", zoneCenter.lat + deltaLat)
-          .gte("longitud", zoneCenter.lng - deltaLng)
-          .lte("longitud", zoneCenter.lng + deltaLng)
+          .gte("latitud", expansionCenter.lat - deltaLat)
+          .lte("latitud", expansionCenter.lat + deltaLat)
+          .gte("longitud", expansionCenter.lng - deltaLng)
+          .lte("longitud", expansionCenter.lng + deltaLng)
           .order("rating", { ascending: false })
           .limit(needed * 5);
         
@@ -833,13 +833,13 @@ Deno.serve(async (req) => {
         
         extraProspectosLoaded.push(...geoFiltered);
         
-        // Score with RELAXED radius (2km instead of 1km)
+        // Score with RELAXED radius
         const geoScored = preScoreCandidates(
           [], geoFiltered, placesMap,
           feedbacksMapClientes, feedbacksMapProspectos,
           vendedor.user_id, vendedor.nombre,
           sellerNameMap, myAnchors, otherAnchors,
-          zoneCenter, EXPANSION_RADIUS_KM,
+          expansionCenter, EXPANSION_RADIUS_KM,
         ).filter(c => !allExistingIds.has(c.client_id));
         
         potenciales = [...potenciales, ...geoScored.slice(0, needed)];
