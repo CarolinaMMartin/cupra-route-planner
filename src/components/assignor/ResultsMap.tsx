@@ -22,6 +22,8 @@ interface ClientLocation {
   lng: number;
   direccion: string;
   vendedor?: string;
+  estado_cliente?: string;
+  hasOverlap?: boolean;
 }
 
 // Load Google Maps Script
