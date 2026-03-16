@@ -803,7 +803,8 @@ Deno.serve(async (req) => {
 
       // === GUARANTEE 8: Expand prospect pool if total candidates < 8 ===
       const totalCandidates = activos.length + inactivos.length + perdidos.length + potenciales.length;
-      if (totalCandidates < 8 && zoneCenter) {
+      if (totalCandidates < 8 && (vendorZoneCenter || zoneCenter)) {
+        const expansionCenter = vendorZoneCenter || zoneCenter!;
         console.log(`⚠️ ${vendedor.nombre}: Solo ${totalCandidates} candidatos, necesita 8. Buscando más prospectos por proximidad geográfica...`);
         
         const existingProspectoIds = new Set(potenciales.map(p => p.client_id));
