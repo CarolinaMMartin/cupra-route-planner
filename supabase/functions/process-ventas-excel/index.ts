@@ -268,13 +268,47 @@ Deno.serve(async (req) => {
       }
 
       // Build venta record
-      ventas.push({
+      ventasRaw.push({
         client_id,
         ticket, letra, fecha_emision: fecha_iso, cuit_dni, razon_social, fantasia,
         cajas, codigo_producto, nombre: producto, marca, facturacion_ars: facturacion,
         vendedor, telefono, celular, correo, direccion, ciudad: ciudad_raw,
         provincia: provincia_raw, pais, categorias,
       });
+    }
+
+    // ============ FASE 1b: Deduplicar ventas ANTES de agregar clientes ============
+    const ventasByConflictKey = new Map<string, any>();
+    const ventasSinClaveConflicto: any[] = [];
+    let ventasDuplicadas = 0;
+
+    for (const venta of ventasRaw) {
+      const conflictKey = buildVentaConflictKey(venta);
+      if (!conflictKey) {
+        ventasSinClaveConflicto.push(venta);
+        continue;
+      }
+
+      const existingVenta = ventasByConflictKey.get(conflictKey);
+      if (!existingVenta) {
+        ventasByConflictKey.set(conflictKey, venta);
+      } else {
+        ventasDuplicadas += 1;
+        ventasByConflictKey.set(conflictKey, mergeVentaDuplicate(existingVenta, venta));
+      }
+    }
+
+    const ventasDeduplicadas = [...ventasByConflictKey.values(), ...ventasSinClaveConflicto];
+
+    if (ventasDuplicadas > 0) {
+      console.log(`♻️ ${ventasDuplicadas} filas duplicadas consolidadas (${ventasRaw.length} → ${ventasDeduplicadas.length})`);
+    }
+
+    // ============ FASE 2: Agregar clientes desde ventas DEDUPLICADAS ============
+    for (const venta of ventasDeduplicadas) {
+      const { client_id, cuit_dni, razon_social, fantasia, direccion, ciudad: ciudad_raw,
+              vendedor, facturacion_ars: facturacion, nombre: producto, cajas,
+              categorias, telefono, celular, correo, fecha_emision: fecha_iso } = venta;
 
       const geo = normalizarGeografia(ciudad_raw);
 
@@ -312,7 +346,7 @@ Deno.serve(async (req) => {
       c.fantasia = fantasia || c.fantasia;
     }
 
-    // ============ FASE 2: RFM + scores ============
+    // ============ FASE 3: RFM + scores ============
     const ahora = new Date();
     const totalGlobal = Array.from(clientesMap.values()).reduce((sum, c) => sum + c.monto_total, 0);
 
@@ -365,9 +399,9 @@ Deno.serve(async (req) => {
       };
     });
 
-    console.log(`🧮 ${clientesEnriquecidos.length} clientes agregados, $${Math.round(totalGlobal).toLocaleString()} total`);
+    console.log(`🧮 ${clientesEnriquecidos.length} clientes agregados desde ${ventasDeduplicadas.length} ventas deduplicadas, $${Math.round(totalGlobal).toLocaleString()} total`);
 
-    // ============ FASE 3: Upsert clientes PRIMERO (para satisfacer FK de ventas) ============
+    // ============ FASE 4: Upsert clientes PRIMERO (para satisfacer FK de ventas) ============
     const results = { ventas_procesadas: 0, ventas_errores: 0, clientes_actualizados: 0, clientes_errores: 0, errores: [] as string[] };
 
     if (ventasSinClientId > 0) {
@@ -435,36 +469,10 @@ Deno.serve(async (req) => {
 
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
 
-    // ============ FASE 4: Upsert ventas (después de clientes para respetar FK) ============
-    const ventasByConflictKey = new Map<string, any>();
-    const ventasSinClaveConflicto: any[] = [];
-    let ventasDuplicadas = 0;
-
-    for (const venta of ventas) {
-      const conflictKey = buildVentaConflictKey(venta);
-      if (!conflictKey) {
-        ventasSinClaveConflicto.push(venta);
-        continue;
-      }
-
-      const existingVenta = ventasByConflictKey.get(conflictKey);
-      if (!existingVenta) {
-        ventasByConflictKey.set(conflictKey, venta);
-      } else {
-        ventasDuplicadas += 1;
-        ventasByConflictKey.set(conflictKey, mergeVentaDuplicate(existingVenta, venta));
-      }
-    }
-
-    const ventasParaUpsert = [...ventasByConflictKey.values(), ...ventasSinClaveConflicto];
-
-    if (ventasDuplicadas > 0) {
-      console.log(`♻️ ${ventasDuplicadas} filas duplicadas consolidadas`);
-    }
-
+    // ============ FASE 5: Upsert ventas (después de clientes para respetar FK) ============
     // Batch ventas in chunks of 500
-    for (let i = 0; i < ventasParaUpsert.length; i += 500) {
-      const batch = ventasParaUpsert.slice(i, i + 500);
+    for (let i = 0; i < ventasDeduplicadas.length; i += 500) {
+      const batch = ventasDeduplicadas.slice(i, i + 500);
       const { error } = await supabase.from('ventas_cupra').upsert(batch, {
         onConflict: 'ticket,letra,fecha_emision,client_id,codigo_producto',
         ignoreDuplicates: false,
