@@ -235,12 +235,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onContinue }: ResultsMa
     locations.forEach((location) => {
       if (selectedIds.includes(location.id)) {
         if (!markers.has(location.id)) {
-          const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : '#E53935';
+          const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : undefined;
           const marker = new google.maps.Marker({
             position: { lat: location.lat, lng: location.lng },
             map,
             title: location.name,
-            icon: createColoredMarkerIcon(vendorColor),
+            icon: createStateMarkerIcon(location.estado_cliente, vendorColor),
             animation: google.maps.Animation.DROP,
           });
 
