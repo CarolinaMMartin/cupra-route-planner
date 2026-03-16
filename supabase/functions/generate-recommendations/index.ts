@@ -410,6 +410,30 @@ function validateAndFixDistribution(
     }
   }
 
+  // Último recurso para cuota obligatoria: permitir reutilizar candidatos de otro vendedor
+  if (result.length < 8) {
+    const allBuckets = [...buckets.activos, ...buckets.inactivos, ...buckets.perdidos, ...buckets.potenciales];
+    for (const c of allBuckets) {
+      if (result.length >= 8) break;
+      if (pickedIds.has(c.client_id)) continue;
+      result.push({
+        client_id: c.client_id,
+        vendedor_id: vendedorId,
+        prioridad: 'media',
+        justificacion: `Completado por cuota obligatoria (reuso controlado): ${c.razon_social} (${c.estado_comercial})`,
+        score_final: c.score_total,
+        factores: {
+          score_comercial: c.score_comercial,
+          score_recencia: c.score_rotacion,
+          score_proximidad: c.score_geo,
+          distancia_km: c.distancia_km,
+          potencial_venta: c.monto_total_historico || 0,
+        },
+      });
+      pickedIds.add(c.client_id);
+    }
+  }
+
   return result.slice(0, 8);
 }
 
