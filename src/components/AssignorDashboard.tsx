@@ -21,7 +21,7 @@ import TableAssignment from "@/components/assignor/TableAssignment";
 import TodayAssignments from "./assignor/TodayAssignments";
 import AIInsightsCard from "./assignor/AIInsightsCard";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
-import EditAssignmentsKanban from "./assignor/EditAssignmentsKanban";
+import EditAssignmentsTable from "./assignor/EditAssignmentsTable";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useRecommendationsStore } from "@/hooks/useRecommendationsStore";
@@ -268,15 +268,7 @@ const AssignorDashboard = () => {
       )}
 
       {flowStep === "edit-kanban" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="font-serif text-2xl">Reasignar Clientes</CardTitle>
-            <CardDescription>Arrastra los clientes entre vendedores</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <EditAssignmentsKanban selectedAssignments={selectedExistingAssignments} onBack={handleBackFromEditKanban} onComplete={handleEditComplete} />
-          </CardContent>
-        </Card>
+        <EditAssignmentsTable selectedAssignments={selectedExistingAssignments} onBack={handleBackFromEditKanban} onComplete={handleEditComplete} />
       )}
 
       {flowStep === "preselection" && recommendations.length > 0 && (
