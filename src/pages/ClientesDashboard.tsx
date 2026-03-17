@@ -446,9 +446,9 @@ const ClientesDashboard = () => {
 
         {/* Panel de Filtros */}
         <Card className="matte-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Filter className="h-5 w-5" />
+          <CardHeader className="pb-4">
+            <CardTitle className="section-title flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground/50" />
               Filtros Interactivos
             </CardTitle>
           </CardHeader>
