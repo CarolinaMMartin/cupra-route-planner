@@ -103,13 +103,13 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
         <Card className="matte-card hover-lift">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Activos</CardTitle>
+              <CardTitle className="text-base font-semibold text-foreground/90">Activos</CardTitle>
               <CheckCircle2 className="h-4 w-4 text-emerald-500" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-500">{globalStats.activos}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-foreground/60">
               Compraron en últimos 30 días ({globalStats.total > 0 ? Math.round(globalStats.activos / globalStats.total * 100) : 0}%)
             </p>
             <Progress value={globalStats.total > 0 ? (globalStats.activos / globalStats.total) * 100 : 0} className="mt-2 h-1.5" />
@@ -119,13 +119,13 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
         <Card className="matte-card hover-lift">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Inactivos</CardTitle>
+              <CardTitle className="text-base font-semibold text-foreground/90">Inactivos</CardTitle>
               <AlertTriangle className="h-4 w-4 text-amber-500" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-amber-500">{globalStats.inactivos}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-foreground/60">
               1–3 meses sin comprar ({globalStats.total > 0 ? Math.round(globalStats.inactivos / globalStats.total * 100) : 0}%)
             </p>
             <Progress value={globalStats.total > 0 ? (globalStats.inactivos / globalStats.total) * 100 : 0} className="mt-2 h-1.5" />
@@ -135,30 +135,29 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
         <Card className="matte-card hover-lift">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Perdidos</CardTitle>
+              <CardTitle className="text-base font-semibold text-foreground/90">Perdidos</CardTitle>
               <XCircle className="h-4 w-4 text-red-500" />
             </div>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-red-500">{globalStats.perdidos}</div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-foreground/60">
               +3 meses sin comprar ({globalStats.total > 0 ? Math.round(globalStats.perdidos / globalStats.total * 100) : 0}%)
             </p>
             <Progress value={globalStats.total > 0 ? (globalStats.perdidos / globalStats.total) * 100 : 0} className="mt-2 h-1.5" />
           </CardContent>
         </Card>
 
-        {/* TAREA 6: Nueva card "Sin datos" */}
         <Card className="matte-card hover-lift">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Sin datos</CardTitle>
-              <HelpCircle className="h-4 w-4 text-muted-foreground/60" />
+              <CardTitle className="text-base font-semibold text-foreground/90">Sin datos</CardTitle>
+              <HelpCircle className="h-4 w-4 text-foreground/40" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-muted-foreground">{globalStats.sin_datos}</div>
-            <p className="text-xs text-muted-foreground">
+            <div className="text-2xl font-bold text-foreground/70">{globalStats.sin_datos}</div>
+            <p className="text-sm text-foreground/60">
               Sin fecha de compra registrada ({globalStats.total > 0 ? Math.round(globalStats.sin_datos / globalStats.total * 100) : 0}%)
             </p>
             <Progress value={globalStats.total > 0 ? (globalStats.sin_datos / globalStats.total) * 100 : 0} className="mt-2 h-1.5" />
