@@ -611,9 +611,9 @@ const ClientesDashboard = () => {
                   <Tooltip>
                     <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
                     <TooltipContent className="max-w-[240px] text-xs">
-                      <p className="font-medium">COUNT de clientes filtrados</p>
-                      <p>Fuente: tabla clientes</p>
-                      <p>Granularidad: cliente único</p>
+                      <p className="font-medium">COUNT(DISTINCT razon_social)</p>
+                      <p>Fuente: ventas_cupra (transaccional)</p>
+                      <p>Granularidad: cliente único por razón social</p>
                     </TooltipContent>
                   </Tooltip>
                 </CardTitle>
