@@ -48,7 +48,8 @@ const ClientesDashboard = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [clientesData, setClientesData] = useState<any[]>([]);
-  // Tarea 4: ventas por vendedor desde ventas_cupra
+  // KPIs 100% desde ventas_cupra
+  const [ventasRaw, setVentasRaw] = useState<any[]>([]);
   const [ventasVendedorData, setVentasVendedorData] = useState<{ vendedor: string; ventas: number; tickets: number }[]>([]);
   
   // Filtros
