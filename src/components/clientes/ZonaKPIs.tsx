@@ -168,7 +168,7 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
       {/* Tabla de zonas */}
       <Card className="matte-card">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="section-title flex items-center gap-2">
             <MapPin className="h-5 w-5 text-accent" />
             KPIs por Zona (Top 15 por facturación)
           </CardTitle>
@@ -178,23 +178,15 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/60">
-                  <th className="text-left py-2 px-2 font-medium text-muted-foreground">Zona</th>
-                  <th className="text-center py-2 px-2 font-medium text-muted-foreground">Total</th>
-                  <th className="text-center py-2 px-2 font-medium text-muted-foreground">
-                    <span className="text-emerald-500">Act.</span>
-                  </th>
-                  <th className="text-center py-2 px-2 font-medium text-muted-foreground">
-                    <span className="text-amber-500">Inact.</span>
-                  </th>
-                  <th className="text-center py-2 px-2 font-medium text-muted-foreground">
-                    <span className="text-red-500">Perd.</span>
-                  </th>
-                  <th className="text-center py-2 px-2 font-medium text-muted-foreground">
-                    <span className="text-muted-foreground/60">S/D</span>
-                  </th>
-                  <th className="text-right py-2 px-2 font-medium text-muted-foreground">Facturación</th>
-                  <th className="text-center py-2 px-2 font-medium text-muted-foreground">Vendedores</th>
-                  <th className="text-center py-2 px-2 font-medium text-muted-foreground">Cobertura</th>
+                  <th className="text-left py-2.5 px-2 text-[13px] font-medium text-foreground/50 uppercase tracking-wide">Zona</th>
+                  <th className="text-center py-2.5 px-2 text-[13px] font-medium text-foreground/50 uppercase tracking-wide">Total</th>
+                  <th className="text-center py-2.5 px-2 text-[13px] font-medium text-emerald-500 uppercase tracking-wide">Act.</th>
+                  <th className="text-center py-2.5 px-2 text-[13px] font-medium text-amber-500 uppercase tracking-wide">Inact.</th>
+                  <th className="text-center py-2.5 px-2 text-[13px] font-medium text-red-500 uppercase tracking-wide">Perd.</th>
+                  <th className="text-center py-2.5 px-2 text-[13px] font-medium text-foreground/40 uppercase tracking-wide">S/D</th>
+                  <th className="text-right py-2.5 px-2 text-[13px] font-medium text-foreground/50 uppercase tracking-wide">Facturación</th>
+                  <th className="text-center py-2.5 px-2 text-[13px] font-medium text-foreground/50 uppercase tracking-wide">Vend.</th>
+                  <th className="text-center py-2.5 px-2 text-[13px] font-medium text-foreground/50 uppercase tracking-wide">Cobertura</th>
                 </tr>
               </thead>
               <tbody>
