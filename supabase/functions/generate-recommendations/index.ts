@@ -22,6 +22,7 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
 
 const HARD_RADIUS_KM = 1.5;
 const MAX_EXPANSION_KM = 2.0;
+const EXPANSION_STEPS_KM = [3.0, 5.0]; // Progressive expansion if 2km isn't enough
 
 interface AnchorPoint { lat: number; lng: number; }
 
