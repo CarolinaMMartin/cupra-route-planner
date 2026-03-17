@@ -1,18 +1,17 @@
 /**
  * Dashboard de Clientes y Ventas
  * 
- * FUENTE DE VERDAD:
- * ─────────────────
- * • KPIs monetarios (Ventas Totales, Ticket Promedio): desde tabla `clientes` (agregada)
- * • Top Vendedores: desde tabla `ventas_cupra` (transaccional) — NO desde clientes
- * • Top Barrios/Clientes: desde tabla `clientes` (agregada)
+ * FUENTE DE VERDAD ÚNICA: tabla `ventas_cupra` (transaccional, Excel de ventas)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * • Ventas Totales: SUM(facturacion_ars) desde ventas_cupra. Columna Excel: "Precio Total Final".
+ * • Tickets Únicos: COUNT(DISTINCT ticket) desde ventas_cupra.
+ * • Clientes: COUNT(DISTINCT razon_social) desde ventas_cupra.
+ * • Ticket Promedio: Ventas Totales / Tickets Únicos.
+ * • Top Vendedores: GROUP BY vendedor, SUM(facturacion_ars) desde ventas_cupra.
+ * • Top Barrios: GROUP BY barrio (via join clientes), SUM(facturacion_ars) desde ventas_cupra.
  * 
- * GRANULARIDAD:
- * ─────────────
- * • Ventas Totales = SUM(monto_total_historico) por cliente filtrado. Granularidad: cliente.
- * • Órdenes = SUM(cantidad_ordenes) = tickets únicos (DISTINCT ticket+letra+fecha). Granularidad: ticket.
- * • Ticket Promedio = Ventas Totales / Órdenes. Promedio ponderado global. Granularidad: ticket.
- * • Top Vendedores = SUM(facturacion_ars) desde ventas_cupra agrupado por vendedor. Granularidad: línea.
+ * NO se usan datos derivados de la tabla `clientes` para KPIs.
+ * La tabla `clientes` solo se usa para filtros, segmentación y ZonaKPIs.
  */
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
@@ -49,7 +48,8 @@ const ClientesDashboard = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [clientesData, setClientesData] = useState<any[]>([]);
-  // Tarea 4: ventas por vendedor desde ventas_cupra
+  // KPIs 100% desde ventas_cupra
+  const [ventasRaw, setVentasRaw] = useState<any[]>([]);
   const [ventasVendedorData, setVentasVendedorData] = useState<{ vendedor: string; ventas: number; tickets: number }[]>([]);
   
   // Filtros
@@ -102,30 +102,40 @@ const ClientesDashboard = () => {
   };
 
   const fetchDashboardData = async () => {
-    // Fetch clientes
+    // Fetch clientes (para filtros, segmentación, ZonaKPIs)
     const { data: clientes } = await supabase
       .from('clientes')
       .select('*');
-    if (!clientes) return;
-    setClientesData(clientes);
+    if (clientes) setClientesData(clientes);
 
-    // TAREA 4: Fetch ventas por vendedor directamente desde ventas_cupra
-    const { data: ventas } = await supabase
-      .from('ventas_cupra')
-      .select('vendedor, facturacion_ars, ticket, letra, fecha_emision');
-    
-    if (ventas) {
+    // FUENTE DE VERDAD: Fetch TODAS las ventas desde ventas_cupra
+    // Paginar para superar límite de 1000 filas
+    let allVentas: any[] = [];
+    let offset = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: batch } = await supabase
+        .from('ventas_cupra')
+        .select('vendedor, facturacion_ars, ticket, client_id, razon_social, ciudad')
+        .range(offset, offset + pageSize - 1);
+      if (!batch || batch.length === 0) break;
+      allVentas = allVentas.concat(batch);
+      if (batch.length < pageSize) break;
+      offset += pageSize;
+    }
+    setVentasRaw(allVentas);
+
+    // Top Vendedores: GROUP BY vendedor, SUM(facturacion_ars)
+    if (allVentas.length > 0) {
       const vendedorMap = new Map<string, { ventas: number; tickets: Set<string> }>();
-      for (const v of ventas) {
+      for (const v of allVentas) {
         if (!v.vendedor) continue;
         if (!vendedorMap.has(v.vendedor)) {
           vendedorMap.set(v.vendedor, { ventas: 0, tickets: new Set() });
         }
         const entry = vendedorMap.get(v.vendedor)!;
         entry.ventas += Number(v.facturacion_ars || 0);
-        if (v.ticket) {
-          entry.tickets.add(`${v.ticket}||${v.letra || ''}||${v.fecha_emision || ''}`);
-        }
+        if (v.ticket) entry.tickets.add(v.ticket);
       }
       const vendedorArr = Array.from(vendedorMap.entries())
         .map(([vendedor, data]) => ({ vendedor, ventas: data.ventas, tickets: data.tickets.size }))
@@ -235,18 +245,25 @@ const ClientesDashboard = () => {
   }, [clientesData, selectedProvincia, selectedCiudad, selectedBarrio, selectedVendedor, selectedCanal, searchTerm]);
 
   /**
-   * KPIs calculados desde tabla `clientes` (agregada).
-   * • totalVentas: SUM(monto_total_historico). Granularidad: cliente.
-   * • totalOrdenes: SUM(cantidad_ordenes) = tickets únicos. Granularidad: ticket.
-   * • ticketPromedio: totalVentas / totalOrdenes. Promedio ponderado global.
+   * KPIs calculados 100% desde ventas_cupra (transaccional).
+   * • totalVentas: SUM(facturacion_ars). Columna Excel: "Precio Total Final".
+   * • totalTickets: COUNT(DISTINCT ticket).
+   * • totalClientes: COUNT(DISTINCT razon_social).
+   * • ticketPromedio: totalVentas / totalTickets.
    */
   const kpis = useMemo(() => {
-    const totalVentas = filteredData.reduce((sum, c) => sum + Number(c.monto_total_historico || 0), 0);
-    const totalClientes = filteredData.length;
-    const totalOrdenes = filteredData.reduce((sum, c) => sum + Number(c.cantidad_ordenes || 0), 0);
-    const ticketPromedio = totalOrdenes > 0 ? totalVentas / totalOrdenes : 0;
-    return { totalVentas, totalClientes, totalOrdenes, ticketPromedio };
-  }, [filteredData]);
+    const totalVentas = ventasRaw.reduce((sum, v) => sum + Number(v.facturacion_ars || 0), 0);
+    const ticketsSet = new Set<string>();
+    const clientesSet = new Set<string>();
+    for (const v of ventasRaw) {
+      if (v.ticket) ticketsSet.add(v.ticket);
+      if (v.razon_social) clientesSet.add(v.razon_social);
+    }
+    const totalTickets = ticketsSet.size;
+    const totalClientes = clientesSet.size;
+    const ticketPromedio = totalTickets > 0 ? totalVentas / totalTickets : 0;
+    return { totalVentas, totalClientes, totalOrdenes: totalTickets, ticketPromedio };
+  }, [ventasRaw]);
 
   // TAREA 13: Indicador de calidad de datos
   const dataQuality = useMemo(() => {
@@ -267,48 +284,53 @@ const ClientesDashboard = () => {
     };
   }, [clientesData]);
 
-  // TAREA 5: Top barrios — incluir "Sin barrio asignado"
+  // Top barrios desde ventas_cupra (via join con clientes para barrio)
   const topBarrios = useMemo(() => {
+    // Build client_id → barrio lookup from clientes
+    const clientBarrio = new Map<string, string>();
+    clientesData.forEach(c => {
+      if (c.client_id && c.barrio_principal) clientBarrio.set(c.client_id, c.barrio_principal);
+    });
     const barriosMap = new Map<string, { display: string; ventas: number }>();
     let sinBarrioVentas = 0;
-    filteredData.forEach(cliente => {
-      const barrio = cliente.barrio_principal;
-      const monto = Number(cliente.monto_total_historico || 0);
+    for (const v of ventasRaw) {
+      const monto = Number(v.facturacion_ars || 0);
+      const barrio = v.client_id ? clientBarrio.get(v.client_id) : null;
       if (barrio) {
         const key = normalize(barrio);
         const existing = barriosMap.get(key);
-        if (existing) {
-          existing.ventas += monto;
-        } else {
-          barriosMap.set(key, { display: barrio, ventas: monto });
-        }
+        if (existing) { existing.ventas += monto; }
+        else { barriosMap.set(key, { display: barrio, ventas: monto }); }
       } else {
         sinBarrioVentas += monto;
       }
-    });
+    }
     const result = Array.from(barriosMap.values())
       .map(({ display, ventas }) => ({ barrio: display, ventas }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
-    // Agregar "Sin barrio asignado" si tiene ventas
     if (sinBarrioVentas > 0) {
       result.push({ barrio: '⚠️ Sin barrio asignado', ventas: sinBarrioVentas });
       result.sort((a, b) => b.ventas - a.ventas);
     }
     return result.slice(0, 11);
-  }, [filteredData]);
+  }, [ventasRaw, clientesData]);
 
+  // Top Clientes desde ventas_cupra
   const topClientes = useMemo(() => {
-    return filteredData
-      .map(c => ({
-        razon_social: c.razon_social || 'Sin nombre',
-        monto_total: Number(c.monto_total_historico || 0),
-        ordenes: Number(c.cantidad_ordenes || 0),
-        provincia: c.provincia_principal
-      }))
+    const clienteMap = new Map<string, { razon_social: string; monto_total: number; tickets: Set<string> }>();
+    for (const v of ventasRaw) {
+      const rs = v.razon_social || 'Sin nombre';
+      if (!clienteMap.has(rs)) clienteMap.set(rs, { razon_social: rs, monto_total: 0, tickets: new Set() });
+      const entry = clienteMap.get(rs)!;
+      entry.monto_total += Number(v.facturacion_ars || 0);
+      if (v.ticket) entry.tickets.add(v.ticket);
+    }
+    return Array.from(clienteMap.values())
+      .map(c => ({ razon_social: c.razon_social, monto_total: c.monto_total, ordenes: c.tickets.size }))
       .sort((a, b) => b.monto_total - a.monto_total)
       .slice(0, 10);
-  }, [filteredData]);
+  }, [ventasRaw]);
 
   // TAREA 4: Top vendedores desde ventas_cupra (fuente transaccional)
   const topVendedores = useMemo(() => {
@@ -565,9 +587,9 @@ const ClientesDashboard = () => {
                   <Tooltip>
                     <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
                     <TooltipContent className="max-w-[240px] text-xs">
-                      <p className="font-medium">SUM(monto_total_historico)</p>
-                      <p>Fuente: tabla clientes (agregada)</p>
-                      <p>Columna Excel: Facturación Ar$ (neto)</p>
+                      <p className="font-medium">SUM(facturacion_ars)</p>
+                      <p>Fuente: ventas_cupra (transaccional)</p>
+                      <p>Columna Excel: Precio Total Final</p>
                     </TooltipContent>
                   </Tooltip>
                 </CardTitle>
@@ -589,9 +611,9 @@ const ClientesDashboard = () => {
                   <Tooltip>
                     <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
                     <TooltipContent className="max-w-[240px] text-xs">
-                      <p className="font-medium">COUNT de clientes filtrados</p>
-                      <p>Fuente: tabla clientes</p>
-                      <p>Granularidad: cliente único</p>
+                      <p className="font-medium">COUNT(DISTINCT razon_social)</p>
+                      <p>Fuente: ventas_cupra (transaccional)</p>
+                      <p>Granularidad: cliente único por razón social</p>
                     </TooltipContent>
                   </Tooltip>
                 </CardTitle>
@@ -613,9 +635,9 @@ const ClientesDashboard = () => {
                   <Tooltip>
                     <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
                     <TooltipContent className="max-w-[240px] text-xs">
-                      <p className="font-medium">SUM(cantidad_ordenes)</p>
-                      <p>Fuente: tabla clientes</p>
-                      <p>Granularidad: ticket único (DISTINCT ticket+letra+fecha)</p>
+                      <p className="font-medium">COUNT(DISTINCT ticket)</p>
+                      <p>Fuente: ventas_cupra (transaccional)</p>
+                      <p>Granularidad: ticket único</p>
                     </TooltipContent>
                   </Tooltip>
                 </CardTitle>
@@ -638,7 +660,7 @@ const ClientesDashboard = () => {
                     <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
                     <TooltipContent className="max-w-[240px] text-xs">
                       <p className="font-medium">Ventas Totales ÷ Tickets Únicos</p>
-                      <p>Fuente: tabla clientes (derivado)</p>
+                      <p>Fuente: ventas_cupra (transaccional)</p>
                       <p>Promedio ponderado global, no promedio de promedios</p>
                     </TooltipContent>
                   </Tooltip>

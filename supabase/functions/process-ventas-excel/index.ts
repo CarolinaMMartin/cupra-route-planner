@@ -21,17 +21,17 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
  * MÉTRICAS Y GRANULARIDAD:
  * ────────────────────────
  * • monto_total_historico: SUM(facturacion_ars) de líneas deduplicadas. Granularidad: línea.
- * • cantidad_ordenes: COUNT(DISTINCT ticket||letra||fecha). Granularidad: ticket.
+ * • cantidad_ordenes: COUNT(DISTINCT ticket). Granularidad: ticket único.
  * • ticket_promedio: monto_total_historico / cantidad_ordenes. Granularidad: ticket.
  * • vendedor_actual: Vendedor de la venta MÁS RECIENTE del cliente. Operativo.
  * • vendedor_principal: Vendedor con más ventas históricas (mode). Histórico.
  *
  * COLUMNA DE FACTURACIÓN:
  * ───────────────────────
- * Fuente oficial: "Facturación Ar$" (valor neto). Confirmado 2026-03-17.
- * Prioridad de búsqueda: Facturación Ar$ > Facturacion Ars > facturacion_ars > Precio Total Final > Precio Total Neto
+ * Fuente oficial: "Precio Total Final" (valor con IVA). Confirmado 2026-03-17.
+ * Prioridad: Precio Total Final > Precio Total Neto > Facturación Ar$ > facturacion_ars
  * 
- * VERSION: v2.0 — tickets únicos, validaciones, metadata, reconciliación
+ * VERSION: v3.0 — Precio Total Final, tickets DISTINCT, KPIs 100% transaccional
  * ═══════════════════════════════════════════════════════════════
  */
 
@@ -44,7 +44,7 @@ const corsHeaders = {
 const DIAS_ACTIVO = 30;
 const DIAS_INTERMITENTE = 90;
 const DIAS_INACTIVO = 180;
-const ETL_VERSION = 'v2.0';
+const ETL_VERSION = 'v3.0';
 
 // === UMBRALES DE CALIDAD ===
 const UMBRAL_PCT_SIN_BARRIO = 10;
@@ -249,9 +249,11 @@ const mergeVentaDuplicate = (current: Record<string, any>, incoming: Record<stri
 };
 
 // === Campo de facturación: nombres de columna en orden de prioridad ===
+// PRIORIDAD: Precio Total Final (con IVA, ~$511M) es la fuente oficial.
 const FACTURACION_FIELD_NAMES = [
+  'Precio Total Final', 'Precio Total Neto',
   'Facturación Ar$', 'Facturacion Ar$', 'Facturación Ars', 'Facturacion Ars',
-  'facturacion_ars', 'Precio Total Final', 'Precio Total Neto',
+  'facturacion_ars',
 ];
 
 // === MAIN ===
@@ -444,11 +446,9 @@ Deno.serve(async (req) => {
       c.monto_total += facturacion || 0;
       c.cantidad_lineas += 1;
 
-      // TAREA 1: Contar tickets únicos via Set
-      // Identificador primario: ticket. Desambiguación: letra + fecha_emision.
+      // TAREA 1: Contar tickets únicos via Set — usar solo campo Ticket (DISTINCT)
       if (venta.ticket) {
-        const ticketKey = `${venta.ticket}||${venta.letra || ''}||${fecha_iso || ''}`;
-        c.tickets_set.add(ticketKey);
+        c.tickets_set.add(venta.ticket);
       }
 
       if (fecha_iso) {
