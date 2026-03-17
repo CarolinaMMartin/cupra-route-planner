@@ -21,17 +21,17 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
  * MÉTRICAS Y GRANULARIDAD:
  * ────────────────────────
  * • monto_total_historico: SUM(facturacion_ars) de líneas deduplicadas. Granularidad: línea.
- * • cantidad_ordenes: COUNT(DISTINCT ticket||letra||fecha). Granularidad: ticket.
+ * • cantidad_ordenes: COUNT(DISTINCT ticket). Granularidad: ticket único.
  * • ticket_promedio: monto_total_historico / cantidad_ordenes. Granularidad: ticket.
  * • vendedor_actual: Vendedor de la venta MÁS RECIENTE del cliente. Operativo.
  * • vendedor_principal: Vendedor con más ventas históricas (mode). Histórico.
  *
  * COLUMNA DE FACTURACIÓN:
  * ───────────────────────
- * Fuente oficial: "Facturación Ar$" (valor neto). Confirmado 2026-03-17.
- * Prioridad de búsqueda: Facturación Ar$ > Facturacion Ars > facturacion_ars > Precio Total Final > Precio Total Neto
+ * Fuente oficial: "Precio Total Final" (valor con IVA). Confirmado 2026-03-17.
+ * Prioridad: Precio Total Final > Precio Total Neto > Facturación Ar$ > facturacion_ars
  * 
- * VERSION: v2.0 — tickets únicos, validaciones, metadata, reconciliación
+ * VERSION: v3.0 — Precio Total Final, tickets DISTINCT, KPIs 100% transaccional
  * ═══════════════════════════════════════════════════════════════
  */
 
