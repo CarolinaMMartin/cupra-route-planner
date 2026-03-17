@@ -740,11 +740,11 @@ const ClientesDashboard = () => {
           {/* Top Vendedores */}
           <Card className="matte-card">
             <CardHeader className="pb-4">
-              <CardTitle className="section-title flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground/50" />
+             <CardTitle className="section-title flex items-center gap-2">
+                <Users className="h-4 w-4 text-foreground/40" />
                 Top Vendedores
                 <Tooltip>
-                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/40" /></TooltipTrigger>
+                  <TooltipTrigger><Info className="h-3 w-3 text-foreground/30" /></TooltipTrigger>
                   <TooltipContent className="max-w-[240px] text-xs">
                     <p className="font-medium">SUM(facturacion_ars) desde ventas_cupra</p>
                     <p>Fuente transaccional · No afectado por filtros</p>
