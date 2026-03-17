@@ -716,16 +716,33 @@ Deno.serve(async (req) => {
 
       console.log(`📊 ${vendedor.nombre}: ${clientPool.length} clientes + ${prospectPool.length} prospectos en radio ${HARD_RADIUS_KM}km`);
 
-      // === EXPANSION: If total < 8, expand prospect search to MAX_EXPANSION_KM ===
-      const totalInRadius = clientPool.length + prospectPool.length;
-      if (totalInRadius < 8) {
-        console.log(`⚠️ ${vendedor.nombre}: Solo ${totalInRadius} en ${HARD_RADIUS_KM}km. Expandiendo a ${MAX_EXPANSION_KM}km...`);
+      // === PROGRESSIVE EXPANSION: If total < 8, expand in steps ===
+      const expansionRadii = [MAX_EXPANSION_KM, ...EXPANSION_STEPS_KM];
+      let currentTotal = clientPool.length + prospectPool.length;
 
+      for (const expandRadius of expansionRadii) {
+        if (currentTotal >= 8) break;
+
+        console.log(`⚠️ ${vendedor.nombre}: Solo ${currentTotal} candidatos. Expandiendo a ${expandRadius}km...`);
         const existingIds = new Set([...clientPool, ...prospectPool].map(c => c.client_id));
 
-        // Bounding box ~2km around vendorHotspot
-        const deltaLat = 0.018;
-        const deltaLng = 0.022;
+        // Expand CLIENTS from portfolio within larger radius
+        const extraClientPool = scoreClients(
+          myValidClients, placesMap, feedbacksMapClientes,
+          vendedor.user_id, sellerNameMap,
+          vendorHotspot, expandRadius, otherHotspots,
+        ).filter(c => !existingIds.has(c.client_id));
+
+        if (extraClientPool.length > 0) {
+          clientPool = [...clientPool, ...extraClientPool];
+          extraClientPool.forEach(c => existingIds.add(c.client_id));
+          console.log(`🆕 ${vendedor.nombre}: +${extraClientPool.length} clientes en ${expandRadius}km`);
+        }
+
+        // Expand PROSPECTS with geo bounding box
+        const degPerKm = 0.009; // ~1km in degrees
+        const deltaLat = expandRadius * degPerKm;
+        const deltaLng = expandRadius * degPerKm * 1.2; // longitude correction
 
         const { data: geoProspectos } = await supabaseClient
           .from("prospectos").select("*")
@@ -746,11 +763,12 @@ Deno.serve(async (req) => {
 
         const extraScored = scoreProspects(
           extraFiltered, feedbacksMapProspectos,
-          vendorHotspot, MAX_EXPANSION_KM, otherHotspots,
+          vendorHotspot, expandRadius, otherHotspots,
         ).filter(c => !existingIds.has(c.client_id));
 
         prospectPool = [...prospectPool, ...extraScored];
-        console.log(`🆕 ${vendedor.nombre}: +${extraScored.length} prospectos en expansión ${MAX_EXPANSION_KM}km. Total: ${clientPool.length}C + ${prospectPool.length}P`);
+        currentTotal = clientPool.length + prospectPool.length;
+        console.log(`🆕 ${vendedor.nombre}: +${extraScored.length} prospectos en ${expandRadius}km. Total: ${clientPool.length}C + ${prospectPool.length}P`);
       }
 
       vendorClientPools.set(vendedor.user_id, clientPool);
