@@ -660,7 +660,7 @@ const ClientesDashboard = () => {
                     <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
                     <TooltipContent className="max-w-[240px] text-xs">
                       <p className="font-medium">Ventas Totales ÷ Tickets Únicos</p>
-                      <p>Fuente: tabla clientes (derivado)</p>
+                      <p>Fuente: ventas_cupra (transaccional)</p>
                       <p>Promedio ponderado global, no promedio de promedios</p>
                     </TooltipContent>
                   </Tooltip>
