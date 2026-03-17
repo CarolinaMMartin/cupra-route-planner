@@ -455,14 +455,14 @@ const ClientesDashboard = () => {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="filter-label">
                   Buscar Cliente
                 </label>
                 <Input
                   placeholder="Razón social..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-background/50"
+                  className="bg-muted/50 border-border/60"
                 />
               </div>
 
