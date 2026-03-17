@@ -205,13 +205,13 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
                           </span>
                         </div>
                       </td>
-                      <td className="text-center py-2.5 px-2">{zona.total}</td>
+                      <td className="text-center py-2.5 px-2 text-foreground/70">{zona.total}</td>
                       <td className="text-center py-2.5 px-2 text-emerald-500 font-medium">{zona.activos}</td>
                       <td className="text-center py-2.5 px-2 text-amber-500 font-medium">{zona.inactivos}</td>
                       <td className="text-center py-2.5 px-2 text-red-500 font-medium">{zona.perdidos}</td>
-                      <td className="text-center py-2.5 px-2 text-muted-foreground/60 font-medium">{zona.sin_datos || '—'}</td>
+                      <td className="text-center py-2.5 px-2 text-foreground/40 font-medium">{zona.sin_datos || '—'}</td>
                       <td className="text-right py-2.5 px-2 font-semibold text-accent">{formatCurrency(zona.ventas)}</td>
-                      <td className="text-center py-2.5 px-2">{zona.vendedores.size}</td>
+                      <td className="text-center py-2.5 px-2 text-foreground/70">{zona.vendedores.size}</td>
                       <td className="text-center py-2.5 px-2">
                         <div className="flex items-center gap-1.5 justify-center">
                           <Progress value={cobertura} className="w-12 h-1.5" />
