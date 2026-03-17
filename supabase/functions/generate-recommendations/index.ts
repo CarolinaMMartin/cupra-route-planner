@@ -702,7 +702,7 @@ Deno.serve(async (req) => {
         .map(([, h]) => h);
 
       // === POOL 1: Clients within HARD_RADIUS_KM of hotspot ===
-      const clientPool = scoreClients(
+      let clientPool = scoreClients(
         myValidClients, placesMap, feedbacksMapClientes,
         vendedor.user_id, sellerNameMap,
         vendorHotspot, HARD_RADIUS_KM, otherHotspots,
