@@ -587,9 +587,9 @@ const ClientesDashboard = () => {
                   <Tooltip>
                     <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
                     <TooltipContent className="max-w-[240px] text-xs">
-                      <p className="font-medium">SUM(monto_total_historico)</p>
-                      <p>Fuente: tabla clientes (agregada)</p>
-                      <p>Columna Excel: Facturación Ar$ (neto)</p>
+                      <p className="font-medium">SUM(facturacion_ars)</p>
+                      <p>Fuente: ventas_cupra (transaccional)</p>
+                      <p>Columna Excel: Precio Total Final</p>
                     </TooltipContent>
                   </Tooltip>
                 </CardTitle>
