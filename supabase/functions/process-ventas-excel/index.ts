@@ -44,7 +44,7 @@ const corsHeaders = {
 const DIAS_ACTIVO = 30;
 const DIAS_INTERMITENTE = 90;
 const DIAS_INACTIVO = 180;
-const ETL_VERSION = 'v2.0';
+const ETL_VERSION = 'v3.0';
 
 // === UMBRALES DE CALIDAD ===
 const UMBRAL_PCT_SIN_BARRIO = 10;
