@@ -284,36 +284,37 @@ const ClientesDashboard = () => {
     };
   }, [clientesData]);
 
-  // TAREA 5: Top barrios — incluir "Sin barrio asignado"
+  // Top barrios desde ventas_cupra (via join con clientes para barrio)
   const topBarrios = useMemo(() => {
+    // Build client_id → barrio lookup from clientes
+    const clientBarrio = new Map<string, string>();
+    clientesData.forEach(c => {
+      if (c.client_id && c.barrio_principal) clientBarrio.set(c.client_id, c.barrio_principal);
+    });
     const barriosMap = new Map<string, { display: string; ventas: number }>();
     let sinBarrioVentas = 0;
-    filteredData.forEach(cliente => {
-      const barrio = cliente.barrio_principal;
-      const monto = Number(cliente.monto_total_historico || 0);
+    for (const v of ventasRaw) {
+      const monto = Number(v.facturacion_ars || 0);
+      const barrio = v.client_id ? clientBarrio.get(v.client_id) : null;
       if (barrio) {
         const key = normalize(barrio);
         const existing = barriosMap.get(key);
-        if (existing) {
-          existing.ventas += monto;
-        } else {
-          barriosMap.set(key, { display: barrio, ventas: monto });
-        }
+        if (existing) { existing.ventas += monto; }
+        else { barriosMap.set(key, { display: barrio, ventas: monto }); }
       } else {
         sinBarrioVentas += monto;
       }
-    });
+    }
     const result = Array.from(barriosMap.values())
       .map(({ display, ventas }) => ({ barrio: display, ventas }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
-    // Agregar "Sin barrio asignado" si tiene ventas
     if (sinBarrioVentas > 0) {
       result.push({ barrio: '⚠️ Sin barrio asignado', ventas: sinBarrioVentas });
       result.sort((a, b) => b.ventas - a.ventas);
     }
     return result.slice(0, 11);
-  }, [filteredData]);
+  }, [ventasRaw, clientesData]);
 
   const topClientes = useMemo(() => {
     return filteredData
