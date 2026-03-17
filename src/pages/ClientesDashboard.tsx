@@ -526,11 +526,11 @@ const ClientesDashboard = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="filter-label">
                   Vendedor
                 </label>
                 <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger className="bg-muted/50 border-border/60">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -543,11 +543,11 @@ const ClientesDashboard = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="filter-label">
                   Canal
                 </label>
                 <Select value={selectedCanal} onValueChange={setSelectedCanal}>
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger className="bg-muted/50 border-border/60">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
