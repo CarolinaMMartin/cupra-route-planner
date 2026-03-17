@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, X, Eye, MapPin } from "lucide-react";
+import { ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, X, Eye, MapPin, AlertTriangle, Info } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import * as XLSX from "xlsx";
 
@@ -18,6 +18,40 @@ interface ProcessResults {
   clientes_actualizados: number;
   clientes_errores: number;
   errores: string[];
+}
+
+interface QualityReport {
+  pct_sin_barrio: number;
+  pct_sin_vendedor: number;
+  pct_sin_client_id: number;
+  clientes_sin_barrio: number;
+  clientes_sin_vendedor: number;
+  alerta: boolean;
+}
+
+interface Reconciliacion {
+  filas_excel: number;
+  filas_procesadas: number;
+  filas_deduplicadas: number;
+  filas_descartadas_sin_id: number;
+  facturacion_total_procesada: number;
+  tickets_unicos: number;
+  clientes_unicos: number;
+  tickets_compartidos: number;
+}
+
+interface ETLMetadata {
+  fecha_carga: string;
+  version_etl: string;
+  columna_facturacion: string | null;
+  columnas_evaluadas: string[];
+  filas_origen: number;
+  filas_facturacion_null: number;
+}
+
+interface Integridad {
+  descartados_sin_client_id: { cuit_dni: string | null; razon_social: string | null }[];
+  total_descartados: number;
 }
 
 interface GeocodeResults {
@@ -41,6 +75,12 @@ const CargaDatos = () => {
   const [progress, setProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
 
+  // TAREA 7, 9, 10: Extended ETL response
+  const [calidad, setCalidad] = useState<QualityReport | null>(null);
+  const [reconciliacion, setReconciliacion] = useState<Reconciliacion | null>(null);
+  const [metadata, setMetadata] = useState<ETLMetadata | null>(null);
+  const [integridad, setIntegridad] = useState<Integridad | null>(null);
+
   // Geocoding state
   const [pendingGeocount, setPendingGeocount] = useState<number | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
@@ -63,18 +103,15 @@ const CargaDatos = () => {
     }
   }, [session, navigate]);
 
-  // Fetch pending geocode count
   const fetchPendingGeocount = useCallback(async () => {
     const { data: allClients } = await supabase
       .from("clientes")
       .select("client_id")
       .not("direccion_principal", "is", null)
       .not("ciudad_principal", "is", null);
-
     const { data: existingPlaces } = await supabase
       .from("client_places")
       .select("client_id");
-
     const placedIds = new Set((existingPlaces || []).map((p) => p.client_id));
     const pending = (allClients || []).filter((c) => !placedIds.has(c.client_id));
     setPendingGeocount(pending.length);
@@ -118,10 +155,14 @@ const CargaDatos = () => {
       if (error) throw new Error(error.message || "Error al procesar");
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
       setResults(data.results);
+      // TAREA 7, 9, 10: Guardar datos extendidos
+      if (data.calidad) setCalidad(data.calidad);
+      if (data.reconciliacion) setReconciliacion(data.reconciliacion);
+      if (data.metadata) setMetadata(data.metadata);
+      if (data.integridad) setIntegridad(data.integridad);
       setProgress(100);
       setStep("done");
       toast({ title: "Carga completada", description: `${data.results.ventas_procesadas} ventas y ${data.results.clientes_actualizados} clientes procesados` });
-      // Refresh geocode count after processing
       fetchPendingGeocount();
     } catch (err: any) {
       toast({ title: "Error en la carga", description: err.message, variant: "destructive" });
@@ -155,7 +196,18 @@ const CargaDatos = () => {
     setRows([]);
     setColumns([]);
     setResults(null);
+    setCalidad(null);
+    setReconciliacion(null);
+    setMetadata(null);
+    setIntegridad(null);
     setProgress(0);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency', currency: 'ARS',
+      minimumFractionDigits: 0, maximumFractionDigits: 0,
+    }).format(amount);
   };
 
   if (!profile) {
@@ -184,7 +236,6 @@ const CargaDatos = () => {
       </header>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* ── Section 1: Excel Upload ── */}
         <div>
           <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">
             Carga de Ventas
@@ -315,11 +366,17 @@ const CargaDatos = () => {
         {/* STEP: Done */}
         {step === "done" && results && (
           <div className="space-y-4">
+            {/* Resumen principal */}
             <Card>
               <CardContent className="p-8">
                 <div className="text-center mb-6">
                   <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-500" />
                   <p className="text-lg font-semibold text-foreground">Carga completada</p>
+                  {metadata && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      ETL {metadata.version_etl} · Columna: {metadata.columna_facturacion || 'No resuelta'} · {new Date(metadata.fecha_carga).toLocaleString('es-AR')}
+                    </p>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center p-3 rounded-lg bg-muted/30">
@@ -339,6 +396,7 @@ const CargaDatos = () => {
                     <p className="text-xs text-muted-foreground mt-0.5">Clientes con error</p>
                   </div>
                 </div>
+
                 {results.errores.length > 0 && (
                   <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                     <p className="text-xs font-medium text-destructive flex items-center gap-1.5 mb-2">
@@ -351,6 +409,136 @@ const CargaDatos = () => {
                 )}
               </CardContent>
             </Card>
+
+            {/* TAREA 9: Reconciliación */}
+            {reconciliacion && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                    Reconciliación — Verificá contra tu Excel
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="p-2.5 rounded-lg bg-muted/20 text-center">
+                      <p className="text-lg font-bold text-foreground">{reconciliacion.filas_excel.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">Filas Excel</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/20 text-center">
+                      <p className="text-lg font-bold text-foreground">{reconciliacion.filas_deduplicadas.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">Líneas deduplicadas</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/20 text-center">
+                      <p className="text-lg font-bold text-foreground">{reconciliacion.tickets_unicos.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">Tickets únicos</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/20 text-center">
+                      <p className="text-lg font-bold text-foreground">{reconciliacion.clientes_unicos.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">Clientes únicos</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 p-2.5 rounded-lg bg-accent/5 text-center">
+                    <p className="text-xs text-muted-foreground">Facturación total procesada</p>
+                    <p className="text-xl font-bold text-accent">{formatCurrency(reconciliacion.facturacion_total_procesada)}</p>
+                  </div>
+                  {reconciliacion.filas_descartadas_sin_id > 0 && (
+                    <p className="text-xs text-amber-500 mt-2">
+                      ⚠️ {reconciliacion.filas_descartadas_sin_id} filas descartadas sin client_id/CUIT válido
+                    </p>
+                  )}
+                  {reconciliacion.tickets_compartidos > 0 && (
+                    <p className="text-xs text-amber-500 mt-1">
+                      ⚠️ {reconciliacion.tickets_compartidos} tickets compartidos entre múltiples clientes
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* TAREA 7: Alertas de calidad */}
+            {calidad && calidad.alerta && (
+              <Card className="border-amber-500/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-amber-500">
+                    <AlertTriangle className="h-4 w-4" />
+                    Alertas de Calidad de Datos
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 text-sm">
+                    {calidad.pct_sin_barrio > 10 && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="border-amber-500/30 text-amber-500">
+                          {calidad.pct_sin_barrio}%
+                        </Badge>
+                        <span className="text-muted-foreground">
+                          clientes sin barrio asignado ({calidad.clientes_sin_barrio})
+                        </span>
+                      </div>
+                    )}
+                    {calidad.pct_sin_vendedor > 5 && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="border-amber-500/30 text-amber-500">
+                          {calidad.pct_sin_vendedor}%
+                        </Badge>
+                        <span className="text-muted-foreground">
+                          clientes sin vendedor ({calidad.clientes_sin_vendedor})
+                        </span>
+                      </div>
+                    )}
+                    {calidad.pct_sin_client_id > 0 && (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="border-amber-500/30 text-amber-500">
+                          {calidad.pct_sin_client_id}%
+                        </Badge>
+                        <span className="text-muted-foreground">
+                          filas del Excel sin identificador de cliente
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* TAREA 12: Descartados sin client_id */}
+            {integridad && integridad.total_descartados > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                    Registros descartados ({integridad.total_descartados})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="max-h-32 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border/40">
+                          <th className="text-left py-1 px-2 text-muted-foreground">CUIT/DNI</th>
+                          <th className="text-left py-1 px-2 text-muted-foreground">Razón Social</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {integridad.descartados_sin_client_id.map((d, i) => (
+                          <tr key={i} className="border-b border-border/20">
+                            <td className="py-1 px-2 text-foreground/70">{d.cuit_dni || '—'}</td>
+                            <td className="py-1 px-2 text-foreground/70">{d.razon_social || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {integridad.total_descartados > 20 && (
+                      <p className="text-xs text-muted-foreground text-center mt-1">
+                        Mostrando 20 de {integridad.total_descartados}
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <div className="flex gap-3 justify-end">
               <Button variant="outline" onClick={reset}>Cargar otro archivo</Button>
               <Button onClick={() => navigate("/")}>Volver al inicio</Button>
