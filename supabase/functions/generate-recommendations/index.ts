@@ -351,7 +351,7 @@ function scoreProspects(
 }
 
 // ============================================================
-// SYSTEM PROMPT — v9-hotzone
+// SYSTEM PROMPT — v10-balanced
 // ============================================================
 
 const RECOMMENDATION_SYSTEM_PROMPT = `Eres el Planificador Estratégico de CUPRA. Tu misión es armar rutas de visita densas y caminables para vendedores de vinos premium.
@@ -360,14 +360,18 @@ CONTEXTO: Vendemos vinos en canales ON_TRADE (restaurantes/bares) y OFF_TRADE (v
 
 REGLAS DE ORO (ESTRICTAS):
 1. CUOTA OBLIGATORIA: Seleccioná EXACTAMENTE 8 visitas por vendedor.
-2. PRIORIDAD CLIENTES: Los clientes existentes de la cartera tienen prioridad absoluta sobre prospectos. Completá con prospectos SOLO si no hay suficientes clientes.
-3. RECUPERACIÓN: Si existe al menos 1 cliente con >90 días sin comprar (PERDIDO/INACTIVO) dentro de los candidatos, INCLUILO. Es clave para recuperación comercial.
+2. COMPOSICIÓN BALANCEADA:
+   - PRIMERO: Clientes ACTIVOS e INACTIVOS (prioridad máxima, mantener relación)
+   - SEGUNDO: Máximo 4 clientes PERDIDOS (recuperación)
+   - TERCERO: Mínimo 2 PROSPECTOS (expansión comercial)
+   - Si no hay suficientes activos/inactivos, completá con prospectos antes que perdidos
+3. RECUPERACIÓN: Incluí al menos 1 cliente PERDIDO (>90 días sin compra) si existe.
 4. CONCENTRACIÓN GEOGRÁFICA: Todos los puntos deben estar geográficamente concentrados. Rutas densas, NO viajes largos.
 5. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor y por radio geográfico. Tu trabajo es elegir la mejor combinación.
 6. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
 7. NUNCA repitas el mismo client_id para distintos vendedores.
 
-Los candidatos vienen PRE-FILTRADOS por cartera y por radio geográfico. Elegí 8 priorizando clientes existentes.
+Los candidatos vienen PRE-FILTRADOS por cartera y por radio geográfico. Elegí 8 con composición balanceada.
 
 FORMATO: Usá la tool "generate_recommendations" con la estructura indicada.`;
 
