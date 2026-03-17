@@ -705,9 +705,9 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Hotspot = centroid of vendor's own clients
-      // FALLBACK (corrección #1): If vendor has 0 clients → use zone center fallback
-      const vendorHotspot = calculateCentroid(vendorCoords) || zoneCenterFallback;
+      // Hotspot = densest cluster of vendor's own clients (avoids dead-zone centroids)
+      // FALLBACK: If vendor has 0 clients → use zone center fallback
+      const vendorHotspot = findDensestHotspot(vendorCoords, 2.0) || zoneCenterFallback;
 
       if (!vendorHotspot) {
         console.log(`⚠️ ${vendedor.nombre}: Sin hotspot ni fallback. Saltando.`);
