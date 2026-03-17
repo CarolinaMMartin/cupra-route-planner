@@ -21,10 +21,10 @@
     --primary-foreground: 240 8% 6%;  /* dark text on gold */
 
     --secondary: 240 6% 13%;          /* #1C1D22 */
-    --secondary-foreground: 0 0% 62%; /* #9A9A9F */
+    --secondary-foreground: 0 0% 72%; /* #B8B8B8 — legible */
 
     --muted: 240 5% 12%;
-    --muted-foreground: 240 2% 44%;   /* #6F7075 */
+    --muted-foreground: 240 2% 58%;   /* #929296 — legible on dark */
 
     --accent: 37 40% 59%;             /* same gold */
     --accent-foreground: 240 8% 6%;
@@ -105,19 +105,29 @@
     box-shadow: var(--shadow-medium);
   }
 
-  /* KPI label — uppercase, tracked, muted */
+  /* KPI label — uppercase, tracked, readable */
   .kpi-label {
-    @apply text-xs font-medium uppercase tracking-widest text-muted-foreground;
+    @apply text-[13px] font-medium uppercase tracking-widest text-foreground/50;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     letter-spacing: 0.08em;
   }
 
   /* KPI value — large, white, semibold */
   .kpi-value {
     @apply text-[28px] font-semibold text-foreground leading-tight;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 
-  /* Section title — medium weight, slightly muted */
+  /* Section title — consistent sans, readable */
   .section-title {
-    @apply text-base font-medium text-foreground/80;
+    @apply text-[15px] font-semibold text-foreground/80;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  /* Filter label — consistent */
+  .filter-label {
+    @apply text-[13px] font-medium uppercase tracking-wide text-foreground/50;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    letter-spacing: 0.06em;
   }
 }

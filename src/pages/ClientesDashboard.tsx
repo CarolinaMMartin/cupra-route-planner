@@ -446,32 +446,32 @@ const ClientesDashboard = () => {
 
         {/* Panel de Filtros */}
         <Card className="matte-card">
-          <CardHeader className="pb-4">
+           <CardHeader className="pb-4">
             <CardTitle className="section-title flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground/50" />
+              <Filter className="h-4 w-4 text-foreground/40" />
               Filtros Interactivos
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="filter-label">
                   Buscar Cliente
                 </label>
                 <Input
                   placeholder="Razón social..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="bg-background/50"
+                  className="bg-muted/50 border-border/60"
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="filter-label">
                   Provincia
                 </label>
                 <Select value={selectedProvincia} onValueChange={handleProvinciaChange}>
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger className="bg-muted/50 border-border/60">
                     <SelectValue placeholder="Todas" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -484,7 +484,7 @@ const ClientesDashboard = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="filter-label">
                   Ciudad
                 </label>
                 <Select 
@@ -492,7 +492,7 @@ const ClientesDashboard = () => {
                   onValueChange={handleCiudadChange}
                   disabled={selectedProvincia === "all"}
                 >
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger className="bg-muted/50 border-border/60">
                     <SelectValue placeholder={selectedProvincia === "all" ? "Seleccione provincia" : "Todas"} />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -505,7 +505,7 @@ const ClientesDashboard = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="filter-label">
                   Barrio
                 </label>
                 <Select 
@@ -513,7 +513,7 @@ const ClientesDashboard = () => {
                   onValueChange={setSelectedBarrio}
                   disabled={selectedProvincia === "all"}
                 >
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger className="bg-muted/50 border-border/60">
                     <SelectValue placeholder={selectedProvincia === "all" ? "Seleccione provincia" : "Todos"} />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -526,11 +526,11 @@ const ClientesDashboard = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="filter-label">
                   Vendedor
                 </label>
                 <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger className="bg-muted/50 border-border/60">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -543,11 +543,11 @@ const ClientesDashboard = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="filter-label">
                   Canal
                 </label>
                 <Select value={selectedCanal} onValueChange={setSelectedCanal}>
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger className="bg-muted/50 border-border/60">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
@@ -665,8 +665,8 @@ const ClientesDashboard = () => {
           {/* Top Barrios */}
           <Card className="matte-card">
             <CardHeader className="pb-4">
-              <CardTitle className="section-title flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground/50" />
+             <CardTitle className="section-title flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-foreground/40" />
                 Top Barrios
               </CardTitle>
             </CardHeader>
@@ -701,8 +701,8 @@ const ClientesDashboard = () => {
           {/* Top Clientes */}
           <Card className="matte-card">
             <CardHeader className="pb-4">
-              <CardTitle className="section-title flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-muted-foreground/50" />
+             <CardTitle className="section-title flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-foreground/40" />
                 Top 10 Clientes
               </CardTitle>
             </CardHeader>
@@ -740,11 +740,11 @@ const ClientesDashboard = () => {
           {/* Top Vendedores */}
           <Card className="matte-card">
             <CardHeader className="pb-4">
-              <CardTitle className="section-title flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground/50" />
+             <CardTitle className="section-title flex items-center gap-2">
+                <Users className="h-4 w-4 text-foreground/40" />
                 Top Vendedores
                 <Tooltip>
-                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/40" /></TooltipTrigger>
+                  <TooltipTrigger><Info className="h-3 w-3 text-foreground/30" /></TooltipTrigger>
                   <TooltipContent className="max-w-[240px] text-xs">
                     <p className="font-medium">SUM(facturacion_ars) desde ventas_cupra</p>
                     <p>Fuente transaccional · No afectado por filtros</p>
