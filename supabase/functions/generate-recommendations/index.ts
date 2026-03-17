@@ -45,6 +45,30 @@ function calculateCentroid(points: AnchorPoint[]): AnchorPoint | null {
   };
 }
 
+// Find the densest cluster: the point with the most neighbors within clusterRadius
+function findDensestHotspot(points: AnchorPoint[], clusterRadius: number = 2.0): AnchorPoint | null {
+  if (points.length === 0) return null;
+  if (points.length <= 3) return calculateCentroid(points);
+
+  let bestPoint: AnchorPoint | null = null;
+  let bestCount = 0;
+  let bestNeighbors: AnchorPoint[] = [];
+
+  for (const p of points) {
+    const neighbors = points.filter(q =>
+      calcularDistanciaKm(p.lat, p.lng, q.lat, q.lng) <= clusterRadius
+    );
+    if (neighbors.length > bestCount) {
+      bestCount = neighbors.length;
+      bestPoint = p;
+      bestNeighbors = neighbors;
+    }
+  }
+
+  // Return centroid of the densest cluster (smoother than a single point)
+  return bestNeighbors.length > 0 ? calculateCentroid(bestNeighbors) : bestPoint;
+}
+
 function buildSellerNameMap(vendedoresData: any[]): Map<string, string> {
   const map = new Map<string, string>();
   for (const v of vendedoresData) {
@@ -681,9 +705,9 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Hotspot = centroid of vendor's own clients
-      // FALLBACK (corrección #1): If vendor has 0 clients → use zone center fallback
-      const vendorHotspot = calculateCentroid(vendorCoords) || zoneCenterFallback;
+      // Hotspot = densest cluster of vendor's own clients (avoids dead-zone centroids)
+      // FALLBACK: If vendor has 0 clients → use zone center fallback
+      const vendorHotspot = findDensestHotspot(vendorCoords, 2.0) || zoneCenterFallback;
 
       if (!vendorHotspot) {
         console.log(`⚠️ ${vendedor.nombre}: Sin hotspot ni fallback. Saltando.`);
