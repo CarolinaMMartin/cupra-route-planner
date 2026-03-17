@@ -484,7 +484,7 @@ const ClientesDashboard = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                <label className="filter-label">
                   Ciudad
                 </label>
                 <Select 
@@ -492,7 +492,7 @@ const ClientesDashboard = () => {
                   onValueChange={handleCiudadChange}
                   disabled={selectedProvincia === "all"}
                 >
-                  <SelectTrigger className="bg-background/50">
+                  <SelectTrigger className="bg-muted/50 border-border/60">
                     <SelectValue placeholder={selectedProvincia === "all" ? "Seleccione provincia" : "Todas"} />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
