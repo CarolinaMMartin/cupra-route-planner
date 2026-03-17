@@ -701,8 +701,8 @@ const ClientesDashboard = () => {
           {/* Top Clientes */}
           <Card className="matte-card">
             <CardHeader className="pb-4">
-              <CardTitle className="section-title flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-muted-foreground/50" />
+             <CardTitle className="section-title flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-foreground/40" />
                 Top 10 Clientes
               </CardTitle>
             </CardHeader>
