@@ -1,18 +1,17 @@
 /**
  * Dashboard de Clientes y Ventas
  * 
- * FUENTE DE VERDAD:
- * ─────────────────
- * • KPIs monetarios (Ventas Totales, Ticket Promedio): desde tabla `clientes` (agregada)
- * • Top Vendedores: desde tabla `ventas_cupra` (transaccional) — NO desde clientes
- * • Top Barrios/Clientes: desde tabla `clientes` (agregada)
+ * FUENTE DE VERDAD ÚNICA: tabla `ventas_cupra` (transaccional, Excel de ventas)
+ * ─────────────────────────────────────────────────────────────────────────────
+ * • Ventas Totales: SUM(facturacion_ars) desde ventas_cupra. Columna Excel: "Precio Total Final".
+ * • Tickets Únicos: COUNT(DISTINCT ticket) desde ventas_cupra.
+ * • Clientes: COUNT(DISTINCT razon_social) desde ventas_cupra.
+ * • Ticket Promedio: Ventas Totales / Tickets Únicos.
+ * • Top Vendedores: GROUP BY vendedor, SUM(facturacion_ars) desde ventas_cupra.
+ * • Top Barrios: GROUP BY barrio (via join clientes), SUM(facturacion_ars) desde ventas_cupra.
  * 
- * GRANULARIDAD:
- * ─────────────
- * • Ventas Totales = SUM(monto_total_historico) por cliente filtrado. Granularidad: cliente.
- * • Órdenes = SUM(cantidad_ordenes) = tickets únicos (DISTINCT ticket+letra+fecha). Granularidad: ticket.
- * • Ticket Promedio = Ventas Totales / Órdenes. Promedio ponderado global. Granularidad: ticket.
- * • Top Vendedores = SUM(facturacion_ars) desde ventas_cupra agrupado por vendedor. Granularidad: línea.
+ * NO se usan datos derivados de la tabla `clientes` para KPIs.
+ * La tabla `clientes` solo se usa para filtros, segmentación y ZonaKPIs.
  */
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
