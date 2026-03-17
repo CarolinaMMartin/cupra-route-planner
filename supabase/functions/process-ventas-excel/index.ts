@@ -446,11 +446,9 @@ Deno.serve(async (req) => {
       c.monto_total += facturacion || 0;
       c.cantidad_lineas += 1;
 
-      // TAREA 1: Contar tickets únicos via Set
-      // Identificador primario: ticket. Desambiguación: letra + fecha_emision.
+      // TAREA 1: Contar tickets únicos via Set — usar solo campo Ticket (DISTINCT)
       if (venta.ticket) {
-        const ticketKey = `${venta.ticket}||${venta.letra || ''}||${fecha_iso || ''}`;
-        c.tickets_set.add(ticketKey);
+        c.tickets_set.add(venta.ticket);
       }
 
       if (fecha_iso) {
