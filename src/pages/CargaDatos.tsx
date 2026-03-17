@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, X, Eye } from "lucide-react";
+import { ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, X, Eye, MapPin } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import * as XLSX from "xlsx";
 
@@ -18,6 +18,14 @@ interface ProcessResults {
   clientes_actualizados: number;
   clientes_errores: number;
   errores: string[];
+}
+
+interface GeocodeResults {
+  total: number;
+  geocoded: number;
+  errors: number;
+  skipped: number;
+  error_details: string[];
 }
 
 const CargaDatos = () => {
@@ -32,6 +40,11 @@ const CargaDatos = () => {
   const [results, setResults] = useState<ProcessResults | null>(null);
   const [progress, setProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Geocoding state
+  const [pendingGeocount, setPendingGeocount] = useState<number | null>(null);
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeResults, setGeocodeResults] = useState<GeocodeResults | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -49,6 +62,27 @@ const CargaDatos = () => {
         });
     }
   }, [session, navigate]);
+
+  // Fetch pending geocode count
+  const fetchPendingGeocount = useCallback(async () => {
+    const { data: allClients } = await supabase
+      .from("clientes")
+      .select("client_id")
+      .not("direccion_principal", "is", null)
+      .not("ciudad_principal", "is", null);
+
+    const { data: existingPlaces } = await supabase
+      .from("client_places")
+      .select("client_id");
+
+    const placedIds = new Set((existingPlaces || []).map((p) => p.client_id));
+    const pending = (allClients || []).filter((c) => !placedIds.has(c.client_id));
+    setPendingGeocount(pending.length);
+  }, []);
+
+  useEffect(() => {
+    if (profile) fetchPendingGeocount();
+  }, [profile, fetchPendingGeocount]);
 
   const parseExcel = useCallback(async (f: File) => {
     const buffer = await f.arrayBuffer();
@@ -77,25 +111,41 @@ const CargaDatos = () => {
   const handleProcess = async () => {
     setStep("processing");
     setProgress(10);
-
     try {
       setProgress(30);
-      const { data, error } = await supabase.functions.invoke("process-ventas-excel", {
-        body: { rows },
-      });
-
+      const { data, error } = await supabase.functions.invoke("process-ventas-excel", { body: { rows } });
       setProgress(90);
-
       if (error) throw new Error(error.message || "Error al procesar");
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
-
       setResults(data.results);
       setProgress(100);
       setStep("done");
       toast({ title: "Carga completada", description: `${data.results.ventas_procesadas} ventas y ${data.results.clientes_actualizados} clientes procesados` });
+      // Refresh geocode count after processing
+      fetchPendingGeocount();
     } catch (err: any) {
       toast({ title: "Error en la carga", description: err.message, variant: "destructive" });
       setStep("preview");
+    }
+  };
+
+  const handleBatchGeocode = async () => {
+    setIsGeocoding(true);
+    setGeocodeResults(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("geocode-clients");
+      if (error) throw new Error(error.message || "Error al geocodificar");
+      if (!data?.success) throw new Error(data?.error || "Error desconocido");
+      setGeocodeResults(data.results);
+      toast({
+        title: "Geocodificación completada",
+        description: `${data.results.geocoded} de ${data.results.total} clientes geocodificados`,
+      });
+      fetchPendingGeocount();
+    } catch (err: any) {
+      toast({ title: "Error en geocodificación", description: err.message, variant: "destructive" });
+    } finally {
+      setIsGeocoding(false);
     }
   };
 
@@ -133,8 +183,9 @@ const CargaDatos = () => {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* ── Section 1: Excel Upload ── */}
+        <div>
           <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">
             Carga de Ventas
           </h1>
@@ -156,19 +207,10 @@ const CargaDatos = () => {
                 onDrop={handleDrop}
               >
                 <FileSpreadsheet className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                <p className="text-sm font-medium text-foreground mb-1">
-                  Arrastrá el archivo Excel aquí
-                </p>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Formatos soportados: .xlsx, .xls
-                </p>
+                <p className="text-sm font-medium text-foreground mb-1">Arrastrá el archivo Excel aquí</p>
+                <p className="text-xs text-muted-foreground mb-4">Formatos soportados: .xlsx, .xls</p>
                 <label>
-                  <input
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
+                  <input type="file" accept=".xlsx,.xls" onChange={handleFileChange} className="hidden" />
                   <Button variant="outline" size="sm" asChild>
                     <span className="cursor-pointer">
                       <Upload className="h-3.5 w-3.5 mr-1.5" />
@@ -205,28 +247,20 @@ const CargaDatos = () => {
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {columns.map((col) => (
-                      <Badge key={col} variant="secondary" className="text-xs font-normal">
-                        {col}
-                      </Badge>
+                      <Badge key={col} variant="secondary" className="text-xs font-normal">{col}</Badge>
                     ))}
                   </div>
                 </div>
-
-                {/* Preview table */}
                 <div className="border border-border/60 rounded-lg overflow-hidden">
                   <div className="overflow-x-auto max-h-64">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-muted/30">
                           {columns.slice(0, 8).map((col) => (
-                            <th key={col} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
-                              {col}
-                            </th>
+                            <th key={col} className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">{col}</th>
                           ))}
                           {columns.length > 8 && (
-                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">
-                              +{columns.length - 8} más
-                            </th>
+                            <th className="px-3 py-2 text-left font-medium text-muted-foreground">+{columns.length - 8} más</th>
                           )}
                         </tr>
                       </thead>
@@ -252,7 +286,6 @@ const CargaDatos = () => {
                 </div>
               </CardContent>
             </Card>
-
             <div className="flex gap-3 justify-end">
               <Button variant="outline" onClick={reset}>Cancelar</Button>
               <Button onClick={handleProcess}>
@@ -271,9 +304,7 @@ const CargaDatos = () => {
                 <Loader2 className="h-10 w-10 mx-auto animate-spin text-primary" />
                 <div>
                   <p className="text-sm font-medium text-foreground">Procesando ventas…</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Normalizando datos, calculando métricas y actualizando base de datos
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Normalizando datos, calculando métricas y actualizando base de datos</p>
                 </div>
                 <Progress value={progress} className="max-w-xs mx-auto" />
               </div>
@@ -290,7 +321,6 @@ const CargaDatos = () => {
                   <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-500" />
                   <p className="text-lg font-semibold text-foreground">Carga completada</p>
                 </div>
-
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center p-3 rounded-lg bg-muted/30">
                     <p className="text-2xl font-bold text-foreground">{results.ventas_procesadas.toLocaleString()}</p>
@@ -309,28 +339,131 @@ const CargaDatos = () => {
                     <p className="text-xs text-muted-foreground mt-0.5">Clientes con error</p>
                   </div>
                 </div>
-
                 {results.errores.length > 0 && (
                   <div className="mt-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                     <p className="text-xs font-medium text-destructive flex items-center gap-1.5 mb-2">
                       <AlertCircle className="h-3.5 w-3.5" /> Errores encontrados
                     </p>
                     <ul className="text-xs text-destructive/80 space-y-1 max-h-32 overflow-y-auto">
-                      {results.errores.map((err, i) => (
-                        <li key={i}>• {err}</li>
-                      ))}
+                      {results.errores.map((err, i) => <li key={i}>• {err}</li>)}
                     </ul>
                   </div>
                 )}
               </CardContent>
             </Card>
-
             <div className="flex gap-3 justify-end">
               <Button variant="outline" onClick={reset}>Cargar otro archivo</Button>
               <Button onClick={() => navigate("/")}>Volver al inicio</Button>
             </div>
           </div>
         )}
+
+        {/* ── Section 2: Batch Geocoding ── */}
+        <div className="pt-4 border-t border-border/30">
+          <h2 className="text-xl font-serif text-foreground tracking-tight">
+            Geocodificación de Clientes
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Clientes con dirección pero sin coordenadas GPS. Necesarios para el motor de recomendaciones geográficas.
+          </p>
+        </div>
+
+        <Card>
+          <CardContent className="p-6">
+            {pendingGeocount === null ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Calculando clientes pendientes…</span>
+              </div>
+            ) : pendingGeocount === 0 && !geocodeResults ? (
+              <div className="flex items-center gap-2 text-green-600">
+                <CheckCircle2 className="h-5 w-5" />
+                <span className="text-sm font-medium">Todos los clientes tienen coordenadas GPS</span>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {!isGeocoding && !geocodeResults && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                        <MapPin className="h-5 w-5 text-amber-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {pendingGeocount} cliente{pendingGeocount !== 1 ? "s" : ""} sin coordenadas
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Se geocodificarán usando Google Maps API (~{Math.ceil(pendingGeocount * 0.2)}s estimado)
+                        </p>
+                      </div>
+                    </div>
+                    <Button onClick={handleBatchGeocode} size="sm">
+                      <MapPin className="h-3.5 w-3.5 mr-1.5" />
+                      Geocodificar
+                    </Button>
+                  </div>
+                )}
+
+                {isGeocoding && (
+                  <div className="text-center space-y-3 py-4">
+                    <Loader2 className="h-8 w-8 mx-auto animate-spin text-primary" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Geocodificando clientes…</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Consultando Google Maps API para {pendingGeocount} direcciones. Esto puede tomar ~{Math.ceil((pendingGeocount || 0) * 0.2)}s.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {geocodeResults && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-500" />
+                      <span className="text-sm font-medium text-foreground">Geocodificación completada</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      <div className="text-center p-2.5 rounded-lg bg-muted/30">
+                        <p className="text-xl font-bold text-foreground">{geocodeResults.total}</p>
+                        <p className="text-xs text-muted-foreground">Total pendientes</p>
+                      </div>
+                      <div className="text-center p-2.5 rounded-lg bg-green-500/10">
+                        <p className="text-xl font-bold text-green-600">{geocodeResults.geocoded}</p>
+                        <p className="text-xs text-muted-foreground">Geocodificados</p>
+                      </div>
+                      <div className="text-center p-2.5 rounded-lg bg-destructive/10">
+                        <p className="text-xl font-bold text-destructive">{geocodeResults.errors}</p>
+                        <p className="text-xs text-muted-foreground">Con error</p>
+                      </div>
+                      <div className="text-center p-2.5 rounded-lg bg-muted/30">
+                        <p className="text-xl font-bold text-foreground">{geocodeResults.skipped}</p>
+                        <p className="text-xs text-muted-foreground">Sin dirección</p>
+                      </div>
+                    </div>
+                    {geocodeResults.error_details.length > 0 && (
+                      <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                        <p className="text-xs font-medium text-destructive flex items-center gap-1.5 mb-2">
+                          <AlertCircle className="h-3.5 w-3.5" /> Detalle de errores
+                        </p>
+                        <ul className="text-xs text-destructive/80 space-y-1 max-h-32 overflow-y-auto">
+                          {geocodeResults.error_details.slice(0, 20).map((err, i) => <li key={i}>• {err}</li>)}
+                          {geocodeResults.error_details.length > 20 && (
+                            <li className="text-muted-foreground">…y {geocodeResults.error_details.length - 20} más</li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="flex justify-end">
+                      <Button variant="outline" size="sm" onClick={() => { setGeocodeResults(null); fetchPendingGeocount(); }}>
+                        Verificar de nuevo
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
