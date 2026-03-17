@@ -700,9 +700,9 @@ const ClientesDashboard = () => {
 
           {/* Top Clientes */}
           <Card className="matte-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-secondary" />
+            <CardHeader className="pb-4">
+              <CardTitle className="section-title flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-muted-foreground/50" />
                 Top 10 Clientes
               </CardTitle>
             </CardHeader>
@@ -726,7 +726,7 @@ const ClientesDashboard = () => {
                             {formatCurrency(cliente.monto_total)}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            • {cliente.ordenes} tickets
+                            · {cliente.ordenes} tickets
                           </span>
                         </div>
                       </div>
@@ -737,18 +737,17 @@ const ClientesDashboard = () => {
             </CardContent>
           </Card>
 
-          {/* TAREA 4: Top Vendedores desde ventas_cupra */}
+          {/* Top Vendedores */}
           <Card className="matte-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-accent" />
+            <CardHeader className="pb-4">
+              <CardTitle className="section-title flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground/50" />
                 Top Vendedores
                 <Tooltip>
-                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
+                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/40" /></TooltipTrigger>
                   <TooltipContent className="max-w-[240px] text-xs">
                     <p className="font-medium">SUM(facturacion_ars) desde ventas_cupra</p>
-                    <p>Fuente: tabla transaccional (no derivada)</p>
-                    <p>No afectado por filtros de clientes</p>
+                    <p>Fuente transaccional · No afectado por filtros</p>
                   </TooltipContent>
                 </Tooltip>
               </CardTitle>
