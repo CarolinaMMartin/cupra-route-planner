@@ -1,5 +1,6 @@
-// Servicio de geocodificación via webhook n8n
-// El webhook llama a Google Geocoding API y devuelve las coordenadas
+// Servicio de geocodificación directo via Google Geocoding API
+// Ya no depende de n8n — llama a Google directamente desde el frontend
+// La API key de Maps JS ya está expuesta en el frontend, así que es seguro usarla aquí
 
 export interface GeocodingRequest {
   direccion: string;
@@ -17,7 +18,6 @@ export interface GeocodingResponse {
   location_type?: string;
   error_code?: string;
   message?: string;
-  // Campos enriquecidos del webhook
   barrio?: string | null;
   comuna?: string | null;
   ciudad?: string | null;
@@ -25,19 +25,22 @@ export interface GeocodingResponse {
   postal_code?: string | null;
   admin_area_level_2?: string | null;
   barrio_fallback_admin2?: string | null;
-  place_id?: string; // Google place_id (diferente al manual)
+  place_id?: string;
 }
 
-// URL del webhook de n8n para geocodificación
-const N8N_GEOCODING_WEBHOOK_URL = import.meta.env.VITE_N8N_GEOCODING_WEBHOOK_URL || "";
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+
+function extractComponent(components: any[], type: string): string | null {
+  const c = components.find((comp: any) => comp.types?.includes(type));
+  return c?.long_name || null;
+}
 
 /**
- * Llama al webhook de n8n para geocodificar una dirección
- * El webhook internamente usa Google Geocoding API
+ * Llama directamente a Google Geocoding API para geocodificar una dirección
  */
 export async function geocodeAddress(request: GeocodingRequest): Promise<GeocodingResponse> {
-  if (!N8N_GEOCODING_WEBHOOK_URL) {
-    console.error("N8N_GEOCODING_WEBHOOK_URL no está configurada");
+  if (!GOOGLE_MAPS_API_KEY) {
+    console.error("VITE_GOOGLE_MAPS_API_KEY no está configurada");
     return {
       status: "ERROR",
       error_code: "CONFIG_ERROR",
@@ -45,37 +48,67 @@ export async function geocodeAddress(request: GeocodingRequest): Promise<Geocodi
     };
   }
 
+  const parts = [request.direccion, request.barrio, request.ciudad, request.provincia, request.pais].filter(Boolean);
+  const fullAddress = parts.join(", ");
+
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 segundos timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-    const response = await fetch(N8N_GEOCODING_WEBHOOK_URL, {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(request),
-      signal: controller.signal,
-    });
-
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullAddress)}&key=${GOOGLE_MAPS_API_KEY}`;
+    const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.error("Error en respuesta del webhook:", response.status, response.statusText);
       return {
         status: "ERROR",
         error_code: "NETWORK_ERROR",
-        message: "Error de conexión con el servicio de geocodificación. Intenta nuevamente.",
+        message: "Error de conexión con Google Geocoding API. Intenta nuevamente.",
       };
     }
 
     const data = await response.json();
-    return data as GeocodingResponse;
 
+    if (data.status !== "OK" || !data.results?.length) {
+      return {
+        status: "ERROR",
+        error_code: data.status || "NO_RESULTS",
+        message: data.error_message || "No se encontraron resultados para esa dirección.",
+      };
+    }
+
+    const result = data.results[0];
+    const { lat, lng } = result.geometry.location;
+    const components = result.address_components || [];
+
+    const barrio =
+      extractComponent(components, "sublocality_level_1") ||
+      extractComponent(components, "sublocality") ||
+      extractComponent(components, "neighborhood");
+    const adminArea2 = extractComponent(components, "administrative_area_level_2");
+    const ciudad = extractComponent(components, "locality");
+    const provincia = extractComponent(components, "administrative_area_level_1");
+    const postalCode = extractComponent(components, "postal_code");
+
+    return {
+      status: "OK",
+      lat,
+      lng,
+      formatted_address: result.formatted_address,
+      location_type: result.geometry.location_type,
+      barrio,
+      comuna: adminArea2?.toLowerCase().startsWith("comuna") ? adminArea2 : null,
+      ciudad,
+      provincia,
+      postal_code: postalCode,
+      admin_area_level_2: adminArea2,
+      barrio_fallback_admin2: barrio || adminArea2,
+      place_id: result.place_id,
+    };
   } catch (error: any) {
-    console.error("Error al llamar webhook de geocodificación:", error);
-    
-    if (error.name === 'AbortError') {
+    console.error("Error al llamar Google Geocoding API:", error);
+
+    if (error.name === "AbortError") {
       return {
         status: "ERROR",
         error_code: "TIMEOUT",
@@ -95,16 +128,11 @@ export async function geocodeAddress(request: GeocodingRequest): Promise<Geocodi
  * Valida que las coordenadas estén dentro del rango de Argentina
  */
 export function isValidArgentinaCoordinate(lat: number, lng: number): boolean {
-  // Rango aproximado de Argentina continental + Tierra del Fuego
-  const LAT_MIN = -56; // Sur de Tierra del Fuego
-  const LAT_MAX = -21; // Norte de Jujuy
-  const LNG_MIN = -74; // Oeste de Mendoza/Neuquén
-  const LNG_MAX = -53; // Este de Misiones
-
-  return (
-    lat >= LAT_MIN && lat <= LAT_MAX &&
-    lng >= LNG_MIN && lng <= LNG_MAX
-  );
+  const LAT_MIN = -56;
+  const LAT_MAX = -21;
+  const LNG_MIN = -74;
+  const LNG_MAX = -53;
+  return lat >= LAT_MIN && lat <= LAT_MAX && lng >= LNG_MIN && lng <= LNG_MAX;
 }
 
 /**
