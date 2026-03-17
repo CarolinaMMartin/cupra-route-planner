@@ -351,7 +351,7 @@ function scoreProspects(
 }
 
 // ============================================================
-// SYSTEM PROMPT — v9-hotzone
+// SYSTEM PROMPT — v10-balanced
 // ============================================================
 
 const RECOMMENDATION_SYSTEM_PROMPT = `Eres el Planificador Estratégico de CUPRA. Tu misión es armar rutas de visita densas y caminables para vendedores de vinos premium.
@@ -360,25 +360,37 @@ CONTEXTO: Vendemos vinos en canales ON_TRADE (restaurantes/bares) y OFF_TRADE (v
 
 REGLAS DE ORO (ESTRICTAS):
 1. CUOTA OBLIGATORIA: Seleccioná EXACTAMENTE 8 visitas por vendedor.
-2. PRIORIDAD CLIENTES: Los clientes existentes de la cartera tienen prioridad absoluta sobre prospectos. Completá con prospectos SOLO si no hay suficientes clientes.
-3. RECUPERACIÓN: Si existe al menos 1 cliente con >90 días sin comprar (PERDIDO/INACTIVO) dentro de los candidatos, INCLUILO. Es clave para recuperación comercial.
+2. COMPOSICIÓN BALANCEADA:
+   - PRIMERO: Clientes ACTIVOS e INACTIVOS (prioridad máxima, mantener relación)
+   - SEGUNDO: Máximo 4 clientes PERDIDOS (recuperación)
+   - TERCERO: Mínimo 2 PROSPECTOS (expansión comercial)
+   - Si no hay suficientes activos/inactivos, completá con prospectos antes que perdidos
+3. RECUPERACIÓN: Incluí al menos 1 cliente PERDIDO (>90 días sin compra) si existe.
 4. CONCENTRACIÓN GEOGRÁFICA: Todos los puntos deben estar geográficamente concentrados. Rutas densas, NO viajes largos.
 5. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor y por radio geográfico. Tu trabajo es elegir la mejor combinación.
 6. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
 7. NUNCA repitas el mismo client_id para distintos vendedores.
 
-Los candidatos vienen PRE-FILTRADOS por cartera y por radio geográfico. Elegí 8 priorizando clientes existentes.
+Los candidatos vienen PRE-FILTRADOS por cartera y por radio geográfico. Elegí 8 con composición balanceada.
 
 FORMATO: Usá la tool "generate_recommendations" con la estructura indicada.`;
 
 // ============================================================
-// POST-IA VALIDATION — v9-hotzone (linear pool fill)
+// POST-IA VALIDATION — v10-balanced (composition rules)
+// Rules:
+//   1. ACTIVO/INACTIVO clients first (highest priority)
+//   2. At least 1 PERDIDO (recovery) if available
+//   3. At least 2 PROSPECTOS if available and slots remain
+//   4. Max 4 PERDIDOS — rest filled with prospects
 // ============================================================
+
+const MIN_PROSPECTS = 2;
+const MAX_LOST = 4;
 
 function validateAndFill(
   aiRecs: any[],
-  clientPool: ScoredCandidate[],  // Pool 1: clientes (ACTIVO+INACTIVO+PERDIDO) sorted by score
-  prospectPool: ScoredCandidate[], // Pool 2: prospectos (POTENCIAL) sorted by distance
+  clientPool: ScoredCandidate[],
+  prospectPool: ScoredCandidate[],
   vendedorId: string,
   globalPickedIds: Set<string>,
 ): any[] {
@@ -388,53 +400,80 @@ function validateAndFill(
   const pickedIds = new Set<string>();
   const result: any[] = [];
 
-  // Step 1: Accept valid AI picks (respecting dedup)
+  const isAvailable = (id: string) => !pickedIds.has(id) && !globalPickedIds.has(id);
+  const addRec = (rec: any) => { result.push(rec); pickedIds.add(rec.client_id); };
+
+  // Separate client pool by estado
+  const activeClients = clientPool.filter(c => c.estado_comercial === 'ACTIVO' || c.estado_comercial === 'INACTIVO');
+  const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
+
+  // Step 1: Accept valid AI picks (respecting dedup) — but we'll rebalance after
+  const aiAccepted: any[] = [];
   for (const r of aiRecs) {
     if (r.vendedor_id !== vendedorId) continue;
-    if (pickedIds.has(r.client_id) || globalPickedIds.has(r.client_id)) continue;
+    if (!isAvailable(r.client_id)) continue;
     if (!allCandidates.has(r.client_id)) continue;
-    if (result.length >= 8) break;
-    result.push(r);
-    pickedIds.add(r.client_id);
+    aiAccepted.push(r);
   }
 
-  // Step 2: Fill remaining from client pool (by score)
-  for (const c of clientPool) {
+  // Step 2: Build balanced composition
+  // Priority A: ACTIVO + INACTIVO clients
+  for (const c of activeClients) {
     if (result.length >= 8) break;
-    if (pickedIds.has(c.client_id) || globalPickedIds.has(c.client_id)) continue;
-    result.push(makeRec(c, vendedorId));
-    pickedIds.add(c.client_id);
+    if (!isAvailable(c.client_id)) continue;
+    // Check if AI had a pick for this — use AI justification if so
+    const aiPick = aiAccepted.find(r => r.client_id === c.client_id);
+    addRec(aiPick || makeRec(c, vendedorId));
   }
 
-  // Step 3: Fill remaining from prospect pool (by distance)
+  // Priority B: Up to MAX_LOST lost clients (recovery)
+  let lostCount = 0;
+  for (const c of lostClients) {
+    if (result.length >= 6) break; // Reserve at least 2 slots for prospects
+    if (lostCount >= MAX_LOST) break;
+    if (!isAvailable(c.client_id)) continue;
+    const aiPick = aiAccepted.find(r => r.client_id === c.client_id);
+    addRec(aiPick || makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
+    lostCount++;
+  }
+
+  // Priority C: Prospects (minimum 2 if available, fill rest)
+  const prospectSlots = Math.max(MIN_PROSPECTS, 8 - result.length);
+  let prospectCount = 0;
   for (const c of prospectPool) {
     if (result.length >= 8) break;
-    if (pickedIds.has(c.client_id) || globalPickedIds.has(c.client_id)) continue;
-    result.push(makeRec(c, vendedorId));
-    pickedIds.add(c.client_id);
+    if (prospectCount >= prospectSlots) break;
+    if (!isAvailable(c.client_id)) continue;
+    addRec(makeRec(c, vendedorId));
+    prospectCount++;
   }
 
-  // Step 4: Strategic recovery swap — ensure at least 1 PERDIDO/INACTIVO (>90 days)
+  // Step 3: If still < 8, fill with remaining lost clients
+  for (const c of lostClients) {
+    if (result.length >= 8) break;
+    if (!isAvailable(c.client_id)) continue;
+    addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
+  }
+
+  // Step 4: If STILL < 8, fill with any remaining prospects
+  for (const c of prospectPool) {
+    if (result.length >= 8) break;
+    if (!isAvailable(c.client_id)) continue;
+    addRec(makeRec(c, vendedorId));
+  }
+
+  // Ensure at least 1 recovery if available and we have 8
   const hasRecovery = result.some(r => {
     const c = allCandidates.get(r.client_id);
     return c && !c.es_prospecto && (c.dias_desde_ultima_compra ?? 0) > 90;
   });
 
-  if (!hasRecovery && result.length >= 8) {
-    // Find the best recovery candidate not yet picked
-    const recoveryCandidates = clientPool.filter(c =>
-      (c.dias_desde_ultima_compra ?? 0) > 90 &&
-      !pickedIds.has(c.client_id) &&
-      !globalPickedIds.has(c.client_id)
-    );
-
-    if (recoveryCandidates.length > 0) {
-      const recovery = recoveryCandidates[0];
-      // Swap with the last picked client (lowest priority)
+  if (!hasRecovery && result.length >= 8 && lostClients.length > 0) {
+    const recovery = lostClients.find(c => isAvailable(c.client_id));
+    if (recovery) {
       const lastIdx = result.length - 1;
-      const swapped = result[lastIdx];
+      pickedIds.delete(result[lastIdx].client_id);
       result[lastIdx] = makeRec(recovery, vendedorId, `Recuperación estratégica: ${recovery.razon_social} (${recovery.dias_desde_ultima_compra} días sin compra)`);
-      pickedIds.delete(swapped.client_id);
       pickedIds.add(recovery.client_id);
     }
   }
