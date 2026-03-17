@@ -656,7 +656,7 @@ const ClientesDashboard = () => {
           </TabsList>
 
           <TabsContent value="zonas">
-            <ZonaKPIs clientesData={filteredData} formatCurrency={formatCurrency} />
+            <ZonaKPIs clientesData={filteredData} ventasData={ventasRaw} formatCurrency={formatCurrency} />
           </TabsContent>
 
           <TabsContent value="rankings">
