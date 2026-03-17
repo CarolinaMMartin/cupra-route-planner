@@ -21,10 +21,10 @@
     --primary-foreground: 240 8% 6%;  /* dark text on gold */
 
     --secondary: 240 6% 13%;          /* #1C1D22 */
-    --secondary-foreground: 0 0% 62%; /* #9A9A9F */
+    --secondary-foreground: 0 0% 72%; /* #B8B8B8 — legible */
 
     --muted: 240 5% 12%;
-    --muted-foreground: 240 2% 44%;   /* #6F7075 */
+    --muted-foreground: 240 2% 58%;   /* #929296 — legible on dark */
 
     --accent: 37 40% 59%;             /* same gold */
     --accent-foreground: 240 8% 6%;
