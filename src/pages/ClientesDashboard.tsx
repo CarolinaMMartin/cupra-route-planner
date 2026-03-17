@@ -376,8 +376,8 @@ const ClientesDashboard = () => {
 
   return (
     <TooltipProvider>
-    <div className="min-h-screen p-4 md:p-6">
-      <div className="max-w-[1920px] mx-auto space-y-6">
+    <div className="min-h-screen p-5 md:p-8">
+      <div className="max-w-[1920px] mx-auto space-y-7">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -446,9 +446,9 @@ const ClientesDashboard = () => {
 
         {/* Panel de Filtros */}
         <Card className="matte-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Filter className="h-5 w-5" />
+          <CardHeader className="pb-4">
+            <CardTitle className="section-title flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground/50" />
               Filtros Interactivos
             </CardTitle>
           </CardHeader>
@@ -577,108 +577,80 @@ const ClientesDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* TAREA 15: KPIs con tooltips documentando fórmula, fuente y granularidad */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="matte-card hover-lift">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                  Ventas Totales
-                  <Tooltip>
-                    <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
-                    <TooltipContent className="max-w-[240px] text-xs">
-                      <p className="font-medium">SUM(facturacion_ars)</p>
-                      <p>Fuente: ventas_cupra (transaccional)</p>
-                      <p>Columna Excel: Precio Total Final</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </CardTitle>
-                <DollarSign className="h-5 w-5 text-accent" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold text-foreground">
-                {formatCurrency(kpis.totalVentas)}
-              </div>
-            </CardContent>
+        {/* KPI Cards — unified typography */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="matte-card hover-lift p-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="kpi-label flex items-center gap-1.5">
+                Ventas Totales
+                <Tooltip>
+                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/40" /></TooltipTrigger>
+                  <TooltipContent className="max-w-[240px] text-xs">
+                    <p className="font-medium">SUM(facturacion_ars)</p>
+                    <p>Fuente: ventas_cupra · Columna: Precio Total Final</p>
+                  </TooltipContent>
+                </Tooltip>
+              </span>
+              <DollarSign className="h-4 w-4 text-muted-foreground/30" />
+            </div>
+            <div className="kpi-value">{formatCurrency(kpis.totalVentas)}</div>
           </Card>
 
-          <Card className="matte-card hover-lift">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                  Total Clientes
-                  <Tooltip>
-                    <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
-                    <TooltipContent className="max-w-[240px] text-xs">
-                      <p className="font-medium">COUNT(DISTINCT razon_social)</p>
-                      <p>Fuente: ventas_cupra (transaccional)</p>
-                      <p>Granularidad: cliente único por razón social</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </CardTitle>
-                <Users className="h-5 w-5 text-accent" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold text-foreground">
-                {kpis.totalClientes.toLocaleString()}
-              </div>
-            </CardContent>
+          <Card className="matte-card hover-lift p-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="kpi-label flex items-center gap-1.5">
+                Clientes
+                <Tooltip>
+                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/40" /></TooltipTrigger>
+                  <TooltipContent className="max-w-[240px] text-xs">
+                    <p className="font-medium">COUNT(DISTINCT razon_social)</p>
+                    <p>Fuente: ventas_cupra · Cliente único por razón social</p>
+                  </TooltipContent>
+                </Tooltip>
+              </span>
+              <Users className="h-4 w-4 text-muted-foreground/30" />
+            </div>
+            <div className="kpi-value">{kpis.totalClientes.toLocaleString()}</div>
           </Card>
 
-          <Card className="matte-card hover-lift">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                  Tickets Únicos
-                  <Tooltip>
-                    <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
-                    <TooltipContent className="max-w-[240px] text-xs">
-                      <p className="font-medium">COUNT(DISTINCT ticket)</p>
-                      <p>Fuente: ventas_cupra (transaccional)</p>
-                      <p>Granularidad: ticket único</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </CardTitle>
-                <ShoppingCart className="h-5 w-5 text-accent" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold text-foreground">
-                {kpis.totalOrdenes.toLocaleString()}
-              </div>
-            </CardContent>
+          <Card className="matte-card hover-lift p-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="kpi-label flex items-center gap-1.5">
+                Tickets
+                <Tooltip>
+                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/40" /></TooltipTrigger>
+                  <TooltipContent className="max-w-[240px] text-xs">
+                    <p className="font-medium">COUNT(DISTINCT ticket)</p>
+                    <p>Fuente: ventas_cupra · Ticket único</p>
+                  </TooltipContent>
+                </Tooltip>
+              </span>
+              <ShoppingCart className="h-4 w-4 text-muted-foreground/30" />
+            </div>
+            <div className="kpi-value">{kpis.totalOrdenes.toLocaleString()}</div>
           </Card>
 
-          <Card className="matte-card hover-lift">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-                  Ticket Prom. Ponderado
-                  <Tooltip>
-                    <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
-                    <TooltipContent className="max-w-[240px] text-xs">
-                      <p className="font-medium">Ventas Totales ÷ Tickets Únicos</p>
-                      <p>Fuente: ventas_cupra (transaccional)</p>
-                      <p>Promedio ponderado global, no promedio de promedios</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </CardTitle>
-                <TrendingUp className="h-5 w-5 text-accent" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-semibold text-foreground">
-                {formatCurrency(kpis.ticketPromedio)}
-              </div>
-            </CardContent>
+          <Card className="matte-card hover-lift p-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="kpi-label flex items-center gap-1.5">
+                Ticket Promedio
+                <Tooltip>
+                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/40" /></TooltipTrigger>
+                  <TooltipContent className="max-w-[240px] text-xs">
+                    <p className="font-medium">Ventas Totales ÷ Tickets</p>
+                    <p>Fuente: ventas_cupra · Promedio ponderado global</p>
+                  </TooltipContent>
+                </Tooltip>
+              </span>
+              <TrendingUp className="h-4 w-4 text-muted-foreground/30" />
+            </div>
+            <div className="kpi-value">{formatCurrency(kpis.ticketPromedio)}</div>
           </Card>
         </div>
 
         {/* Tabs: Rankings / KPIs por Zona */}
         <Tabs defaultValue="rankings" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="rankings">Top Rankings</TabsTrigger>
             <TabsTrigger value="zonas">KPIs por Zona</TabsTrigger>
           </TabsList>
@@ -692,9 +664,9 @@ const ClientesDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Top Barrios */}
           <Card className="matte-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-accent" />
+            <CardHeader className="pb-4">
+              <CardTitle className="section-title flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground/50" />
                 Top Barrios
               </CardTitle>
             </CardHeader>
@@ -728,9 +700,9 @@ const ClientesDashboard = () => {
 
           {/* Top Clientes */}
           <Card className="matte-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-secondary" />
+            <CardHeader className="pb-4">
+              <CardTitle className="section-title flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-muted-foreground/50" />
                 Top 10 Clientes
               </CardTitle>
             </CardHeader>
@@ -754,7 +726,7 @@ const ClientesDashboard = () => {
                             {formatCurrency(cliente.monto_total)}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            • {cliente.ordenes} tickets
+                            · {cliente.ordenes} tickets
                           </span>
                         </div>
                       </div>
@@ -765,18 +737,17 @@ const ClientesDashboard = () => {
             </CardContent>
           </Card>
 
-          {/* TAREA 4: Top Vendedores desde ventas_cupra */}
+          {/* Top Vendedores */}
           <Card className="matte-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-accent" />
+            <CardHeader className="pb-4">
+              <CardTitle className="section-title flex items-center gap-2">
+                <Users className="h-4 w-4 text-muted-foreground/50" />
                 Top Vendedores
                 <Tooltip>
-                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
+                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/40" /></TooltipTrigger>
                   <TooltipContent className="max-w-[240px] text-xs">
                     <p className="font-medium">SUM(facturacion_ars) desde ventas_cupra</p>
-                    <p>Fuente: tabla transaccional (no derivada)</p>
-                    <p>No afectado por filtros de clientes</p>
+                    <p>Fuente transaccional · No afectado por filtros</p>
                   </TooltipContent>
                 </Tooltip>
               </CardTitle>

@@ -89,4 +89,35 @@
     position: fixed;
     z-index: 0;
   }
+
+  /* Premium matte card */
+  .matte-card {
+    @apply bg-card border border-border/40 rounded-xl;
+    box-shadow: var(--shadow-soft);
+  }
+
+  /* Subtle lift on hover */
+  .hover-lift {
+    transition: var(--transition-smooth);
+  }
+  .hover-lift:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-medium);
+  }
+
+  /* KPI label — uppercase, tracked, muted */
+  .kpi-label {
+    @apply text-xs font-medium uppercase tracking-widest text-muted-foreground;
+    letter-spacing: 0.08em;
+  }
+
+  /* KPI value — large, white, semibold */
+  .kpi-value {
+    @apply text-[28px] font-semibold text-foreground leading-tight;
+  }
+
+  /* Section title — medium weight, slightly muted */
+  .section-title {
+    @apply text-base font-medium text-foreground/80;
+  }
 }
