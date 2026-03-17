@@ -650,7 +650,7 @@ const ClientesDashboard = () => {
 
         {/* Tabs: Rankings / KPIs por Zona */}
         <Tabs defaultValue="rankings" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-4">
+          <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="rankings">Top Rankings</TabsTrigger>
             <TabsTrigger value="zonas">KPIs por Zona</TabsTrigger>
           </TabsList>
@@ -664,9 +664,9 @@ const ClientesDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Top Barrios */}
           <Card className="matte-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-accent" />
+            <CardHeader className="pb-4">
+              <CardTitle className="section-title flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-muted-foreground/50" />
                 Top Barrios
               </CardTitle>
             </CardHeader>
