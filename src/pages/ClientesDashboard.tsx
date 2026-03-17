@@ -102,30 +102,40 @@ const ClientesDashboard = () => {
   };
 
   const fetchDashboardData = async () => {
-    // Fetch clientes
+    // Fetch clientes (para filtros, segmentación, ZonaKPIs)
     const { data: clientes } = await supabase
       .from('clientes')
       .select('*');
-    if (!clientes) return;
-    setClientesData(clientes);
+    if (clientes) setClientesData(clientes);
 
-    // TAREA 4: Fetch ventas por vendedor directamente desde ventas_cupra
-    const { data: ventas } = await supabase
-      .from('ventas_cupra')
-      .select('vendedor, facturacion_ars, ticket, letra, fecha_emision');
-    
-    if (ventas) {
+    // FUENTE DE VERDAD: Fetch TODAS las ventas desde ventas_cupra
+    // Paginar para superar límite de 1000 filas
+    let allVentas: any[] = [];
+    let offset = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data: batch } = await supabase
+        .from('ventas_cupra')
+        .select('vendedor, facturacion_ars, ticket, client_id, razon_social, ciudad')
+        .range(offset, offset + pageSize - 1);
+      if (!batch || batch.length === 0) break;
+      allVentas = allVentas.concat(batch);
+      if (batch.length < pageSize) break;
+      offset += pageSize;
+    }
+    setVentasRaw(allVentas);
+
+    // Top Vendedores: GROUP BY vendedor, SUM(facturacion_ars)
+    if (allVentas.length > 0) {
       const vendedorMap = new Map<string, { ventas: number; tickets: Set<string> }>();
-      for (const v of ventas) {
+      for (const v of allVentas) {
         if (!v.vendedor) continue;
         if (!vendedorMap.has(v.vendedor)) {
           vendedorMap.set(v.vendedor, { ventas: 0, tickets: new Set() });
         }
         const entry = vendedorMap.get(v.vendedor)!;
         entry.ventas += Number(v.facturacion_ars || 0);
-        if (v.ticket) {
-          entry.tickets.add(`${v.ticket}||${v.letra || ''}||${v.fecha_emision || ''}`);
-        }
+        if (v.ticket) entry.tickets.add(v.ticket);
       }
       const vendedorArr = Array.from(vendedorMap.entries())
         .map(([vendedor, data]) => ({ vendedor, ventas: data.ventas, tickets: data.tickets.size }))
