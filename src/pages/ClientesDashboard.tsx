@@ -1,15 +1,32 @@
+/**
+ * Dashboard de Clientes y Ventas
+ * 
+ * FUENTE DE VERDAD:
+ * ─────────────────
+ * • KPIs monetarios (Ventas Totales, Ticket Promedio): desde tabla `clientes` (agregada)
+ * • Top Vendedores: desde tabla `ventas_cupra` (transaccional) — NO desde clientes
+ * • Top Barrios/Clientes: desde tabla `clientes` (agregada)
+ * 
+ * GRANULARIDAD:
+ * ─────────────
+ * • Ventas Totales = SUM(monto_total_historico) por cliente filtrado. Granularidad: cliente.
+ * • Órdenes = SUM(cantidad_ordenes) = tickets únicos (DISTINCT ticket+letra+fecha). Granularidad: ticket.
+ * • Ticket Promedio = Ventas Totales / Órdenes. Promedio ponderado global. Granularidad: ticket.
+ * • Top Vendedores = SUM(facturacion_ars) desde ventas_cupra agrupado por vendedor. Granularidad: línea.
+ */
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, TrendingUp, Users, MapPin, DollarSign, ShoppingCart, Filter, Download, RefreshCw, ClipboardList, Pencil } from "lucide-react";
+import { ArrowLeft, TrendingUp, Users, MapPin, DollarSign, ShoppingCart, Filter, RefreshCw, ClipboardList, Pencil, AlertTriangle, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ZonaKPIs from "@/components/clientes/ZonaKPIs";
 
 interface BarrioVentas {
@@ -32,6 +49,8 @@ const ClientesDashboard = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [clientesData, setClientesData] = useState<any[]>([]);
+  // Tarea 4: ventas por vendedor desde ventas_cupra
+  const [ventasVendedorData, setVentasVendedorData] = useState<{ vendedor: string; ventas: number; tickets: number }[]>([]);
   
   // Filtros
   const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
@@ -83,36 +102,56 @@ const ClientesDashboard = () => {
   };
 
   const fetchDashboardData = async () => {
+    // Fetch clientes
     const { data: clientes } = await supabase
       .from('clientes')
       .select('*');
-
     if (!clientes) return;
     setClientesData(clientes);
+
+    // TAREA 4: Fetch ventas por vendedor directamente desde ventas_cupra
+    const { data: ventas } = await supabase
+      .from('ventas_cupra')
+      .select('vendedor, facturacion_ars, ticket, letra, fecha_emision');
+    
+    if (ventas) {
+      const vendedorMap = new Map<string, { ventas: number; tickets: Set<string> }>();
+      for (const v of ventas) {
+        if (!v.vendedor) continue;
+        if (!vendedorMap.has(v.vendedor)) {
+          vendedorMap.set(v.vendedor, { ventas: 0, tickets: new Set() });
+        }
+        const entry = vendedorMap.get(v.vendedor)!;
+        entry.ventas += Number(v.facturacion_ars || 0);
+        if (v.ticket) {
+          entry.tickets.add(`${v.ticket}||${v.letra || ''}||${v.fecha_emision || ''}`);
+        }
+      }
+      const vendedorArr = Array.from(vendedorMap.entries())
+        .map(([vendedor, data]) => ({ vendedor, ventas: data.ventas, tickets: data.tickets.size }))
+        .sort((a, b) => b.ventas - a.ventas);
+      setVentasVendedorData(vendedorArr);
+    }
   };
 
-  // Helper: normalizar strings para comparación case-insensitive
   const normalize = (str: string | null | undefined): string => {
     return str ? str.trim().toLowerCase().replace(/\s+/g, ' ') : '';
   };
 
-  // Helper: obtener barrios de un cliente con fallback robusto
   const getClienteBarrios = (cliente: any): string[] => {
     if (cliente.todos_barrios?.length > 0) return cliente.todos_barrios;
     if (cliente.barrio_principal) return [cliente.barrio_principal];
     return [];
   };
 
-  // Helper: obtener ciudades de un cliente con fallback robusto
   const getClienteCiudades = (cliente: any): string[] => {
     if (cliente.todas_ciudades?.length > 0) return cliente.todas_ciudades;
     if (cliente.ciudad_principal) return [cliente.ciudad_principal];
     return [];
   };
 
-  // Opciones únicas para filtros (con dedupe case-insensitive)
   const provincias = useMemo(() => {
-    const provinciasMap = new Map<string, string>(); // normalized -> display
+    const provinciasMap = new Map<string, string>();
     clientesData.forEach(cliente => {
       if (cliente.provincia_principal) {
         const key = normalize(cliente.provincia_principal);
@@ -124,47 +163,34 @@ const ClientesDashboard = () => {
     return Array.from(provinciasMap.values()).sort();
   }, [clientesData]);
 
-  // Ciudades filtradas por provincia (con dedupe case-insensitive)
   const ciudades = useMemo(() => {
-    const ciudadesMap = new Map<string, string>(); // normalized -> display
+    const ciudadesMap = new Map<string, string>();
     clientesData.forEach(cliente => {
-      if (selectedProvincia !== "all" && cliente.provincia_principal !== selectedProvincia) {
-        return;
-      }
+      if (selectedProvincia !== "all" && cliente.provincia_principal !== selectedProvincia) return;
       const ciudadesList = getClienteCiudades(cliente);
       ciudadesList.forEach((c: string) => {
         if (c) {
           const key = normalize(c);
-          if (!ciudadesMap.has(key)) {
-            ciudadesMap.set(key, c);
-          }
+          if (!ciudadesMap.has(key)) ciudadesMap.set(key, c);
         }
       });
     });
     return Array.from(ciudadesMap.values()).sort();
   }, [clientesData, selectedProvincia]);
 
-  // Barrios filtrados por provincia y ciudad (con dedupe case-insensitive)
   const barrios = useMemo(() => {
-    const barriosMap = new Map<string, string>(); // normalized -> display
+    const barriosMap = new Map<string, string>();
     clientesData.forEach(cliente => {
-      if (selectedProvincia !== "all" && cliente.provincia_principal !== selectedProvincia) {
-        return;
-      }
+      if (selectedProvincia !== "all" && cliente.provincia_principal !== selectedProvincia) return;
       if (selectedCiudad !== "all") {
         const ciudadesList = getClienteCiudades(cliente);
-        const matchCiudad = ciudadesList.some(c => normalize(c) === normalize(selectedCiudad));
-        if (!matchCiudad) {
-          return;
-        }
+        if (!ciudadesList.some(c => normalize(c) === normalize(selectedCiudad))) return;
       }
       const barriosList = getClienteBarrios(cliente);
       barriosList.forEach((b: string) => {
         if (b) {
           const key = normalize(b);
-          if (!barriosMap.has(key)) {
-            barriosMap.set(key, b);
-          }
+          if (!barriosMap.has(key)) barriosMap.set(key, b);
         }
       });
     });
@@ -174,7 +200,6 @@ const ClientesDashboard = () => {
   const vendedores = useMemo(() => {
     const uniqueVendedores = new Set<string>();
     clientesData.forEach(cliente => {
-      // Usar vendedor_actual (único) para evitar duplicación multi-vendedor
       const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
       if (vendedor) uniqueVendedores.add(vendedor);
     });
@@ -189,47 +214,63 @@ const ClientesDashboard = () => {
     return Array.from(uniqueCanales).sort();
   }, [clientesData]);
 
-  // Datos filtrados (con comparación case-insensitive para provincia, barrio y ciudad)
   const filteredData = useMemo(() => {
     return clientesData.filter(cliente => {
       const matchProvincia = selectedProvincia === "all" || 
         normalize(cliente.provincia_principal) === normalize(selectedProvincia);
-      
-      // Ciudades: case-insensitive con fallback robusto
       const ciudadesCliente = getClienteCiudades(cliente);
       const matchCiudad = selectedCiudad === "all" || 
         ciudadesCliente.some(c => normalize(c) === normalize(selectedCiudad));
-      
-      // Barrios: case-insensitive con fallback robusto
       const barriosCliente = getClienteBarrios(cliente);
       const matchBarrio = selectedBarrio === "all" || 
         barriosCliente.some(b => normalize(b) === normalize(selectedBarrio));
-      
-      // Filtrar por vendedor_actual (único) para evitar que un cliente aparezca en múltiples vendedores
       const vendedorCliente = cliente.vendedor_actual || cliente.vendedor_principal;
       const matchVendedor = selectedVendedor === "all" || vendedorCliente === selectedVendedor;
       const matchCanal = selectedCanal === "all" || cliente.canal === selectedCanal;
       const matchSearch = searchTerm === "" || 
         (cliente.razon_social || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
         (cliente.fantasia || "").toLowerCase().includes(searchTerm.toLowerCase());
-      
       return matchProvincia && matchCiudad && matchBarrio && matchVendedor && matchCanal && matchSearch;
     });
   }, [clientesData, selectedProvincia, selectedCiudad, selectedBarrio, selectedVendedor, selectedCanal, searchTerm]);
 
-  // KPIs calculados
+  /**
+   * KPIs calculados desde tabla `clientes` (agregada).
+   * • totalVentas: SUM(monto_total_historico). Granularidad: cliente.
+   * • totalOrdenes: SUM(cantidad_ordenes) = tickets únicos. Granularidad: ticket.
+   * • ticketPromedio: totalVentas / totalOrdenes. Promedio ponderado global.
+   */
   const kpis = useMemo(() => {
     const totalVentas = filteredData.reduce((sum, c) => sum + Number(c.monto_total_historico || 0), 0);
     const totalClientes = filteredData.length;
     const totalOrdenes = filteredData.reduce((sum, c) => sum + Number(c.cantidad_ordenes || 0), 0);
     const ticketPromedio = totalOrdenes > 0 ? totalVentas / totalOrdenes : 0;
-
     return { totalVentas, totalClientes, totalOrdenes, ticketPromedio };
   }, [filteredData]);
 
-  // Top barrios - usar barrio_principal (único) para evitar inflación por múltiples barrios
+  // TAREA 13: Indicador de calidad de datos
+  const dataQuality = useMemo(() => {
+    const total = clientesData.length;
+    if (total === 0) return null;
+    const sinBarrio = clientesData.filter(c => !c.barrio_principal).length;
+    const sinVendedor = clientesData.filter(c => !c.vendedor_actual && !c.vendedor_principal).length;
+    const ultimaCarga = clientesData.reduce((latest, c) => {
+      const d = c.updated_at ? new Date(c.updated_at) : null;
+      return d && (!latest || d > latest) ? d : latest;
+    }, null as Date | null);
+    return {
+      pctSinBarrio: Math.round(sinBarrio / total * 100),
+      pctSinVendedor: Math.round(sinVendedor / total * 100),
+      sinBarrio,
+      sinVendedor,
+      ultimaCarga,
+    };
+  }, [clientesData]);
+
+  // TAREA 5: Top barrios — incluir "Sin barrio asignado"
   const topBarrios = useMemo(() => {
     const barriosMap = new Map<string, { display: string; ventas: number }>();
+    let sinBarrioVentas = 0;
     filteredData.forEach(cliente => {
       const barrio = cliente.barrio_principal;
       const monto = Number(cliente.monto_total_historico || 0);
@@ -241,15 +282,22 @@ const ClientesDashboard = () => {
         } else {
           barriosMap.set(key, { display: barrio, ventas: monto });
         }
+      } else {
+        sinBarrioVentas += monto;
       }
     });
-    return Array.from(barriosMap.values())
+    const result = Array.from(barriosMap.values())
       .map(({ display, ventas }) => ({ barrio: display, ventas }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
+    // Agregar "Sin barrio asignado" si tiene ventas
+    if (sinBarrioVentas > 0) {
+      result.push({ barrio: '⚠️ Sin barrio asignado', ventas: sinBarrioVentas });
+      result.sort((a, b) => b.ventas - a.ventas);
+    }
+    return result.slice(0, 11);
   }, [filteredData]);
 
-  // Top clientes
   const topClientes = useMemo(() => {
     return filteredData
       .map(c => ({
@@ -262,24 +310,10 @@ const ClientesDashboard = () => {
       .slice(0, 10);
   }, [filteredData]);
 
-  // Top vendedores - usar vendedor_actual (único) para evitar doble conteo en clientes multi-vendedor
+  // TAREA 4: Top vendedores desde ventas_cupra (fuente transaccional)
   const topVendedores = useMemo(() => {
-    const vendedoresMap = new Map<string, { ventas: number; clientes: number }>();
-    filteredData.forEach(cliente => {
-      const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
-      const monto = Number(cliente.monto_total_historico || 0);
-      if (vendedor) {
-        const existing = vendedoresMap.get(vendedor) || { ventas: 0, clientes: 0 };
-        existing.ventas += monto;
-        existing.clientes += 1;
-        vendedoresMap.set(vendedor, existing);
-      }
-    });
-    return Array.from(vendedoresMap.entries())
-      .map(([vendedor, data]) => ({ vendedor, ventas: data.ventas, clientes: data.clientes }))
-      .sort((a, b) => b.ventas - a.ventas)
-      .slice(0, 10);
-  }, [filteredData]);
+    return ventasVendedorData.slice(0, 10);
+  }, [ventasVendedorData]);
 
   const handleClearFilters = () => {
     setSelectedProvincia("all");
@@ -290,14 +324,12 @@ const ClientesDashboard = () => {
     setSearchTerm("");
   };
 
-  // Manejar cambio de provincia (resetear ciudad y barrio)
   const handleProvinciaChange = (value: string) => {
     setSelectedProvincia(value);
     setSelectedCiudad("all");
     setSelectedBarrio("all");
   };
 
-  // Manejar cambio de ciudad (resetear barrio)
   const handleCiudadChange = (value: string) => {
     setSelectedCiudad(value);
     setSelectedBarrio("all");
@@ -321,6 +353,7 @@ const ClientesDashboard = () => {
   }
 
   return (
+    <TooltipProvider>
     <div className="min-h-screen p-4 md:p-6">
       <div className="max-w-[1920px] mx-auto space-y-6">
         {/* Header */}
@@ -363,6 +396,31 @@ const ClientesDashboard = () => {
             <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
           </div>
         </div>
+
+        {/* TAREA 13: Indicador de calidad de datos */}
+        {dataQuality && (dataQuality.pctSinBarrio > 10 || dataQuality.pctSinVendedor > 5) && (
+          <Card className="border-amber-500/30 bg-amber-500/5">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center gap-3 text-sm">
+                <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                <span className="text-muted-foreground">
+                  Calidad de datos:
+                  {dataQuality.pctSinBarrio > 10 && (
+                    <span className="ml-2 font-medium text-amber-500">{dataQuality.sinBarrio} clientes sin barrio ({dataQuality.pctSinBarrio}%)</span>
+                  )}
+                  {dataQuality.pctSinVendedor > 5 && (
+                    <span className="ml-2 font-medium text-amber-500">{dataQuality.sinVendedor} sin vendedor ({dataQuality.pctSinVendedor}%)</span>
+                  )}
+                  {dataQuality.ultimaCarga && (
+                    <span className="ml-3 text-muted-foreground/70">
+                      · Últ. actualización: {dataQuality.ultimaCarga.toLocaleDateString('es-AR')}
+                    </span>
+                  )}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Panel de Filtros */}
         <Card className="matte-card">
@@ -497,13 +555,21 @@ const ClientesDashboard = () => {
           </CardContent>
         </Card>
 
-        {/* KPIs */}
+        {/* TAREA 15: KPIs con tooltips documentando fórmula, fuente y granularidad */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="matte-card hover-lift">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
                   Ventas Totales
+                  <Tooltip>
+                    <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
+                    <TooltipContent className="max-w-[240px] text-xs">
+                      <p className="font-medium">SUM(monto_total_historico)</p>
+                      <p>Fuente: tabla clientes (agregada)</p>
+                      <p>Columna Excel: Facturación Ar$ (neto)</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </CardTitle>
                 <DollarSign className="h-5 w-5 text-accent" />
               </div>
@@ -518,8 +584,16 @@ const ClientesDashboard = () => {
           <Card className="matte-card hover-lift">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
                   Total Clientes
+                  <Tooltip>
+                    <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
+                    <TooltipContent className="max-w-[240px] text-xs">
+                      <p className="font-medium">COUNT de clientes filtrados</p>
+                      <p>Fuente: tabla clientes</p>
+                      <p>Granularidad: cliente único</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </CardTitle>
                 <Users className="h-5 w-5 text-accent" />
               </div>
@@ -534,8 +608,16 @@ const ClientesDashboard = () => {
           <Card className="matte-card hover-lift">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Órdenes Totales
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                  Tickets Únicos
+                  <Tooltip>
+                    <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
+                    <TooltipContent className="max-w-[240px] text-xs">
+                      <p className="font-medium">SUM(cantidad_ordenes)</p>
+                      <p>Fuente: tabla clientes</p>
+                      <p>Granularidad: ticket único (DISTINCT ticket+letra+fecha)</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </CardTitle>
                 <ShoppingCart className="h-5 w-5 text-accent" />
               </div>
@@ -550,8 +632,16 @@ const ClientesDashboard = () => {
           <Card className="matte-card hover-lift">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Ticket Promedio
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                  Ticket Prom. Ponderado
+                  <Tooltip>
+                    <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
+                    <TooltipContent className="max-w-[240px] text-xs">
+                      <p className="font-medium">Ventas Totales ÷ Tickets Únicos</p>
+                      <p>Fuente: tabla clientes (derivado)</p>
+                      <p>Promedio ponderado global, no promedio de promedios</p>
+                    </TooltipContent>
+                  </Tooltip>
                 </CardTitle>
                 <TrendingUp className="h-5 w-5 text-accent" />
               </div>
@@ -577,14 +667,13 @@ const ClientesDashboard = () => {
 
           <TabsContent value="rankings">
 
-        {/* Gráficos y Tablas */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Top Barrios */}
           <Card className="matte-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MapPin className="h-5 w-5 text-accent" />
-                Top 10 Barrios
+                Top Barrios
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -592,7 +681,11 @@ const ClientesDashboard = () => {
                 {topBarrios.map((barrio, index) => (
                   <div
                     key={barrio.barrio}
-                    className="flex items-center justify-between p-3 rounded-lg bg-card/50 border border-border/40 hover:bg-card/70 transition-colors"
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                      barrio.barrio.includes('Sin barrio') 
+                        ? 'bg-amber-500/5 border-amber-500/20' 
+                        : 'bg-card/50 border-border/40 hover:bg-card/70'
+                    }`}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <Badge variant="secondary" className="shrink-0">
@@ -639,7 +732,7 @@ const ClientesDashboard = () => {
                             {formatCurrency(cliente.monto_total)}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            • {cliente.ordenes} órdenes
+                            • {cliente.ordenes} tickets
                           </span>
                         </div>
                       </div>
@@ -650,12 +743,20 @@ const ClientesDashboard = () => {
             </CardContent>
           </Card>
 
-          {/* Top Vendedores */}
+          {/* TAREA 4: Top Vendedores desde ventas_cupra */}
           <Card className="matte-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-accent" />
-                Top 10 Vendedores
+                Top Vendedores
+                <Tooltip>
+                  <TooltipTrigger><Info className="h-3 w-3 text-muted-foreground/50" /></TooltipTrigger>
+                  <TooltipContent className="max-w-[240px] text-xs">
+                    <p className="font-medium">SUM(facturacion_ars) desde ventas_cupra</p>
+                    <p>Fuente: tabla transaccional (no derivada)</p>
+                    <p>No afectado por filtros de clientes</p>
+                  </TooltipContent>
+                </Tooltip>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -674,7 +775,7 @@ const ClientesDashboard = () => {
                           {vendedor.vendedor}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {vendedor.clientes} clientes
+                          {vendedor.tickets} tickets
                         </span>
                       </div>
                     </div>
@@ -692,6 +793,7 @@ const ClientesDashboard = () => {
         </Tabs>
       </div>
     </div>
+    </TooltipProvider>
   );
 };
 

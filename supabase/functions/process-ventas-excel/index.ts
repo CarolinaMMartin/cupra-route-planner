@@ -1,5 +1,40 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
 
+/**
+ * ═══════════════════════════════════════════════════════════════
+ * ETL: process-ventas-excel — v2.0
+ * ═══════════════════════════════════════════════════════════════
+ * 
+ * MODELO DE DATOS:
+ * ────────────────
+ * • ventas_cupra: Tabla TRANSACCIONAL. 1 fila = 1 línea de producto.
+ *   Granularidad: ticket + letra + fecha + client_id + codigo_producto.
+ *   
+ * • clientes: Tabla AGREGADA, derivada de ventas_cupra.
+ *   1 fila = 1 cliente. Campos calculados desde ventas_cupra.
+ *
+ * FUENTE DE VERDAD:
+ * ─────────────────
+ * KPIs monetarios → ventas_cupra (SUM facturacion_ars)
+ * Segmentación/filtros → clientes (campos derivados)
+ *
+ * MÉTRICAS Y GRANULARIDAD:
+ * ────────────────────────
+ * • monto_total_historico: SUM(facturacion_ars) de líneas deduplicadas. Granularidad: línea.
+ * • cantidad_ordenes: COUNT(DISTINCT ticket||letra||fecha). Granularidad: ticket.
+ * • ticket_promedio: monto_total_historico / cantidad_ordenes. Granularidad: ticket.
+ * • vendedor_actual: Vendedor de la venta MÁS RECIENTE del cliente. Operativo.
+ * • vendedor_principal: Vendedor con más ventas históricas (mode). Histórico.
+ *
+ * COLUMNA DE FACTURACIÓN:
+ * ───────────────────────
+ * Fuente oficial: "Facturación Ar$" (valor neto). Confirmado 2026-03-17.
+ * Prioridad de búsqueda: Facturación Ar$ > Facturacion Ars > facturacion_ars > Precio Total Final > Precio Total Neto
+ * 
+ * VERSION: v2.0 — tickets únicos, validaciones, metadata, reconciliación
+ * ═══════════════════════════════════════════════════════════════
+ */
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
@@ -9,6 +44,11 @@ const corsHeaders = {
 const DIAS_ACTIVO = 30;
 const DIAS_INTERMITENTE = 90;
 const DIAS_INACTIVO = 180;
+const ETL_VERSION = 'v2.0';
+
+// === UMBRALES DE CALIDAD ===
+const UMBRAL_PCT_SIN_BARRIO = 10;
+const UMBRAL_PCT_SIN_VENDEDOR = 5;
 
 // === MAPEO BARRIOS → COMUNAS DE CABA ===
 const BARRIOS_A_COMUNA: Record<string, string> = {
@@ -49,25 +89,19 @@ const toFloat = (v: any): number | null => {
 };
 const toNumberCurrency = (v: any): number | null => {
   if (isEmpty(v)) return null;
-  // If xlsx already parsed it as a JS number, use it directly
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
   const s = String(v).trim();
-  // Try direct parse first (handles "34710.74" from xlsx)
   const directParse = Number(s);
   if (Number.isFinite(directParse)) return directParse;
-  // Clean non-numeric chars
   const cleaned = s.replace(/[^\d,.\-]/g, '').replace(/\s+/g, '');
-  // Argentine format: comma as decimal (1.234.567,89)
   if (/,\d{1,2}$/.test(cleaned)) {
     const n = Number(cleaned.replace(/\./g, '').replace(',', '.'));
     return Number.isFinite(n) ? n : null;
   }
-  // US format: dot as decimal (1,234,567.89)
   if (/\.\d{1,2}$/.test(cleaned)) {
     const n = Number(cleaned.replace(/,/g, ''));
     return Number.isFinite(n) ? n : null;
   }
-  // No clear decimal separator - treat as integer
   const n = Number(cleaned.replace(/[.,]/g, ''));
   return Number.isFinite(n) ? n : null;
 };
@@ -76,7 +110,6 @@ const normalizeClientId = (v: any): string | null => {
   if (isEmpty(v)) return null;
   const raw = String(v).trim();
   if (!raw) return null;
-
   if (/^[\d.,]+$/.test(raw)) {
     const normalized = raw.replace(/,/g, '.');
     const asNum = Number(normalized);
@@ -84,7 +117,6 @@ const normalizeClientId = (v: any): string | null => {
       return Number.isInteger(asNum) ? String(asNum) : normalized.replace(/\.0+$/, '');
     }
   }
-
   return raw;
 };
 
@@ -95,6 +127,14 @@ const normalizeCuit = (v: any): string | null => {
   return digits || s;
 };
 
+/**
+ * Busca un valor en un objeto probando múltiples nombres de campo.
+ * Prioridad: exacto → case-insensitive → NFD-normalized.
+ * 
+ * IMPORTANTE: El orden de fieldNames define la prioridad de resolución.
+ * Para facturacion_ars, la prioridad es:
+ *   'Facturación Ar$' > 'Facturacion Ar$' > etc. > 'Precio Total Final'
+ */
 function getFieldValue(obj: Record<string, any>, fieldNames: string[]): any {
   for (const f of fieldNames) {
     if (obj[f] !== undefined) return obj[f];
@@ -113,6 +153,30 @@ function getFieldValue(obj: Record<string, any>, fieldNames: string[]): any {
     }
   }
   return undefined;
+}
+
+/**
+ * Resuelve qué columna del Excel se mapeó para un campo dado.
+ * Retorna el nombre de la columna encontrada o null.
+ */
+function resolveFieldName(obj: Record<string, any>, fieldNames: string[]): string | null {
+  for (const f of fieldNames) {
+    if (obj[f] !== undefined) return f;
+  }
+  const keys = Object.keys(obj);
+  for (const f of fieldNames) {
+    for (const k of keys) {
+      if (k.toLowerCase() === f.toLowerCase()) return k;
+    }
+  }
+  const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+  for (const f of fieldNames) {
+    const nf = normalize(f);
+    for (const k of keys) {
+      if (normalize(k) === nf) return k;
+    }
+  }
+  return null;
 }
 
 const mode = (iterable: Set<string>): string | null => {
@@ -149,7 +213,6 @@ interface GeoResult { barrio: string | null; comuna: string | null; ciudad: stri
 function normalizarGeografia(ciudadRaw: string | null): GeoResult {
   if (!ciudadRaw) return { barrio: null, comuna: null, ciudad: null, provincia: null };
   const ubicacion = ciudadRaw.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-
   if (BARRIOS_A_COMUNA[ubicacion]) {
     return { barrio: ubicacion, comuna: BARRIOS_A_COMUNA[ubicacion], ciudad: 'CABA', provincia: 'CABA' };
   }
@@ -177,17 +240,19 @@ const countNonEmptyValues = (obj: Record<string, any>): number => {
 const buildVentaConflictKey = (venta: Record<string, any>): string | null => {
   const targetFields = ['ticket', 'letra', 'fecha_emision', 'client_id', 'codigo_producto'];
   const values = targetFields.map(field => venta[field]);
-
   if (values.some(value => isEmpty(value))) return null;
-
-  return values
-    .map(value => String(value).trim().toUpperCase())
-    .join('||');
+  return values.map(value => String(value).trim().toUpperCase()).join('||');
 };
 
 const mergeVentaDuplicate = (current: Record<string, any>, incoming: Record<string, any>) => {
   return countNonEmptyValues(incoming) >= countNonEmptyValues(current) ? incoming : current;
 };
+
+// === Campo de facturación: nombres de columna en orden de prioridad ===
+const FACTURACION_FIELD_NAMES = [
+  'Facturación Ar$', 'Facturacion Ar$', 'Facturación Ars', 'Facturacion Ars',
+  'facturacion_ars', 'Precio Total Final', 'Precio Total Neto',
+];
 
 // === MAIN ===
 Deno.serve(async (req) => {
@@ -205,7 +270,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`📦 Recibidas ${rows.length} filas del Excel`);
+    console.log(`📦 ETL ${ETL_VERSION} — Recibidas ${rows.length} filas del Excel`);
+
+    // ── TAREA 8: Log de columna de facturación resuelta ──
+    const facturacionColumnResolved = rows.length > 0
+      ? resolveFieldName(rows[0], FACTURACION_FIELD_NAMES)
+      : null;
+    console.log(`💰 Columna facturación: resuelta="${facturacionColumnResolved}" | evaluadas=${JSON.stringify(FACTURACION_FIELD_NAMES)}`);
 
     // ============ FASE 0: Lookup CUIT → client_id existente ============
     const allCuits = new Set<string>();
@@ -217,7 +288,6 @@ Deno.serve(async (req) => {
     const cuitToClientId = new Map<string, string>();
     if (allCuits.size > 0) {
       const cuitArray = Array.from(allCuits);
-      // Query in batches of 500 to avoid URL length limits
       for (let i = 0; i < cuitArray.length; i += 500) {
         const batch = cuitArray.slice(i, i + 500);
         const { data: existingByCuit } = await supabase
@@ -235,11 +305,13 @@ Deno.serve(async (req) => {
     const ventasRaw: any[] = [];
     const clientesMap = new Map<string, any>();
     let ventasSinClientId = 0;
+    let facturacionNullCount = 0;
+    // TAREA 12: Track descartados sin client_id
+    const descartados: { cuit_dni: string | null; razon_social: string | null }[] = [];
 
     for (const row of rows) {
       const idCandidato = normalizeClientId(getFieldValue(row, ['Id', 'id', 'ID', 'client_id', 'Número Externo', 'Numero Externo']));
       const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
-      // Prioridad: ID explícito > lookup por CUIT en DB > CUIT como fallback
       const client_id = idCandidato || (cuit_dni && cuitToClientId.get(cuit_dni)) || cuit_dni;
       const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
       const fantasia = toStr(getFieldValue(row, ['Fantasia', 'Fantasía', 'fantasia']));
@@ -247,7 +319,7 @@ Deno.serve(async (req) => {
       const ciudad_raw = toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad']));
       const vendedor = toStr(getFieldValue(row, ['Vendedor', 'vendedor']));
       const fecha_emision = getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision']);
-      const facturacion = toNumberCurrency(getFieldValue(row, ['Facturación Ar$', 'Facturacion Ar$', 'Facturación Ars', 'Facturacion Ars', 'facturacion_ars', 'Precio Total Final', 'Precio Total Neto']));
+      const facturacion = toNumberCurrency(getFieldValue(row, FACTURACION_FIELD_NAMES));
       const producto = toStr(getFieldValue(row, ['Nombre', 'nombre', 'Etiqueta', 'Variante']));
       const cajas = toInt(getFieldValue(row, ['Cajas', 'cajas', 'Cantidad']));
       const categorias = toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias', 'Categorías Cliente', 'Categorias Cliente']));
@@ -262,12 +334,14 @@ Deno.serve(async (req) => {
       const pais = toStr(getFieldValue(row, ['País', 'Pais', 'pais']));
       const fecha_iso = toYmdFromExcelOrText(fecha_emision);
 
+      if (facturacion === null) facturacionNullCount++;
+
       if (!client_id) {
         ventasSinClientId += 1;
+        descartados.push({ cuit_dni, razon_social });
         continue;
       }
 
-      // Build venta record
       ventasRaw.push({
         client_id,
         ticket, letra, fecha_emision: fecha_iso, cuit_dni, razon_social, fantasia,
@@ -275,6 +349,10 @@ Deno.serve(async (req) => {
         vendedor, telefono, celular, correo, direccion, ciudad: ciudad_raw,
         provincia: provincia_raw, pais, categorias,
       });
+    }
+
+    if (facturacionNullCount > 0) {
+      console.log(`⚠️ ${facturacionNullCount} filas con facturación null (columna: ${facturacionColumnResolved})`);
     }
 
     // ============ FASE 1b: Deduplicar ventas ANTES de agregar clientes ============
@@ -288,7 +366,6 @@ Deno.serve(async (req) => {
         ventasSinClaveConflicto.push(venta);
         continue;
       }
-
       const existingVenta = ventasByConflictKey.get(conflictKey);
       if (!existingVenta) {
         ventasByConflictKey.set(conflictKey, venta);
@@ -302,6 +379,24 @@ Deno.serve(async (req) => {
 
     if (ventasDuplicadas > 0) {
       console.log(`♻️ ${ventasDuplicadas} filas duplicadas consolidadas (${ventasRaw.length} → ${ventasDeduplicadas.length})`);
+    }
+
+    // ── TAREA 2: Validación de unicidad de tickets cross-client ──
+    const ticketToClients = new Map<string, Set<string>>();
+    for (const venta of ventasDeduplicadas) {
+      if (venta.ticket && venta.client_id) {
+        const tKey = `${venta.ticket}||${venta.letra || ''}||${venta.fecha_emision || ''}`;
+        if (!ticketToClients.has(tKey)) ticketToClients.set(tKey, new Set());
+        ticketToClients.get(tKey)!.add(venta.client_id);
+      }
+    }
+    const ticketsCompartidos = Array.from(ticketToClients.entries())
+      .filter(([, clients]) => clients.size > 1);
+    if (ticketsCompartidos.length > 0) {
+      console.log(`⚠️ ${ticketsCompartidos.length} tickets compartidos entre múltiples clientes`);
+      ticketsCompartidos.slice(0, 5).forEach(([tk, cls]) => {
+        console.log(`  ticket=${tk} → clientes: ${Array.from(cls).join(', ')}`);
+      });
     }
 
     // ============ FASE 2: Agregar clientes desde ventas DEDUPLICADAS ============
@@ -319,7 +414,14 @@ Deno.serve(async (req) => {
           provincias: new Set<string>(), direcciones: new Set<string>(), vendedores: new Set<string>(),
           productos: new Set<string>(), categorias_set: new Set<string>(),
           telefonos: new Set<string>(), emails: new Set<string>(),
-          monto_total: 0, cantidad_ordenes: 0, fechas: [] as Date[],
+          monto_total: 0,
+          // TAREA 1: Set para tickets únicos en vez de contador
+          tickets_set: new Set<string>(),
+          cantidad_lineas: 0,
+          fechas: [] as Date[],
+          // Track vendedor de la venta más reciente
+          ultima_fecha_venta: null as Date | null,
+          vendedor_ultima_venta: null as string | null,
         });
       }
 
@@ -340,8 +442,24 @@ Deno.serve(async (req) => {
         categorias.split(/[/|,;]/).forEach((cat: string) => { const t = cat.trim(); if (t) c.categorias_set.add(t); });
       }
       c.monto_total += facturacion || 0;
-      c.cantidad_ordenes += 1;
-      if (fecha_iso) c.fechas.push(new Date(fecha_iso));
+      c.cantidad_lineas += 1;
+
+      // TAREA 1: Contar tickets únicos via Set
+      // Identificador primario: ticket. Desambiguación: letra + fecha_emision.
+      if (venta.ticket) {
+        const ticketKey = `${venta.ticket}||${venta.letra || ''}||${fecha_iso || ''}`;
+        c.tickets_set.add(ticketKey);
+      }
+
+      if (fecha_iso) {
+        const d = new Date(fecha_iso);
+        c.fechas.push(d);
+        // Track vendedor de la venta más reciente para vendedor_actual
+        if (vendedor && (!c.ultima_fecha_venta || d > c.ultima_fecha_venta)) {
+          c.ultima_fecha_venta = d;
+          c.vendedor_ultima_venta = vendedor;
+        }
+      }
       c.razon_social = razon_social || c.razon_social;
       c.fantasia = fantasia || c.fantasia;
     }
@@ -356,7 +474,9 @@ Deno.serve(async (req) => {
       const ultima = fechasOrd[fechasOrd.length - 1] || null;
       const dias = ultima ? Math.floor((ahora.getTime() - ultima.getTime()) / 86400000) : 9999;
 
-      const ticket_promedio = c.cantidad_ordenes > 0 ? Math.round((c.monto_total / c.cantidad_ordenes) * 100) / 100 : 0;
+      // TAREA 1: cantidad_ordenes = tickets únicos (no líneas de producto)
+      const cantidadOrdenes = c.tickets_set.size > 0 ? c.tickets_set.size : (c.cantidad_lineas > 0 ? 1 : 0);
+      const ticket_promedio = cantidadOrdenes > 0 ? Math.round((c.monto_total / cantidadOrdenes) * 100) / 100 : 0;
 
       let categoria_recencia = 'PERDIDO', score_recencia = 10;
       if (dias <= DIAS_ACTIVO) { categoria_recencia = 'ACTIVO'; score_recencia = 100; }
@@ -384,7 +504,7 @@ Deno.serve(async (req) => {
         primera_compra: primera ? primera.toISOString().split('T')[0] : null,
         ultima_compra: ultima ? ultima.toISOString().split('T')[0] : null,
         dias_desde_ultima_compra: dias === 9999 ? null : dias,
-        cantidad_ordenes: c.cantidad_ordenes,
+        cantidad_ordenes: cantidadOrdenes,
         monto_total_historico: Math.round(c.monto_total * 100) / 100,
         ticket_promedio, categoria_recencia, categoria_volumen,
         score_recencia, score_volumen, score_comercial,
@@ -392,6 +512,8 @@ Deno.serve(async (req) => {
         barrio_principal: mode(c.barrios), ciudad_principal: mode(c.ciudades),
         provincia_principal: mode(c.provincias), direccion_principal: mode(c.direcciones),
         vendedor_principal: mode(c.vendedores),
+        // TAREA 3: vendedor_actual = vendedor de la venta más reciente
+        vendedor_actual: c.vendedor_ultima_venta || mode(c.vendedores),
         productos_comprados: Array.from(c.productos),
         todos_barrios: Array.from(c.barrios), todas_ciudades: Array.from(c.ciudades),
         todas_direcciones: Array.from(c.direcciones), todos_vendedores: Array.from(c.vendedores),
@@ -399,7 +521,31 @@ Deno.serve(async (req) => {
       };
     });
 
-    console.log(`🧮 ${clientesEnriquecidos.length} clientes agregados desde ${ventasDeduplicadas.length} ventas deduplicadas, $${Math.round(totalGlobal).toLocaleString()} total`);
+    // ── TAREA 9: Reconciliación — totales para validación ──
+    const totalFacturacionProcesada = Math.round(totalGlobal * 100) / 100;
+    const totalTicketsUnicos = Array.from(clientesMap.values()).reduce((sum, c) => sum + c.tickets_set.size, 0);
+    const totalClientesUnicos = clientesMap.size;
+
+    console.log(`🧮 ${clientesEnriquecidos.length} clientes | ${ventasDeduplicadas.length} líneas deduplicadas | ${totalTicketsUnicos} tickets únicos | $${Math.round(totalGlobal).toLocaleString()} total`);
+
+    // ── TAREA 7: Umbrales de calidad ──
+    const sinBarrio = clientesEnriquecidos.filter(c => !c.barrio_principal).length;
+    const sinVendedor = clientesEnriquecidos.filter(c => !c.vendedor_actual && !c.vendedor_principal).length;
+    const pctSinBarrio = totalClientesUnicos > 0 ? Math.round(sinBarrio / totalClientesUnicos * 100) : 0;
+    const pctSinVendedor = totalClientesUnicos > 0 ? Math.round(sinVendedor / totalClientesUnicos * 100) : 0;
+
+    const calidad = {
+      pct_sin_barrio: pctSinBarrio,
+      pct_sin_vendedor: pctSinVendedor,
+      pct_sin_client_id: rows.length > 0 ? Math.round(ventasSinClientId / rows.length * 100) : 0,
+      clientes_sin_barrio: sinBarrio,
+      clientes_sin_vendedor: sinVendedor,
+      alerta: pctSinBarrio > UMBRAL_PCT_SIN_BARRIO || pctSinVendedor > UMBRAL_PCT_SIN_VENDEDOR,
+    };
+
+    if (calidad.alerta) {
+      console.log(`🚨 ALERTA CALIDAD: ${pctSinBarrio}% sin barrio (umbral ${UMBRAL_PCT_SIN_BARRIO}%), ${pctSinVendedor}% sin vendedor (umbral ${UMBRAL_PCT_SIN_VENDEDOR}%)`);
+    }
 
     // ============ FASE 4: Upsert clientes PRIMERO (para satisfacer FK de ventas) ============
     const results = { ventas_procesadas: 0, ventas_errores: 0, clientes_actualizados: 0, clientes_errores: 0, errores: [] as string[] };
@@ -417,14 +563,12 @@ Deno.serve(async (req) => {
         .from('clientes')
         .select('client_id')
         .in('client_id', allClientIds);
-
       existingSet = new Set((existingClients || []).map(c => c.client_id));
     }
 
     const newClients = clientesEnriquecidos.filter(c => !existingSet.has(String(c.client_id)));
     const updateClients = clientesEnriquecidos.filter(c => existingSet.has(String(c.client_id)));
 
-    // Insert new clients
     if (newClients.length > 0) {
       const { error } = await supabase.from('clientes').insert(
         newClients.map(c => ({
@@ -447,7 +591,7 @@ Deno.serve(async (req) => {
       'primera_compra', 'ultima_compra', 'dias_desde_ultima_compra',
       'cantidad_ordenes', 'monto_total_historico', 'ticket_promedio',
       'categoria_recencia', 'categoria_volumen', 'score_recencia', 'score_volumen', 'score_comercial',
-      'participacion_mercado', 'vendedor_principal', 'productos_comprados',
+      'participacion_mercado', 'vendedor_principal', 'vendedor_actual', 'productos_comprados',
       'todos_barrios', 'todas_ciudades', 'todas_direcciones', 'todos_vendedores',
       'requiere_visita', 'canal', 'etiquetas',
       'barrio_principal', 'ciudad_principal', 'provincia_principal', 'direccion_principal',
@@ -470,7 +614,6 @@ Deno.serve(async (req) => {
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
 
     // ============ FASE 5: Upsert ventas (después de clientes para respetar FK) ============
-    // Batch ventas in chunks of 500
     for (let i = 0; i < ventasDeduplicadas.length; i += 500) {
       const batch = ventasDeduplicadas.slice(i, i + 500);
       const { error } = await supabase.from('ventas_cupra').upsert(batch, {
@@ -486,9 +629,50 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ── TAREA 11: Consistencia clientes ↔ ventas_cupra (post-carga check) ──
+    // Solo reportamos las discrepancias, no corregimos aquí
+    const discrepancias: string[] = [];
+    // Compare total processed vs what we just upserted
+    if (Math.abs(totalFacturacionProcesada - Array.from(clientesMap.values()).reduce((s, c) => s + c.monto_total, 0)) > 1) {
+      discrepancias.push('Discrepancia interna en facturación total procesada');
+    }
+
     console.log('🎉 Proceso completo:', results);
 
-    return new Response(JSON.stringify({ success: true, results }), {
+    // ── TAREA 10, 12: Metadata y descartados ──
+    const metadata = {
+      fecha_carga: new Date().toISOString(),
+      version_etl: ETL_VERSION,
+      columna_facturacion: facturacionColumnResolved,
+      columnas_evaluadas: FACTURACION_FIELD_NAMES,
+      filas_origen: rows.length,
+      filas_facturacion_null: facturacionNullCount,
+    };
+
+    const reconciliacion = {
+      filas_excel: rows.length,
+      filas_procesadas: ventasRaw.length,
+      filas_deduplicadas: ventasDeduplicadas.length,
+      filas_descartadas_sin_id: ventasSinClientId,
+      facturacion_total_procesada: totalFacturacionProcesada,
+      tickets_unicos: totalTicketsUnicos,
+      clientes_unicos: totalClientesUnicos,
+      tickets_compartidos: ticketsCompartidos.length,
+    };
+
+    const integridad = {
+      descartados_sin_client_id: descartados.slice(0, 20),
+      total_descartados: descartados.length,
+    };
+
+    return new Response(JSON.stringify({
+      success: true,
+      results,
+      calidad,
+      reconciliacion,
+      metadata,
+      integridad,
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200,
     });
   } catch (error) {

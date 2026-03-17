@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Users, TrendingUp, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { MapPin, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 
 interface ZonaKPIsProps {
@@ -9,10 +9,18 @@ interface ZonaKPIsProps {
   formatCurrency: (amount: number) => string;
 }
 
+/**
+ * Categorías de estado comercial:
+ * • activo: dias_desde_ultima_compra <= 30
+ * • inactivo: 31–90 días
+ * • perdido: >90 días
+ * • sin_datos: dias_desde_ultima_compra === null (no confundir con "perdido")
+ */
+type ClientCategory = 'activo' | 'inactivo' | 'perdido' | 'sin_datos';
+
 const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
-  // Categorías del manual de operaciones
-  const categorizeClient = (diasSinCompra: number | null): 'activo' | 'inactivo' | 'perdido' => {
-    if (diasSinCompra === null || diasSinCompra === undefined) return 'perdido';
+  const categorizeClient = (diasSinCompra: number | null): ClientCategory => {
+    if (diasSinCompra === null || diasSinCompra === undefined) return 'sin_datos';
     if (diasSinCompra <= 30) return 'activo';
     if (diasSinCompra <= 90) return 'inactivo';
     return 'perdido';
@@ -25,13 +33,15 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
       activos: number;
       inactivos: number;
       perdidos: number;
+      sin_datos: number;
       ventas: number;
       ordenes: number;
       vendedores: Set<string>;
     }>();
 
     clientesData.forEach(cliente => {
-      const barrio = cliente.barrio_principal || 'Sin barrio';
+      // TAREA 5: Clientes sin barrio → "Sin barrio asignado" (visible)
+      const barrio = cliente.barrio_principal || '⚠️ Sin barrio asignado';
       const key = barrio.trim().toLowerCase();
       
       if (!zonaMap.has(key)) {
@@ -41,6 +51,7 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
           activos: 0,
           inactivos: 0,
           perdidos: 0,
+          sin_datos: 0,
           ventas: 0,
           ordenes: 0,
           vendedores: new Set(),
@@ -50,15 +61,16 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
       const zona = zonaMap.get(key)!;
       zona.total++;
       
+      // TAREA 6: Separar "sin_datos" de "perdidos"
       const categoria = categorizeClient(cliente.dias_desde_ultima_compra);
       if (categoria === 'activo') zona.activos++;
       else if (categoria === 'inactivo') zona.inactivos++;
-      else zona.perdidos++;
+      else if (categoria === 'perdido') zona.perdidos++;
+      else zona.sin_datos++;
 
       zona.ventas += Number(cliente.monto_total_historico || 0);
       zona.ordenes += Number(cliente.cantidad_ordenes || 0);
       
-      // Usar vendedor_actual (único) para evitar inflación multi-vendedor
       const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
       if (vendedor) zona.vendedores.add(vendedor);
     });
@@ -70,23 +82,24 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
 
   // KPIs globales por estado
   const globalStats = useMemo(() => {
-    let activos = 0, inactivos = 0, perdidos = 0;
+    let activos = 0, inactivos = 0, perdidos = 0, sin_datos = 0;
     clientesData.forEach(c => {
       const cat = categorizeClient(c.dias_desde_ultima_compra);
       if (cat === 'activo') activos++;
       else if (cat === 'inactivo') inactivos++;
-      else perdidos++;
+      else if (cat === 'perdido') perdidos++;
+      else sin_datos++;
     });
     const total = clientesData.length;
-    return { activos, inactivos, perdidos, total };
+    return { activos, inactivos, perdidos, sin_datos, total };
   }, [clientesData]);
 
   if (clientesData.length === 0) return null;
 
   return (
     <div className="space-y-4">
-      {/* Resumen global por estado */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* Resumen global por estado — TAREA 6: 4 categorías */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="matte-card hover-lift">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -134,6 +147,23 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
             <Progress value={globalStats.total > 0 ? (globalStats.perdidos / globalStats.total) * 100 : 0} className="mt-2 h-1.5" />
           </CardContent>
         </Card>
+
+        {/* TAREA 6: Nueva card "Sin datos" */}
+        <Card className="matte-card hover-lift">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Sin datos</CardTitle>
+              <HelpCircle className="h-4 w-4 text-muted-foreground/60" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-muted-foreground">{globalStats.sin_datos}</div>
+            <p className="text-xs text-muted-foreground">
+              Sin fecha de compra registrada ({globalStats.total > 0 ? Math.round(globalStats.sin_datos / globalStats.total * 100) : 0}%)
+            </p>
+            <Progress value={globalStats.total > 0 ? (globalStats.sin_datos / globalStats.total) * 100 : 0} className="mt-2 h-1.5" />
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabla de zonas */}
@@ -160,6 +190,9 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
                   <th className="text-center py-2 px-2 font-medium text-muted-foreground">
                     <span className="text-red-500">Perd.</span>
                   </th>
+                  <th className="text-center py-2 px-2 font-medium text-muted-foreground">
+                    <span className="text-muted-foreground/60">S/D</span>
+                  </th>
                   <th className="text-right py-2 px-2 font-medium text-muted-foreground">Facturación</th>
                   <th className="text-center py-2 px-2 font-medium text-muted-foreground">Vendedores</th>
                   <th className="text-center py-2 px-2 font-medium text-muted-foreground">Cobertura</th>
@@ -168,18 +201,24 @@ const ZonaKPIs = ({ clientesData, formatCurrency }: ZonaKPIsProps) => {
               <tbody>
                 {zonaData.map((zona, i) => {
                   const cobertura = zona.total > 0 ? Math.round(zona.activos / zona.total * 100) : 0;
+                  const isSinBarrio = zona.barrio.includes('Sin barrio');
                   return (
-                    <tr key={i} className="border-b border-border/30 hover:bg-muted/30 transition-colors">
+                    <tr key={i} className={`border-b border-border/30 transition-colors ${
+                      isSinBarrio ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-muted/30'
+                    }`}>
                       <td className="py-2.5 px-2">
                         <div className="flex items-center gap-2">
                           <Badge variant="secondary" className="shrink-0 text-xs">{i + 1}</Badge>
-                          <span className="font-medium truncate max-w-[180px]">{zona.barrio}</span>
+                          <span className={`font-medium truncate max-w-[180px] ${isSinBarrio ? 'text-amber-500' : ''}`}>
+                            {zona.barrio}
+                          </span>
                         </div>
                       </td>
                       <td className="text-center py-2.5 px-2">{zona.total}</td>
                       <td className="text-center py-2.5 px-2 text-emerald-500 font-medium">{zona.activos}</td>
                       <td className="text-center py-2.5 px-2 text-amber-500 font-medium">{zona.inactivos}</td>
                       <td className="text-center py-2.5 px-2 text-red-500 font-medium">{zona.perdidos}</td>
+                      <td className="text-center py-2.5 px-2 text-muted-foreground/60 font-medium">{zona.sin_datos || '—'}</td>
                       <td className="text-right py-2.5 px-2 font-semibold text-accent">{formatCurrency(zona.ventas)}</td>
                       <td className="text-center py-2.5 px-2">{zona.vendedores.size}</td>
                       <td className="text-center py-2.5 px-2">

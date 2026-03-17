@@ -1,172 +1,205 @@
+# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
 
+## Cambios realizados
 
-# Plan: Auditoría Integral del Dashboard y ETL — 16 Tareas
+### A. DB: Campo `vendedor_actual` en `clientes` ✅
+- Nuevo campo `vendedor_actual` (text) agregado
+- Inicializado desde la última venta registrada en `ventas_cupra`
+- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
 
-## Estado actual confirmado con datos reales
+### B. Pre-scoring determinístico ✅
+- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
+- **score_geo (50%)**: Distancia Haversine al centroide del cluster
+- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
+- **score_comercial (15%)**: Score comercial normalizado (0-100)
+- **score_rotacion (10%)**: Días desde última recomendación
+- Filtra candidatos con feedback negativo automáticamente
+- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
 
-```text
-ventas_cupra:  1079 filas | 440 tickets únicos | 174 clientes | $267M total
-clientes:      187 registros | 76 sin vendedor_actual (41%) | 102 sin barrio (55%)
-```
+### C. Mapeo nombre→UUID ✅
+- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
+- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
+- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
 
-- `cantidad_ordenes` en ETL cuenta **filas deduplicadas** (líneas de producto), NO tickets únicos → 1079 vs 440 reales
-- Columna `facturacion_ars` toma "Facturación Ar$" como prioridad → $267M vs $511M del Excel (probable Precio Neto vs Total Final)
-- Top Vendedores se calcula desde `clientes` (campo derivado), no desde `ventas_cupra` (fuente transaccional)
+### D. Prompt reducido centrado en vendedor ✅
+- De ~65K chars a ~5-10K chars (reducción ~80%)
+- Formato tabular compacto con scores pre-calculados
+- IA solo decide ruta óptima y genera justificaciones
+- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
 
----
-
-## Tarea 0 — Prerequisito bloqueante: Columna de facturación
-
-**Pregunta al usuario antes de implementar**: ¿Cuál es la columna correcta del Excel?
-- Opción A: "Precio Total Final" (~$511M, incluye IVA)
-- Opción B: "Facturación Ar$" (~$267M, neto)
-
-**Cambio en ETL** (`process-ventas-excel/index.ts` línea 250): Reordenar prioridad en `getFieldValue` según respuesta. Agregar log de qué columna se resolvió.
-
-## Tarea 0.1 — Documentación del modelo de datos
-
-Agregar bloque de comentarios al inicio del ETL y del dashboard documentando:
-- `ventas_cupra`: tabla transaccional, 1 fila = 1 línea de producto
-- `clientes`: tabla agregada, derivada de ventas_cupra. Fuente para filtros y segmentación
-- **Fuente de verdad oficial para KPIs monetarios: `ventas_cupra`**
-- Granularidad de cada métrica: línea, ticket (DISTINCT ticket+letra+fecha+client_id), cliente
-
-## Tarea 1 — Corregir `cantidad_ordenes` → tickets únicos
-
-**ETL línea 322-343**: Reemplazar `c.cantidad_ordenes += 1` por un `Set<string>` de tickets únicos por cliente:
-```typescript
-c.tickets_set = c.tickets_set || new Set();
-const ticketKey = `${venta.ticket}||${venta.letra}||${venta.fecha_emision}`;
-if (ticketKey && venta.ticket) c.tickets_set.add(ticketKey);
-// En Fase 3:
-cantidad_ordenes: c.tickets_set.size,
-```
-Usar solo `ticket` como identificador primario; concatenar con `letra` y `fecha_emision` solo para desambiguar tickets con mismo número.
-
-## Tarea 2 — Validación de unicidad de tickets en ETL
-
-Después de la deduplicación (Fase 1b), agregar validación:
-- Contar tickets con >1 `client_id` (posible error de datos)
-- Logear alertas si se detectan tickets compartidos entre clientes
-
-## Tarea 3 — Separar vendedor_actual (operativo) vs atribución de ventas
-
-- `vendedor_actual`: último vendedor que vendió al cliente (ya existe, corregir los 76 nulls)
-- **Top Vendedores en dashboard**: calcular siempre desde `ventas_cupra` directamente (query separada), no desde campos derivados en `clientes`
-- SQL one-time fix para los 76 nulls:
-```sql
-UPDATE clientes c SET vendedor_actual = sub.vendedor
-FROM (SELECT DISTINCT ON (client_id) client_id, vendedor 
-      FROM ventas_cupra WHERE vendedor IS NOT NULL
-      ORDER BY client_id, fecha_emision DESC) sub
-WHERE c.client_id = sub.client_id AND c.vendedor_actual IS NULL;
-```
-- Actualizar ETL para siempre calcular `vendedor_actual` como el vendedor de la venta más reciente
-
-## Tarea 4 — Top Vendedores desde ventas_cupra
-
-En `ClientesDashboard.tsx`: nueva query a `ventas_cupra` agrupada por `vendedor`:
-```typescript
-const { data: ventasVendedor } = await supabase
-  .from('ventas_cupra')
-  .select('vendedor, facturacion_ars');
-// Agrupar en JS por vendedor → SUM(facturacion_ars)
-```
-Reemplaza el cálculo actual basado en `clientes.vendedor_actual`.
-
-## Tarea 5 — Clientes sin barrio visibles
-
-- `ZonaKPIs.tsx` y `topBarrios` en dashboard: incluir grupo "Sin barrio asignado" con los 102 clientes y su facturación
-- Cualquier filtro/exportación que use `barrio_principal` debe contemplar nulls
-
-## Tarea 6 — Separar "Sin datos" de "Perdidos"
-
-`ZonaKPIs.tsx` línea 19: si `dias_desde_ultima_compra === null` → categoría "Sin datos" (no "Perdidos"). Agregar cuarta card o badge.
-
-## Tarea 7 — Umbrales de calidad post-ETL
-
-Al final del ETL, calcular y retornar en el response:
-```json
-{
-  "calidad": {
-    "pct_sin_barrio": 55,
-    "pct_sin_vendedor": 41,
-    "pct_sin_client_id": 2,
-    "alerta": true
-  }
-}
-```
-Mostrar alertas en `CargaDatos.tsx` si supera umbrales (>10% sin barrio, >5% sin vendedor).
-
-## Tarea 8 — Log de columnas evaluadas en ETL
-
-Para `facturacion_ars`, logear:
-- Lista de columnas evaluadas en orden de prioridad
-- Cuál se resolvió para la primera fila
-- Cuántas filas resultaron en null
-
-## Tarea 9 — Reconciliación post-carga
-
-Al final del ETL, agregar resumen de reconciliación:
-- Total filas Excel vs filas procesadas vs filas en ventas_cupra
-- Total facturación procesada
-- Total tickets únicos
-- Total clientes únicos
-Mostrar en `CargaDatos.tsx` para que el usuario valide contra su Excel.
-
-## Tarea 10 — Versionado y metadata de carga
-
-Agregar campos al response del ETL:
-```json
-{
-  "metadata": {
-    "fecha_carga": "2026-03-17T...",
-    "version_etl": "v2.0",
-    "columna_facturacion": "Facturación Ar$",
-    "filas_origen": 1079
-  }
-}
-```
-
-## Tarea 11 — Consistencia clientes ↔ ventas_cupra
-
-Validación post-carga: comparar `SUM(facturacion_ars)` en ventas_cupra por client_id vs `monto_total_historico` en clientes. Reportar discrepancias >1%.
-
-## Tarea 12 — Control de integridad client_id
-
-En ETL: reportar cuántos registros del Excel no pudieron resolverse a un `client_id` válido, y listar los CUIT/razón social descartados.
-
-## Tarea 13 — Indicador de calidad en dashboard
-
-En `ClientesDashboard.tsx`: badge/card pequeño mostrando:
-- % clientes sin barrio
-- % clientes sin vendedor
-- Fecha de última carga
-
-## Tarea 14 — Normalización de nomenclatura
-
-Unificar en todo el código: usar solo `dias_desde_ultima_compra` (nunca `dias_sin_compra`). Documentar granularidad en comentarios de cada KPI card.
-
-## Tarea 15 — Documentar KPIs con tooltips
-
-Cada KPI card en el dashboard lleva tooltip con:
-- Fórmula exacta
-- Tabla fuente
-- Granularidad (línea/ticket/cliente)
+### E. UI: Vendedor actual vs anterior ✅
+- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
+- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
+- Tipo `Sucursal` extendido con `vendedor_actual`
 
 ---
 
-## Archivos a modificar
+# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
 
-| Archivo | Tareas |
+## Cambios realizados
+
+### A. Tabs principales ✅
+- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
+- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
+
+### B. FilterPanel con dos modos ✅
+- Modo "Por Área": selector de área → ver resumen → generar
+- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
+- Instrucciones IA colapsables en ambos modos
+- Vendedores en Collapsible con badge "X de Y seleccionados"
+
+### C. RecommendationFilters simplificado ✅
+- De 6 filtros redundantes a solo 1 filtro por vendedor
+- Se muestra solo cuando hay más de 1 vendedor
+
+### D. TodayAssignments sin Card wrapper ✅
+- Funciona como contenido directo del tab
+- Layout más limpio sin doble Card
+
+## Archivos modificados
+| Archivo | Cambio |
 |---------|--------|
-| `supabase/functions/process-ventas-excel/index.ts` | 0, 0.1, 1, 2, 7, 8, 9, 10, 11, 12 |
-| `src/pages/ClientesDashboard.tsx` | 0.1, 4, 5, 13, 14, 15 |
-| `src/components/clientes/ZonaKPIs.tsx` | 5, 6 |
-| `src/pages/CargaDatos.tsx` | 7, 9, 10 |
-| Migración SQL | 3 (fix vendedor_actual nulls) |
+| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
+| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
+| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
+| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
 
-## Prerequisito bloqueante
+---
 
-Necesito tu respuesta sobre **Tarea 0**: ¿"Precio Total Final" o "Facturación Ar$"? Sin esto no se puede implementar el resto correctamente.
+# Phase 3: Carga de Excel + ETL integrado — IMPLEMENTADO
 
+## Cambios realizados
+
+### A. Edge Function `process-ventas-excel` ✅
+- Recibe `{ rows: [...] }` parseadas en frontend con SheetJS
+- **Normalización de campos**: `getFieldValue()` con matching exacto, case-insensitive y NFD-normalized
+- **Conversión de fechas**: Excel serial → ISO, DD/MM/YYYY → ISO
+- **Conversión de montos**: Formato argentino (puntos miles, coma decimal)
+- **Geografía CABA**: 48 barrios mapeados a 15 comunas + detección PBA/GBA
+- **Agregación RFM por cliente**: Primera/última compra, días inactividad, scores recencia/volumen/comercial
+- **Canal**: Detección ON_TRADE vs OFF_TRADE por categorías
+- **Upsert ventas_cupra**: Batches de 500, conflict key existente
+- **Upsert clientes protegido**: No sobreescribe `last_recommendation_at`, `excluir_recomendaciones`, `ultima_visita`
+
+### B. Página `CargaDatos.tsx` ✅
+- Acceso restringido a rol `asignador`
+- Drop zone + file input para `.xlsx` / `.xls`
+- Parseo client-side con `xlsx` (SheetJS)
+- Preview: columnas detectadas + primeras 5 filas
+- Progreso visual durante procesamiento
+- Resumen final: ventas procesadas, clientes actualizados, errores
+
+### C. Navegación ✅
+- Ruta `/carga-datos` en `App.tsx`
+- Menú "Gestión" del asignador: nuevo item "Carga de Datos"
+
+## Archivos creados/modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/process-ventas-excel/index.ts` | Creado — ETL completo |
+| `src/pages/CargaDatos.tsx` | Creado — UI de upload |
+| `src/App.tsx` | Ruta `/carga-datos` |
+| `src/pages/Index.tsx` | Menú con "Carga de Datos" |
+| `supabase/config.toml` | Función registrada |
+| `package.json` | Dependencia `xlsx` |
+
+## Próximos pasos potenciales
+- Planificación temporal (agenda semanal)
+- Reportes y supervisión
+- Agente conversacional
+
+---
+
+# Phase 4: CUPRA Smart Route v4 — Anclaje Geográfico + Cuota 5-1-1-1 — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Vista SQL `v_clientes_priorizacion` ✅
+- Extensión `unaccent` habilitada para normalización de nombres
+- Vista combina `clientes` + `prospectos` con clasificación por estado comercial (ACTIVO/INACTIVO/PERDIDO/POTENCIAL)
+- `vendedor_afin_id` calculado con `UPPER(UNACCENT())` para matching robusto
+- Función `get_vendedor_barrios_top()` para obtener top 3 barrios por vendedor
+
+### B. Edge Function refactorizada ✅
+- **Centroide eliminado**: Ya no se usa `centerLat`/`centerLong`
+- **Algoritmo de Anclaje**: Top 5 clientes ACTIVOS del vendedor definen "anclas" del día
+- **Scoring magnético**: Distancia al ancla más cercana en vez de al centroide
+- **Penalización solapamiento**: -100 puntos si candidato < 300m de ancla de OTRO vendedor
+- **Cubetas 15-5-5-5**: 15 Activos + 5 Inactivos + 5 Perdidos + 5 Potenciales enviados a IA
+- **Filtro 15 días eliminado**: La IA decide según categoría de estado
+- **Nuevo prompt 5-1-1-1**: Distribución estricta 5 Activos + 1 Inactivo + 1 Perdido + 1 Potencial
+- **Barrios top del vendedor**: Incluidos en el contexto del prompt
+- **Validación post-IA**: Si la IA no cumple cuota, se completa determinísticamente
+- **`estado_comercial`** incluido en la respuesta para el frontend
+
+### C. Frontend — Tipo `Sucursal` extendido ✅
+- Nuevo campo `estado_cliente?: 'ACTIVO' | 'INACTIVO' | 'PERDIDO' | 'POTENCIAL'`
+- `AssignorDashboard.tsx` mapea `estado_comercial` desde la respuesta
+
+### D. `vendorColors.ts` — Funciones de estado ✅
+- `getStateColor(estado)`: Verde/Amarillo/Rojo/Azul
+- `classifyClientState(dias, esProspecto)`: Clasificación frontend
+- `createStateMarkerIcon(estado, vendorColor?, scale)`: SVG con relleno=estado + borde=vendedor
+- `getStateLegend()`: Para leyendas de mapa
+- `calcularDistanciaKmFrontend()`: Para detección de solapamiento
+
+### E. Mapas actualizados ✅
+- **`ResultsMap.tsx`**: Marcadores con relleno=estado + borde=vendedor. Leyenda doble (estados + vendedores). Detección solapamiento < 200m con icono ⚠️
+- **`VendedorAssignmentsMap.tsx`**: Marcadores por estado (mono-vendedor, sin borde). Leyenda de estados
+- **`AssignorTodayAssignmentsMap.tsx`**: Pendiente actualización con marcadores por estado
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| Migración SQL | `unaccent` + vista + función `get_vendedor_barrios_top` |
+| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: anclas, cubetas, prompt 5-1-1-1, validación |
+| `src/types/sales.ts` | `estado_cliente` en `Sucursal` |
+| `src/lib/vendorColors.ts` | Funciones de estado + marcadores duales |
+| `src/components/AssignorDashboard.tsx` | Mapeo `estado_cliente` |
+| `src/components/assignor/ResultsMap.tsx` | Marcadores estado+vendedor, solapamiento |
+| `src/components/vendedor/VendedorAssignmentsMap.tsx` | Marcadores por estado |
+
+---
+
+# Phase 5: v9-hotzone — Zona Caliente por Vendedor + Mix Estratégico — IMPLEMENTADO
+
+## Cambios realizados
+
+### A. Hotspot per-vendor (reemplaza zoneCenter global) ✅
+- `calculateCentroid()` calcula el centro de los clientes propios del vendedor
+- **Fallback (corrección #1):** Si vendor tiene 0 clientes → usa centroide de `clientPlaces` del filtro geo (centro del barrio/comuna)
+- Habilita "Modo Conquista" con solo prospectos en zona nueva
+
+### B. Radio duro 1.5km para TODOS ✅
+- `HARD_RADIUS_KM = 1.5` aplicado a clientes Y prospectos
+- `MAX_EXPANSION_KM = 2.0` — expansión máxima absoluta
+- Eliminadas expansiones de 2.5km y 3km
+
+### C. Pool lineal — clientes primero, prospectos después ✅
+- `scoreClients()` — Pool 1: ACTIVO+INACTIVO+PERDIDO, ordenados por score_total
+- `scoreProspects()` — Pool 2: POTENCIAL, ordenados por distancia al hotspot (más cerca primero)
+- `validateAndFill()` — Llena 8 slots: primero Pool 1, luego Pool 2
+
+### D. Mix estratégico — al menos 1 recuperación (corrección #2) ✅
+- Si no hay cliente con >90 días sin compra en los 8 seleccionados, swapea el #8 por el mejor PERDIDO disponible
+- Garantiza proactividad de recuperación sin cuota rígida
+
+### E. Deduplicación cross-vendor mantenida (corrección #3) ✅
+- `globalPickedIds` impide asignar mismo cliente a 2 vendedores
+
+### F. Prompt simplificado ✅
+- Sin distribución 5-1-1-1
+- "Priorizá clientes existentes, completá con prospectos, incluí al menos 1 recuperación"
+
+### G. Version bump: `v9-hotzone` ✅
+
+## Archivos modificados
+| Archivo | Cambio |
+|---------|--------|
+| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: hotspot per-vendor, radio duro, pool lineal, recovery swap |
+
+## Resultado esperado
+- Todas las recomendaciones dentro de 1.5-2km del hotspot real del vendedor
+- Clientes existentes priorizados, prospectos solo como relleno
+- Al menos 1 visita de recuperación si existe en zona
+- Modo conquista funcional (vendedor sin clientes en zona nueva)
