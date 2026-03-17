@@ -170,22 +170,28 @@ Deno.serve(async (req) => {
         const formattedAddress = result.formatted_address || address;
         const googleMapsLink = `https://www.google.com/maps/place/?q=place_id:${placeId}`;
 
-        // Upsert client_places
-        const { error: upsertError } = await supabase.from("client_places").upsert(
-          {
-            client_id: client.client_id,
-            lat,
-            long: lng,
-            barrio_principal: barrio || client.barrio_principal,
-            comuna,
-            provincia_principal: normalizedProv || client.provincia_principal,
-            direccion_principal: formattedAddress,
-            place_id: placeId,
-            google_maps_link: googleMapsLink,
-            is_primary: true,
-          },
-          { onConflict: "client_id" }
-        );
+        // Check if client_places row already exists
+        const placeData = {
+          lat,
+          long: lng,
+          barrio_principal: barrio || client.barrio_principal,
+          comuna,
+          provincia_principal: normalizedProv || client.provincia_principal,
+          direccion_principal: formattedAddress,
+          place_id: placeId,
+          google_maps_link: googleMapsLink,
+          is_primary: true,
+        };
+
+        const { data: existingPlace } = await supabase
+          .from("client_places")
+          .select("id")
+          .eq("client_id", client.client_id)
+          .maybeSingle();
+
+        const { error: upsertError } = existingPlace
+          ? await supabase.from("client_places").update(placeData).eq("id", existingPlace.id)
+          : await supabase.from("client_places").insert({ client_id: client.client_id, ...placeData });
 
         if (upsertError) {
           results.errors++;
