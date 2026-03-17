@@ -249,9 +249,11 @@ const mergeVentaDuplicate = (current: Record<string, any>, incoming: Record<stri
 };
 
 // === Campo de facturación: nombres de columna en orden de prioridad ===
+// PRIORIDAD: Precio Total Final (con IVA, ~$511M) es la fuente oficial.
 const FACTURACION_FIELD_NAMES = [
+  'Precio Total Final', 'Precio Total Neto',
   'Facturación Ar$', 'Facturacion Ar$', 'Facturación Ars', 'Facturacion Ars',
-  'facturacion_ars', 'Precio Total Final', 'Precio Total Neto',
+  'facturacion_ars',
 ];
 
 // === MAIN ===
