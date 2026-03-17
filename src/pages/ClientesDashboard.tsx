@@ -316,17 +316,21 @@ const ClientesDashboard = () => {
     return result.slice(0, 11);
   }, [ventasRaw, clientesData]);
 
+  // Top Clientes desde ventas_cupra
   const topClientes = useMemo(() => {
-    return filteredData
-      .map(c => ({
-        razon_social: c.razon_social || 'Sin nombre',
-        monto_total: Number(c.monto_total_historico || 0),
-        ordenes: Number(c.cantidad_ordenes || 0),
-        provincia: c.provincia_principal
-      }))
+    const clienteMap = new Map<string, { razon_social: string; monto_total: number; tickets: Set<string> }>();
+    for (const v of ventasRaw) {
+      const rs = v.razon_social || 'Sin nombre';
+      if (!clienteMap.has(rs)) clienteMap.set(rs, { razon_social: rs, monto_total: 0, tickets: new Set() });
+      const entry = clienteMap.get(rs)!;
+      entry.monto_total += Number(v.facturacion_ars || 0);
+      if (v.ticket) entry.tickets.add(v.ticket);
+    }
+    return Array.from(clienteMap.values())
+      .map(c => ({ razon_social: c.razon_social, monto_total: c.monto_total, ordenes: c.tickets.size }))
       .sort((a, b) => b.monto_total - a.monto_total)
       .slice(0, 10);
-  }, [filteredData]);
+  }, [ventasRaw]);
 
   // TAREA 4: Top vendedores desde ventas_cupra (fuente transaccional)
   const topVendedores = useMemo(() => {
