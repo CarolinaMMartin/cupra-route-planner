@@ -245,18 +245,25 @@ const ClientesDashboard = () => {
   }, [clientesData, selectedProvincia, selectedCiudad, selectedBarrio, selectedVendedor, selectedCanal, searchTerm]);
 
   /**
-   * KPIs calculados desde tabla `clientes` (agregada).
-   * • totalVentas: SUM(monto_total_historico). Granularidad: cliente.
-   * • totalOrdenes: SUM(cantidad_ordenes) = tickets únicos. Granularidad: ticket.
-   * • ticketPromedio: totalVentas / totalOrdenes. Promedio ponderado global.
+   * KPIs calculados 100% desde ventas_cupra (transaccional).
+   * • totalVentas: SUM(facturacion_ars). Columna Excel: "Precio Total Final".
+   * • totalTickets: COUNT(DISTINCT ticket).
+   * • totalClientes: COUNT(DISTINCT razon_social).
+   * • ticketPromedio: totalVentas / totalTickets.
    */
   const kpis = useMemo(() => {
-    const totalVentas = filteredData.reduce((sum, c) => sum + Number(c.monto_total_historico || 0), 0);
-    const totalClientes = filteredData.length;
-    const totalOrdenes = filteredData.reduce((sum, c) => sum + Number(c.cantidad_ordenes || 0), 0);
-    const ticketPromedio = totalOrdenes > 0 ? totalVentas / totalOrdenes : 0;
-    return { totalVentas, totalClientes, totalOrdenes, ticketPromedio };
-  }, [filteredData]);
+    const totalVentas = ventasRaw.reduce((sum, v) => sum + Number(v.facturacion_ars || 0), 0);
+    const ticketsSet = new Set<string>();
+    const clientesSet = new Set<string>();
+    for (const v of ventasRaw) {
+      if (v.ticket) ticketsSet.add(v.ticket);
+      if (v.razon_social) clientesSet.add(v.razon_social);
+    }
+    const totalTickets = ticketsSet.size;
+    const totalClientes = clientesSet.size;
+    const ticketPromedio = totalTickets > 0 ? totalVentas / totalTickets : 0;
+    return { totalVentas, totalClientes, totalOrdenes: totalTickets, ticketPromedio };
+  }, [ventasRaw]);
 
   // TAREA 13: Indicador de calidad de datos
   const dataQuality = useMemo(() => {
