@@ -300,6 +300,10 @@ const AssignorDashboard = () => {
               </Card>
             </TabsContent>
 
+            <TabsContent value="manual">
+              <ManualAssignment />
+            </TabsContent>
+
             <TabsContent value="hoy">
               <Card>
                 <CardContent className="p-8">
