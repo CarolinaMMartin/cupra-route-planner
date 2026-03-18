@@ -346,12 +346,24 @@ const CargaDatos = () => {
                 </div>
               </CardContent>
             </Card>
-            <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={reset}>Cancelar</Button>
-              <Button onClick={handleProcess}>
-                <Upload className="h-4 w-4 mr-1.5" />
-                Procesar {rows.length.toLocaleString()} filas
-              </Button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="replaceExisting"
+                  checked={replaceExisting}
+                  onCheckedChange={(checked) => setReplaceExisting(checked === true)}
+                />
+                <label htmlFor="replaceExisting" className="text-sm text-muted-foreground cursor-pointer">
+                  Reemplazar datos existentes <span className="text-xs">(recomendado para carga completa)</span>
+                </label>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={reset}>Cancelar</Button>
+                <Button onClick={handleProcess}>
+                  <Upload className="h-4 w-4 mr-1.5" />
+                  Procesar {rows.length.toLocaleString()} filas
+                </Button>
+              </div>
             </div>
           </div>
         )}
