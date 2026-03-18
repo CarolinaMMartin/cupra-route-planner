@@ -287,37 +287,32 @@ const ClientesDashboard = () => {
     };
   }, [clientesData]);
 
-  // Top barrios desde ventas_cupra (via join con clientes para barrio)
-  const topBarrios = useMemo(() => {
-    // Build client_id → barrio lookup from clientes
-    const clientBarrio = new Map<string, string>();
-    clientesData.forEach(c => {
-      if (c.client_id && c.barrio_principal) clientBarrio.set(c.client_id, c.barrio_principal);
-    });
-    const barriosMap = new Map<string, { display: string; ventas: number }>();
-    let sinBarrioVentas = 0;
+  // Fix 5: Top Ciudades desde ventas_cupra (reemplaza Top Barrios)
+  const topCiudades = useMemo(() => {
+    const ciudadMap = new Map<string, { display: string; ventas: number }>();
+    let sinCiudadVentas = 0;
     for (const v of ventasRaw) {
       const monto = Number(v.facturacion_ars || 0);
-      const barrio = v.client_id ? clientBarrio.get(v.client_id) : null;
-      if (barrio) {
-        const key = normalize(barrio);
-        const existing = barriosMap.get(key);
+      const ciudad = v.ciudad;
+      if (ciudad) {
+        const key = normalize(ciudad);
+        const existing = ciudadMap.get(key);
         if (existing) { existing.ventas += monto; }
-        else { barriosMap.set(key, { display: barrio, ventas: monto }); }
+        else { ciudadMap.set(key, { display: ciudad, ventas: monto }); }
       } else {
-        sinBarrioVentas += monto;
+        sinCiudadVentas += monto;
       }
     }
-    const result = Array.from(barriosMap.values())
-      .map(({ display, ventas }) => ({ barrio: display, ventas }))
+    const result = Array.from(ciudadMap.values())
+      .map(({ display, ventas }) => ({ ciudad: display, ventas }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
-    if (sinBarrioVentas > 0) {
-      result.push({ barrio: '⚠️ Sin barrio asignado', ventas: sinBarrioVentas });
+    if (sinCiudadVentas > 0) {
+      result.push({ ciudad: 'Sin ciudad', ventas: sinCiudadVentas });
       result.sort((a, b) => b.ventas - a.ventas);
     }
     return result.slice(0, 11);
-  }, [ventasRaw, clientesData]);
+  }, [ventasRaw]);
 
   // Top Clientes desde ventas_cupra
   const topClientes = useMemo(() => {
