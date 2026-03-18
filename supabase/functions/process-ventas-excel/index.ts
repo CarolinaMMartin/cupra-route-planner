@@ -212,6 +212,10 @@ const toYmdFromExcelOrText = (v: any): string | null => {
   return isNaN(d2.getTime()) ? null : d2.toISOString().split('T')[0];
 };
 
+// Compat helpers: mantienen nombres usados en el pipeline
+const parseDate = (v: any): string | null => toYmdFromExcelOrText(v);
+const parseNumericValue = (v: any): number | null => toNumberCurrency(v);
+
 interface GeoResult { barrio: string | null; comuna: string | null; ciudad: string | null; provincia: string | null; }
 
 // === NORMALIZACIÓN DE PROVINCIAS ===
