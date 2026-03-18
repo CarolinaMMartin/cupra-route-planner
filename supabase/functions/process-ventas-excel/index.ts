@@ -380,27 +380,6 @@ Deno.serve(async (req) => {
       const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
       let client_id = idCandidato || (cuit_dni && cuitToClientId.get(cuit_dni)) || cuit_dni;
       const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
-      const fantasia = toStr(getFieldValue(row, ['Fantasia', 'Fantasía', 'fantasia']));
-      const direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Domicilio', 'Calle']));
-      const ciudad_raw = toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad']));
-      const vendedor = toStr(getFieldValue(row, ['Vendedor', 'vendedor']));
-      const fecha_emision = getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision']);
-      const facturacion = toNumberCurrency(getFieldValue(row, FACTURACION_FIELD_NAMES));
-      const producto = toStr(getFieldValue(row, ['Nombre', 'nombre', 'Etiqueta', 'Variante']));
-      const cajas = toInt(getFieldValue(row, ['Cajas', 'cajas', 'Cantidad']));
-      const categorias = toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias', 'Categorías Cliente', 'Categorias Cliente']));
-      const telefono = toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono', 'Tel']));
-      const celular = toStr(getFieldValue(row, ['Celular', 'celular', 'Cel', 'Movil', 'Móvil']));
-      const correo = toStr(getFieldValue(row, ['Correo', 'correo', 'Email', 'email', 'Mail']));
-      const ticket = toStr(getFieldValue(row, ['Ticket', 'ticket']));
-      const letra = toStr(getFieldValue(row, ['Letra', 'letra']));
-      const codigo_producto = toStr(getFieldValue(row, ['Codigo Producto', 'Código Producto', 'codigo_producto']));
-      const marca = toStr(getFieldValue(row, ['Marca', 'marca']));
-      const provincia_raw = toStr(getFieldValue(row, ['Provincia', 'provincia']));
-      const pais = toStr(getFieldValue(row, ['País', 'Pais', 'pais']));
-      const fecha_iso = toYmdFromExcelOrText(fecha_emision);
-
-      if (facturacion === null) facturacionNullCount++;
 
       // Fix 1: Generate synthetic client_id from razon_social when no ID/CUIT exists
       if (!client_id && razon_social) {
