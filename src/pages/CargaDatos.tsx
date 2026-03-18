@@ -44,6 +44,7 @@ interface Reconciliacion {
   facturacion_total_procesada: number;
   tickets_unicos: number;
   clientes_unicos: number;
+  clientes_razon_social?: number;
   tickets_compartidos: number;
   vendedor_breakdown?: VendedorBreakdown[];
 }
