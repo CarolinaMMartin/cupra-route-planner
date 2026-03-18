@@ -71,6 +71,10 @@ const BARRIOS_A_COMUNA: Record<string, string> = {
   'PALERMO': 'COMUNA 14',
   'CHACARITA': 'COMUNA 15', 'VILLA CRESPO': 'COMUNA 15', 'PATERNAL': 'COMUNA 15',
   'VILLA ORTUZAR': 'COMUNA 15', 'AGRONOMIA': 'COMUNA 15', 'PARQUE CHAS': 'COMUNA 15',
+  // Barrios adicionales / alias comunes
+  'CONGRESO': 'COMUNA 5', 'ONCE': 'COMUNA 3', 'ABASTO': 'COMUNA 3',
+  'MICROCENTRO': 'COMUNA 1', 'TRIBUNALES': 'COMUNA 1',
+  'VILLA CRESPO': 'COMUNA 15',
 };
 
 // === HELPERS ===
@@ -210,11 +214,36 @@ const toYmdFromExcelOrText = (v: any): string | null => {
 
 interface GeoResult { barrio: string | null; comuna: string | null; ciudad: string | null; provincia: string | null; }
 
+// === NORMALIZACIÓN DE PROVINCIAS ===
+const PROVINCIA_NORM: Record<string, string> = {
+  'CABA': 'CABA',
+  'CDAD. AUTONOMA DE BUENOS AIRES': 'CABA',
+  'CDAD AUTONOMA DE BUENOS AIRES': 'CABA',
+  'CIUDAD AUTONOMA DE BUENOS AIRES': 'CABA',
+  'C.A.B.A.': 'CABA',
+  'CAPITAL FEDERAL': 'CABA',
+  'BUENOS AIRES': 'Provincia de Buenos Aires',
+  'BS AS': 'Provincia de Buenos Aires',
+  'BS. AS.': 'Provincia de Buenos Aires',
+  'PBA': 'Provincia de Buenos Aires',
+  'PROVINCIA DE BUENOS AIRES': 'Provincia de Buenos Aires',
+};
+
+const normalizeProvincia = (prov: string | null): string | null => {
+  if (!prov) return null;
+  const key = prov.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  return PROVINCIA_NORM[key] || prov;
+};
+
 function normalizarGeografia(ciudadRaw: string | null): GeoResult {
   if (!ciudadRaw) return { barrio: null, comuna: null, ciudad: null, provincia: null };
-  const ubicacion = ciudadRaw.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-  if (BARRIOS_A_COMUNA[ubicacion]) {
-    return { barrio: ubicacion, comuna: BARRIOS_A_COMUNA[ubicacion], ciudad: 'CABA', provincia: 'CABA' };
+  const ubicacionNorm = ciudadRaw.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  // Fix 2: Normalizar también las keys del mapa para evitar que NFD rompa Ñ→N
+  const barrioKey = Object.keys(BARRIOS_A_COMUNA).find(k =>
+    k.normalize('NFD').replace(/[\u0300-\u036f]/g, '') === ubicacionNorm
+  );
+  if (barrioKey) {
+    return { barrio: barrioKey, comuna: BARRIOS_A_COMUNA[barrioKey], ciudad: 'CABA', provincia: 'CABA' };
   }
   if (ubicacion === 'CABA' || ubicacion === 'CIUDAD AUTONOMA DE BUENOS AIRES') {
     return { barrio: null, comuna: null, ciudad: 'CABA', provincia: 'CABA' };
@@ -265,14 +294,27 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { rows } = await req.json() as { rows: Record<string, any>[] };
-    if (!rows || !rows.length) {
+    const { rows: rawRows } = await req.json() as { rows: Record<string, any>[] };
+    if (!rawRows || !rawRows.length) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
       });
     }
 
-    console.log(`📦 ETL ${ETL_VERSION} — Recibidas ${rows.length} filas del Excel`);
+    // ── Fix 3: Deduplicación estricta — eliminar filas 100% idénticas ──
+    const rowHashes = new Set<string>();
+    let exactDuplicates = 0;
+    const rows = rawRows.filter(row => {
+      const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
+      if (rowHashes.has(hash)) { exactDuplicates++; return false; }
+      rowHashes.add(hash);
+      return true;
+    });
+    if (exactDuplicates > 0) {
+      console.log(`🗑️ Fix 3: ${exactDuplicates} filas 100% idénticas eliminadas (${rawRows.length} → ${rows.length})`);
+    }
+
+    console.log(`📦 ETL ${ETL_VERSION} — Recibidas ${rawRows.length} filas, procesando ${rows.length} únicas`);
 
     // ── TAREA 8: Log de columna de facturación resuelta ──
     const facturacionColumnResolved = rows.length > 0
@@ -408,6 +450,8 @@ Deno.serve(async (req) => {
               categorias, telefono, celular, correo, fecha_emision: fecha_iso } = venta;
 
       const geo = normalizarGeografia(ciudad_raw);
+      // Fix 6: Normalizar provincia del Excel Y de la geo
+      const provinciaFinal = normalizeProvincia(geo.provincia) || normalizeProvincia(venta.provincia) || geo.provincia;
 
       if (!clientesMap.has(client_id)) {
         clientesMap.set(client_id, {
@@ -431,7 +475,7 @@ Deno.serve(async (req) => {
       if (geo.barrio) c.barrios.add(geo.barrio);
       if (geo.comuna) c.comunas.add(geo.comuna);
       if (geo.ciudad) c.ciudades.add(geo.ciudad);
-      if (geo.provincia) c.provincias.add(geo.provincia);
+      if (provinciaFinal) c.provincias.add(provinciaFinal);
       if (direccion) c.direcciones.add(direccion);
       if (vendedor) c.vendedores.add(vendedor);
       if (telefono) c.telefonos.add(telefono);
