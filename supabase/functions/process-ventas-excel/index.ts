@@ -245,21 +245,21 @@ function normalizarGeografia(ciudadRaw: string | null): GeoResult {
   if (barrioKey) {
     return { barrio: barrioKey, comuna: BARRIOS_A_COMUNA[barrioKey], ciudad: 'CABA', provincia: 'CABA' };
   }
-  if (ubicacion === 'CABA' || ubicacion === 'CIUDAD AUTONOMA DE BUENOS AIRES') {
+  if (ubicacionNorm === 'CABA' || ubicacionNorm === 'CIUDAD AUTONOMA DE BUENOS AIRES') {
     return { barrio: null, comuna: null, ciudad: 'CABA', provincia: 'CABA' };
   }
-  if (ubicacion.includes('LA PLATA')) {
-    const match = ubicacion.match(/LA PLATA\s*\(([^)]+)\)/);
+  if (ubicacionNorm.includes('LA PLATA')) {
+    const match = ubicacionNorm.match(/LA PLATA\s*\(([^)]+)\)/);
     return { barrio: match ? match[1].trim() : null, comuna: null, ciudad: 'LA PLATA', provincia: 'BUENOS AIRES' };
   }
-  if (['CITY BELL', 'GONNET', 'ABASTO'].includes(ubicacion)) {
-    return { barrio: ubicacion, comuna: null, ciudad: 'LA PLATA', provincia: 'BUENOS AIRES' };
+  if (['CITY BELL', 'GONNET', 'ABASTO'].includes(ubicacionNorm)) {
+    return { barrio: ubicacionNorm, comuna: null, ciudad: 'LA PLATA', provincia: 'BUENOS AIRES' };
   }
   const zonaVicente = ['OLIVOS', 'FLORIDA', 'MARTINEZ', 'LA LUCILA', 'MUNRO'];
-  if (zonaVicente.includes(ubicacion)) {
-    return { barrio: null, comuna: null, ciudad: ubicacion, provincia: 'BUENOS AIRES' };
+  if (zonaVicente.includes(ubicacionNorm)) {
+    return { barrio: null, comuna: null, ciudad: ubicacionNorm, provincia: 'BUENOS AIRES' };
   }
-  return { barrio: null, comuna: null, ciudad: ubicacion, provincia: 'BUENOS AIRES' };
+  return { barrio: null, comuna: null, ciudad: ubicacionNorm, provincia: 'BUENOS AIRES' };
 }
 
 const countNonEmptyValues = (obj: Record<string, any>): number => {
