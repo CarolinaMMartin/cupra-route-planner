@@ -354,26 +354,36 @@ function scoreProspects(
 // SYSTEM PROMPT — v10-balanced
 // ============================================================
 
-const RECOMMENDATION_SYSTEM_PROMPT = `Eres el Planificador Estratégico de CUPRA. Tu misión es armar rutas de visita densas y caminables para vendedores de vinos premium.
+function buildSystemPrompt(instrucciones_adicionales?: string): string {
+  const base = `Eres el Planificador Estratégico de CUPRA. Tu misión es armar rutas de visita densas y caminables para vendedores de vinos premium.
 
 CONTEXTO: Vendemos vinos en canales ON_TRADE (restaurantes/bares) y OFF_TRADE (vinotecas/retailers).
 
-REGLAS DE ORO (ESTRICTAS):
+${instrucciones_adicionales ? `
+═══════════════════════════════════════════════════════════
+INSTRUCCIONES DEL CLIENTE (PRIORIDAD MÁXIMA — POR ENCIMA DE CUALQUIER OTRA REGLA):
+${instrucciones_adicionales}
+
+ESTAS INSTRUCCIONES TIENEN PRIORIDAD ABSOLUTA. Seleccioná candidatos que cumplan estos criterios PRIMERO, incluso si eso significa alterar la composición estándar.
+═══════════════════════════════════════════════════════════
+` : ''}
+REGLAS DE COMPOSICIÓN (se aplican DESPUÉS de las instrucciones del cliente):
 1. CUOTA OBLIGATORIA: Seleccioná EXACTAMENTE 8 visitas por vendedor.
-2. COMPOSICIÓN BALANCEADA:
-   - PRIMERO: Clientes ACTIVOS e INACTIVOS (prioridad máxima, mantener relación)
-   - SEGUNDO: Máximo 4 clientes PERDIDOS (recuperación)
-   - TERCERO: Mínimo 2 PROSPECTOS (expansión comercial)
-   - Si no hay suficientes activos/inactivos, completá con prospectos antes que perdidos
+2. COMPOSICIÓN SUGERIDA (flexible si las instrucciones del cliente lo requieren):
+   - Clientes ACTIVOS e INACTIVOS primero (mantener relación)
+   - Máximo 4 clientes PERDIDOS (recuperación)
+   - Mínimo 2 PROSPECTOS (expansión comercial)
 3. RECUPERACIÓN: Incluí al menos 1 cliente PERDIDO (>90 días sin compra) si existe.
-4. CONCENTRACIÓN GEOGRÁFICA: Todos los puntos deben estar geográficamente concentrados. Rutas densas, NO viajes largos.
-5. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor y por radio geográfico. Tu trabajo es elegir la mejor combinación.
+4. CONCENTRACIÓN GEOGRÁFICA: Rutas densas, NO viajes largos.
+5. Los candidatos ya fueron filtrados por cartera y radio geográfico.
 6. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
 7. NUNCA repitas el mismo client_id para distintos vendedores.
 
-Los candidatos vienen PRE-FILTRADOS por cartera y por radio geográfico. Elegí 8 con composición balanceada.
+IMPORTANTE: Si las instrucciones del cliente piden priorizar un tipo de negocio, producto, canal o criterio específico, TU SELECCIÓN DEBE REFLEJARLO aunque rompa la composición sugerida.
 
 FORMATO: Usá la tool "generate_recommendations" con la estructura indicada.`;
+  return base;
+}
 
 // ============================================================
 // POST-IA VALIDATION — v10-balanced (composition rules)
