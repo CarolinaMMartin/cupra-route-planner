@@ -885,6 +885,46 @@ Deno.serve(async (req) => {
         console.log(`🆕 ${vendedor.nombre}: +${extraScored.length} prospectos en ${expandRadius}km. Total: ${clientPool.length}C + ${prospectPool.length}P`);
       }
 
+      // === FINAL FALLBACK: If still < 8, load prospects with NO radius limit ===
+      currentTotal = clientPool.length + prospectPool.length;
+      if (currentTotal < 8 && vendorHotspot) {
+        console.log(`🚨 ${vendedor.nombre}: Solo ${currentTotal} candidatos tras expansión. Cargando prospectos sin límite de radio...`);
+        const existingIds = new Set([...clientPool, ...prospectPool].map(c => c.client_id));
+        const needed = 8 - currentTotal;
+
+        // Load nearest prospects globally, sorted by distance to hotspot
+        const degPerKm = 0.009;
+        const fallbackRadius = 20; // 20km bounding box
+        const deltaLat = fallbackRadius * degPerKm;
+        const deltaLng = fallbackRadius * degPerKm * 1.2;
+
+        const { data: fallbackProspectos } = await supabaseClient
+          .from("prospectos").select("*")
+          .gte("latitud", vendorHotspot.lat - deltaLat)
+          .lte("latitud", vendorHotspot.lat + deltaLat)
+          .gte("longitud", vendorHotspot.lng - deltaLng)
+          .lte("longitud", vendorHotspot.lng + deltaLng)
+          .order("rating", { ascending: false })
+          .limit(needed + 10);
+
+        const fallbackFiltered = (fallbackProspectos || []).filter(p =>
+          !prospectosAsignadosHoy.has(p.place_id) &&
+          !existingIds.has(p.place_id) &&
+          !p.client_id
+        );
+
+        extraProspectosLoaded.push(...fallbackFiltered);
+
+        // Score with unlimited radius (20km) so nothing gets filtered out
+        const fallbackScored = scoreProspects(
+          fallbackFiltered, feedbacksMapProspectos,
+          vendorHotspot, fallbackRadius, [],
+        ).filter(c => !existingIds.has(c.client_id));
+
+        prospectPool = [...prospectPool, ...fallbackScored];
+        console.log(`🆕 ${vendedor.nombre}: +${fallbackScored.length} prospectos fallback. Total final: ${clientPool.length}C + ${prospectPool.length}P`);
+      }
+
       vendorClientPools.set(vendedor.user_id, clientPool);
       vendorProspectPools.set(vendedor.user_id, prospectPool);
     }
