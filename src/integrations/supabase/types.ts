@@ -180,6 +180,39 @@ export type Database = {
           },
         ]
       }
+      asignaciones_manuales_audit: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          razon_social: string | null
+          usuario_id: string
+          vendedor_anterior: string | null
+          vendedor_nuevo_id: string
+          vendedor_nuevo_nombre: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          razon_social?: string | null
+          usuario_id: string
+          vendedor_anterior?: string | null
+          vendedor_nuevo_id: string
+          vendedor_nuevo_nombre: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          razon_social?: string | null
+          usuario_id?: string
+          vendedor_anterior?: string | null
+          vendedor_nuevo_id?: string
+          vendedor_nuevo_nombre?: string
+        }
+        Relationships: []
+      }
       asignaciones_vendedores_clientes: {
         Row: {
           client_id: string | null
