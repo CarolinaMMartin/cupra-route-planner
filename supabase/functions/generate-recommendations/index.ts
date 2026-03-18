@@ -734,14 +734,21 @@ Deno.serve(async (req) => {
 
     console.log(`🆕 Prospectos disponibles: ${prospectos.length}`);
 
-    // ---- 7. Zone center fallback (centroid of ALL client_places in filter) ----
-    const zoneCoords: AnchorPoint[] = (clientPlaces || [])
+    // ---- 7. Zone center fallback ----
+    // Priority: client_places centroid; if none, use prospects centroid
+    const clientZoneCoords: AnchorPoint[] = (clientPlaces || [])
       .map((p: any) => ({ lat: Number(p.lat), lng: Number(p.long) }))
       .filter((p: AnchorPoint) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat >= -60 && p.lat <= -20 && p.lng >= -80 && p.lng <= -40);
 
+    const prospectZoneCoords: AnchorPoint[] = (prospectos || [])
+      .map((p: any) => ({ lat: Number(p.latitud), lng: Number(p.longitud) }))
+      .filter((p: AnchorPoint) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat >= -60 && p.lat <= -20 && p.lng >= -80 && p.lng <= -40);
+
+    const zoneCoords = clientZoneCoords.length > 0 ? clientZoneCoords : prospectZoneCoords;
     const zoneCenterFallback = calculateCentroid(zoneCoords);
     if (zoneCenterFallback) {
-      console.log(`🎯 Zone center fallback: ${zoneCenterFallback.lat.toFixed(4)}, ${zoneCenterFallback.lng.toFixed(4)}`);
+      const source = clientZoneCoords.length > 0 ? "clientes" : "prospectos";
+      console.log(`🎯 Zone center fallback (${source}): ${zoneCenterFallback.lat.toFixed(4)}, ${zoneCenterFallback.lng.toFixed(4)}`);
     }
 
     if (allClientesEnZona.length === 0 && portfolioClients.length === 0 && prospectos.length === 0) {
@@ -799,8 +806,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Hotspot = densest cluster of vendor's own clients (avoids dead-zone centroids)
-      // FALLBACK: If vendor has 0 clients → use zone center fallback
+      // Hotspot = densest cluster of vendor's own clients
+      // FALLBACK: if vendor has no clients, use zone center (clients or prospects)
       const vendorHotspot = findDensestHotspot(vendorCoords, 2.0) || zoneCenterFallback;
 
       if (!vendorHotspot) {
@@ -812,7 +819,7 @@ Deno.serve(async (req) => {
 
       vendorHotspots.set(vendedor.user_id, vendorHotspot);
       const isConquestMode = vendorCoords.length === 0;
-      console.log(`🔥 ${vendedor.nombre}: Hotspot ${vendorHotspot.lat.toFixed(4)}, ${vendorHotspot.lng.toFixed(4)}${isConquestMode ? ' (MODO CONQUISTA — fallback a centro de zona)' : ` (${vendorCoords.length} clientes propios)`}`);
+      console.log(`🔥 ${vendedor.nombre}: Hotspot ${vendorHotspot.lat.toFixed(4)}, ${vendorHotspot.lng.toFixed(4)}${isConquestMode ? ' (MODO CONQUISTA — fallback a centro de zona/prospectos)' : ` (${vendorCoords.length} clientes propios)`}`);
 
       // === Other vendors' hotspots for overlap penalty ===
       const otherHotspots = [...vendorHotspots.entries()]
@@ -889,27 +896,31 @@ Deno.serve(async (req) => {
         console.log(`🆕 ${vendedor.nombre}: +${extraScored.length} prospectos en ${expandRadius}km. Total: ${clientPool.length}C + ${prospectPool.length}P`);
       }
 
-      // === FINAL FALLBACK: If still < 8, load prospects with NO radius limit ===
+      // === FINAL FALLBACK: if still < 8, score best prospects in whole selected zone ===
       currentTotal = clientPool.length + prospectPool.length;
-      if (currentTotal < 8 && vendorHotspot) {
-        console.log(`🚨 ${vendedor.nombre}: Solo ${currentTotal} candidatos tras expansión. Cargando prospectos sin límite de radio...`);
+      if (currentTotal < 8) {
+        console.log(`🚨 ${vendedor.nombre}: Solo ${currentTotal} candidatos tras expansión. Buscando mejores prospectos de toda la zona...`);
         const existingIds = new Set([...clientPool, ...prospectPool].map(c => c.client_id));
         const needed = 8 - currentTotal;
 
-        // Load nearest prospects globally, sorted by distance to hotspot
-        const degPerKm = 0.009;
-        const fallbackRadius = 20; // 20km bounding box
-        const deltaLat = fallbackRadius * degPerKm;
-        const deltaLng = fallbackRadius * degPerKm * 1.2;
-
-        const { data: fallbackProspectos } = await supabaseClient
-          .from("prospectos").select("*")
-          .gte("latitud", vendorHotspot.lat - deltaLat)
-          .lte("latitud", vendorHotspot.lat + deltaLat)
-          .gte("longitud", vendorHotspot.lng - deltaLng)
-          .lte("longitud", vendorHotspot.lng + deltaLng)
+        let fallbackQuery = supabaseClient
+          .from("prospectos")
+          .select("*")
           .order("rating", { ascending: false })
-          .limit(needed + 10);
+          .limit(Math.max(needed * 8, 80));
+
+        if (provincia && provincia !== "all") {
+          fallbackQuery = fallbackQuery.ilike("provincia", `%${provincia}%`);
+        }
+
+        const geoConditionsFallback: string[] = [];
+        if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditionsFallback.push(`comuna.ilike.%${c}%`));
+        if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditionsFallback.push(`barrio.ilike.%${b}%`));
+        if (geoConditionsFallback.length > 0) {
+          fallbackQuery = fallbackQuery.or(geoConditionsFallback.join(","));
+        }
+
+        const { data: fallbackProspectos } = await fallbackQuery;
 
         const fallbackFiltered = (fallbackProspectos || []).filter(p =>
           !prospectosAsignadosHoy.has(p.place_id) &&
@@ -919,14 +930,19 @@ Deno.serve(async (req) => {
 
         extraProspectosLoaded.push(...fallbackFiltered);
 
-        // Score with unlimited radius (20km) so nothing gets filtered out
+        // Large radius so entire zone can be evaluated by score
+        const fallbackRadius = 100;
         const fallbackScored = scoreProspects(
-          fallbackFiltered, feedbacksMapProspectos,
-          vendorHotspot, fallbackRadius, [],
+          fallbackFiltered,
+          feedbacksMapProspectos,
+          vendorHotspot,
+          fallbackRadius,
+          otherHotspots,
         ).filter(c => !existingIds.has(c.client_id));
 
         prospectPool = [...prospectPool, ...fallbackScored];
-        console.log(`🆕 ${vendedor.nombre}: +${fallbackScored.length} prospectos fallback. Total final: ${clientPool.length}C + ${prospectPool.length}P`);
+        currentTotal = clientPool.length + prospectPool.length;
+        console.log(`🆕 ${vendedor.nombre}: +${fallbackScored.length} prospectos global fallback. Total final: ${clientPool.length}C + ${prospectPool.length}P`);
       }
 
       vendorClientPools.set(vendedor.user_id, clientPool);
