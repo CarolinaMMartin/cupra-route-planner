@@ -210,11 +210,36 @@ const toYmdFromExcelOrText = (v: any): string | null => {
 
 interface GeoResult { barrio: string | null; comuna: string | null; ciudad: string | null; provincia: string | null; }
 
+// === NORMALIZACIÓN DE PROVINCIAS ===
+const PROVINCIA_NORM: Record<string, string> = {
+  'CABA': 'CABA',
+  'CDAD. AUTONOMA DE BUENOS AIRES': 'CABA',
+  'CDAD AUTONOMA DE BUENOS AIRES': 'CABA',
+  'CIUDAD AUTONOMA DE BUENOS AIRES': 'CABA',
+  'C.A.B.A.': 'CABA',
+  'CAPITAL FEDERAL': 'CABA',
+  'BUENOS AIRES': 'Provincia de Buenos Aires',
+  'BS AS': 'Provincia de Buenos Aires',
+  'BS. AS.': 'Provincia de Buenos Aires',
+  'PBA': 'Provincia de Buenos Aires',
+  'PROVINCIA DE BUENOS AIRES': 'Provincia de Buenos Aires',
+};
+
+const normalizeProvincia = (prov: string | null): string | null => {
+  if (!prov) return null;
+  const key = prov.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  return PROVINCIA_NORM[key] || prov;
+};
+
 function normalizarGeografia(ciudadRaw: string | null): GeoResult {
   if (!ciudadRaw) return { barrio: null, comuna: null, ciudad: null, provincia: null };
-  const ubicacion = ciudadRaw.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-  if (BARRIOS_A_COMUNA[ubicacion]) {
-    return { barrio: ubicacion, comuna: BARRIOS_A_COMUNA[ubicacion], ciudad: 'CABA', provincia: 'CABA' };
+  const ubicacionNorm = ciudadRaw.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  // Fix 2: Normalizar también las keys del mapa para evitar que NFD rompa Ñ→N
+  const barrioKey = Object.keys(BARRIOS_A_COMUNA).find(k =>
+    k.normalize('NFD').replace(/[\u0300-\u036f]/g, '') === ubicacionNorm
+  );
+  if (barrioKey) {
+    return { barrio: barrioKey, comuna: BARRIOS_A_COMUNA[barrioKey], ciudad: 'CABA', provincia: 'CABA' };
   }
   if (ubicacion === 'CABA' || ubicacion === 'CIUDAD AUTONOMA DE BUENOS AIRES') {
     return { barrio: null, comuna: null, ciudad: 'CABA', provincia: 'CABA' };
