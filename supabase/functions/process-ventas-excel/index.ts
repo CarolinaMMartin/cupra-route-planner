@@ -267,10 +267,13 @@ const countNonEmptyValues = (obj: Record<string, any>): number => {
 };
 
 const buildVentaConflictKey = (venta: Record<string, any>): string | null => {
+  // Fix 2: Include facturacion_ars in key to preserve bonificaciones (price=0 vs price>0)
   const targetFields = ['ticket', 'letra', 'fecha_emision', 'client_id', 'codigo_producto'];
   const values = targetFields.map(field => venta[field]);
   if (values.some(value => isEmpty(value))) return null;
-  return values.map(value => String(value).trim().toUpperCase()).join('||');
+  // Append facturacion_ars to distinguish bonificaciones
+  const priceKey = String(venta.facturacion_ars ?? 0);
+  return [...values.map(value => String(value).trim().toUpperCase()), priceKey].join('||');
 };
 
 const mergeVentaDuplicate = (current: Record<string, any>, incoming: Record<string, any>) => {
