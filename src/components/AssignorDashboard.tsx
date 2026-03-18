@@ -22,6 +22,7 @@ import TodayAssignments from "./assignor/TodayAssignments";
 import AIInsightsCard from "./assignor/AIInsightsCard";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
 import EditAssignmentsTable from "./assignor/EditAssignmentsTable";
+import ManualAssignment from "./assignor/ManualAssignment";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useRecommendationsStore } from "@/hooks/useRecommendationsStore";
