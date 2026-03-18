@@ -5,7 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, MapPin, X, ChevronRight, LayoutGrid, Search, Square } from "lucide-react";
+import { Sparkles, MapPin, X, ChevronRight, LayoutGrid, Search, Square, Hand } from "lucide-react";
+import ManualAssignment from "./ManualAssignment";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
@@ -27,7 +28,7 @@ const FilterPanel = ({
   onRequestRecommendations, isLoading, onCancel, placesData,
   instruccionesAdicionales, onInstruccionesChange
 }: FilterPanelProps) => {
-  const [mode, setMode] = useState<'area' | 'custom'>('area');
+  const [mode, setMode] = useState<'area' | 'custom' | 'manual'>('area');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [selectedVendedores, setSelectedVendedores] = useState<string[]>([]);
   const [isLoadingVendedores, setIsLoadingVendedores] = useState(true);
@@ -140,7 +141,7 @@ const FilterPanel = ({
   return (
     <div className="space-y-8">
       {/* Mode selector */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <button
           type="button"
           onClick={() => setMode('area')}
@@ -171,6 +172,22 @@ const FilterPanel = ({
             <span className="font-medium text-sm">Personalizado</span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">Selección manual de vendedores y zonas</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMode('manual')}
+          className={`group p-6 rounded-xl text-left transition-all duration-200 ${
+            mode === 'manual'
+              ? 'bg-primary/8 border border-primary/20'
+              : 'bg-secondary/30 border border-transparent hover:bg-secondary/50'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 mb-2">
+            <Hand className={`w-4 h-4 ${mode === 'manual' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <span className="font-medium text-sm">Asignación Manual</span>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">Buscar y asignar clientes directamente</p>
         </button>
       </div>
 
@@ -313,6 +330,11 @@ const FilterPanel = ({
             </Button>
           )}
         </form>
+      )}
+
+      {/* Mode: Manual */}
+      {mode === 'manual' && (
+        <ManualAssignment />
       )}
     </div>
   );
