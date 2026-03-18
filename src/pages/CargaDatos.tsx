@@ -159,7 +159,7 @@ const CargaDatos = () => {
     setProgress(10);
     try {
       setProgress(30);
-      const { data, error } = await supabase.functions.invoke("process-ventas-excel", { body: { rows } });
+      const { data, error } = await supabase.functions.invoke("process-ventas-excel", { body: { rows, replaceExisting } });
       setProgress(90);
       if (error) throw new Error(error.message || "Error al procesar");
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
