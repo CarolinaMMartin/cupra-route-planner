@@ -33,21 +33,21 @@ const categorizeClient = (diasSinCompra: number | null): ClientCategory => {
 };
 
 const ZonaKPIs = ({ clientesData, ventasData, formatCurrency }: ZonaKPIsProps) => {
-  // Build client_id → barrio lookup
-  const clientBarrioMap = useMemo(() => {
+  // Build client_id → ciudad lookup
+  const clientCiudadMap = useMemo(() => {
     const map = new Map<string, string>();
     clientesData.forEach(c => {
       if (c.client_id) {
-        map.set(c.client_id, c.barrio_principal || '⚠️ Sin barrio asignado');
+        map.set(c.client_id, c.ciudad_principal || 'Sin ciudad');
       }
     });
     return map;
   }, [clientesData]);
 
   const zonaData = useMemo(() => {
-    // Step 1: Client counts by barrio (from clientes)
+    // Step 1: Client counts by ciudad (from clientes)
     const zonaMap = new Map<string, {
-      barrio: string;
+      ciudad: string;
       total: number;
       activos: number;
       inactivos: number;
@@ -58,11 +58,11 @@ const ZonaKPIs = ({ clientesData, ventasData, formatCurrency }: ZonaKPIsProps) =
       vendedores: Set<string>;
     }>();
 
-    const getOrCreate = (barrio: string) => {
-      const key = barrio.trim().toLowerCase();
+    const getOrCreate = (ciudad: string) => {
+      const key = ciudad.trim().toLowerCase();
       if (!zonaMap.has(key)) {
         zonaMap.set(key, {
-          barrio,
+          ciudad,
           total: 0, activos: 0, inactivos: 0, perdidos: 0, sin_datos: 0,
           ventas: 0, tickets: new Set(), vendedores: new Set(),
         });
@@ -72,8 +72,8 @@ const ZonaKPIs = ({ clientesData, ventasData, formatCurrency }: ZonaKPIsProps) =
 
     // Count clients by status
     clientesData.forEach(cliente => {
-      const barrio = cliente.barrio_principal || '⚠️ Sin barrio asignado';
-      const zona = getOrCreate(barrio);
+      const ciudad = cliente.ciudad_principal || 'Sin ciudad';
+      const zona = getOrCreate(ciudad);
       zona.total++;
       const cat = categorizeClient(cliente.dias_desde_ultima_compra);
       if (cat === 'activo') zona.activos++;
@@ -84,8 +84,8 @@ const ZonaKPIs = ({ clientesData, ventasData, formatCurrency }: ZonaKPIsProps) =
 
     // Step 2: Facturación, tickets, vendedores from ventas_cupra
     ventasData.forEach(v => {
-      const barrio = v.client_id ? (clientBarrioMap.get(v.client_id) || '⚠️ Sin barrio asignado') : '⚠️ Sin barrio asignado';
-      const zona = getOrCreate(barrio);
+      const ciudad = v.client_id ? (clientCiudadMap.get(v.client_id) || 'Sin ciudad') : 'Sin ciudad';
+      const zona = getOrCreate(ciudad);
       zona.ventas += Number(v.facturacion_ars || 0);
       if (v.ticket) zona.tickets.add(v.ticket);
       if (v.vendedor) zona.vendedores.add(v.vendedor);
@@ -94,7 +94,7 @@ const ZonaKPIs = ({ clientesData, ventasData, formatCurrency }: ZonaKPIsProps) =
     return Array.from(zonaMap.values())
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 15);
-  }, [clientesData, ventasData, clientBarrioMap]);
+  }, [clientesData, ventasData, clientCiudadMap]);
 
   // KPIs globales por estado
   const globalStats = useMemo(() => {
