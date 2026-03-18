@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, X, Eye, MapPin, AlertTriangle, Info } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import cupraLogo from "@/assets/cupra-logo-new.png";
-import * as XLSX from "xlsx";
 
 type Step = "upload" | "preview" | "processing" | "done";
 
