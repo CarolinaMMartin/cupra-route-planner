@@ -999,6 +999,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         prospectPool,
         vendedor.user_id,
         globalPickedIds,
+        hasCustomInstructions,
       );
 
       vendorRecs.forEach((r: any) => globalPickedIds.add(r.client_id));
