@@ -920,7 +920,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: RECOMMENDATION_SYSTEM_PROMPT },
+          { role: "system", content: buildSystemPrompt(instrucciones_adicionales) },
           { role: "user", content: prompt },
         ],
         tools: [{
