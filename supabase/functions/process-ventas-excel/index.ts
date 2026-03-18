@@ -378,7 +378,7 @@ Deno.serve(async (req) => {
     for (const row of rows) {
       const idCandidato = normalizeClientId(getFieldValue(row, ['Id', 'id', 'ID', 'client_id', 'Número Externo', 'Numero Externo']));
       const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
-      const client_id = idCandidato || (cuit_dni && cuitToClientId.get(cuit_dni)) || cuit_dni;
+      let client_id = idCandidato || (cuit_dni && cuitToClientId.get(cuit_dni)) || cuit_dni;
       const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
       const fantasia = toStr(getFieldValue(row, ['Fantasia', 'Fantasía', 'fantasia']));
       const direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Domicilio', 'Calle']));
@@ -402,6 +402,11 @@ Deno.serve(async (req) => {
 
       if (facturacion === null) facturacionNullCount++;
 
+      // Fix 1: Generate synthetic client_id from razon_social when no ID/CUIT exists
+      if (!client_id && razon_social) {
+        const normalizedRS = razon_social.trim().toUpperCase().replace(/\s+/g, ' ');
+        client_id = `RS_${normalizedRS}`;
+      }
       if (!client_id) {
         ventasSinClientId += 1;
         descartados.push({ cuit_dni, razon_social });
