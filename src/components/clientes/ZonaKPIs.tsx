@@ -194,7 +194,7 @@ const ZonaKPIs = ({ clientesData, ventasData, formatCurrency }: ZonaKPIsProps) =
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border/60">
-                    <th className="text-left py-2.5 px-2 text-[13px] font-medium text-foreground/50 uppercase tracking-wide">Zona</th>
+                    <th className="text-left py-2.5 px-2 text-[13px] font-medium text-foreground/50 uppercase tracking-wide">Ciudad</th>
                     <th className="text-center py-2.5 px-2 text-[13px] font-medium text-foreground/50 uppercase tracking-wide">Total</th>
                     <th className="text-center py-2.5 px-2 text-[13px] font-medium text-emerald-500 uppercase tracking-wide">Act.</th>
                     <th className="text-center py-2.5 px-2 text-[13px] font-medium text-amber-500 uppercase tracking-wide">Inact.</th>
