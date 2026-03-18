@@ -442,7 +442,7 @@ const CargaDatos = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div className="p-2.5 rounded-lg bg-muted/20 text-center">
                       <p className="text-lg font-bold text-foreground">{reconciliacion.filas_excel.toLocaleString()}</p>
                       <p className="text-xs text-muted-foreground">Filas Excel</p>
@@ -456,8 +456,12 @@ const CargaDatos = () => {
                       <p className="text-xs text-muted-foreground">Tickets únicos</p>
                     </div>
                     <div className="p-2.5 rounded-lg bg-muted/20 text-center">
+                      <p className="text-lg font-bold text-foreground">{(reconciliacion.clientes_razon_social ?? reconciliacion.clientes_unicos).toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">Clientes (razón social)</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/20 text-center">
                       <p className="text-lg font-bold text-foreground">{reconciliacion.clientes_unicos.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">Clientes únicos</p>
+                      <p className="text-xs text-muted-foreground">Clientes (por ID)</p>
                     </div>
                   </div>
                   <div className="mt-3 p-2.5 rounded-lg bg-accent/5 text-center">
@@ -466,7 +470,7 @@ const CargaDatos = () => {
                   </div>
                   {reconciliacion.filas_descartadas_sin_id > 0 && (
                     <p className="text-xs text-amber-500 mt-2">
-                      ⚠️ {reconciliacion.filas_descartadas_sin_id} filas descartadas sin client_id/CUIT válido
+                      ⚠️ {reconciliacion.filas_descartadas_sin_id} filas descartadas sin identificador ni razón social
                     </p>
                   )}
                   {reconciliacion.tickets_compartidos > 0 && (

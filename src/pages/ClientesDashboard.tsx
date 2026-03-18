@@ -660,21 +660,21 @@ const ClientesDashboard = () => {
           <TabsContent value="rankings">
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Top Barrios */}
+          {/* Top Ciudades (reemplaza Top Barrios) */}
           <Card className="matte-card">
             <CardHeader className="pb-4">
              <CardTitle className="section-title flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-foreground/40" />
-                Top Barrios
+                Top Ciudades
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {topBarrios.map((barrio, index) => (
+                {topCiudades.map((item, index) => (
                   <div
-                    key={barrio.barrio}
+                    key={item.ciudad}
                     className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                      barrio.barrio.includes('Sin barrio') 
+                      item.ciudad === 'Sin ciudad' 
                         ? 'bg-amber-500/5 border-amber-500/20' 
                         : 'bg-card/50 border-border/40 hover:bg-card/70'
                     }`}
@@ -684,11 +684,11 @@ const ClientesDashboard = () => {
                         {index + 1}
                       </Badge>
                       <span className="text-sm font-medium text-foreground truncate">
-                        {barrio.barrio}
+                        {item.ciudad}
                       </span>
                     </div>
                     <span className="text-sm font-semibold text-accent ml-2 shrink-0">
-                      {formatCurrency(barrio.ventas)}
+                      {formatCurrency(item.ventas)}
                     </span>
                   </div>
                 ))}

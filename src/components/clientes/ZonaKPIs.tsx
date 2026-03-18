@@ -241,16 +241,16 @@ const ZonaKPIs = ({ clientesData, ventasData, formatCurrency }: ZonaKPIsProps) =
                 <tbody>
                   {zonaData.map((zona, i) => {
                     const cobertura = zona.total > 0 ? Math.round(zona.activos / zona.total * 100) : 0;
-                    const isSinBarrio = zona.barrio.includes('Sin barrio');
+                    const isSinCiudad = zona.ciudad === 'Sin ciudad';
                     return (
                       <tr key={i} className={`border-b border-border/30 transition-colors ${
-                        isSinBarrio ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-muted/30'
+                        isSinCiudad ? 'bg-amber-500/5 hover:bg-amber-500/10' : 'hover:bg-muted/30'
                       }`}>
                         <td className="py-2.5 px-2">
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="shrink-0 text-xs">{i + 1}</Badge>
-                            <span className={`font-medium truncate max-w-[180px] ${isSinBarrio ? 'text-amber-500' : ''}`}>
-                              {zona.barrio}
+                            <span className={`font-medium truncate max-w-[180px] ${isSinCiudad ? 'text-amber-500' : ''}`}>
+                              {zona.ciudad}
                             </span>
                           </div>
                         </td>

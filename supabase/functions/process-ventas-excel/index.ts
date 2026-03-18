@@ -734,6 +734,7 @@ Deno.serve(async (req) => {
       facturacion_total_procesada: totalFacturacionProcesada,
       tickets_unicos: totalTicketsUnicos,
       clientes_unicos: totalClientesUnicos,
+      clientes_razon_social: totalClientesRazonSocial,
       tickets_compartidos: ticketsCompartidos.length,
       vendedor_breakdown: vendedorBreakdown,
     };
