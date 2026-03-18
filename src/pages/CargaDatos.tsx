@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, X, Eye, MapPin, AlertTriangle, Info } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import * as XLSX from "xlsx";
 
@@ -29,6 +30,12 @@ interface QualityReport {
   alerta: boolean;
 }
 
+interface VendedorBreakdown {
+  vendedor: string;
+  monto: number;
+  registros: number;
+}
+
 interface Reconciliacion {
   filas_excel: number;
   filas_procesadas: number;
@@ -38,6 +45,7 @@ interface Reconciliacion {
   tickets_unicos: number;
   clientes_unicos: number;
   tickets_compartidos: number;
+  vendedor_breakdown?: VendedorBreakdown[];
 }
 
 interface ETLMetadata {
@@ -74,6 +82,7 @@ const CargaDatos = () => {
   const [results, setResults] = useState<ProcessResults | null>(null);
   const [progress, setProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [replaceExisting, setReplaceExisting] = useState(true);
 
   // TAREA 7, 9, 10: Extended ETL response
   const [calidad, setCalidad] = useState<QualityReport | null>(null);
@@ -150,7 +159,7 @@ const CargaDatos = () => {
     setProgress(10);
     try {
       setProgress(30);
-      const { data, error } = await supabase.functions.invoke("process-ventas-excel", { body: { rows } });
+      const { data, error } = await supabase.functions.invoke("process-ventas-excel", { body: { rows, replaceExisting } });
       setProgress(90);
       if (error) throw new Error(error.message || "Error al procesar");
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
@@ -337,12 +346,24 @@ const CargaDatos = () => {
                 </div>
               </CardContent>
             </Card>
-            <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={reset}>Cancelar</Button>
-              <Button onClick={handleProcess}>
-                <Upload className="h-4 w-4 mr-1.5" />
-                Procesar {rows.length.toLocaleString()} filas
-              </Button>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="replaceExisting"
+                  checked={replaceExisting}
+                  onCheckedChange={(checked) => setReplaceExisting(checked === true)}
+                />
+                <label htmlFor="replaceExisting" className="text-sm text-muted-foreground cursor-pointer">
+                  Reemplazar datos existentes <span className="text-xs">(recomendado para carga completa)</span>
+                </label>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={reset}>Cancelar</Button>
+                <Button onClick={handleProcess}>
+                  <Upload className="h-4 w-4 mr-1.5" />
+                  Procesar {rows.length.toLocaleString()} filas
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -451,6 +472,32 @@ const CargaDatos = () => {
                     <p className="text-xs text-amber-500 mt-1">
                       ⚠️ {reconciliacion.tickets_compartidos} tickets compartidos entre múltiples clientes
                     </p>
+                  )}
+                  {/* Fix 4: Desglose por vendedor */}
+                  {reconciliacion.vendedor_breakdown && reconciliacion.vendedor_breakdown.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Monto por vendedor</p>
+                      <div className="border border-border/40 rounded-lg overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-muted/30">
+                              <th className="text-left px-3 py-1.5 text-muted-foreground font-medium">Vendedor</th>
+                              <th className="text-right px-3 py-1.5 text-muted-foreground font-medium">Registros</th>
+                              <th className="text-right px-3 py-1.5 text-muted-foreground font-medium">Monto</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/20">
+                            {reconciliacion.vendedor_breakdown.map((vb, i) => (
+                              <tr key={i} className="hover:bg-muted/10">
+                                <td className="px-3 py-1.5 text-foreground">{vb.vendedor}</td>
+                                <td className="px-3 py-1.5 text-right text-foreground/70">{vb.registros.toLocaleString()}</td>
+                                <td className="px-3 py-1.5 text-right font-medium text-foreground">{formatCurrency(vb.monto)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
                   )}
                 </CardContent>
               </Card>

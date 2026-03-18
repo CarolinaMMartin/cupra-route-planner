@@ -267,10 +267,13 @@ const countNonEmptyValues = (obj: Record<string, any>): number => {
 };
 
 const buildVentaConflictKey = (venta: Record<string, any>): string | null => {
+  // Fix 2: Include facturacion_ars in key to preserve bonificaciones (price=0 vs price>0)
   const targetFields = ['ticket', 'letra', 'fecha_emision', 'client_id', 'codigo_producto'];
   const values = targetFields.map(field => venta[field]);
   if (values.some(value => isEmpty(value))) return null;
-  return values.map(value => String(value).trim().toUpperCase()).join('||');
+  // Append facturacion_ars to distinguish bonificaciones
+  const priceKey = String(venta.facturacion_ars ?? 0);
+  return [...values.map(value => String(value).trim().toUpperCase()), priceKey].join('||');
 };
 
 const mergeVentaDuplicate = (current: Record<string, any>, incoming: Record<string, any>) => {
@@ -294,11 +297,24 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { rows: rawRows } = await req.json() as { rows: Record<string, any>[] };
+    const body = await req.json() as { rows: Record<string, any>[]; replaceExisting?: boolean };
+    const rawRows = body.rows;
+    const replaceExisting = body.replaceExisting !== false; // default true
     if (!rawRows || !rawRows.length) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
       });
+    }
+
+    // Fix 1: Si replaceExisting, limpiar tablas antes de insertar
+    if (replaceExisting) {
+      console.log('🧹 Fix 1: Limpiando ventas_cupra antes de carga completa...');
+      const { error: deleteError } = await supabase.from('ventas_cupra').delete().neq('id', 0);
+      if (deleteError) {
+        console.error('❌ Error limpiando ventas_cupra:', deleteError.message);
+      } else {
+        console.log('✅ ventas_cupra limpiada exitosamente');
+      }
     }
 
     // ── Fix 3: Deduplicación estricta — eliminar filas 100% idénticas ──
@@ -657,13 +673,17 @@ Deno.serve(async (req) => {
 
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
 
-    // ============ FASE 5: Upsert ventas (después de clientes para respetar FK) ============
+    // ============ FASE 5: Insert/Upsert ventas ============
+    // Fix 2: Updated conflict key includes facturacion_ars
+    const ventasConflictKey = 'ticket,letra,fecha_emision,client_id,codigo_producto,facturacion_ars';
     for (let i = 0; i < ventasDeduplicadas.length; i += 500) {
       const batch = ventasDeduplicadas.slice(i, i + 500);
-      const { error } = await supabase.from('ventas_cupra').upsert(batch, {
-        onConflict: 'ticket,letra,fecha_emision,client_id,codigo_producto',
-        ignoreDuplicates: false,
-      });
+      const { error } = replaceExisting
+        ? await supabase.from('ventas_cupra').insert(batch)
+        : await supabase.from('ventas_cupra').upsert(batch, {
+            onConflict: ventasConflictKey,
+            ignoreDuplicates: false,
+          });
       if (error) {
         console.error(`❌ Ventas batch ${i}:`, error.message);
         results.ventas_errores += batch.length;
@@ -693,6 +713,21 @@ Deno.serve(async (req) => {
       filas_facturacion_null: facturacionNullCount,
     };
 
+    // Fix 4: Per-vendor breakdown for reconciliation
+    const vendedorBreakdown: { vendedor: string; monto: number; registros: number }[] = [];
+    const vendedorAgg = new Map<string, { monto: number; registros: number }>();
+    for (const v of ventasDeduplicadas) {
+      const vend = v.vendedor || 'Sin vendedor';
+      if (!vendedorAgg.has(vend)) vendedorAgg.set(vend, { monto: 0, registros: 0 });
+      const entry = vendedorAgg.get(vend)!;
+      entry.monto += v.facturacion_ars || 0;
+      entry.registros += 1;
+    }
+    for (const [vendedor, data] of vendedorAgg.entries()) {
+      vendedorBreakdown.push({ vendedor, monto: Math.round(data.monto * 100) / 100, registros: data.registros });
+    }
+    vendedorBreakdown.sort((a, b) => b.monto - a.monto);
+
     const reconciliacion = {
       filas_excel: rows.length,
       filas_procesadas: ventasRaw.length,
@@ -702,6 +737,7 @@ Deno.serve(async (req) => {
       tickets_unicos: totalTicketsUnicos,
       clientes_unicos: totalClientesUnicos,
       tickets_compartidos: ticketsCompartidos.length,
+      vendedor_breakdown: vendedorBreakdown,
     };
 
     const integridad = {
