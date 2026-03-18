@@ -473,6 +473,32 @@ const CargaDatos = () => {
                       ⚠️ {reconciliacion.tickets_compartidos} tickets compartidos entre múltiples clientes
                     </p>
                   )}
+                  {/* Fix 4: Desglose por vendedor */}
+                  {reconciliacion.vendedor_breakdown && reconciliacion.vendedor_breakdown.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Monto por vendedor</p>
+                      <div className="border border-border/40 rounded-lg overflow-hidden">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="bg-muted/30">
+                              <th className="text-left px-3 py-1.5 text-muted-foreground font-medium">Vendedor</th>
+                              <th className="text-right px-3 py-1.5 text-muted-foreground font-medium">Registros</th>
+                              <th className="text-right px-3 py-1.5 text-muted-foreground font-medium">Monto</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/20">
+                            {reconciliacion.vendedor_breakdown.map((vb, i) => (
+                              <tr key={i} className="hover:bg-muted/10">
+                                <td className="px-3 py-1.5 text-foreground">{vb.vendedor}</td>
+                                <td className="px-3 py-1.5 text-right text-foreground/70">{vb.registros.toLocaleString()}</td>
+                                <td className="px-3 py-1.5 text-right font-medium text-foreground">{formatCurrency(vb.monto)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
