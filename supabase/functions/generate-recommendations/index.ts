@@ -354,26 +354,36 @@ function scoreProspects(
 // SYSTEM PROMPT — v10-balanced
 // ============================================================
 
-const RECOMMENDATION_SYSTEM_PROMPT = `Eres el Planificador Estratégico de CUPRA. Tu misión es armar rutas de visita densas y caminables para vendedores de vinos premium.
+function buildSystemPrompt(instrucciones_adicionales?: string): string {
+  const base = `Eres el Planificador Estratégico de CUPRA. Tu misión es armar rutas de visita densas y caminables para vendedores de vinos premium.
 
 CONTEXTO: Vendemos vinos en canales ON_TRADE (restaurantes/bares) y OFF_TRADE (vinotecas/retailers).
 
-REGLAS DE ORO (ESTRICTAS):
+${instrucciones_adicionales ? `
+═══════════════════════════════════════════════════════════
+INSTRUCCIONES DEL CLIENTE (PRIORIDAD MÁXIMA — POR ENCIMA DE CUALQUIER OTRA REGLA):
+${instrucciones_adicionales}
+
+ESTAS INSTRUCCIONES TIENEN PRIORIDAD ABSOLUTA. Seleccioná candidatos que cumplan estos criterios PRIMERO, incluso si eso significa alterar la composición estándar.
+═══════════════════════════════════════════════════════════
+` : ''}
+REGLAS DE COMPOSICIÓN (se aplican DESPUÉS de las instrucciones del cliente):
 1. CUOTA OBLIGATORIA: Seleccioná EXACTAMENTE 8 visitas por vendedor.
-2. COMPOSICIÓN BALANCEADA:
-   - PRIMERO: Clientes ACTIVOS e INACTIVOS (prioridad máxima, mantener relación)
-   - SEGUNDO: Máximo 4 clientes PERDIDOS (recuperación)
-   - TERCERO: Mínimo 2 PROSPECTOS (expansión comercial)
-   - Si no hay suficientes activos/inactivos, completá con prospectos antes que perdidos
+2. COMPOSICIÓN SUGERIDA (flexible si las instrucciones del cliente lo requieren):
+   - Clientes ACTIVOS e INACTIVOS primero (mantener relación)
+   - Máximo 4 clientes PERDIDOS (recuperación)
+   - Mínimo 2 PROSPECTOS (expansión comercial)
 3. RECUPERACIÓN: Incluí al menos 1 cliente PERDIDO (>90 días sin compra) si existe.
-4. CONCENTRACIÓN GEOGRÁFICA: Todos los puntos deben estar geográficamente concentrados. Rutas densas, NO viajes largos.
-5. IDENTIDAD: Los candidatos ya fueron filtrados por cartera del vendedor y por radio geográfico. Tu trabajo es elegir la mejor combinación.
+4. CONCENTRACIÓN GEOGRÁFICA: Rutas densas, NO viajes largos.
+5. Los candidatos ya fueron filtrados por cartera y radio geográfico.
 6. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
 7. NUNCA repitas el mismo client_id para distintos vendedores.
 
-Los candidatos vienen PRE-FILTRADOS por cartera y por radio geográfico. Elegí 8 con composición balanceada.
+IMPORTANTE: Si las instrucciones del cliente piden priorizar un tipo de negocio, producto, canal o criterio específico, TU SELECCIÓN DEBE REFLEJARLO aunque rompa la composición sugerida.
 
 FORMATO: Usá la tool "generate_recommendations" con la estructura indicada.`;
+  return base;
+}
 
 // ============================================================
 // POST-IA VALIDATION — v10-balanced (composition rules)
@@ -393,6 +403,7 @@ function validateAndFill(
   prospectPool: ScoredCandidate[],
   vendedorId: string,
   globalPickedIds: Set<string>,
+  hasCustomInstructions: boolean = false,
 ): any[] {
   const allCandidates = new Map<string, ScoredCandidate>();
   [...clientPool, ...prospectPool].forEach(c => allCandidates.set(c.client_id, c));
@@ -403,78 +414,94 @@ function validateAndFill(
   const isAvailable = (id: string) => !pickedIds.has(id) && !globalPickedIds.has(id);
   const addRec = (rec: any) => { result.push(rec); pickedIds.add(rec.client_id); };
 
-  // Separate client pool by estado
-  const activeClients = clientPool.filter(c => c.estado_comercial === 'ACTIVO' || c.estado_comercial === 'INACTIVO');
-  const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
-
-  // Step 1: Accept valid AI picks (respecting dedup) — but we'll rebalance after
-  const aiAccepted: any[] = [];
+  // ── STEP 1: Accept valid AI picks FIRST (respect IA selection) ──
   for (const r of aiRecs) {
+    if (result.length >= 8) break;
     if (r.vendedor_id !== vendedorId) continue;
     if (!isAvailable(r.client_id)) continue;
     if (!allCandidates.has(r.client_id)) continue;
-    aiAccepted.push(r);
+    addRec(r);
   }
 
-  // Step 2: Build balanced composition
-  // Priority A: ACTIVO + INACTIVO clients
-  for (const c of activeClients) {
-    if (result.length >= 8) break;
-    if (!isAvailable(c.client_id)) continue;
-    // Check if AI had a pick for this — use AI justification if so
-    const aiPick = aiAccepted.find(r => r.client_id === c.client_id);
-    addRec(aiPick || makeRec(c, vendedorId));
+  console.log(`   📋 AI picks aceptados: ${result.length}/8 para ${vendedorId.slice(0, 8)}`);
+
+  // ── STEP 2: Fill remaining slots with standard composition ──
+  if (result.length < 8) {
+    const activeClients = clientPool.filter(c => c.estado_comercial === 'ACTIVO' || c.estado_comercial === 'INACTIVO');
+    const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
+
+    // Fill with active/inactive clients
+    for (const c of activeClients) {
+      if (result.length >= 8) break;
+      if (!isAvailable(c.client_id)) continue;
+      addRec(makeRec(c, vendedorId));
+    }
+
+    // Fill with lost clients (max 4 total in result)
+    const currentLost = result.filter(r => {
+      const c = allCandidates.get(r.client_id);
+      return c && c.estado_comercial === 'PERDIDO';
+    }).length;
+    for (const c of lostClients) {
+      if (result.length >= 6) break; // Reserve 2 for prospects
+      if (currentLost >= MAX_LOST) break;
+      if (!isAvailable(c.client_id)) continue;
+      addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
+    }
+
+    // Fill with prospects
+    for (const c of prospectPool) {
+      if (result.length >= 8) break;
+      if (!isAvailable(c.client_id)) continue;
+      addRec(makeRec(c, vendedorId));
+    }
+
+    // Still not full? Fill with remaining lost
+    for (const c of lostClients) {
+      if (result.length >= 8) break;
+      if (!isAvailable(c.client_id)) continue;
+      addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social}`));
+    }
   }
 
-  // Priority B: Up to MAX_LOST lost clients (recovery)
-  let lostCount = 0;
-  for (const c of lostClients) {
-    if (result.length >= 6) break; // Reserve at least 2 slots for prospects
-    if (lostCount >= MAX_LOST) break;
-    if (!isAvailable(c.client_id)) continue;
-    const aiPick = aiAccepted.find(r => r.client_id === c.client_id);
-    addRec(aiPick || makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
-    lostCount++;
-  }
+  // ── STEP 3: Soft rebalancing (ONLY if no custom instructions) ──
+  if (!hasCustomInstructions && result.length >= 8) {
+    // Ensure at least 1 recovery if available
+    const hasRecovery = result.some(r => {
+      const c = allCandidates.get(r.client_id);
+      return c && !c.es_prospecto && (c.dias_desde_ultima_compra ?? 0) > 90;
+    });
+    const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
 
-  // Priority C: Prospects (minimum 2 if available, fill rest)
-  const prospectSlots = Math.max(MIN_PROSPECTS, 8 - result.length);
-  let prospectCount = 0;
-  for (const c of prospectPool) {
-    if (result.length >= 8) break;
-    if (prospectCount >= prospectSlots) break;
-    if (!isAvailable(c.client_id)) continue;
-    addRec(makeRec(c, vendedorId));
-    prospectCount++;
-  }
+    if (!hasRecovery && lostClients.length > 0) {
+      const recovery = lostClients.find(c => isAvailable(c.client_id));
+      if (recovery) {
+        const lastIdx = result.length - 1;
+        pickedIds.delete(result[lastIdx].client_id);
+        result[lastIdx] = makeRec(recovery, vendedorId, `Recuperación estratégica: ${recovery.razon_social} (${recovery.dias_desde_ultima_compra} días sin compra)`);
+        pickedIds.add(recovery.client_id);
+      }
+    }
 
-  // Step 3: If still < 8, fill with remaining lost clients
-  for (const c of lostClients) {
-    if (result.length >= 8) break;
-    if (!isAvailable(c.client_id)) continue;
-    addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
-  }
-
-  // Step 4: If STILL < 8, fill with any remaining prospects
-  for (const c of prospectPool) {
-    if (result.length >= 8) break;
-    if (!isAvailable(c.client_id)) continue;
-    addRec(makeRec(c, vendedorId));
-  }
-
-  // Ensure at least 1 recovery if available and we have 8
-  const hasRecovery = result.some(r => {
-    const c = allCandidates.get(r.client_id);
-    return c && !c.es_prospecto && (c.dias_desde_ultima_compra ?? 0) > 90;
-  });
-
-  if (!hasRecovery && result.length >= 8 && lostClients.length > 0) {
-    const recovery = lostClients.find(c => isAvailable(c.client_id));
-    if (recovery) {
-      const lastIdx = result.length - 1;
-      pickedIds.delete(result[lastIdx].client_id);
-      result[lastIdx] = makeRec(recovery, vendedorId, `Recuperación estratégica: ${recovery.razon_social} (${recovery.dias_desde_ultima_compra} días sin compra)`);
-      pickedIds.add(recovery.client_id);
+    // Ensure at least 2 prospects if available
+    const currentProspects = result.filter(r => allCandidates.get(r.client_id)?.es_prospecto).length;
+    if (currentProspects < MIN_PROSPECTS) {
+      const availableProspects = prospectPool.filter(c => isAvailable(c.client_id));
+      for (const prospect of availableProspects) {
+        if (currentProspects >= MIN_PROSPECTS) break;
+        if (result.length > MIN_PROSPECTS) {
+          // Swap last non-prospect
+          for (let i = result.length - 1; i >= 0; i--) {
+            const existing = allCandidates.get(result[i].client_id);
+            if (existing && !existing.es_prospecto) {
+              pickedIds.delete(result[i].client_id);
+              result[i] = makeRec(prospect, vendedorId);
+              pickedIds.add(prospect.client_id);
+              break;
+            }
+          }
+        }
+      }
     }
   }
 
@@ -862,11 +889,18 @@ PROSPECTOS DISPONIBLES (${prospects.length} — solo para completar):
 ${prospects.length > 0 ? prospects.slice(0, 15).map(formatCandidate).join('\n') : '(sin prospectos disponibles)'}`;
     }).join('\n\n');
 
-    const prompt = `${vendorSections}
+    const hasCustomInstructions = !!(instrucciones_adicionales && instrucciones_adicionales.trim().length > 0);
 
-${instrucciones_adicionales ? `\nINSTRUCCIONES ADICIONALES:\n${instrucciones_adicionales}\n` : ''}
+    const prompt = `${hasCustomInstructions ? `
+═══════════════════════════════════════════════════════════
+⚡ INSTRUCCIONES DEL CLIENTE (PRIORIDAD MÁXIMA):
+${instrucciones_adicionales}
+Aplicá estas instrucciones ANTES que cualquier regla de composición.
+═══════════════════════════════════════════════════════════
+` : ''}${vendorSections}
+
 TOTAL ESPERADO: ${vendedoresData.length * 8} recomendaciones (8 por vendedor).
-Cada client_id UNA SOLA VEZ en toda la respuesta. Priorizá clientes sobre prospectos. Concentración geográfica.`;
+Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${hasCustomInstructions ? `\nRECORDÁ: Las instrucciones del cliente tienen PRIORIDAD ABSOLUTA sobre la composición estándar.` : ' Priorizá clientes sobre prospectos.'}`;
 
     console.log(`📏 Prompt: ${prompt.length} chars`);
 
@@ -886,7 +920,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Priorizá clientes sobre prosp
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: RECOMMENDATION_SYSTEM_PROMPT },
+          { role: "system", content: buildSystemPrompt(instrucciones_adicionales) },
           { role: "user", content: prompt },
         ],
         tools: [{
@@ -965,6 +999,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Priorizá clientes sobre prosp
         prospectPool,
         vendedor.user_id,
         globalPickedIds,
+        hasCustomInstructions,
       );
 
       vendorRecs.forEach((r: any) => globalPickedIds.add(r.client_id));
