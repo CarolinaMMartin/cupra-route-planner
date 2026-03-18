@@ -267,13 +267,19 @@ const countNonEmptyValues = (obj: Record<string, any>): number => {
 };
 
 const buildVentaConflictKey = (venta: Record<string, any>): string | null => {
-  // Fix 2: Include facturacion_ars in key to preserve bonificaciones (price=0 vs price>0)
-  const targetFields = ['ticket', 'letra', 'fecha_emision', 'client_id', 'codigo_producto'];
-  const values = targetFields.map(field => venta[field]);
-  if (values.some(value => isEmpty(value))) return null;
-  // Append facturacion_ars to distinguish bonificaciones
-  const priceKey = String(venta.facturacion_ars ?? 0);
-  return [...values.map(value => String(value).trim().toUpperCase()), priceKey].join('||');
+  // Only ticket is strictly required for dedup
+  const ticket = venta.ticket;
+  if (isEmpty(ticket)) return null;
+  // Use COALESCE logic: treat nulls as empty string to avoid dedup bypass
+  const parts = [
+    String(ticket).trim().toUpperCase(),
+    String(venta.letra ?? '').trim().toUpperCase(),
+    String(venta.fecha_emision ?? '').trim(),
+    String(venta.client_id ?? '').trim().toUpperCase(),
+    String(venta.codigo_producto ?? '').trim().toUpperCase(),
+    String(venta.facturacion_ars ?? 0),
+  ];
+  return parts.join('||');
 };
 
 const mergeVentaDuplicate = (current: Record<string, any>, incoming: Record<string, any>) => {
