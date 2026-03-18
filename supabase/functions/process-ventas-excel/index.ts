@@ -267,13 +267,19 @@ const countNonEmptyValues = (obj: Record<string, any>): number => {
 };
 
 const buildVentaConflictKey = (venta: Record<string, any>): string | null => {
-  // Fix 2: Include facturacion_ars in key to preserve bonificaciones (price=0 vs price>0)
-  const targetFields = ['ticket', 'letra', 'fecha_emision', 'client_id', 'codigo_producto'];
-  const values = targetFields.map(field => venta[field]);
-  if (values.some(value => isEmpty(value))) return null;
-  // Append facturacion_ars to distinguish bonificaciones
-  const priceKey = String(venta.facturacion_ars ?? 0);
-  return [...values.map(value => String(value).trim().toUpperCase()), priceKey].join('||');
+  // Only ticket is strictly required for dedup
+  const ticket = venta.ticket;
+  if (isEmpty(ticket)) return null;
+  // Use COALESCE logic: treat nulls as empty string to avoid dedup bypass
+  const parts = [
+    String(ticket).trim().toUpperCase(),
+    String(venta.letra ?? '').trim().toUpperCase(),
+    String(venta.fecha_emision ?? '').trim(),
+    String(venta.client_id ?? '').trim().toUpperCase(),
+    String(venta.codigo_producto ?? '').trim().toUpperCase(),
+    String(venta.facturacion_ars ?? 0),
+  ];
+  return parts.join('||');
 };
 
 const mergeVentaDuplicate = (current: Record<string, any>, incoming: Record<string, any>) => {
@@ -372,30 +378,14 @@ Deno.serve(async (req) => {
     for (const row of rows) {
       const idCandidato = normalizeClientId(getFieldValue(row, ['Id', 'id', 'ID', 'client_id', 'Número Externo', 'Numero Externo']));
       const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
-      const client_id = idCandidato || (cuit_dni && cuitToClientId.get(cuit_dni)) || cuit_dni;
+      let client_id = idCandidato || (cuit_dni && cuitToClientId.get(cuit_dni)) || cuit_dni;
       const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
-      const fantasia = toStr(getFieldValue(row, ['Fantasia', 'Fantasía', 'fantasia']));
-      const direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Domicilio', 'Calle']));
-      const ciudad_raw = toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad']));
-      const vendedor = toStr(getFieldValue(row, ['Vendedor', 'vendedor']));
-      const fecha_emision = getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision']);
-      const facturacion = toNumberCurrency(getFieldValue(row, FACTURACION_FIELD_NAMES));
-      const producto = toStr(getFieldValue(row, ['Nombre', 'nombre', 'Etiqueta', 'Variante']));
-      const cajas = toInt(getFieldValue(row, ['Cajas', 'cajas', 'Cantidad']));
-      const categorias = toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias', 'Categorías Cliente', 'Categorias Cliente']));
-      const telefono = toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono', 'Tel']));
-      const celular = toStr(getFieldValue(row, ['Celular', 'celular', 'Cel', 'Movil', 'Móvil']));
-      const correo = toStr(getFieldValue(row, ['Correo', 'correo', 'Email', 'email', 'Mail']));
-      const ticket = toStr(getFieldValue(row, ['Ticket', 'ticket']));
-      const letra = toStr(getFieldValue(row, ['Letra', 'letra']));
-      const codigo_producto = toStr(getFieldValue(row, ['Codigo Producto', 'Código Producto', 'codigo_producto']));
-      const marca = toStr(getFieldValue(row, ['Marca', 'marca']));
-      const provincia_raw = toStr(getFieldValue(row, ['Provincia', 'provincia']));
-      const pais = toStr(getFieldValue(row, ['País', 'Pais', 'pais']));
-      const fecha_iso = toYmdFromExcelOrText(fecha_emision);
 
-      if (facturacion === null) facturacionNullCount++;
-
+      // Fix 1: Generate synthetic client_id from razon_social when no ID/CUIT exists
+      if (!client_id && razon_social) {
+        const normalizedRS = razon_social.trim().toUpperCase().replace(/\s+/g, ' ');
+        client_id = `RS_${normalizedRS}`;
+      }
       if (!client_id) {
         ventasSinClientId += 1;
         descartados.push({ cuit_dni, razon_social });
@@ -585,6 +575,14 @@ Deno.serve(async (req) => {
     const totalFacturacionProcesada = Math.round(totalGlobal * 100) / 100;
     const totalTicketsUnicos = Array.from(clientesMap.values()).reduce((sum, c) => sum + c.tickets_set.size, 0);
     const totalClientesUnicos = clientesMap.size;
+    // Fix 3: Count clients by normalized razon_social
+    const razonSocialSet = new Set<string>();
+    for (const c of clientesMap.values()) {
+      if (c.razon_social) {
+        razonSocialSet.add(c.razon_social.trim().toUpperCase().replace(/\s+/g, ' '));
+      }
+    }
+    const totalClientesRazonSocial = razonSocialSet.size;
 
     console.log(`🧮 ${clientesEnriquecidos.length} clientes | ${ventasDeduplicadas.length} líneas deduplicadas | ${totalTicketsUnicos} tickets únicos | $${Math.round(totalGlobal).toLocaleString()} total`);
 
@@ -736,6 +734,7 @@ Deno.serve(async (req) => {
       facturacion_total_procesada: totalFacturacionProcesada,
       tickets_unicos: totalTicketsUnicos,
       clientes_unicos: totalClientesUnicos,
+      clientes_razon_social: totalClientesRazonSocial,
       tickets_compartidos: ticketsCompartidos.length,
       vendedor_breakdown: vendedorBreakdown,
     };

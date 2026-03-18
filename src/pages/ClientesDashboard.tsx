@@ -251,13 +251,16 @@ const ClientesDashboard = () => {
    * • totalClientes: COUNT(DISTINCT client_id).
    * • ticketPromedio: totalVentas / totalTickets.
    */
+  const normalizeRS = (rs: string) => rs.trim().toUpperCase().replace(/\s+/g, ' ');
+
   const kpis = useMemo(() => {
     const totalVentas = ventasRaw.reduce((sum, v) => sum + Number(v.facturacion_ars || 0), 0);
     const ticketsSet = new Set<string>();
     const clientesSet = new Set<string>();
     for (const v of ventasRaw) {
       if (v.ticket) ticketsSet.add(v.ticket);
-      if (v.client_id) clientesSet.add(v.client_id);
+      // Fix 4: Count clients by normalized razon_social, not client_id
+      if (v.razon_social) clientesSet.add(normalizeRS(v.razon_social));
     }
     const totalTickets = ticketsSet.size;
     const totalClientes = clientesSet.size;
@@ -284,37 +287,32 @@ const ClientesDashboard = () => {
     };
   }, [clientesData]);
 
-  // Top barrios desde ventas_cupra (via join con clientes para barrio)
-  const topBarrios = useMemo(() => {
-    // Build client_id → barrio lookup from clientes
-    const clientBarrio = new Map<string, string>();
-    clientesData.forEach(c => {
-      if (c.client_id && c.barrio_principal) clientBarrio.set(c.client_id, c.barrio_principal);
-    });
-    const barriosMap = new Map<string, { display: string; ventas: number }>();
-    let sinBarrioVentas = 0;
+  // Fix 5: Top Ciudades desde ventas_cupra (reemplaza Top Barrios)
+  const topCiudades = useMemo(() => {
+    const ciudadMap = new Map<string, { display: string; ventas: number }>();
+    let sinCiudadVentas = 0;
     for (const v of ventasRaw) {
       const monto = Number(v.facturacion_ars || 0);
-      const barrio = v.client_id ? clientBarrio.get(v.client_id) : null;
-      if (barrio) {
-        const key = normalize(barrio);
-        const existing = barriosMap.get(key);
+      const ciudad = v.ciudad;
+      if (ciudad) {
+        const key = normalize(ciudad);
+        const existing = ciudadMap.get(key);
         if (existing) { existing.ventas += monto; }
-        else { barriosMap.set(key, { display: barrio, ventas: monto }); }
+        else { ciudadMap.set(key, { display: ciudad, ventas: monto }); }
       } else {
-        sinBarrioVentas += monto;
+        sinCiudadVentas += monto;
       }
     }
-    const result = Array.from(barriosMap.values())
-      .map(({ display, ventas }) => ({ barrio: display, ventas }))
+    const result = Array.from(ciudadMap.values())
+      .map(({ display, ventas }) => ({ ciudad: display, ventas }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
-    if (sinBarrioVentas > 0) {
-      result.push({ barrio: '⚠️ Sin barrio asignado', ventas: sinBarrioVentas });
+    if (sinCiudadVentas > 0) {
+      result.push({ ciudad: 'Sin ciudad', ventas: sinCiudadVentas });
       result.sort((a, b) => b.ventas - a.ventas);
     }
     return result.slice(0, 11);
-  }, [ventasRaw, clientesData]);
+  }, [ventasRaw]);
 
   // Top Clientes desde ventas_cupra
   const topClientes = useMemo(() => {
@@ -662,21 +660,21 @@ const ClientesDashboard = () => {
           <TabsContent value="rankings">
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Top Barrios */}
+          {/* Top Ciudades (reemplaza Top Barrios) */}
           <Card className="matte-card">
             <CardHeader className="pb-4">
              <CardTitle className="section-title flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-foreground/40" />
-                Top Barrios
+                Top Ciudades
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {topBarrios.map((barrio, index) => (
+                {topCiudades.map((item, index) => (
                   <div
-                    key={barrio.barrio}
+                    key={item.ciudad}
                     className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                      barrio.barrio.includes('Sin barrio') 
+                      item.ciudad === 'Sin ciudad' 
                         ? 'bg-amber-500/5 border-amber-500/20' 
                         : 'bg-card/50 border-border/40 hover:bg-card/70'
                     }`}
@@ -686,11 +684,11 @@ const ClientesDashboard = () => {
                         {index + 1}
                       </Badge>
                       <span className="text-sm font-medium text-foreground truncate">
-                        {barrio.barrio}
+                        {item.ciudad}
                       </span>
                     </div>
                     <span className="text-sm font-semibold text-accent ml-2 shrink-0">
-                      {formatCurrency(barrio.ventas)}
+                      {formatCurrency(item.ventas)}
                     </span>
                   </div>
                 ))}
