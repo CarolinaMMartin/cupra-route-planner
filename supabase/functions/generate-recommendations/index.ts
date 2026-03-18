@@ -414,30 +414,45 @@ function validateAndFill(
   const isAvailable = (id: string) => !pickedIds.has(id) && !globalPickedIds.has(id);
   const addRec = (rec: any) => { result.push(rec); pickedIds.add(rec.client_id); };
 
-  // ── STEP 1: Accept valid AI picks FIRST (respect IA selection) ──
+  // Determine minimum client slots: if clients available, at least 5 of 8 must be clients
+  const MIN_CLIENTS = clientPool.length > 0 ? Math.min(5, clientPool.length) : 0;
+  const MAX_PROSPECT_SLOTS = 8 - MIN_CLIENTS;
+
+  // ── STEP 1: Accept valid AI picks, but enforce client minimum ──
+  let aiProspectCount = 0;
+  const deferredProspects: any[] = []; // AI-picked prospects beyond quota
+
   for (const r of aiRecs) {
     if (result.length >= 8) break;
     if (r.vendedor_id !== vendedorId) continue;
     if (!isAvailable(r.client_id)) continue;
     if (!allCandidates.has(r.client_id)) continue;
+
+    const candidate = allCandidates.get(r.client_id)!;
+    if (candidate.es_prospecto) {
+      if (aiProspectCount >= MAX_PROSPECT_SLOTS) {
+        deferredProspects.push(r); // Save for later if we have room
+        continue;
+      }
+      aiProspectCount++;
+    }
     addRec(r);
   }
 
-  console.log(`   📋 AI picks aceptados: ${result.length}/8 para ${vendedorId.slice(0, 8)}`);
+  console.log(`   📋 AI picks aceptados: ${result.length}/8 para ${vendedorId.slice(0, 8)} (${MIN_CLIENTS} client min enforced)`);
 
-  // ── STEP 2: Fill remaining slots with standard composition ──
+  // ── STEP 2: Fill remaining slots — clients first, then prospects ──
   if (result.length < 8) {
+    // Priority: Active/Inactive clients
     const activeClients = clientPool.filter(c => c.estado_comercial === 'ACTIVO' || c.estado_comercial === 'INACTIVO');
-    const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
-
-    // Fill with active/inactive clients
     for (const c of activeClients) {
       if (result.length >= 8) break;
       if (!isAvailable(c.client_id)) continue;
       addRec(makeRec(c, vendedorId));
     }
 
-    // Fill with lost clients (max 4 total in result)
+    // Lost clients (max 4 total, reserve 2 for prospects)
+    const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
     const currentLost = result.filter(r => {
       const c = allCandidates.get(r.client_id);
       return c && c.estado_comercial === 'PERDIDO';
@@ -449,7 +464,12 @@ function validateAndFill(
       addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
     }
 
-    // Fill with prospects
+    // Fill with deferred AI prospects first, then pool prospects
+    for (const r of deferredProspects) {
+      if (result.length >= 8) break;
+      if (!isAvailable(r.client_id)) continue;
+      addRec(r);
+    }
     for (const c of prospectPool) {
       if (result.length >= 8) break;
       if (!isAvailable(c.client_id)) continue;
@@ -476,9 +496,11 @@ function validateAndFill(
     if (!hasRecovery && lostClients.length > 0) {
       const recovery = lostClients.find(c => isAvailable(c.client_id));
       if (recovery) {
-        const lastIdx = result.length - 1;
-        pickedIds.delete(result[lastIdx].client_id);
-        result[lastIdx] = makeRec(recovery, vendedorId, `Recuperación estratégica: ${recovery.razon_social} (${recovery.dias_desde_ultima_compra} días sin compra)`);
+        // Swap out a prospect if possible, otherwise last entry
+        const swapIdx = result.findIndex(r => allCandidates.get(r.client_id)?.es_prospecto);
+        const idx = swapIdx >= 0 ? swapIdx : result.length - 1;
+        pickedIds.delete(result[idx].client_id);
+        result[idx] = makeRec(recovery, vendedorId, `Recuperación estratégica: ${recovery.razon_social} (${recovery.dias_desde_ultima_compra} días sin compra)`);
         pickedIds.add(recovery.client_id);
       }
     }
@@ -487,18 +509,20 @@ function validateAndFill(
     const currentProspects = result.filter(r => allCandidates.get(r.client_id)?.es_prospecto).length;
     if (currentProspects < MIN_PROSPECTS) {
       const availableProspects = prospectPool.filter(c => isAvailable(c.client_id));
+      let added = currentProspects;
       for (const prospect of availableProspects) {
-        if (currentProspects >= MIN_PROSPECTS) break;
-        if (result.length > MIN_PROSPECTS) {
-          // Swap last non-prospect
-          for (let i = result.length - 1; i >= 0; i--) {
-            const existing = allCandidates.get(result[i].client_id);
-            if (existing && !existing.es_prospecto) {
-              pickedIds.delete(result[i].client_id);
-              result[i] = makeRec(prospect, vendedorId);
-              pickedIds.add(prospect.client_id);
-              break;
-            }
+        if (added >= MIN_PROSPECTS) break;
+        // Swap last non-prospect client (but keep minimum clients)
+        const clientCount = result.filter(r => !allCandidates.get(r.client_id)?.es_prospecto).length;
+        if (clientCount <= MIN_CLIENTS) break; // Don't swap below minimum
+        for (let i = result.length - 1; i >= 0; i--) {
+          const existing = allCandidates.get(result[i].client_id);
+          if (existing && !existing.es_prospecto) {
+            pickedIds.delete(result[i].client_id);
+            result[i] = makeRec(prospect, vendedorId);
+            pickedIds.add(prospect.client_id);
+            added++;
+            break;
           }
         }
       }
