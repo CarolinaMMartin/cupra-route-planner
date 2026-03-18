@@ -673,13 +673,17 @@ Deno.serve(async (req) => {
 
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
 
-    // ============ FASE 5: Upsert ventas (después de clientes para respetar FK) ============
+    // ============ FASE 5: Insert/Upsert ventas ============
+    // Fix 2: Updated conflict key includes facturacion_ars
+    const ventasConflictKey = 'ticket,letra,fecha_emision,client_id,codigo_producto,facturacion_ars';
     for (let i = 0; i < ventasDeduplicadas.length; i += 500) {
       const batch = ventasDeduplicadas.slice(i, i + 500);
-      const { error } = await supabase.from('ventas_cupra').upsert(batch, {
-        onConflict: 'ticket,letra,fecha_emision,client_id,codigo_producto',
-        ignoreDuplicates: false,
-      });
+      const { error } = replaceExisting
+        ? await supabase.from('ventas_cupra').insert(batch)
+        : await supabase.from('ventas_cupra').upsert(batch, {
+            onConflict: ventasConflictKey,
+            ignoreDuplicates: false,
+          });
       if (error) {
         console.error(`❌ Ventas batch ${i}:`, error.message);
         results.ventas_errores += batch.length;
