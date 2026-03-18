@@ -248,7 +248,7 @@ const ClientesDashboard = () => {
    * KPIs calculados 100% desde ventas_cupra (transaccional).
    * • totalVentas: SUM(facturacion_ars). Columna Excel: "Precio Total Final".
    * • totalTickets: COUNT(DISTINCT ticket).
-   * • totalClientes: COUNT(DISTINCT razon_social).
+   * • totalClientes: COUNT(DISTINCT client_id).
    * • ticketPromedio: totalVentas / totalTickets.
    */
   const kpis = useMemo(() => {
@@ -257,7 +257,7 @@ const ClientesDashboard = () => {
     const clientesSet = new Set<string>();
     for (const v of ventasRaw) {
       if (v.ticket) ticketsSet.add(v.ticket);
-      if (v.razon_social) clientesSet.add(v.razon_social);
+      if (v.client_id) clientesSet.add(v.client_id);
     }
     const totalTickets = ticketsSet.size;
     const totalClientes = clientesSet.size;

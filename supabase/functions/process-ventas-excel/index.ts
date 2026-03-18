@@ -294,14 +294,27 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { rows } = await req.json() as { rows: Record<string, any>[] };
-    if (!rows || !rows.length) {
+    const { rows: rawRows } = await req.json() as { rows: Record<string, any>[] };
+    if (!rawRows || !rawRows.length) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
       });
     }
 
-    console.log(`📦 ETL ${ETL_VERSION} — Recibidas ${rows.length} filas del Excel`);
+    // ── Fix 3: Deduplicación estricta — eliminar filas 100% idénticas ──
+    const rowHashes = new Set<string>();
+    let exactDuplicates = 0;
+    const rows = rawRows.filter(row => {
+      const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
+      if (rowHashes.has(hash)) { exactDuplicates++; return false; }
+      rowHashes.add(hash);
+      return true;
+    });
+    if (exactDuplicates > 0) {
+      console.log(`🗑️ Fix 3: ${exactDuplicates} filas 100% idénticas eliminadas (${rawRows.length} → ${rows.length})`);
+    }
+
+    console.log(`📦 ETL ${ETL_VERSION} — Recibidas ${rawRows.length} filas, procesando ${rows.length} únicas`);
 
     // ── TAREA 8: Log de columna de facturación resuelta ──
     const facturacionColumnResolved = rows.length > 0
