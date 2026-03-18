@@ -889,11 +889,18 @@ PROSPECTOS DISPONIBLES (${prospects.length} — solo para completar):
 ${prospects.length > 0 ? prospects.slice(0, 15).map(formatCandidate).join('\n') : '(sin prospectos disponibles)'}`;
     }).join('\n\n');
 
-    const prompt = `${vendorSections}
+    const hasCustomInstructions = !!(instrucciones_adicionales && instrucciones_adicionales.trim().length > 0);
 
-${instrucciones_adicionales ? `\nINSTRUCCIONES ADICIONALES:\n${instrucciones_adicionales}\n` : ''}
+    const prompt = `${hasCustomInstructions ? `
+═══════════════════════════════════════════════════════════
+⚡ INSTRUCCIONES DEL CLIENTE (PRIORIDAD MÁXIMA):
+${instrucciones_adicionales}
+Aplicá estas instrucciones ANTES que cualquier regla de composición.
+═══════════════════════════════════════════════════════════
+` : ''}${vendorSections}
+
 TOTAL ESPERADO: ${vendedoresData.length * 8} recomendaciones (8 por vendedor).
-Cada client_id UNA SOLA VEZ en toda la respuesta. Priorizá clientes sobre prospectos. Concentración geográfica.`;
+Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${hasCustomInstructions ? `\nRECORDÁ: Las instrucciones del cliente tienen PRIORIDAD ABSOLUTA sobre la composición estándar.` : ' Priorizá clientes sobre prospectos.'}`;
 
     console.log(`📏 Prompt: ${prompt.length} chars`);
 
