@@ -450,6 +450,8 @@ Deno.serve(async (req) => {
               categorias, telefono, celular, correo, fecha_emision: fecha_iso } = venta;
 
       const geo = normalizarGeografia(ciudad_raw);
+      // Fix 6: Normalizar provincia del Excel Y de la geo
+      const provinciaFinal = normalizeProvincia(geo.provincia) || normalizeProvincia(venta.provincia) || geo.provincia;
 
       if (!clientesMap.has(client_id)) {
         clientesMap.set(client_id, {
@@ -473,7 +475,7 @@ Deno.serve(async (req) => {
       if (geo.barrio) c.barrios.add(geo.barrio);
       if (geo.comuna) c.comunas.add(geo.comuna);
       if (geo.ciudad) c.ciudades.add(geo.ciudad);
-      if (geo.provincia) c.provincias.add(geo.provincia);
+      if (provinciaFinal) c.provincias.add(provinciaFinal);
       if (direccion) c.direcciones.add(direccion);
       if (vendedor) c.vendedores.add(vendedor);
       if (telefono) c.telefonos.add(telefono);
