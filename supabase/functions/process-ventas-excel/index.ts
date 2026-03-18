@@ -575,6 +575,14 @@ Deno.serve(async (req) => {
     const totalFacturacionProcesada = Math.round(totalGlobal * 100) / 100;
     const totalTicketsUnicos = Array.from(clientesMap.values()).reduce((sum, c) => sum + c.tickets_set.size, 0);
     const totalClientesUnicos = clientesMap.size;
+    // Fix 3: Count clients by normalized razon_social
+    const razonSocialSet = new Set<string>();
+    for (const c of clientesMap.values()) {
+      if (c.razon_social) {
+        razonSocialSet.add(c.razon_social.trim().toUpperCase().replace(/\s+/g, ' '));
+      }
+    }
+    const totalClientesRazonSocial = razonSocialSet.size;
 
     console.log(`🧮 ${clientesEnriquecidos.length} clientes | ${ventasDeduplicadas.length} líneas deduplicadas | ${totalTicketsUnicos} tickets únicos | $${Math.round(totalGlobal).toLocaleString()} total`);
 
