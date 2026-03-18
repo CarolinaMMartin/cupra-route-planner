@@ -28,7 +28,7 @@ const FilterPanel = ({
   onRequestRecommendations, isLoading, onCancel, placesData,
   instruccionesAdicionales, onInstruccionesChange
 }: FilterPanelProps) => {
-  const [mode, setMode] = useState<'area' | 'custom'>('area');
+  const [mode, setMode] = useState<'area' | 'custom' | 'manual'>('area');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [selectedVendedores, setSelectedVendedores] = useState<string[]>([]);
   const [isLoadingVendedores, setIsLoadingVendedores] = useState(true);
