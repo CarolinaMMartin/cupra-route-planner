@@ -403,6 +403,7 @@ function validateAndFill(
   prospectPool: ScoredCandidate[],
   vendedorId: string,
   globalPickedIds: Set<string>,
+  hasCustomInstructions: boolean = false,
 ): any[] {
   const allCandidates = new Map<string, ScoredCandidate>();
   [...clientPool, ...prospectPool].forEach(c => allCandidates.set(c.client_id, c));
@@ -413,78 +414,94 @@ function validateAndFill(
   const isAvailable = (id: string) => !pickedIds.has(id) && !globalPickedIds.has(id);
   const addRec = (rec: any) => { result.push(rec); pickedIds.add(rec.client_id); };
 
-  // Separate client pool by estado
-  const activeClients = clientPool.filter(c => c.estado_comercial === 'ACTIVO' || c.estado_comercial === 'INACTIVO');
-  const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
-
-  // Step 1: Accept valid AI picks (respecting dedup) — but we'll rebalance after
-  const aiAccepted: any[] = [];
+  // ── STEP 1: Accept valid AI picks FIRST (respect IA selection) ──
   for (const r of aiRecs) {
+    if (result.length >= 8) break;
     if (r.vendedor_id !== vendedorId) continue;
     if (!isAvailable(r.client_id)) continue;
     if (!allCandidates.has(r.client_id)) continue;
-    aiAccepted.push(r);
+    addRec(r);
   }
 
-  // Step 2: Build balanced composition
-  // Priority A: ACTIVO + INACTIVO clients
-  for (const c of activeClients) {
-    if (result.length >= 8) break;
-    if (!isAvailable(c.client_id)) continue;
-    // Check if AI had a pick for this — use AI justification if so
-    const aiPick = aiAccepted.find(r => r.client_id === c.client_id);
-    addRec(aiPick || makeRec(c, vendedorId));
+  console.log(`   📋 AI picks aceptados: ${result.length}/8 para ${vendedorId.slice(0, 8)}`);
+
+  // ── STEP 2: Fill remaining slots with standard composition ──
+  if (result.length < 8) {
+    const activeClients = clientPool.filter(c => c.estado_comercial === 'ACTIVO' || c.estado_comercial === 'INACTIVO');
+    const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
+
+    // Fill with active/inactive clients
+    for (const c of activeClients) {
+      if (result.length >= 8) break;
+      if (!isAvailable(c.client_id)) continue;
+      addRec(makeRec(c, vendedorId));
+    }
+
+    // Fill with lost clients (max 4 total in result)
+    const currentLost = result.filter(r => {
+      const c = allCandidates.get(r.client_id);
+      return c && c.estado_comercial === 'PERDIDO';
+    }).length;
+    for (const c of lostClients) {
+      if (result.length >= 6) break; // Reserve 2 for prospects
+      if (currentLost >= MAX_LOST) break;
+      if (!isAvailable(c.client_id)) continue;
+      addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
+    }
+
+    // Fill with prospects
+    for (const c of prospectPool) {
+      if (result.length >= 8) break;
+      if (!isAvailable(c.client_id)) continue;
+      addRec(makeRec(c, vendedorId));
+    }
+
+    // Still not full? Fill with remaining lost
+    for (const c of lostClients) {
+      if (result.length >= 8) break;
+      if (!isAvailable(c.client_id)) continue;
+      addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social}`));
+    }
   }
 
-  // Priority B: Up to MAX_LOST lost clients (recovery)
-  let lostCount = 0;
-  for (const c of lostClients) {
-    if (result.length >= 6) break; // Reserve at least 2 slots for prospects
-    if (lostCount >= MAX_LOST) break;
-    if (!isAvailable(c.client_id)) continue;
-    const aiPick = aiAccepted.find(r => r.client_id === c.client_id);
-    addRec(aiPick || makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
-    lostCount++;
-  }
+  // ── STEP 3: Soft rebalancing (ONLY if no custom instructions) ──
+  if (!hasCustomInstructions && result.length >= 8) {
+    // Ensure at least 1 recovery if available
+    const hasRecovery = result.some(r => {
+      const c = allCandidates.get(r.client_id);
+      return c && !c.es_prospecto && (c.dias_desde_ultima_compra ?? 0) > 90;
+    });
+    const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
 
-  // Priority C: Prospects (minimum 2 if available, fill rest)
-  const prospectSlots = Math.max(MIN_PROSPECTS, 8 - result.length);
-  let prospectCount = 0;
-  for (const c of prospectPool) {
-    if (result.length >= 8) break;
-    if (prospectCount >= prospectSlots) break;
-    if (!isAvailable(c.client_id)) continue;
-    addRec(makeRec(c, vendedorId));
-    prospectCount++;
-  }
+    if (!hasRecovery && lostClients.length > 0) {
+      const recovery = lostClients.find(c => isAvailable(c.client_id));
+      if (recovery) {
+        const lastIdx = result.length - 1;
+        pickedIds.delete(result[lastIdx].client_id);
+        result[lastIdx] = makeRec(recovery, vendedorId, `Recuperación estratégica: ${recovery.razon_social} (${recovery.dias_desde_ultima_compra} días sin compra)`);
+        pickedIds.add(recovery.client_id);
+      }
+    }
 
-  // Step 3: If still < 8, fill with remaining lost clients
-  for (const c of lostClients) {
-    if (result.length >= 8) break;
-    if (!isAvailable(c.client_id)) continue;
-    addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
-  }
-
-  // Step 4: If STILL < 8, fill with any remaining prospects
-  for (const c of prospectPool) {
-    if (result.length >= 8) break;
-    if (!isAvailable(c.client_id)) continue;
-    addRec(makeRec(c, vendedorId));
-  }
-
-  // Ensure at least 1 recovery if available and we have 8
-  const hasRecovery = result.some(r => {
-    const c = allCandidates.get(r.client_id);
-    return c && !c.es_prospecto && (c.dias_desde_ultima_compra ?? 0) > 90;
-  });
-
-  if (!hasRecovery && result.length >= 8 && lostClients.length > 0) {
-    const recovery = lostClients.find(c => isAvailable(c.client_id));
-    if (recovery) {
-      const lastIdx = result.length - 1;
-      pickedIds.delete(result[lastIdx].client_id);
-      result[lastIdx] = makeRec(recovery, vendedorId, `Recuperación estratégica: ${recovery.razon_social} (${recovery.dias_desde_ultima_compra} días sin compra)`);
-      pickedIds.add(recovery.client_id);
+    // Ensure at least 2 prospects if available
+    const currentProspects = result.filter(r => allCandidates.get(r.client_id)?.es_prospecto).length;
+    if (currentProspects < MIN_PROSPECTS) {
+      const availableProspects = prospectPool.filter(c => isAvailable(c.client_id));
+      for (const prospect of availableProspects) {
+        if (currentProspects >= MIN_PROSPECTS) break;
+        if (result.length > MIN_PROSPECTS) {
+          // Swap last non-prospect
+          for (let i = result.length - 1; i >= 0; i--) {
+            const existing = allCandidates.get(result[i].client_id);
+            if (existing && !existing.es_prospecto) {
+              pickedIds.delete(result[i].client_id);
+              result[i] = makeRec(prospect, vendedorId);
+              pickedIds.add(prospect.client_id);
+              break;
+            }
+          }
+        }
+      }
     }
   }
 
