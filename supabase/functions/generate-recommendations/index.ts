@@ -529,6 +529,10 @@ function validateAndFill(
     }
   }
 
+  if (result.length < 8) {
+    console.warn(`⚠️ ${vendedorId.slice(0, 8)}: Solo ${result.length}/8 recs posibles. Pools agotados (${clientPool.length}C + ${prospectPool.length}P disponibles).`);
+  }
+
   return result.slice(0, 8);
 }
 
