@@ -251,13 +251,16 @@ const ClientesDashboard = () => {
    * • totalClientes: COUNT(DISTINCT client_id).
    * • ticketPromedio: totalVentas / totalTickets.
    */
+  const normalizeRS = (rs: string) => rs.trim().toUpperCase().replace(/\s+/g, ' ');
+
   const kpis = useMemo(() => {
     const totalVentas = ventasRaw.reduce((sum, v) => sum + Number(v.facturacion_ars || 0), 0);
     const ticketsSet = new Set<string>();
     const clientesSet = new Set<string>();
     for (const v of ventasRaw) {
       if (v.ticket) ticketsSet.add(v.ticket);
-      if (v.client_id) clientesSet.add(v.client_id);
+      // Fix 4: Count clients by normalized razon_social, not client_id
+      if (v.razon_social) clientesSet.add(normalizeRS(v.razon_social));
     }
     const totalTickets = ticketsSet.size;
     const totalClientes = clientesSet.size;
