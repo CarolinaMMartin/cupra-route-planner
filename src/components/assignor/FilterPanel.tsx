@@ -331,6 +331,11 @@ const FilterPanel = ({
           )}
         </form>
       )}
+
+      {/* Mode: Manual */}
+      {mode === 'manual' && (
+        <ManualAssignment />
+      )}
     </div>
   );
 };
