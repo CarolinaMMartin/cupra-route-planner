@@ -713,6 +713,21 @@ Deno.serve(async (req) => {
       filas_facturacion_null: facturacionNullCount,
     };
 
+    // Fix 4: Per-vendor breakdown for reconciliation
+    const vendedorBreakdown: { vendedor: string; monto: number; registros: number }[] = [];
+    const vendedorAgg = new Map<string, { monto: number; registros: number }>();
+    for (const v of ventasDeduplicadas) {
+      const vend = v.vendedor || 'Sin vendedor';
+      if (!vendedorAgg.has(vend)) vendedorAgg.set(vend, { monto: 0, registros: 0 });
+      const entry = vendedorAgg.get(vend)!;
+      entry.monto += v.facturacion_ars || 0;
+      entry.registros += 1;
+    }
+    for (const [vendedor, data] of vendedorAgg.entries()) {
+      vendedorBreakdown.push({ vendedor, monto: Math.round(data.monto * 100) / 100, registros: data.registros });
+    }
+    vendedorBreakdown.sort((a, b) => b.monto - a.monto);
+
     const reconciliacion = {
       filas_excel: rows.length,
       filas_procesadas: ventasRaw.length,
@@ -722,6 +737,7 @@ Deno.serve(async (req) => {
       tickets_unicos: totalTicketsUnicos,
       clientes_unicos: totalClientesUnicos,
       tickets_compartidos: ticketsCompartidos.length,
+      vendedor_breakdown: vendedorBreakdown,
     };
 
     const integridad = {

@@ -44,6 +44,7 @@ interface Reconciliacion {
   tickets_unicos: number;
   clientes_unicos: number;
   tickets_compartidos: number;
+  vendedor_breakdown?: VendedorBreakdown[];
 }
 
 interface ETLMetadata {
