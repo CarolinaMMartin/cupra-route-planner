@@ -71,6 +71,10 @@ const BARRIOS_A_COMUNA: Record<string, string> = {
   'PALERMO': 'COMUNA 14',
   'CHACARITA': 'COMUNA 15', 'VILLA CRESPO': 'COMUNA 15', 'PATERNAL': 'COMUNA 15',
   'VILLA ORTUZAR': 'COMUNA 15', 'AGRONOMIA': 'COMUNA 15', 'PARQUE CHAS': 'COMUNA 15',
+  // Barrios adicionales / alias comunes
+  'CONGRESO': 'COMUNA 5', 'ONCE': 'COMUNA 3', 'ABASTO': 'COMUNA 3',
+  'MICROCENTRO': 'COMUNA 1', 'TRIBUNALES': 'COMUNA 1',
+  'VILLA CRESPO': 'COMUNA 15',
 };
 
 // === HELPERS ===
