@@ -269,14 +269,10 @@ const AssignorDashboard = () => {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full max-w-lg">
+            <TabsList className="w-full max-w-md">
               <TabsTrigger value="nueva" className="flex-1 gap-2">
                 <Plus className="w-4 h-4" />
                 Nueva Asignación
-              </TabsTrigger>
-              <TabsTrigger value="manual" className="flex-1 gap-2">
-                <Hand className="w-4 h-4" />
-                Asignación Manual
               </TabsTrigger>
               <TabsTrigger value="hoy" className="flex-1 gap-2">
                 <Calendar className="w-4 h-4" />
@@ -297,10 +293,6 @@ const AssignorDashboard = () => {
                   />
                 </CardContent>
               </Card>
-            </TabsContent>
-
-            <TabsContent value="manual">
-              <ManualAssignment />
             </TabsContent>
 
             <TabsContent value="hoy">
