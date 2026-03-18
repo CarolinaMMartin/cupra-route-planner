@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, List, Plus, Calendar } from "lucide-react";
+import { MapPin, List, Plus, Calendar, Hand } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FilterPanel from "./assignor/FilterPanel";
 import ResultsMap from "./assignor/ResultsMap";
@@ -22,6 +22,7 @@ import TodayAssignments from "./assignor/TodayAssignments";
 import AIInsightsCard from "./assignor/AIInsightsCard";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
 import EditAssignmentsTable from "./assignor/EditAssignmentsTable";
+import ManualAssignment from "./assignor/ManualAssignment";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useRecommendationsStore } from "@/hooks/useRecommendationsStore";
@@ -269,10 +270,14 @@ const AssignorDashboard = () => {
           </div>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full max-w-md">
+            <TabsList className="w-full max-w-lg">
               <TabsTrigger value="nueva" className="flex-1 gap-2">
                 <Plus className="w-4 h-4" />
                 Nueva Asignación
+              </TabsTrigger>
+              <TabsTrigger value="manual" className="flex-1 gap-2">
+                <Hand className="w-4 h-4" />
+                Asignación Manual
               </TabsTrigger>
               <TabsTrigger value="hoy" className="flex-1 gap-2">
                 <Calendar className="w-4 h-4" />
@@ -293,6 +298,10 @@ const AssignorDashboard = () => {
                   />
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            <TabsContent value="manual">
+              <ManualAssignment />
             </TabsContent>
 
             <TabsContent value="hoy">
