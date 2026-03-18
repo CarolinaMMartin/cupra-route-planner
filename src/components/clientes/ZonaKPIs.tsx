@@ -186,7 +186,7 @@ const ZonaKPIs = ({ clientesData, ventasData, formatCurrency }: ZonaKPIsProps) =
           <CardHeader>
             <CardTitle className="section-title flex items-center gap-2">
               <MapPin className="h-5 w-5 text-accent" />
-              KPIs por Zona (Top 15 por facturación)
+              KPIs por Ciudad (Top 15 por facturación)
             </CardTitle>
           </CardHeader>
           <CardContent>
