@@ -380,6 +380,26 @@ Deno.serve(async (req) => {
       const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
       let client_id = idCandidato || (cuit_dni && cuitToClientId.get(cuit_dni)) || cuit_dni;
       const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
+      const fantasia = toStr(getFieldValue(row, ['Fantasía', 'Fantasia', 'fantasia']));
+      const ticket = toStr(getFieldValue(row, ['Ticket', 'ticket', 'Comprobante', 'comprobante']));
+      const letra = toStr(getFieldValue(row, ['Letra', 'letra']));
+      const fecha_raw = getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision', 'Fecha', 'fecha']);
+      const fecha_iso = parseDate(fecha_raw);
+      const cajas = parseNumericValue(getFieldValue(row, ['Cajas', 'cajas', 'Cantidad', 'cantidad']));
+      const codigo_producto = toStr(getFieldValue(row, ['Código Producto', 'Codigo Producto', 'codigo_producto', 'Código', 'Codigo']));
+      const producto = toStr(getFieldValue(row, ['Nombre', 'nombre', 'Producto', 'producto', 'Descripción', 'Descripcion']));
+      const marca = toStr(getFieldValue(row, ['Marca', 'marca']));
+      const vendedor = toStr(getFieldValue(row, ['Vendedor', 'vendedor']));
+      const telefono = toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono']));
+      const celular = toStr(getFieldValue(row, ['Celular', 'celular']));
+      const correo = toStr(getFieldValue(row, ['Correo', 'correo', 'Email', 'email']));
+      const direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Calle']));
+      const ciudad_raw = toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad', 'localidad']));
+      const provincia_raw = toStr(getFieldValue(row, ['Provincia', 'provincia']));
+      const pais = toStr(getFieldValue(row, ['País', 'Pais', 'pais']));
+      const categorias = toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias']));
+      const facturacion = parseNumericValue(getFieldValue(row, FACTURACION_FIELD_NAMES));
+      if (facturacion === null || facturacion === undefined) facturacionNullCount++;
 
       // Fix 1: Generate synthetic client_id from razon_social when no ID/CUIT exists
       if (!client_id && razon_social) {
