@@ -81,6 +81,7 @@ const CargaDatos = () => {
   const [results, setResults] = useState<ProcessResults | null>(null);
   const [progress, setProgress] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [replaceExisting, setReplaceExisting] = useState(true);
 
   // TAREA 7, 9, 10: Extended ETL response
   const [calidad, setCalidad] = useState<QualityReport | null>(null);
