@@ -297,11 +297,24 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { rows: rawRows } = await req.json() as { rows: Record<string, any>[] };
+    const body = await req.json() as { rows: Record<string, any>[]; replaceExisting?: boolean };
+    const rawRows = body.rows;
+    const replaceExisting = body.replaceExisting !== false; // default true
     if (!rawRows || !rawRows.length) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
       });
+    }
+
+    // Fix 1: Si replaceExisting, limpiar tablas antes de insertar
+    if (replaceExisting) {
+      console.log('🧹 Fix 1: Limpiando ventas_cupra antes de carga completa...');
+      const { error: deleteError } = await supabase.from('ventas_cupra').delete().neq('id', 0);
+      if (deleteError) {
+        console.error('❌ Error limpiando ventas_cupra:', deleteError.message);
+      } else {
+        console.log('✅ ventas_cupra limpiada exitosamente');
+      }
     }
 
     // ── Fix 3: Deduplicación estricta — eliminar filas 100% idénticas ──
