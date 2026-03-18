@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, List, Plus, Calendar } from "lucide-react";
+import { MapPin, List, Plus, Calendar, Hand } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FilterPanel from "./assignor/FilterPanel";
 import ResultsMap from "./assignor/ResultsMap";
