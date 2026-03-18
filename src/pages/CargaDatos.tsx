@@ -29,6 +29,12 @@ interface QualityReport {
   alerta: boolean;
 }
 
+interface VendedorBreakdown {
+  vendedor: string;
+  monto: number;
+  registros: number;
+}
+
 interface Reconciliacion {
   filas_excel: number;
   filas_procesadas: number;
