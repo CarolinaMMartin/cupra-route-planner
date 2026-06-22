@@ -56,7 +56,9 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
 
   // Initialize Google Maps
   useEffect(() => {
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const apiKey =
+      import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY ||
+      import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
     if (!apiKey || apiKey === "your_google_maps_api_key_here") {
       setError("Por favor, configura VITE_GOOGLE_MAPS_API_KEY en tu archivo .env");
