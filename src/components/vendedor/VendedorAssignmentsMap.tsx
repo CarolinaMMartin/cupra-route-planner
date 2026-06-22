@@ -12,7 +12,10 @@ interface VendedorAssignmentsMapProps {
   assignments: Record<string, ClienteAsignado[]>;
 }
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+const GOOGLE_MAPS_API_KEY =
+  import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY ||
+  import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
+  "";
 
 // Función para cargar el script de Google Maps
 const loadGoogleMapsScript = (apiKey: string): Promise<void> => {

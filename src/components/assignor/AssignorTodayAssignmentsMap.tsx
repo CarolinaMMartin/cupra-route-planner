@@ -36,7 +36,10 @@ interface AssignorTodayAssignmentsMapProps {
   vendedorFilter?: string;
 }
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+const GOOGLE_MAPS_API_KEY =
+  import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY ||
+  import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
+  "";
 
 const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
   return new Promise((resolve, reject) => {
