@@ -445,9 +445,67 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ============ FASE 1a: Notas de crédito (importes negativos) ============
+    // Las hojas de NC no traen CUIT, sólo Razón Social → se matchean por nombre
+    // normalizado contra los clientes ya identificados en las ventas.
+    let notasCreditoAplicadas = 0;
+    let notasCreditoSinMatch = 0;
+    let montoNotasCredito = 0;
+    if (rawNotasCredito.length > 0) {
+      const normalizeRS = (s: string) =>
+        s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+      const rsToClient = new Map<string, any>();
+      for (const v of ventasRaw) {
+        if (v.razon_social && !rsToClient.has(normalizeRS(v.razon_social))) {
+          rsToClient.set(normalizeRS(v.razon_social), v);
+        }
+      }
+
+      const ncHashes = new Set<string>();
+      for (const row of rawNotasCredito) {
+        const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
+        if (ncHashes.has(hash)) continue;
+        ncHashes.add(hash);
+
+        const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
+        if (!razon_social) { notasCreditoSinMatch++; continue; }
+        const base = rsToClient.get(normalizeRS(razon_social));
+        if (!base) { notasCreditoSinMatch++; continue; }
+
+        const importe = parseNumericValue(
+          getFieldValue(row, ['Total Final', 'Precio Total Final', 'Importe No Gravado', 'Importe Neto'])
+        );
+        if (importe === null || importe === undefined || importe === 0) continue;
+        const monto = -Math.abs(importe);
+
+        ventasRaw.push({
+          client_id: base.client_id,
+          ticket: toStr(getFieldValue(row, ['Ticket', 'ticket'])),
+          letra: 'NC',
+          fecha_emision: parseDate(getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision'])),
+          cuit_dni: base.cuit_dni,
+          razon_social,
+          fantasia: base.fantasia,
+          cajas: null,
+          codigo_producto: toStr(getFieldValue(row, ['Código', 'Codigo', 'Código Producto'])),
+          nombre: toStr(getFieldValue(row, ['Nombre', 'nombre'])),
+          marca: null,
+          facturacion_ars: monto,
+          vendedor: base.vendedor || toStr(getFieldValue(row, ['Operador', 'operador'])),
+          telefono: base.telefono, celular: base.celular, correo: base.correo,
+          direccion: base.direccion, ciudad: base.ciudad, provincia: base.provincia,
+          pais: base.pais, categorias: base.categorias,
+        });
+        notasCreditoAplicadas++;
+        montoNotasCredito += monto;
+      }
+      console.log(`🧾 Notas de crédito: ${notasCreditoAplicadas} aplicadas, ${notasCreditoSinMatch} sin match, monto ${Math.round(montoNotasCredito)}`);
+    }
+
     if (facturacionNullCount > 0) {
       console.log(`⚠️ ${facturacionNullCount} filas con facturación null (columna: ${facturacionColumnResolved})`);
     }
+
 
     // ============ FASE 1b: Deduplicar ventas ANTES de agregar clientes ============
     const ventasByConflictKey = new Map<string, any>();
