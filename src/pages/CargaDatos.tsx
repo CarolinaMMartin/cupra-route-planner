@@ -354,12 +354,14 @@ const CargaDatos = () => {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">
-            Carga de Ventas
+            Carga de Datos
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Subí el archivo Excel de ventas para actualizar la base de datos de clientes y transacciones.
+            Subí el archivo de <strong>ventas</strong> o el <strong>maestro de clientes</strong>. El sistema detecta
+            automáticamente el tipo, la hoja y la fila de encabezados.
           </p>
         </div>
+
 
         {/* STEP: Upload */}
         {step === "upload" && (
