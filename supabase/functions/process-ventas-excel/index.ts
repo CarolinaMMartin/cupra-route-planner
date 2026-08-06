@@ -125,11 +125,22 @@ const normalizeClientId = (v: any): string | null => {
 };
 
 const normalizeCuit = (v: any): string | null => {
+  if (v === null || v === undefined) return null;
+  // El Excel puede traer el CUIT como número (27133820472) o en notación
+  // científica al exportar (2.713382e+10). Ambos casos se normalizan a dígitos.
+  if (typeof v === 'number') {
+    return Number.isFinite(v) ? String(Math.round(v)) : null;
+  }
   const s = toStr(v);
   if (!s) return null;
+  if (/^-?\d+(\.\d+)?e[+-]?\d+$/i.test(s)) {
+    const n = Number(s);
+    if (Number.isFinite(n)) return String(Math.round(n));
+  }
   const digits = s.replace(/\D/g, '');
   return digits || s;
 };
+
 
 /**
  * Busca un valor en un objeto probando múltiples nombres de campo.
