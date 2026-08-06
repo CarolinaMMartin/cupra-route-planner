@@ -404,7 +404,10 @@ Deno.serve(async (req) => {
       const codigo_producto = toStr(getFieldValue(row, ['Código Producto', 'Codigo Producto', 'codigo_producto', 'Código', 'Codigo']));
       const producto = toStr(getFieldValue(row, ['Nombre', 'nombre', 'Producto', 'producto', 'Descripción', 'Descripcion']));
       const marca = toStr(getFieldValue(row, ['Marca', 'marca']));
-      const vendedor = toStr(getFieldValue(row, ['Vendedor', 'vendedor']));
+      // El informe nuevo puede traer el vendedor vacío y el nombre en "Operador"
+      const vendedor = toStr(getFieldValue(row, ['Vendedor', 'vendedor']))
+        || toStr(getFieldValue(row, ['Operador', 'operador']));
+
       const telefono = toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono']));
       const celular = toStr(getFieldValue(row, ['Celular', 'celular']));
       const correo = toStr(getFieldValue(row, ['Correo', 'correo', 'Email', 'email']));
