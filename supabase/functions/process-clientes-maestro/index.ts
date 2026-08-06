@@ -437,18 +437,32 @@ Deno.serve(async (req) => {
         await supabase.from('client_places').update({ is_primary: false }).in('client_id', batch);
       }
 
-      for (let i = 0; i < geoRows.length; i += 200) {
-        const batch = geoRows.slice(i, i + 200);
-        const { error } = await supabase
+      // Fila por fila: client_places tiene 2 constraints únicos
+      // (client_id, lat, long) y (client_id, direccion_principal)
+      for (const g of geoRows) {
+        const { data: existingPlaces } = await supabase
           .from('client_places')
-          .upsert(batch, { onConflict: 'client_id,lat,long', ignoreDuplicates: false });
+          .select('id, lat, long, direccion_principal')
+          .eq('client_id', g.client_id);
+
+        const match = (existingPlaces || []).find(
+          (p) => Number(p.lat) === g.lat && Number(p.long) === g.long
+        ) || (g.direccion_principal
+          ? (existingPlaces || []).find((p) => p.direccion_principal === g.direccion_principal)
+          : undefined);
+
+        const { error } = match
+          ? await supabase.from('client_places').update(g).eq('id', match.id)
+          : await supabase.from('client_places').insert(g);
+
         if (error) {
-          console.error(`❌ Places batch ${i}:`, error.message);
-          results.errores.push(`Places batch ${i}: ${error.message}`);
+          console.error(`❌ Place ${g.client_id}:`, error.message);
+          results.errores.push(`Place ${g.client_id}: ${error.message}`);
         } else {
-          results.coordenadas_actualizadas += batch.length;
+          results.coordenadas_actualizadas++;
         }
       }
+
     }
 
     // ── Resumen por vendedor ──
