@@ -309,7 +309,14 @@ const CargaDatos = () => {
     setReconciliacion(null);
     setMetadata(null);
     setIntegridad(null);
+    setNotasCredito([]);
+    setMaestroResults(null);
+    setMaestroVendedores([]);
+    setSheetName("");
+    setHeaderRow(1);
+    setFileKind("ventas");
     setProgress(0);
+
   };
 
   const formatCurrency = (amount: number) => {
