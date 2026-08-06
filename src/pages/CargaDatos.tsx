@@ -399,11 +399,18 @@ const CargaDatos = () => {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-base font-sans">{file?.name}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-base font-sans">{file?.name}</CardTitle>
+                      <Badge variant={fileKind === "maestro" ? "outline" : "default"} className="text-[10px]">
+                        {fileKind === "maestro" ? "Maestro de clientes" : "Ventas"}
+                      </Badge>
+                    </div>
                     <CardDescription className="text-xs mt-0.5">
-                      {rows.length.toLocaleString()} filas · {columns.length} columnas
+                      Hoja "{sheetName}" · encabezados en fila {headerRow} · {rows.length.toLocaleString()} filas · {columns.length} columnas
+                      {notasCredito.length > 0 && ` · ${notasCredito.length.toLocaleString()} notas de crédito`}
                     </CardDescription>
                   </div>
+
                   <Button variant="ghost" size="icon" onClick={reset} className="h-8 w-8">
                     <X className="h-4 w-4" />
                   </Button>
