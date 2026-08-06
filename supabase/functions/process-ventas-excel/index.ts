@@ -757,10 +757,37 @@ Deno.serve(async (req) => {
       'barrio_principal', 'ciudad_principal', 'provincia_principal', 'direccion_principal',
     ];
 
+    // El maestro de clientes manda sobre el vendedor de cartera y las etiquetas:
+    // si ya hay valor cargado desde el maestro, las ventas no lo pisan.
+    const maestroPorCliente = new Map<string, { vendedor_actual: string | null; etiquetas: string[] | null }>();
+    {
+      const idsUpdate = updateClients.map((c: any) => String(c.client_id));
+      for (let i = 0; i < idsUpdate.length; i += 400) {
+        const batch = idsUpdate.slice(i, i + 400);
+        const { data } = await supabase
+          .from('clientes')
+          .select('client_id, vendedor_actual, etiquetas')
+          .in('client_id', batch);
+        for (const c of data || []) {
+          maestroPorCliente.set(c.client_id, {
+            vendedor_actual: c.vendedor_actual,
+            etiquetas: c.etiquetas as string[] | null,
+          });
+        }
+      }
+    }
+
     for (const c of updateClients) {
       const updateData: Record<string, any> = {};
       for (const campo of camposVentas) {
         updateData[campo] = (c as any)[campo];
+      }
+      const prev = maestroPorCliente.get(String(c.client_id));
+      // No pisar el vendedor oficial de cartera con el de la última venta
+      if (prev?.vendedor_actual) delete updateData.vendedor_actual;
+      // No borrar etiquetas/categorías del maestro con un array vacío
+      if (!updateData.etiquetas || updateData.etiquetas.length === 0) {
+        if (prev?.etiquetas && prev.etiquetas.length > 0) delete updateData.etiquetas;
       }
       const { error } = await supabase.from('clientes').update(updateData).eq('client_id', String(c.client_id));
       if (error) {
@@ -770,6 +797,7 @@ Deno.serve(async (req) => {
         results.clientes_actualizados++;
       }
     }
+
 
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
 
