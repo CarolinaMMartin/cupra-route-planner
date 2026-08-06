@@ -12,6 +12,18 @@ import cupraLogo from "@/assets/cupra-logo-new.png";
 import * as XLSX from "xlsx";
 
 type Step = "upload" | "preview" | "processing" | "done";
+type FileKind = "ventas" | "maestro";
+
+interface MaestroResults {
+  clientes_nuevos: number;
+  clientes_actualizados: number;
+  clientes_errores: number;
+  coordenadas_actualizadas: number;
+  sin_vendedor: number;
+  sin_resolver: number;
+  errores: string[];
+}
+
 
 interface ProcessResults {
   ventas_procesadas: number;
