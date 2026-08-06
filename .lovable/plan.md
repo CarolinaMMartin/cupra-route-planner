@@ -1,205 +1,64 @@
-# Phase 1: Motor de Recomendaciones Centrado en Vendedor — IMPLEMENTADO
+# Integración de los 3 archivos nuevos (maestro de clientes + ventas)
 
-## Cambios realizados
+## Qué hay en cada archivo
 
-### A. DB: Campo `vendedor_actual` en `clientes` ✅
-- Nuevo campo `vendedor_actual` (text) agregado
-- Inicializado desde la última venta registrada en `ventas_cupra`
-- Se actualiza automáticamente en `upsert-clientes` (campo agregado a `camposVentas`)
+| Archivo | Contenido real | Filas | Clave |
+|---|---|---|---|
+| `Copia_de_clientes-32_1.xls` (hoja "Clientes") | Maestro WIWO de clientes activos: **Id**, Código, Razón Social, Fantasía, CUIT, Provincia, Dirección, Ciudad, CP, Teléfono, Celular, Correo, Categorías, **Vendedor asignado**, Observación | 635 | `Id` = `client_id` |
+| `ACT.CLIENTES.xlsx` (Hoja1) | Actualización geográfica: CUIT, Provincia, Calle, Número, Ciudad, CP, **Latitud/Longitud reales**, Vendedor, Categorías | 516 | CUIT |
+| `Copia_de_informe_ventas_...xlsx` (hoja "Ventas por Producto") | Ventas desglosadas por producto: Ticket, Letra, Fecha Emisión, CUIT, Razón Social, Código Producto, Nombre, Marca, Cantidad, **Precio Total Final**, Ciudad/Provincia, Lat/Long, Categorías, Vendedor, Operador | 1.542 | Ticket+Letra+Fecha+Producto |
 
-### B. Pre-scoring determinístico ✅
-- Función `preScoreCandidates()` calcula scores numéricos ANTES de llamar a la IA
-- **score_geo (50%)**: Distancia Haversine al centroide del cluster
-- **score_vendedor (25%)**: Afinidad vendedor-cliente via `vendedor_actual` + mapeo nombre→UUID
-- **score_comercial (15%)**: Score comercial normalizado (0-100)
-- **score_rotacion (10%)**: Días desde última recomendación
-- Filtra candidatos con feedback negativo automáticamente
-- Envía top 20 clientes + 10 prospectos pre-rankeados por vendedor
+Hoja2 de `ACT.CLIENTES` es un dump con duplicados sin datos nuevos: se ignora.
 
-### C. Mapeo nombre→UUID ✅
-- `buildSellerNameMap()` crea mapa bidireccional nombre↔UUID
-- `resolveSellerUUID()` con matching exacto + normalizado + fuzzy
-- Resuelve "LEANDRO MUTUVERRIA" → `395f12ee-...` determinísticamente
+## Problemas detectados con el flujo actual
 
-### D. Prompt reducido centrado en vendedor ✅
-- De ~65K chars a ~5-10K chars (reducción ~80%)
-- Formato tabular compacto con scores pre-calculados
-- IA solo decide ruta óptima y genera justificaciones
-- System prompt simplificado: "seleccioná 8 de los pre-rankeados"
+1. **El archivo de ventas rompe el parser actual.** `CargaDatos` lee la primera hoja con la primera fila como encabezado. Este informe trae 2 filas de título antes del encabezado y 6 hojas (Ventas por Producto, Ventas por Comprobante, Financiaciones, Notas de Crédito). Hoy se cargaría basura.
+2. **El informe de ventas no trae `Id` de cliente**, sólo CUIT (además en notación científica). Sin el maestro cargado, muchos clientes se crean con `client_id` sintético y quedan duplicados respecto de los reales.
+3. **La base tiene 190 clientes y el maestro trae 635.** ~445 clientes de cartera hoy no existen para el agente.
+4. **El campo `Vendedor` viene vacío en 88 filas de ventas** (queda `Operador`), y el maestro sí trae el vendedor oficial de cartera.
+5. **Las Notas de Crédito no se descuentan** de la facturación.
 
-### E. UI: Vendedor actual vs anterior ✅
-- `ClientDetailCard` compact view: muestra vendedor actual + anterior (si difiere)
-- `ClientDetailCard` full view: sección vendedores actualizada con indicador naranja
-- Tipo `Sucursal` extendido con `vendedor_actual`
+## Qué se va a construir
 
----
+### 1. Nueva función `process-clientes-maestro`
+Ingesta del maestro de clientes (los dos archivos de clientes, mismo endpoint, detectando el layout).
 
-# Phase 2: Rediseño UX/UI del Panel de Asignación — IMPLEMENTADO
+- Clave: `Id` → `client_id`. Si no hay `Id` (caso ACT.CLIENTES), se resuelve por CUIT normalizado contra los clientes existentes.
+- Escribe/actualiza: razón social, fantasía, cuit, dirección, ciudad, provincia, barrio/comuna (con el mapeo CABA/GBA que ya existe), teléfonos, emails, etiquetas (desde "Categorías"), canal (ON/OFF trade).
+- **Vendedor de cartera**: el maestro define el vendedor oficial → se guarda en `vendedor_actual`. El derivado de la última venta pasa a ser sólo histórico (`vendedor_principal`).
+- **Coordenadas**: las lat/long de ACT.CLIENTES se upsertean en `client_places` como principales, pisando geocodificaciones automáticas previas.
+- **Nunca toca** `cliente_feedbacks`, `excluir_recomendaciones`, `last_recommendation_at`, `ultima_visita` ni las asignaciones (misma protección que ya tiene la carga de ventas).
+- Clientes del maestro sin ninguna venta se crean igual, con métricas en cero y `estado` derivado como "sin compras".
 
-## Cambios realizados
+### 2. Ajustes a `process-ventas-excel`
+- Soportar el layout del informe nuevo: hoja **"Ventas por Producto"** y encabezado en la 3.ª fila.
+- Normalizar el CUIT cuando llega como número (notación científica) para que el match contra el maestro funcione.
+- Fallback de vendedor: `Vendedor` → si viene vacío, `Operador` → si no, el vendedor de cartera del maestro.
+- **Notas de Crédito**: leer la hoja correspondiente y restar esos importes del monto histórico del cliente (bandera activable, por defecto encendida).
+- Mantener `Precio Total Final` como fuente oficial de facturación.
 
-### A. Tabs principales ✅
-- Panel reorganizado con dos tabs: "Nueva Asignación" y "Asignaciones de Hoy"
-- Asignaciones de hoy ahora visibles desde el primer clic (antes estaban enterradas)
+### 3. `CargaDatos.tsx` — carga en dos pasos
+- Detección automática del tipo de archivo (maestro de clientes vs. informe de ventas) leyendo las hojas y encabezados; selector de hoja y fila de encabezado cuando la detección falle.
+- Orden sugerido en pantalla: **1) Maestro de clientes → 2) Ventas**, con aviso si se intenta cargar ventas sin maestro previo.
+- Preview y resumen por tipo: clientes nuevos/actualizados, coordenadas actualizadas, ventas procesadas, notas de crédito aplicadas, filas sin match de CUIT.
 
-### B. FilterPanel con dos modos ✅
-- Modo "Por Área": selector de área → ver resumen → generar
-- Modo "Personalizado": vendedores colapsables + filtros geográficos compactos
-- Instrucciones IA colapsables en ambos modos
-- Vendedores en Collapsible con badge "X de Y seleccionados"
+### 4. Impacto en el agente (`generate-recommendations`)
+- Los ~445 clientes de cartera sin ventas entran al pool como **visitables** para el vendedor que los tiene asignado en el maestro (categoría "sin compras", scoring por debajo de ACTIVO pero por encima de prospecto frío).
+- El match vendedor↔cliente pasa a usar `vendedor_actual` proveniente del maestro, que es más confiable que el derivado de ventas.
+- Más clientes con coordenadas reales ⇒ mejor anclaje geográfico y menos dependencia de la geocodificación por dirección.
 
-### C. RecommendationFilters simplificado ✅
-- De 6 filtros redundantes a solo 1 filtro por vendedor
-- Se muestra solo cuando hay más de 1 vendedor
+## Decisiones asumidas (decime si querés otra cosa)
+- El **maestro manda** sobre el vendedor; la última venta queda como histórico.
+- Los clientes sin compras **entran como cartera visitable**.
+- Las coordenadas del Excel **pisan** las geocodificadas automáticamente.
 
-### D. TodayAssignments sin Card wrapper ✅
-- Funciona como contenido directo del tab
-- Layout más limpio sin doble Card
-
-## Archivos modificados
+## Detalle técnico
 | Archivo | Cambio |
-|---------|--------|
-| `src/components/AssignorDashboard.tsx` | Tabs, imports limpiados |
-| `src/components/assignor/FilterPanel.tsx` | Dos modos (Area/Personalizado), vendedores colapsables |
-| `src/components/assignor/RecommendationFilters.tsx` | Solo filtro por vendedor |
-| `src/components/assignor/TodayAssignments.tsx` | Sin Card wrapper, layout directo |
+|---|---|
+| `supabase/functions/process-clientes-maestro/index.ts` | Nuevo — ingesta maestro + geo, upsert protegido |
+| `supabase/functions/process-ventas-excel/index.ts` | Layout multi-hoja, CUIT numérico, fallback Operador, notas de crédito |
+| `src/pages/CargaDatos.tsx` | Detección de tipo/hoja/encabezado, flujo en 2 pasos, resúmenes |
+| `supabase/config.toml` | Registro de la nueva función |
+| `supabase/functions/generate-recommendations/index.ts` | Incluir cartera sin compras en el pool y priorizar `vendedor_actual` del maestro |
 
----
-
-# Phase 3: Carga de Excel + ETL integrado — IMPLEMENTADO
-
-## Cambios realizados
-
-### A. Edge Function `process-ventas-excel` ✅
-- Recibe `{ rows: [...] }` parseadas en frontend con SheetJS
-- **Normalización de campos**: `getFieldValue()` con matching exacto, case-insensitive y NFD-normalized
-- **Conversión de fechas**: Excel serial → ISO, DD/MM/YYYY → ISO
-- **Conversión de montos**: Formato argentino (puntos miles, coma decimal)
-- **Geografía CABA**: 48 barrios mapeados a 15 comunas + detección PBA/GBA
-- **Agregación RFM por cliente**: Primera/última compra, días inactividad, scores recencia/volumen/comercial
-- **Canal**: Detección ON_TRADE vs OFF_TRADE por categorías
-- **Upsert ventas_cupra**: Batches de 500, conflict key existente
-- **Upsert clientes protegido**: No sobreescribe `last_recommendation_at`, `excluir_recomendaciones`, `ultima_visita`
-
-### B. Página `CargaDatos.tsx` ✅
-- Acceso restringido a rol `asignador`
-- Drop zone + file input para `.xlsx` / `.xls`
-- Parseo client-side con `xlsx` (SheetJS)
-- Preview: columnas detectadas + primeras 5 filas
-- Progreso visual durante procesamiento
-- Resumen final: ventas procesadas, clientes actualizados, errores
-
-### C. Navegación ✅
-- Ruta `/carga-datos` en `App.tsx`
-- Menú "Gestión" del asignador: nuevo item "Carga de Datos"
-
-## Archivos creados/modificados
-| Archivo | Cambio |
-|---------|--------|
-| `supabase/functions/process-ventas-excel/index.ts` | Creado — ETL completo |
-| `src/pages/CargaDatos.tsx` | Creado — UI de upload |
-| `src/App.tsx` | Ruta `/carga-datos` |
-| `src/pages/Index.tsx` | Menú con "Carga de Datos" |
-| `supabase/config.toml` | Función registrada |
-| `package.json` | Dependencia `xlsx` |
-
-## Próximos pasos potenciales
-- Planificación temporal (agenda semanal)
-- Reportes y supervisión
-- Agente conversacional
-
----
-
-# Phase 4: CUPRA Smart Route v4 — Anclaje Geográfico + Cuota 5-1-1-1 — IMPLEMENTADO
-
-## Cambios realizados
-
-### A. Vista SQL `v_clientes_priorizacion` ✅
-- Extensión `unaccent` habilitada para normalización de nombres
-- Vista combina `clientes` + `prospectos` con clasificación por estado comercial (ACTIVO/INACTIVO/PERDIDO/POTENCIAL)
-- `vendedor_afin_id` calculado con `UPPER(UNACCENT())` para matching robusto
-- Función `get_vendedor_barrios_top()` para obtener top 3 barrios por vendedor
-
-### B. Edge Function refactorizada ✅
-- **Centroide eliminado**: Ya no se usa `centerLat`/`centerLong`
-- **Algoritmo de Anclaje**: Top 5 clientes ACTIVOS del vendedor definen "anclas" del día
-- **Scoring magnético**: Distancia al ancla más cercana en vez de al centroide
-- **Penalización solapamiento**: -100 puntos si candidato < 300m de ancla de OTRO vendedor
-- **Cubetas 15-5-5-5**: 15 Activos + 5 Inactivos + 5 Perdidos + 5 Potenciales enviados a IA
-- **Filtro 15 días eliminado**: La IA decide según categoría de estado
-- **Nuevo prompt 5-1-1-1**: Distribución estricta 5 Activos + 1 Inactivo + 1 Perdido + 1 Potencial
-- **Barrios top del vendedor**: Incluidos en el contexto del prompt
-- **Validación post-IA**: Si la IA no cumple cuota, se completa determinísticamente
-- **`estado_comercial`** incluido en la respuesta para el frontend
-
-### C. Frontend — Tipo `Sucursal` extendido ✅
-- Nuevo campo `estado_cliente?: 'ACTIVO' | 'INACTIVO' | 'PERDIDO' | 'POTENCIAL'`
-- `AssignorDashboard.tsx` mapea `estado_comercial` desde la respuesta
-
-### D. `vendorColors.ts` — Funciones de estado ✅
-- `getStateColor(estado)`: Verde/Amarillo/Rojo/Azul
-- `classifyClientState(dias, esProspecto)`: Clasificación frontend
-- `createStateMarkerIcon(estado, vendorColor?, scale)`: SVG con relleno=estado + borde=vendedor
-- `getStateLegend()`: Para leyendas de mapa
-- `calcularDistanciaKmFrontend()`: Para detección de solapamiento
-
-### E. Mapas actualizados ✅
-- **`ResultsMap.tsx`**: Marcadores con relleno=estado + borde=vendedor. Leyenda doble (estados + vendedores). Detección solapamiento < 200m con icono ⚠️
-- **`VendedorAssignmentsMap.tsx`**: Marcadores por estado (mono-vendedor, sin borde). Leyenda de estados
-- **`AssignorTodayAssignmentsMap.tsx`**: Pendiente actualización con marcadores por estado
-
-## Archivos modificados
-| Archivo | Cambio |
-|---------|--------|
-| Migración SQL | `unaccent` + vista + función `get_vendedor_barrios_top` |
-| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: anclas, cubetas, prompt 5-1-1-1, validación |
-| `src/types/sales.ts` | `estado_cliente` en `Sucursal` |
-| `src/lib/vendorColors.ts` | Funciones de estado + marcadores duales |
-| `src/components/AssignorDashboard.tsx` | Mapeo `estado_cliente` |
-| `src/components/assignor/ResultsMap.tsx` | Marcadores estado+vendedor, solapamiento |
-| `src/components/vendedor/VendedorAssignmentsMap.tsx` | Marcadores por estado |
-
----
-
-# Phase 5: v9-hotzone — Zona Caliente por Vendedor + Mix Estratégico — IMPLEMENTADO
-
-## Cambios realizados
-
-### A. Hotspot per-vendor (reemplaza zoneCenter global) ✅
-- `calculateCentroid()` calcula el centro de los clientes propios del vendedor
-- **Fallback (corrección #1):** Si vendor tiene 0 clientes → usa centroide de `clientPlaces` del filtro geo (centro del barrio/comuna)
-- Habilita "Modo Conquista" con solo prospectos en zona nueva
-
-### B. Radio duro 1.5km para TODOS ✅
-- `HARD_RADIUS_KM = 1.5` aplicado a clientes Y prospectos
-- `MAX_EXPANSION_KM = 2.0` — expansión máxima absoluta
-- Eliminadas expansiones de 2.5km y 3km
-
-### C. Pool lineal — clientes primero, prospectos después ✅
-- `scoreClients()` — Pool 1: ACTIVO+INACTIVO+PERDIDO, ordenados por score_total
-- `scoreProspects()` — Pool 2: POTENCIAL, ordenados por distancia al hotspot (más cerca primero)
-- `validateAndFill()` — Llena 8 slots: primero Pool 1, luego Pool 2
-
-### D. Mix estratégico — al menos 1 recuperación (corrección #2) ✅
-- Si no hay cliente con >90 días sin compra en los 8 seleccionados, swapea el #8 por el mejor PERDIDO disponible
-- Garantiza proactividad de recuperación sin cuota rígida
-
-### E. Deduplicación cross-vendor mantenida (corrección #3) ✅
-- `globalPickedIds` impide asignar mismo cliente a 2 vendedores
-
-### F. Prompt simplificado ✅
-- Sin distribución 5-1-1-1
-- "Priorizá clientes existentes, completá con prospectos, incluí al menos 1 recuperación"
-
-### G. Version bump: `v9-hotzone` ✅
-
-## Archivos modificados
-| Archivo | Cambio |
-|---------|--------|
-| `supabase/functions/generate-recommendations/index.ts` | Reescritura completa: hotspot per-vendor, radio duro, pool lineal, recovery swap |
-
-## Resultado esperado
-- Todas las recomendaciones dentro de 1.5-2km del hotspot real del vendedor
-- Clientes existentes priorizados, prospectos solo como relleno
-- Al menos 1 visita de recuperación si existe en zona
-- Modo conquista funcional (vendedor sin clientes en zona nueva)
+Sin cambios de esquema: se usan campos existentes de `clientes` y `client_places`.
