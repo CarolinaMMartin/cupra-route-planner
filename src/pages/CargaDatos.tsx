@@ -97,6 +97,15 @@ const CargaDatos = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(true);
 
+  // Detección automática de archivo (ventas vs maestro de clientes)
+  const [fileKind, setFileKind] = useState<FileKind>("ventas");
+  const [sheetName, setSheetName] = useState<string>("");
+  const [headerRow, setHeaderRow] = useState<number>(1);
+  const [notasCredito, setNotasCredito] = useState<Record<string, any>[]>([]);
+  const [maestroResults, setMaestroResults] = useState<MaestroResults | null>(null);
+  const [maestroVendedores, setMaestroVendedores] = useState<{ vendedor: string; clientes: number }[]>([]);
+
+
   // TAREA 7, 9, 10: Extended ETL response
   const [calidad, setCalidad] = useState<QualityReport | null>(null);
   const [reconciliacion, setReconciliacion] = useState<Reconciliacion | null>(null);
