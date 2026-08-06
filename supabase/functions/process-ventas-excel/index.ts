@@ -125,11 +125,22 @@ const normalizeClientId = (v: any): string | null => {
 };
 
 const normalizeCuit = (v: any): string | null => {
+  if (v === null || v === undefined) return null;
+  // El Excel puede traer el CUIT como número (27133820472) o en notación
+  // científica al exportar (2.713382e+10). Ambos casos se normalizan a dígitos.
+  if (typeof v === 'number') {
+    return Number.isFinite(v) ? String(Math.round(v)) : null;
+  }
   const s = toStr(v);
   if (!s) return null;
+  if (/^-?\d+(\.\d+)?e[+-]?\d+$/i.test(s)) {
+    const n = Number(s);
+    if (Number.isFinite(n)) return String(Math.round(n));
+  }
   const digits = s.replace(/\D/g, '');
   return digits || s;
 };
+
 
 /**
  * Busca un valor en un objeto probando múltiples nombres de campo.
@@ -307,9 +318,15 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const body = await req.json() as { rows: Record<string, any>[]; replaceExisting?: boolean };
+    const body = await req.json() as {
+      rows: Record<string, any>[];
+      replaceExisting?: boolean;
+      notasCredito?: Record<string, any>[];
+    };
     const rawRows = body.rows;
+    const rawNotasCredito = Array.isArray(body.notasCredito) ? body.notasCredito : [];
     const replaceExisting = body.replaceExisting !== false; // default true
+
     if (!rawRows || !rawRows.length) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
@@ -393,7 +410,10 @@ Deno.serve(async (req) => {
       const codigo_producto = toStr(getFieldValue(row, ['Código Producto', 'Codigo Producto', 'codigo_producto', 'Código', 'Codigo']));
       const producto = toStr(getFieldValue(row, ['Nombre', 'nombre', 'Producto', 'producto', 'Descripción', 'Descripcion']));
       const marca = toStr(getFieldValue(row, ['Marca', 'marca']));
-      const vendedor = toStr(getFieldValue(row, ['Vendedor', 'vendedor']));
+      // El informe nuevo puede traer el vendedor vacío y el nombre en "Operador"
+      const vendedor = toStr(getFieldValue(row, ['Vendedor', 'vendedor']))
+        || toStr(getFieldValue(row, ['Operador', 'operador']));
+
       const telefono = toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono']));
       const celular = toStr(getFieldValue(row, ['Celular', 'celular']));
       const correo = toStr(getFieldValue(row, ['Correo', 'correo', 'Email', 'email']));
@@ -425,9 +445,67 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ============ FASE 1a: Notas de crédito (importes negativos) ============
+    // Las hojas de NC no traen CUIT, sólo Razón Social → se matchean por nombre
+    // normalizado contra los clientes ya identificados en las ventas.
+    let notasCreditoAplicadas = 0;
+    let notasCreditoSinMatch = 0;
+    let montoNotasCredito = 0;
+    if (rawNotasCredito.length > 0) {
+      const normalizeRS = (s: string) =>
+        s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+      const rsToClient = new Map<string, any>();
+      for (const v of ventasRaw) {
+        if (v.razon_social && !rsToClient.has(normalizeRS(v.razon_social))) {
+          rsToClient.set(normalizeRS(v.razon_social), v);
+        }
+      }
+
+      const ncHashes = new Set<string>();
+      for (const row of rawNotasCredito) {
+        const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
+        if (ncHashes.has(hash)) continue;
+        ncHashes.add(hash);
+
+        const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
+        if (!razon_social) { notasCreditoSinMatch++; continue; }
+        const base = rsToClient.get(normalizeRS(razon_social));
+        if (!base) { notasCreditoSinMatch++; continue; }
+
+        const importe = parseNumericValue(
+          getFieldValue(row, ['Total Final', 'Precio Total Final', 'Importe No Gravado', 'Importe Neto'])
+        );
+        if (importe === null || importe === undefined || importe === 0) continue;
+        const monto = -Math.abs(importe);
+
+        ventasRaw.push({
+          client_id: base.client_id,
+          ticket: toStr(getFieldValue(row, ['Ticket', 'ticket'])),
+          letra: 'NC',
+          fecha_emision: parseDate(getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision'])),
+          cuit_dni: base.cuit_dni,
+          razon_social,
+          fantasia: base.fantasia,
+          cajas: null,
+          codigo_producto: toStr(getFieldValue(row, ['Código', 'Codigo', 'Código Producto'])),
+          nombre: toStr(getFieldValue(row, ['Nombre', 'nombre'])),
+          marca: null,
+          facturacion_ars: monto,
+          vendedor: base.vendedor || toStr(getFieldValue(row, ['Operador', 'operador'])),
+          telefono: base.telefono, celular: base.celular, correo: base.correo,
+          direccion: base.direccion, ciudad: base.ciudad, provincia: base.provincia,
+          pais: base.pais, categorias: base.categorias,
+        });
+        notasCreditoAplicadas++;
+        montoNotasCredito += monto;
+      }
+      console.log(`🧾 Notas de crédito: ${notasCreditoAplicadas} aplicadas, ${notasCreditoSinMatch} sin match, monto ${Math.round(montoNotasCredito)}`);
+    }
+
     if (facturacionNullCount > 0) {
       console.log(`⚠️ ${facturacionNullCount} filas con facturación null (columna: ${facturacionColumnResolved})`);
     }
+
 
     // ============ FASE 1b: Deduplicar ventas ANTES de agregar clientes ============
     const ventasByConflictKey = new Map<string, any>();
@@ -679,10 +757,37 @@ Deno.serve(async (req) => {
       'barrio_principal', 'ciudad_principal', 'provincia_principal', 'direccion_principal',
     ];
 
+    // El maestro de clientes manda sobre el vendedor de cartera y las etiquetas:
+    // si ya hay valor cargado desde el maestro, las ventas no lo pisan.
+    const maestroPorCliente = new Map<string, { vendedor_actual: string | null; etiquetas: string[] | null }>();
+    {
+      const idsUpdate = updateClients.map((c: any) => String(c.client_id));
+      for (let i = 0; i < idsUpdate.length; i += 400) {
+        const batch = idsUpdate.slice(i, i + 400);
+        const { data } = await supabase
+          .from('clientes')
+          .select('client_id, vendedor_actual, etiquetas')
+          .in('client_id', batch);
+        for (const c of data || []) {
+          maestroPorCliente.set(c.client_id, {
+            vendedor_actual: c.vendedor_actual,
+            etiquetas: c.etiquetas as string[] | null,
+          });
+        }
+      }
+    }
+
     for (const c of updateClients) {
       const updateData: Record<string, any> = {};
       for (const campo of camposVentas) {
         updateData[campo] = (c as any)[campo];
+      }
+      const prev = maestroPorCliente.get(String(c.client_id));
+      // No pisar el vendedor oficial de cartera con el de la última venta
+      if (prev?.vendedor_actual) delete updateData.vendedor_actual;
+      // No borrar etiquetas/categorías del maestro con un array vacío
+      if (!updateData.etiquetas || updateData.etiquetas.length === 0) {
+        if (prev?.etiquetas && prev.etiquetas.length > 0) delete updateData.etiquetas;
       }
       const { error } = await supabase.from('clientes').update(updateData).eq('client_id', String(c.client_id));
       if (error) {
@@ -692,6 +797,7 @@ Deno.serve(async (req) => {
         results.clientes_actualizados++;
       }
     }
+
 
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
 
@@ -752,6 +858,10 @@ Deno.serve(async (req) => {
 
     const reconciliacion = {
       filas_excel: rows.length,
+      notas_credito_aplicadas: notasCreditoAplicadas,
+      notas_credito_sin_match: notasCreditoSinMatch,
+      monto_notas_credito: Math.round(montoNotasCredito * 100) / 100,
+
       filas_procesadas: ventasRaw.length,
       filas_deduplicadas: ventasDeduplicadas.length,
       filas_descartadas_sin_id: ventasSinClientId,

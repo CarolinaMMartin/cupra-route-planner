@@ -12,6 +12,18 @@ import cupraLogo from "@/assets/cupra-logo-new.png";
 import * as XLSX from "xlsx";
 
 type Step = "upload" | "preview" | "processing" | "done";
+type FileKind = "ventas" | "maestro";
+
+interface MaestroResults {
+  clientes_nuevos: number;
+  clientes_actualizados: number;
+  clientes_errores: number;
+  coordenadas_actualizadas: number;
+  sin_vendedor: number;
+  sin_resolver: number;
+  errores: string[];
+}
+
 
 interface ProcessResults {
   ventas_procesadas: number;
@@ -85,6 +97,15 @@ const CargaDatos = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(true);
 
+  // Detección automática de archivo (ventas vs maestro de clientes)
+  const [fileKind, setFileKind] = useState<FileKind>("ventas");
+  const [sheetName, setSheetName] = useState<string>("");
+  const [headerRow, setHeaderRow] = useState<number>(1);
+  const [notasCredito, setNotasCredito] = useState<Record<string, any>[]>([]);
+  const [maestroResults, setMaestroResults] = useState<MaestroResults | null>(null);
+  const [maestroVendedores, setMaestroVendedores] = useState<{ vendedor: string; clientes: number }[]>([]);
+
+
   // TAREA 7, 9, 10: Extended ETL response
   const [calidad, setCalidad] = useState<QualityReport | null>(null);
   const [reconciliacion, setReconciliacion] = useState<Reconciliacion | null>(null);
@@ -131,16 +152,72 @@ const CargaDatos = () => {
     if (profile) fetchPendingGeocount();
   }, [profile, fetchPendingGeocount]);
 
+  // ── Detección automática de hoja, fila de encabezados y tipo de archivo ──
+  const norm = (s: any) =>
+    String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+  const parseSheet = (sheet: XLSX.WorkSheet) => {
+    const aoa = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: null, blankrows: false });
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(aoa.length, 15); i++) {
+      const cells = (aoa[i] || []).filter((c) => c !== null && String(c).trim() !== "");
+      const texto = cells.filter((c) => typeof c === "string" && String(c).trim().length > 1);
+      if (cells.length >= 3 && texto.length >= 3) { headerIdx = i; break; }
+    }
+    if (headerIdx === -1) return { headerIdx: -1, rows: [] as Record<string, any>[], keys: [] as string[] };
+    const rows = XLSX.utils
+      .sheet_to_json<Record<string, any>>(sheet, { range: headerIdx, defval: null })
+      .filter((r) => Object.values(r).some((v) => v !== null && String(v).trim() !== ""));
+    const keys = rows.length > 0 ? Object.keys(rows[0]).map(norm) : [];
+    return { headerIdx, rows, keys };
+  };
+
+  const classify = (keys: string[]): "ventas" | "maestro" | "notas" | null => {
+    const has = (...c: string[]) => c.some((k) => keys.includes(norm(k)));
+    const esVenta = has("Ticket") && (has("Precio Total Final", "Total Final", "Total Bruto", "Facturación Ar$") || has("CUIT / DNI"));
+    if (esVenta) return "ventas";
+    if (has("Razón Social", "RAZON SOCIAL / NOM. FANTASIA") && (has("Vendedor") || has("Categorías", "Categorías Cliente") || has("Latitud"))) {
+      return "maestro";
+    }
+    return null;
+  };
+
   const parseExcel = useCallback(async (f: File) => {
     const buffer = await f.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonRows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: null });
+
+    const parsedSheets = workbook.SheetNames.map((name) => ({ name, ...parseSheet(workbook.Sheets[name]) }));
+
+    // Hojas de notas de crédito (sólo acompañan a un archivo de ventas)
+    const ncSheet =
+      parsedSheets.find((s) => /nota/i.test(s.name) && /detall/i.test(s.name)) ||
+      parsedSheets.find((s) => /nota/i.test(s.name));
+
+    const candidatos = parsedSheets
+      .filter((s) => s.rows.length > 0 && !/nota/i.test(s.name))
+      .map((s) => ({ ...s, tipo: classify(s.keys) }));
+
+    // Prioridad: hoja de ventas por producto > ventas > maestro > la más grande
+    const ventasProducto = candidatos.find((s) => s.tipo === "ventas" && /producto/i.test(s.name));
+    const ventas = ventasProducto || candidatos.find((s) => s.tipo === "ventas");
+    const maestro = candidatos.filter((s) => s.tipo === "maestro").sort((a, b) => b.rows.length - a.rows.length)[0];
+    const elegido = ventas || maestro || candidatos.sort((a, b) => b.rows.length - a.rows.length)[0];
+
+    if (!elegido || elegido.rows.length === 0) {
+      toast({ title: "Archivo vacío", description: "No se detectaron filas con datos", variant: "destructive" });
+      return;
+    }
+
+    const tipo: FileKind = (elegido.tipo as FileKind) || "ventas";
     setFile(f);
-    setRows(jsonRows);
-    setColumns(jsonRows.length > 0 ? Object.keys(jsonRows[0]) : []);
+    setFileKind(tipo);
+    setSheetName(elegido.name);
+    setHeaderRow(elegido.headerIdx + 1);
+    setRows(elegido.rows);
+    setColumns(Object.keys(elegido.rows[0]));
+    setNotasCredito(tipo === "ventas" && ncSheet ? ncSheet.rows : []);
     setStep("preview");
-  }, []);
+  }, [toast]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -160,7 +237,27 @@ const CargaDatos = () => {
     setProgress(10);
     try {
       setProgress(30);
-      const { data, error } = await supabase.functions.invoke("process-ventas-excel", { body: { rows, replaceExisting } });
+
+      if (fileKind === "maestro") {
+        const { data, error } = await supabase.functions.invoke("process-clientes-maestro", { body: { rows } });
+        setProgress(90);
+        if (error) throw new Error(error.message || "Error al procesar");
+        if (!data?.success) throw new Error(data?.error || "Error desconocido");
+        setMaestroResults(data.results);
+        setMaestroVendedores(data.vendedor_breakdown || []);
+        setProgress(100);
+        setStep("done");
+        toast({
+          title: "Maestro de clientes actualizado",
+          description: `${data.results.clientes_nuevos} nuevos · ${data.results.clientes_actualizados} actualizados`,
+        });
+        fetchPendingGeocount();
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke("process-ventas-excel", {
+        body: { rows, replaceExisting, notasCredito: notasCredito.length ? notasCredito : undefined },
+      });
       setProgress(90);
       if (error) throw new Error(error.message || "Error al procesar");
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
@@ -179,6 +276,8 @@ const CargaDatos = () => {
       setStep("preview");
     }
   };
+
+
 
   const handleBatchGeocode = async () => {
     setIsGeocoding(true);
@@ -210,7 +309,14 @@ const CargaDatos = () => {
     setReconciliacion(null);
     setMetadata(null);
     setIntegridad(null);
+    setNotasCredito([]);
+    setMaestroResults(null);
+    setMaestroVendedores([]);
+    setSheetName("");
+    setHeaderRow(1);
+    setFileKind("ventas");
     setProgress(0);
+
   };
 
   const formatCurrency = (amount: number) => {
@@ -248,12 +354,14 @@ const CargaDatos = () => {
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         <div>
           <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">
-            Carga de Ventas
+            Carga de Datos
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Subí el archivo Excel de ventas para actualizar la base de datos de clientes y transacciones.
+            Subí el archivo de <strong>ventas</strong> o el <strong>maestro de clientes</strong>. El sistema detecta
+            automáticamente el tipo, la hoja y la fila de encabezados.
           </p>
         </div>
+
 
         {/* STEP: Upload */}
         {step === "upload" && (
@@ -291,11 +399,18 @@ const CargaDatos = () => {
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-base font-sans">{file?.name}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-base font-sans">{file?.name}</CardTitle>
+                      <Badge variant={fileKind === "maestro" ? "outline" : "default"} className="text-[10px]">
+                        {fileKind === "maestro" ? "Maestro de clientes" : "Ventas"}
+                      </Badge>
+                    </div>
                     <CardDescription className="text-xs mt-0.5">
-                      {rows.length.toLocaleString()} filas · {columns.length} columnas
+                      Hoja "{sheetName}" · encabezados en fila {headerRow} · {rows.length.toLocaleString()} filas · {columns.length} columnas
+                      {notasCredito.length > 0 && ` · ${notasCredito.length.toLocaleString()} notas de crédito`}
                     </CardDescription>
                   </div>
+
                   <Button variant="ghost" size="icon" onClick={reset} className="h-8 w-8">
                     <X className="h-4 w-4" />
                   </Button>
@@ -349,14 +464,23 @@ const CargaDatos = () => {
             </Card>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Checkbox
-                  id="replaceExisting"
-                  checked={replaceExisting}
-                  onCheckedChange={(checked) => setReplaceExisting(checked === true)}
-                />
-                <label htmlFor="replaceExisting" className="text-sm text-muted-foreground cursor-pointer">
-                  Reemplazar datos existentes <span className="text-xs">(recomendado para carga completa)</span>
-                </label>
+                {fileKind === "ventas" ? (
+                  <>
+                    <Checkbox
+                      id="replaceExisting"
+                      checked={replaceExisting}
+                      onCheckedChange={(checked) => setReplaceExisting(checked === true)}
+                    />
+                    <label htmlFor="replaceExisting" className="text-sm text-muted-foreground cursor-pointer">
+                      Reemplazar datos existentes <span className="text-xs">(recomendado para carga completa)</span>
+                    </label>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground max-w-md">
+                    El maestro actualiza cartera, contacto, categorías, vendedor asignado y coordenadas.
+                    No modifica el histórico de ventas ni el feedback de los vendedores.
+                  </p>
+                )}
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={reset}>Cancelar</Button>
@@ -376,7 +500,9 @@ const CargaDatos = () => {
               <div className="text-center space-y-4">
                 <Loader2 className="h-10 w-10 mx-auto animate-spin text-primary" />
                 <div>
-                  <p className="text-sm font-medium text-foreground">Procesando ventas…</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {fileKind === "maestro" ? "Procesando maestro de clientes…" : "Procesando ventas…"}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-0.5">Normalizando datos, calculando métricas y actualizando base de datos</p>
                 </div>
                 <Progress value={progress} className="max-w-xs mx-auto" />
@@ -384,6 +510,62 @@ const CargaDatos = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* STEP: Done — Maestro de clientes */}
+        {step === "done" && maestroResults && (
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-8">
+                <div className="text-center mb-6">
+                  <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-500" />
+                  <p className="text-lg font-semibold text-foreground">Maestro de clientes actualizado</p>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: "Clientes nuevos", value: maestroResults.clientes_nuevos },
+                    { label: "Actualizados", value: maestroResults.clientes_actualizados },
+                    { label: "Coordenadas", value: maestroResults.coordenadas_actualizadas },
+                    { label: "Sin vendedor", value: maestroResults.sin_vendedor },
+                  ].map((m) => (
+                    <div key={m.label} className="text-center p-3 rounded-lg bg-muted/20">
+                      <p className="text-xl font-semibold text-foreground">{m.value.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{m.label}</p>
+                    </div>
+                  ))}
+                </div>
+                {(maestroResults.clientes_errores > 0 || maestroResults.sin_resolver > 0) && (
+                  <p className="text-xs text-muted-foreground mt-4 text-center">
+                    {maestroResults.clientes_errores} errores · {maestroResults.sin_resolver} filas sin identificador resoluble
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {maestroVendedores.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-sans">Cartera por vendedor</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1.5">
+                    {maestroVendedores.map((v) => (
+                      <div key={v.vendedor} className="flex justify-between text-sm">
+                        <span className="text-foreground/80">{v.vendedor}</span>
+                        <span className="text-muted-foreground">{v.clientes.toLocaleString()} clientes</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={reset}>Cargar otro archivo</Button>
+              <Button onClick={() => navigate("/")}>Ir al panel</Button>
+            </div>
+          </div>
+        )}
+
 
         {/* STEP: Done */}
         {step === "done" && results && (
