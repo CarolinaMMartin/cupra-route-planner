@@ -44,6 +44,7 @@ Ingesta del maestro de clientes (los dos archivos de clientes, mismo endpoint, d
 
 ### 4. Impacto en el agente (`generate-recommendations`)
 - Los ~445 clientes de cartera sin ventas entran al pool como **visitables** para el vendedor que los tiene asignado en el maestro (categoría "sin compras", scoring por debajo de ACTIVO pero por encima de prospecto frío).
+- 194 de los 635 clientes del maestro **no traen vendedor**: se resuelve con el vendedor de su última venta y, si tampoco existe, quedan disponibles para asignación manual (no se recomiendan a nadie automáticamente).
 - El match vendedor↔cliente pasa a usar `vendedor_actual` proveniente del maestro, que es más confiable que el derivado de ventas.
 - Más clientes con coordenadas reales ⇒ mejor anclaje geográfico y menos dependencia de la geocodificación por dirección.
 
