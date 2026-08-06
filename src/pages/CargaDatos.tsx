@@ -464,14 +464,23 @@ const CargaDatos = () => {
             </Card>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Checkbox
-                  id="replaceExisting"
-                  checked={replaceExisting}
-                  onCheckedChange={(checked) => setReplaceExisting(checked === true)}
-                />
-                <label htmlFor="replaceExisting" className="text-sm text-muted-foreground cursor-pointer">
-                  Reemplazar datos existentes <span className="text-xs">(recomendado para carga completa)</span>
-                </label>
+                {fileKind === "ventas" ? (
+                  <>
+                    <Checkbox
+                      id="replaceExisting"
+                      checked={replaceExisting}
+                      onCheckedChange={(checked) => setReplaceExisting(checked === true)}
+                    />
+                    <label htmlFor="replaceExisting" className="text-sm text-muted-foreground cursor-pointer">
+                      Reemplazar datos existentes <span className="text-xs">(recomendado para carga completa)</span>
+                    </label>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground max-w-md">
+                    El maestro actualiza cartera, contacto, categorías, vendedor asignado y coordenadas.
+                    No modifica el histórico de ventas ni el feedback de los vendedores.
+                  </p>
+                )}
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={reset}>Cancelar</Button>
@@ -491,7 +500,9 @@ const CargaDatos = () => {
               <div className="text-center space-y-4">
                 <Loader2 className="h-10 w-10 mx-auto animate-spin text-primary" />
                 <div>
-                  <p className="text-sm font-medium text-foreground">Procesando ventas…</p>
+                  <p className="text-sm font-medium text-foreground">
+                    {fileKind === "maestro" ? "Procesando maestro de clientes…" : "Procesando ventas…"}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-0.5">Normalizando datos, calculando métricas y actualizando base de datos</p>
                 </div>
                 <Progress value={progress} className="max-w-xs mx-auto" />
@@ -499,6 +510,62 @@ const CargaDatos = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* STEP: Done — Maestro de clientes */}
+        {step === "done" && maestroResults && (
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-8">
+                <div className="text-center mb-6">
+                  <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-500" />
+                  <p className="text-lg font-semibold text-foreground">Maestro de clientes actualizado</p>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: "Clientes nuevos", value: maestroResults.clientes_nuevos },
+                    { label: "Actualizados", value: maestroResults.clientes_actualizados },
+                    { label: "Coordenadas", value: maestroResults.coordenadas_actualizadas },
+                    { label: "Sin vendedor", value: maestroResults.sin_vendedor },
+                  ].map((m) => (
+                    <div key={m.label} className="text-center p-3 rounded-lg bg-muted/20">
+                      <p className="text-xl font-semibold text-foreground">{m.value.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{m.label}</p>
+                    </div>
+                  ))}
+                </div>
+                {(maestroResults.clientes_errores > 0 || maestroResults.sin_resolver > 0) && (
+                  <p className="text-xs text-muted-foreground mt-4 text-center">
+                    {maestroResults.clientes_errores} errores · {maestroResults.sin_resolver} filas sin identificador resoluble
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {maestroVendedores.length > 0 && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-sans">Cartera por vendedor</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1.5">
+                    {maestroVendedores.map((v) => (
+                      <div key={v.vendedor} className="flex justify-between text-sm">
+                        <span className="text-foreground/80">{v.vendedor}</span>
+                        <span className="text-muted-foreground">{v.clientes.toLocaleString()} clientes</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={reset}>Cargar otro archivo</Button>
+              <Button onClick={() => navigate("/")}>Ir al panel</Button>
+            </div>
+          </div>
+        )}
+
 
         {/* STEP: Done */}
         {step === "done" && results && (
