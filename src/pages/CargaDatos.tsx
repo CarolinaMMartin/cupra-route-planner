@@ -131,16 +131,72 @@ const CargaDatos = () => {
     if (profile) fetchPendingGeocount();
   }, [profile, fetchPendingGeocount]);
 
+  // ── Detección automática de hoja, fila de encabezados y tipo de archivo ──
+  const norm = (s: any) =>
+    String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+  const parseSheet = (sheet: XLSX.WorkSheet) => {
+    const aoa = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: null, blankrows: false });
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(aoa.length, 15); i++) {
+      const cells = (aoa[i] || []).filter((c) => c !== null && String(c).trim() !== "");
+      const texto = cells.filter((c) => typeof c === "string" && String(c).trim().length > 1);
+      if (cells.length >= 3 && texto.length >= 3) { headerIdx = i; break; }
+    }
+    if (headerIdx === -1) return { headerIdx: -1, rows: [] as Record<string, any>[], keys: [] as string[] };
+    const rows = XLSX.utils
+      .sheet_to_json<Record<string, any>>(sheet, { range: headerIdx, defval: null })
+      .filter((r) => Object.values(r).some((v) => v !== null && String(v).trim() !== ""));
+    const keys = rows.length > 0 ? Object.keys(rows[0]).map(norm) : [];
+    return { headerIdx, rows, keys };
+  };
+
+  const classify = (keys: string[]): "ventas" | "maestro" | "notas" | null => {
+    const has = (...c: string[]) => c.some((k) => keys.includes(norm(k)));
+    const esVenta = has("Ticket") && (has("Precio Total Final", "Total Final", "Total Bruto", "Facturación Ar$") || has("CUIT / DNI"));
+    if (esVenta) return "ventas";
+    if (has("Razón Social", "RAZON SOCIAL / NOM. FANTASIA") && (has("Vendedor") || has("Categorías", "Categorías Cliente") || has("Latitud"))) {
+      return "maestro";
+    }
+    return null;
+  };
+
   const parseExcel = useCallback(async (f: File) => {
     const buffer = await f.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonRows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: null });
+
+    const parsedSheets = workbook.SheetNames.map((name) => ({ name, ...parseSheet(workbook.Sheets[name]) }));
+
+    // Hojas de notas de crédito (sólo acompañan a un archivo de ventas)
+    const ncSheet =
+      parsedSheets.find((s) => /nota/i.test(s.name) && /detall/i.test(s.name)) ||
+      parsedSheets.find((s) => /nota/i.test(s.name));
+
+    const candidatos = parsedSheets
+      .filter((s) => s.rows.length > 0 && !/nota/i.test(s.name))
+      .map((s) => ({ ...s, tipo: classify(s.keys) }));
+
+    // Prioridad: hoja de ventas por producto > ventas > maestro > la más grande
+    const ventasProducto = candidatos.find((s) => s.tipo === "ventas" && /producto/i.test(s.name));
+    const ventas = ventasProducto || candidatos.find((s) => s.tipo === "ventas");
+    const maestro = candidatos.filter((s) => s.tipo === "maestro").sort((a, b) => b.rows.length - a.rows.length)[0];
+    const elegido = ventas || maestro || candidatos.sort((a, b) => b.rows.length - a.rows.length)[0];
+
+    if (!elegido || elegido.rows.length === 0) {
+      toast({ title: "Archivo vacío", description: "No se detectaron filas con datos", variant: "destructive" });
+      return;
+    }
+
+    const tipo: FileKind = (elegido.tipo as FileKind) || "ventas";
     setFile(f);
-    setRows(jsonRows);
-    setColumns(jsonRows.length > 0 ? Object.keys(jsonRows[0]) : []);
+    setFileKind(tipo);
+    setSheetName(elegido.name);
+    setHeaderRow(elegido.headerIdx + 1);
+    setRows(elegido.rows);
+    setColumns(Object.keys(elegido.rows[0]));
+    setNotasCredito(tipo === "ventas" && ncSheet ? ncSheet.rows : []);
     setStep("preview");
-  }, []);
+  }, [toast]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -160,7 +216,27 @@ const CargaDatos = () => {
     setProgress(10);
     try {
       setProgress(30);
-      const { data, error } = await supabase.functions.invoke("process-ventas-excel", { body: { rows, replaceExisting } });
+
+      if (fileKind === "maestro") {
+        const { data, error } = await supabase.functions.invoke("process-clientes-maestro", { body: { rows } });
+        setProgress(90);
+        if (error) throw new Error(error.message || "Error al procesar");
+        if (!data?.success) throw new Error(data?.error || "Error desconocido");
+        setMaestroResults(data.results);
+        setMaestroVendedores(data.vendedor_breakdown || []);
+        setProgress(100);
+        setStep("done");
+        toast({
+          title: "Maestro de clientes actualizado",
+          description: `${data.results.clientes_nuevos} nuevos · ${data.results.clientes_actualizados} actualizados`,
+        });
+        fetchPendingGeocount();
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke("process-ventas-excel", {
+        body: { rows, replaceExisting, notasCredito: notasCredito.length ? notasCredito : undefined },
+      });
       setProgress(90);
       if (error) throw new Error(error.message || "Error al procesar");
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
@@ -179,6 +255,8 @@ const CargaDatos = () => {
       setStep("preview");
     }
   };
+
+
 
   const handleBatchGeocode = async () => {
     setIsGeocoding(true);
