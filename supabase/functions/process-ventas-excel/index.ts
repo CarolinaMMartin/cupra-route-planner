@@ -318,9 +318,15 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const body = await req.json() as { rows: Record<string, any>[]; replaceExisting?: boolean };
+    const body = await req.json() as {
+      rows: Record<string, any>[];
+      replaceExisting?: boolean;
+      notasCredito?: Record<string, any>[];
+    };
     const rawRows = body.rows;
+    const rawNotasCredito = Array.isArray(body.notasCredito) ? body.notasCredito : [];
     const replaceExisting = body.replaceExisting !== false; // default true
+
     if (!rawRows || !rawRows.length) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
