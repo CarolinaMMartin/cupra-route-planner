@@ -858,6 +858,10 @@ Deno.serve(async (req) => {
 
     const reconciliacion = {
       filas_excel: rows.length,
+      notas_credito_aplicadas: notasCreditoAplicadas,
+      notas_credito_sin_match: notasCreditoSinMatch,
+      monto_notas_credito: Math.round(montoNotasCredito * 100) / 100,
+
       filas_procesadas: ventasRaw.length,
       filas_deduplicadas: ventasDeduplicadas.length,
       filas_descartadas_sin_id: ventasSinClientId,
