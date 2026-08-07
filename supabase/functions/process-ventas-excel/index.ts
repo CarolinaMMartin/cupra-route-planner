@@ -820,8 +820,39 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============ FASE 4b: Coordenadas del informe → client_places ============
+    let coordenadasGuardadas = 0;
+    if (coordsPorCliente.size > 0) {
+      const idsValidos = new Set(clientesEnriquecidos.map(c => String(c.client_id)));
+      const places = Array.from(coordsPorCliente.entries())
+        .filter(([cid]) => idsValidos.has(String(cid)))
+        .map(([cid, p]) => ({
+          client_id: String(cid),
+          lat: p.lat,
+          long: p.long,
+          direccion_principal: p.direccion,
+          provincia_principal: p.provincia,
+          is_primary: true,
+        }));
+
+      for (let i = 0; i < places.length; i += 300) {
+        const batch = places.slice(i, i + 300);
+        const { error } = await supabase
+          .from('client_places')
+          .upsert(batch, { onConflict: 'client_id,lat,long', ignoreDuplicates: false });
+        if (error) {
+          console.error(`❌ client_places batch ${i}:`, error.message);
+          results.errores.push(`Coordenadas batch ${i}: ${error.message}`);
+        } else {
+          coordenadasGuardadas += batch.length;
+        }
+      }
+      console.log(`📍 Coordenadas del informe guardadas: ${coordenadasGuardadas}/${places.length}`);
+    }
+    (results as any).coordenadas_guardadas = coordenadasGuardadas;
 
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
+
 
     // ============ FASE 5: Insert/Upsert ventas ============
     // Fix 2: Updated conflict key includes facturacion_ars
