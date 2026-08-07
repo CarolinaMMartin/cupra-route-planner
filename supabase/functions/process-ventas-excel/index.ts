@@ -391,6 +391,8 @@ Deno.serve(async (req) => {
     // ============ FASE 1: Normalizar ventas individuales ============
     const ventasRaw: any[] = [];
     const clientesMap = new Map<string, any>();
+    // Coordenadas reales que vienen en el propio informe de ventas (Latitud/Longitud)
+    const coordsPorCliente = new Map<string, { lat: number; long: number; direccion: string | null; ciudad: string | null; provincia: string | null }>();
     let ventasSinClientId = 0;
     let facturacionNullCount = 0;
     // TAREA 12: Track descartados sin client_id
