@@ -445,7 +445,27 @@ Deno.serve(async (req) => {
         vendedor, telefono, celular, correo, direccion, ciudad: ciudad_raw,
         provincia: provincia_raw, pais, categorias,
       });
+
+      // Coordenadas del informe (si vienen y son válidas para Argentina)
+      const latRaw = parseNumericValue(getFieldValue(row, ['Latitud', 'latitud', 'Lat', 'lat']));
+      const lngRaw = parseNumericValue(getFieldValue(row, ['Longitud', 'longitud', 'Lng', 'lng', 'Long', 'long']));
+      if (
+        latRaw !== null && lngRaw !== null &&
+        Number.isFinite(latRaw) && Number.isFinite(lngRaw) &&
+        latRaw >= -56 && latRaw <= -21 && lngRaw >= -74 && lngRaw <= -53
+      ) {
+        const numeroCalle = toStr(getFieldValue(row, ['Número', 'Numero', 'numero']));
+        const dirCompleta = [direccion, numeroCalle].filter(Boolean).join(' ').trim() || null;
+        coordsPorCliente.set(client_id, {
+          lat: latRaw,
+          long: lngRaw,
+          direccion: dirCompleta,
+          ciudad: ciudad_raw,
+          provincia: normalizeProvincia(provincia_raw),
+        });
+      }
     }
+
 
     // ============ FASE 1a: Notas de crédito (importes negativos) ============
     // Las hojas de NC no traen CUIT, sólo Razón Social → se matchean por nombre
