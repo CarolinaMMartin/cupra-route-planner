@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const GOOGLE_API_KEY = Deno.env.get("VITE_GOOGLE_MAPS_API_KEY") || "";
+const GOOGLE_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY") || "";
 
 // Argentina coordinate bounds
 const LAT_MIN = -56, LAT_MAX = -21, LNG_MIN = -74, LNG_MAX = -53;
