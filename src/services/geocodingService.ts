@@ -1,6 +1,6 @@
-// Servicio de geocodificación directo via Google Geocoding API
-// Ya no depende de n8n — llama a Google directamente desde el frontend
-// La API key de Maps JS ya está expuesta en el frontend, así que es seguro usarla aquí
+// Servicio de geocodificación directo vía Google Geocoding API.
+// La clave usada en el navegador debe estar restringida por dominio y por API
+// desde Google Cloud Console.
 
 export interface GeocodingRequest {
   direccion: string;

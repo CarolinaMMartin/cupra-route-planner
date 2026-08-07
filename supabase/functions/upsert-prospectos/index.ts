@@ -169,7 +169,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Procesando ${prospectos.length} prospecto(s) desde n8n`);
+    console.log(`Procesando ${prospectos.length} prospecto(s)`);
 
     // Procesar en batches de 50
     const { results, errors } = await processBatch(supabase, prospectos, 50);

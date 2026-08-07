@@ -390,11 +390,10 @@ FORMATO: Usá la tool "generate_recommendations" con la estructura indicada.`;
 // Rules:
 //   1. ACTIVO/INACTIVO clients first (highest priority)
 //   2. At least 1 PERDIDO (recovery) if available
-//   3. At least 2 PROSPECTOS if available and slots remain
-//   4. Max 4 PERDIDOS — rest filled with prospects
+//   3. PROSPECTOS only fill slots when there are not enough eligible clients
+//   4. Max 4 PERDIDOS before using prospects
 // ============================================================
 
-const MIN_PROSPECTS = 2;
 const MAX_LOST = 4;
 
 function validateAndFill(
@@ -429,6 +428,12 @@ function validateAndFill(
     if (!allCandidates.has(r.client_id)) continue;
 
     const candidate = allCandidates.get(r.client_id)!;
+    if (candidate.es_prospecto && !hasCustomInstructions) {
+      // Default business rule: prospects are fallback inventory. Preserve the
+      // AI choice for later, after all eligible clients have been considered.
+      deferredProspects.push(r);
+      continue;
+    }
     if (candidate.es_prospecto) {
       if (aiProspectCount >= MAX_PROSPECT_SLOTS) {
         deferredProspects.push(r); // Save for later if we have room
@@ -451,17 +456,18 @@ function validateAndFill(
       addRec(makeRec(c, vendedorId));
     }
 
-    // Lost clients (max 4 total, reserve 2 for prospects)
+    // Lost clients (max 4 before falling back to prospects)
     const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
-    const currentLost = result.filter(r => {
+    let currentLost = result.filter(r => {
       const c = allCandidates.get(r.client_id);
       return c && c.estado_comercial === 'PERDIDO';
     }).length;
     for (const c of lostClients) {
-      if (result.length >= 6) break; // Reserve 2 for prospects
+      if (result.length >= 8) break;
       if (currentLost >= MAX_LOST) break;
       if (!isAvailable(c.client_id)) continue;
       addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
+      currentLost++;
     }
 
     // Fill with deferred AI prospects first, then pool prospects
@@ -505,28 +511,6 @@ function validateAndFill(
       }
     }
 
-    // Ensure at least 2 prospects if available
-    const currentProspects = result.filter(r => allCandidates.get(r.client_id)?.es_prospecto).length;
-    if (currentProspects < MIN_PROSPECTS) {
-      const availableProspects = prospectPool.filter(c => isAvailable(c.client_id));
-      let added = currentProspects;
-      for (const prospect of availableProspects) {
-        if (added >= MIN_PROSPECTS) break;
-        // Swap last non-prospect client (but keep minimum clients)
-        const clientCount = result.filter(r => !allCandidates.get(r.client_id)?.es_prospecto).length;
-        if (clientCount <= MIN_CLIENTS) break; // Don't swap below minimum
-        for (let i = result.length - 1; i >= 0; i--) {
-          const existing = allCandidates.get(result[i].client_id);
-          if (existing && !existing.es_prospecto) {
-            pickedIds.delete(result[i].client_id);
-            result[i] = makeRec(prospect, vendedorId);
-            pickedIds.add(prospect.client_id);
-            added++;
-            break;
-          }
-        }
-      }
-    }
   }
 
   if (result.length < 8) {
@@ -698,6 +682,7 @@ Deno.serve(async (req) => {
     // ---- 6. Load prospects ----
     let prospectosQuery = supabaseClient
       .from("prospectos").select("*")
+      .eq("es_cliente_cupra", false)
       .order("last_recommendation_at", { ascending: true, nullsFirst: true })
       .limit(200);
 
@@ -871,6 +856,7 @@ Deno.serve(async (req) => {
 
         const { data: geoProspectos } = await supabaseClient
           .from("prospectos").select("*")
+          .eq("es_cliente_cupra", false)
           .gte("latitud", vendorHotspot.lat - deltaLat)
           .lte("latitud", vendorHotspot.lat + deltaLat)
           .gte("longitud", vendorHotspot.lng - deltaLng)
@@ -906,6 +892,7 @@ Deno.serve(async (req) => {
         let fallbackQuery = supabaseClient
           .from("prospectos")
           .select("*")
+          .eq("es_cliente_cupra", false)
           .order("rating", { ascending: false })
           .limit(Math.max(needed * 8, 80));
 

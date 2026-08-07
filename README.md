@@ -1,5 +1,16 @@
 # Welcome to your Lovable project
 
+## Flujo de desarrollo actual
+
+El repositorio de GitHub es la fuente de código. El desarrollo se realiza localmente,
+los cambios se publican en GitHub y Lovable sincroniza el repositorio para mantener
+el mismo entorno y enlace de pruebas con usuarios.
+
+Durante esta etapa Lovable sigue siendo parte del stack de publicación y provee el
+gateway usado por la función de recomendaciones. n8n no forma parte del stack: la
+carga de datos y la geocodificación se ejecutan mediante la interfaz y las Edge
+Functions de Supabase.
+
 ## Project info
 
 **URL**: https://lovable.dev/projects/4edb6182-f643-40b4-b2af-197de983701b

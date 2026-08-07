@@ -1,8 +1,8 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
 
 /**
  * ═══════════════════════════════════════════════════════════════
- * ETL: process-ventas-excel — v2.0
+ * ETL: process-ventas-excel — v3.2
  * ═══════════════════════════════════════════════════════════════
  * 
  * MODELO DE DATOS:
@@ -44,7 +44,18 @@ const corsHeaders = {
 const DIAS_ACTIVO = 30;
 const DIAS_INTERMITENTE = 90;
 const DIAS_INACTIVO = 180;
-const ETL_VERSION = 'v3.0';
+const ETL_VERSION = 'v3.2';
+
+interface FileMetadata {
+  name?: string;
+  size?: number;
+  lastModified?: number;
+  sha256?: string | null;
+  sheetName?: string;
+  headerRow?: number;
+}
+
+type SupabaseAdminClient = SupabaseClient<any, 'public', any>;
 
 // === UMBRALES DE CALIDAD ===
 const UMBRAL_PCT_SIN_BARRIO = 10;
@@ -74,7 +85,6 @@ const BARRIOS_A_COMUNA: Record<string, string> = {
   // Barrios adicionales / alias comunes
   'CONGRESO': 'COMUNA 5', 'ONCE': 'COMUNA 3', 'ABASTO': 'COMUNA 3',
   'MICROCENTRO': 'COMUNA 1', 'TRIBUNALES': 'COMUNA 1',
-  'VILLA CRESPO': 'COMUNA 15',
 };
 
 // === HELPERS ===
@@ -122,6 +132,16 @@ const normalizeClientId = (v: any): string | null => {
     }
   }
   return raw;
+};
+
+const normalizeBusinessName = (v: any): string | null => {
+  const s = toStr(v);
+  if (!s) return null;
+  return s.toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 };
 
 const normalizeCuit = (v: any): string | null => {
@@ -313,35 +333,101 @@ const FACTURACION_FIELD_NAMES = [
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  let supabase: SupabaseAdminClient | null = null;
+  let batchId: string | null = null;
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    supabase = createClient(supabaseUrl, supabaseKey);
+
+    const authHeader = req.headers.get('Authorization');
+    const accessToken = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!accessToken) {
+      return new Response(JSON.stringify({ success: false, error: 'Sesión requerida' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401,
+      });
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+    if (authError || !authData.user) {
+      return new Response(JSON.stringify({ success: false, error: 'Sesión inválida o vencida' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401,
+      });
+    }
+
+    const { data: callerProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('rol')
+      .eq('user_id', authData.user.id)
+      .single();
+    if (profileError || callerProfile?.rol !== 'asignador') {
+      return new Response(JSON.stringify({ success: false, error: 'Solo un asignador puede importar datos' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403,
+      });
+    }
 
     const body = await req.json() as {
       rows: Record<string, any>[];
       replaceExisting?: boolean;
       notasCredito?: Record<string, any>[];
+      fileMetadata?: FileMetadata;
     };
     const rawRows = body.rows;
     const rawNotasCredito = Array.isArray(body.notasCredito) ? body.notasCredito : [];
     const replaceExisting = body.replaceExisting !== false; // default true
 
-    if (!rawRows || !rawRows.length) {
+    if (!Array.isArray(rawRows) || rawRows.length === 0) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
       });
     }
+    if (rawRows.length > 50_000 || rawNotasCredito.length > 50_000) {
+      return new Response(JSON.stringify({ success: false, error: 'Cada hoja puede contener hasta 50.000 filas' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 413,
+      });
+    }
 
-    // Fix 1: Si replaceExisting, limpiar tablas antes de insertar
-    if (replaceExisting) {
-      console.log('🧹 Fix 1: Limpiando ventas_cupra antes de carga completa...');
-      const { error: deleteError } = await supabase.from('ventas_cupra').delete().neq('id', 0);
-      if (deleteError) {
-        console.error('❌ Error limpiando ventas_cupra:', deleteError.message);
-      } else {
-        console.log('✅ ventas_cupra limpiada exitosamente');
+    const fileMetadata = body.fileMetadata || {};
+    const lastModified = typeof fileMetadata.lastModified === 'number' && fileMetadata.lastModified > 0
+      ? new Date(fileMetadata.lastModified).toISOString()
+      : null;
+    const { data: batch, error: batchError } = await supabase
+      .from('import_batches')
+      .insert({
+        tipo: 'ventas',
+        version_etl: ETL_VERSION,
+        archivo_nombre: fileMetadata.name || 'archivo_sin_nombre',
+        archivo_sha256: fileMetadata.sha256 || null,
+        archivo_tamano: fileMetadata.size ?? null,
+        archivo_ultima_modificacion: lastModified,
+        hoja: fileMetadata.sheetName || null,
+        fila_encabezado: fileMetadata.headerRow ?? null,
+        filas_origen: rawRows.length,
+        filas_notas_credito: rawNotasCredito.length,
+        reemplaza_existentes: replaceExisting,
+        usuario_id: authData.user.id,
+        usuario_email: authData.user.email || null,
+      })
+      .select('id')
+      .single();
+    if (batchError || !batch) throw new Error(`No se pudo crear el lote de importación: ${batchError?.message || 'sin detalle'}`);
+    batchId = batch.id;
+
+    const stageRows = async (sourceRows: Record<string, any>[], tipoFila: 'principal' | 'nota_credito') => {
+      for (let i = 0; i < sourceRows.length; i += 500) {
+        const stagingRows = sourceRows.slice(i, i + 500).map((payload, offset) => ({
+          batch_id: batchId,
+          tipo_fila: tipoFila,
+          numero_fila: i + offset + 1,
+          payload,
+        }));
+        const { error: stagingError } = await supabase!.from('import_staging_rows').insert(stagingRows);
+        if (stagingError) throw new Error(`No se pudo preparar el lote: ${stagingError.message}`);
       }
+    };
+    await stageRows(rawRows, 'principal');
+    if (rawNotasCredito.length > 0) {
+      await stageRows(rawNotasCredito, 'nota_credito');
     }
 
     // ── Fix 3: Deduplicación estricta — eliminar filas 100% idénticas ──
@@ -365,28 +451,42 @@ Deno.serve(async (req) => {
       : null;
     console.log(`💰 Columna facturación: resuelta="${facturacionColumnResolved}" | evaluadas=${JSON.stringify(FACTURACION_FIELD_NAMES)}`);
 
-    // ============ FASE 0: Lookup CUIT → client_id existente ============
-    const allCuits = new Set<string>();
-    for (const row of rows) {
-      const cuit = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
-      if (cuit) allCuits.add(cuit);
+    // ============ FASE 0: identidad comercial contra el maestro ============
+    // El campo "ID" del informe de ventas NO es el Id oficial del maestro.
+    // La identidad se resuelve por CUIT y nombre; "Número Externo" sólo se usa
+    // cuando coincide con un client_id ya existente.
+    const { data: clientesPersistidosData, error: clientesPersistidosError } = await supabase
+      .from('clientes')
+      .select('client_id, cuit_dni, razon_social, fantasia, telefonos, emails, direccion_principal, ciudad_principal, provincia_principal, vendedor_actual, vendedor_principal, etiquetas');
+    if (clientesPersistidosError) {
+      throw new Error(`No se pudo cargar el maestro para resolver clientes: ${clientesPersistidosError.message}`);
     }
+    const clientesPersistidos = clientesPersistidosData || [];
+    const existingClientIds = new Set<string>();
+    const cuitToClientIds = new Map<string, string[]>();
+    const nameToClientId = new Map<string, string>();
+    const ambiguousNames = new Set<string>();
 
-    const cuitToClientId = new Map<string, string>();
-    if (allCuits.size > 0) {
-      const cuitArray = Array.from(allCuits);
-      for (let i = 0; i < cuitArray.length; i += 500) {
-        const batch = cuitArray.slice(i, i + 500);
-        const { data: existingByCuit } = await supabase
-          .from('clientes')
-          .select('client_id, cuit_dni')
-          .in('cuit_dni', batch);
-        for (const c of existingByCuit || []) {
-          if (c.cuit_dni) cuitToClientId.set(c.cuit_dni, c.client_id);
+    for (const c of clientesPersistidos) {
+      existingClientIds.add(c.client_id);
+      if (c.cuit_dni) {
+        const ids = cuitToClientIds.get(c.cuit_dni) || [];
+        if (!ids.includes(c.client_id)) ids.push(c.client_id);
+        cuitToClientIds.set(c.cuit_dni, ids);
+      }
+      for (const rawName of [c.razon_social, c.fantasia]) {
+        const normalized = normalizeBusinessName(rawName);
+        if (!normalized || ambiguousNames.has(normalized)) continue;
+        const previous = nameToClientId.get(normalized);
+        if (previous && previous !== c.client_id) {
+          nameToClientId.delete(normalized);
+          ambiguousNames.add(normalized);
+        } else {
+          nameToClientId.set(normalized, c.client_id);
         }
       }
-      console.log(`🔍 Fase 0: ${cuitToClientId.size} CUITs encontrados en DB de ${allCuits.size} únicos`);
     }
+    console.log(`🔍 Fase 0: ${clientesPersistidos.length} clientes del maestro disponibles para conciliación`);
 
     // ============ FASE 1: Normalizar ventas individuales ============
     const ventasRaw: any[] = [];
@@ -394,16 +494,34 @@ Deno.serve(async (req) => {
     // Coordenadas reales que vienen en el propio informe de ventas (Latitud/Longitud)
     const coordsPorCliente = new Map<string, { lat: number; long: number; direccion: string | null; ciudad: string | null; provincia: string | null }>();
     let ventasSinClientId = 0;
+    let ventasCuitAmbiguo = 0;
     let facturacionNullCount = 0;
     // TAREA 12: Track descartados sin client_id
     const descartados: { cuit_dni: string | null; razon_social: string | null }[] = [];
 
     for (const row of rows) {
-      const idCandidato = normalizeClientId(getFieldValue(row, ['Id', 'id', 'ID', 'client_id', 'Número Externo', 'Numero Externo']));
+      const externalClientId = normalizeClientId(getFieldValue(row, ['client_id', 'Número Externo', 'Numero Externo']));
       const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
-      let client_id = idCandidato || (cuit_dni && cuitToClientId.get(cuit_dni)) || cuit_dni;
       const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
       const fantasia = toStr(getFieldValue(row, ['Fantasía', 'Fantasia', 'fantasia']));
+      const nameMatch = nameToClientId.get(normalizeBusinessName(razon_social) || '')
+        || nameToClientId.get(normalizeBusinessName(fantasia) || '');
+      const cuitMatches = cuit_dni ? (cuitToClientIds.get(cuit_dni) || []) : [];
+      let client_id: string | null = null;
+
+      if (externalClientId && existingClientIds.has(externalClientId)) {
+        client_id = externalClientId;
+      } else if (cuitMatches.length === 1) {
+        client_id = cuitMatches[0];
+      } else if (nameMatch && (cuitMatches.length === 0 || cuitMatches.includes(nameMatch))) {
+        client_id = nameMatch;
+      } else if (cuitMatches.length > 1) {
+        ventasCuitAmbiguo++;
+      } else if (nameMatch) {
+        client_id = nameMatch;
+      } else if (cuit_dni) {
+        client_id = cuit_dni;
+      }
       const ticket = toStr(getFieldValue(row, ['Ticket', 'ticket', 'Comprobante', 'comprobante']));
       const letra = toStr(getFieldValue(row, ['Letra', 'letra']));
       const fecha_raw = getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision', 'Fecha', 'fecha']);
@@ -468,18 +586,40 @@ Deno.serve(async (req) => {
 
 
     // ============ FASE 1a: Notas de crédito (importes negativos) ============
-    // Las hojas de NC no traen CUIT, sólo Razón Social → se matchean por nombre
-    // normalizado contra los clientes ya identificados en las ventas.
+    // Las hojas de NC no traen CUIT, sólo Razón Social. Primero se cruzan
+    // contra las ventas del archivo y luego contra el maestro persistido. Esto
+    // permite netear notas de clientes que no tuvieron una venta en el período.
     let notasCreditoAplicadas = 0;
     let notasCreditoSinMatch = 0;
     let montoNotasCredito = 0;
     if (rawNotasCredito.length > 0) {
-      const normalizeRS = (s: string) =>
-        s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
       const rsToClient = new Map<string, any>();
       for (const v of ventasRaw) {
-        if (v.razon_social && !rsToClient.has(normalizeRS(v.razon_social))) {
-          rsToClient.set(normalizeRS(v.razon_social), v);
+        const key = normalizeBusinessName(v.razon_social);
+        if (key && !rsToClient.has(key)) {
+          rsToClient.set(key, v);
+        }
+      }
+
+      for (const c of clientesPersistidos) {
+        const base = {
+          client_id: c.client_id,
+          cuit_dni: c.cuit_dni,
+          razon_social: c.razon_social,
+          fantasia: c.fantasia,
+          vendedor: c.vendedor_actual || c.vendedor_principal,
+          telefono: c.telefonos?.[0] || null,
+          celular: c.telefonos?.[1] || null,
+          correo: c.emails?.[0] || null,
+          direccion: c.direccion_principal,
+          ciudad: c.ciudad_principal,
+          provincia: c.provincia_principal,
+          pais: 'Argentina',
+          categorias: Array.isArray(c.etiquetas) ? c.etiquetas.join(', ') : null,
+        };
+        for (const nombre of [c.razon_social, c.fantasia]) {
+          const key = normalizeBusinessName(nombre);
+          if (key && !rsToClient.has(key)) rsToClient.set(key, base);
         }
       }
 
@@ -491,7 +631,7 @@ Deno.serve(async (req) => {
 
         const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
         if (!razon_social) { notasCreditoSinMatch++; continue; }
-        const base = rsToClient.get(normalizeRS(razon_social));
+        const base = rsToClient.get(normalizeBusinessName(razon_social) || '');
         if (!base) { notasCreditoSinMatch++; continue; }
 
         const importe = parseNumericValue(
@@ -528,6 +668,14 @@ Deno.serve(async (req) => {
       console.log(`⚠️ ${facturacionNullCount} filas con facturación null (columna: ${facturacionColumnResolved})`);
     }
 
+    if (replaceExisting && (ventasSinClientId > 0 || facturacionNullCount > 0 || notasCreditoSinMatch > 0)) {
+      throw new Error(
+        `Carga completa rechazada por integridad: ${ventasSinClientId} filas sin cliente, ` +
+        `${facturacionNullCount} sin facturación y ${notasCreditoSinMatch} notas de crédito sin conciliar. ` +
+        'No se modificaron las ventas existentes.'
+      );
+    }
+
 
     // ============ FASE 1b: Deduplicar ventas ANTES de agregar clientes ============
     const ventasByConflictKey = new Map<string, any>();
@@ -550,6 +698,10 @@ Deno.serve(async (req) => {
     }
 
     const ventasDeduplicadas = [...ventasByConflictKey.values(), ...ventasSinClaveConflicto];
+
+    if (ventasDeduplicadas.length === 0) {
+      throw new Error('El archivo no produjo ninguna venta válida. No se modificaron las ventas existentes.');
+    }
 
     if (ventasDuplicadas > 0) {
       console.log(`♻️ ${ventasDuplicadas} filas duplicadas consolidadas (${ventasRaw.length} → ${ventasDeduplicadas.length})`);
@@ -734,7 +886,10 @@ Deno.serve(async (req) => {
 
     if (ventasSinClientId > 0) {
       results.ventas_errores += ventasSinClientId;
-      results.errores.push(`Filas omitidas sin client_id/CUIT válido: ${ventasSinClientId}`);
+      results.errores.push(`Filas omitidas sin identidad de cliente resoluble: ${ventasSinClientId}`);
+    }
+    if (ventasCuitAmbiguo > 0) {
+      results.errores.push(`Filas con CUIT duplicado en el maestro y nombre sin coincidencia: ${ventasCuitAmbiguo}`);
     }
 
     const allClientIds = clientesEnriquecidos.map(c => String(c.client_id));
@@ -853,26 +1008,23 @@ Deno.serve(async (req) => {
 
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
 
+    if (results.clientes_errores > 0) {
+      throw new Error(
+        `La carga se detuvo porque ${results.clientes_errores} clientes no pudieron actualizarse. No se modificaron las ventas existentes.`
+      );
+    }
 
     // ============ FASE 5: Insert/Upsert ventas ============
-    // Fix 2: Updated conflict key includes facturacion_ars
-    const ventasConflictKey = 'ticket,letra,fecha_emision,client_id,codigo_producto,facturacion_ars';
-    for (let i = 0; i < ventasDeduplicadas.length; i += 500) {
-      const batch = ventasDeduplicadas.slice(i, i + 500);
-      const { error } = replaceExisting
-        ? await supabase.from('ventas_cupra').insert(batch)
-        : await supabase.from('ventas_cupra').upsert(batch, {
-            onConflict: ventasConflictKey,
-            ignoreDuplicates: false,
-          });
-      if (error) {
-        console.error(`❌ Ventas batch ${i}:`, error.message);
-        results.ventas_errores += batch.length;
-        results.errores.push(`Ventas batch ${i}: ${error.message}`);
-      } else {
-        results.ventas_procesadas += batch.length;
-      }
+    // El RPC ejecuta DELETE/merge + INSERT dentro de una sola transacción.
+    // Si una fila falla, PostgreSQL revierte todo y conserva la carga anterior.
+    const { data: committedSales, error: commitError } = await supabase.rpc('commit_ventas_import', {
+      p_rows: ventasDeduplicadas,
+      p_replace_existing: replaceExisting,
+    });
+    if (commitError) {
+      throw new Error(`No se pudo confirmar el lote de ventas: ${commitError.message}`);
     }
+    results.ventas_procesadas = Number(committedSales || 0);
 
     // ── TAREA 11: Consistencia clientes ↔ ventas_cupra (post-carga check) ──
     // Solo reportamos las discrepancias, no corregimos aquí
@@ -918,6 +1070,7 @@ Deno.serve(async (req) => {
       filas_procesadas: ventasRaw.length,
       filas_deduplicadas: ventasDeduplicadas.length,
       filas_descartadas_sin_id: ventasSinClientId,
+      filas_cuit_ambiguo: ventasCuitAmbiguo,
       facturacion_total_procesada: totalFacturacionProcesada,
       tickets_unicos: totalTicketsUnicos,
       clientes_unicos: totalClientesUnicos,
@@ -929,10 +1082,33 @@ Deno.serve(async (req) => {
     const integridad = {
       descartados_sin_client_id: descartados.slice(0, 20),
       total_descartados: descartados.length,
+      total_cuit_ambiguo: ventasCuitAmbiguo,
     };
+
+    const estado = results.ventas_errores > 0 || results.errores.length > 0 || calidad.alerta || notasCreditoSinMatch > 0
+      ? 'completado_con_errores'
+      : 'completado';
+    const { error: closeBatchError } = await supabase
+      .from('import_batches')
+      .update({
+        estado,
+        resultado: { ...results, metadata, integridad },
+        calidad,
+        reconciliacion,
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', batchId);
+    if (closeBatchError) throw new Error(`Las ventas se procesaron pero no se pudo cerrar el lote: ${closeBatchError.message}`);
+
+    const { error: cleanupError } = await supabase
+      .from('import_staging_rows')
+      .delete()
+      .eq('batch_id', batchId);
+    if (cleanupError) console.error('No se pudo limpiar staging:', cleanupError.message);
 
     return new Response(JSON.stringify({
       success: true,
+      batch_id: batchId,
       results,
       calidad,
       reconciliacion,
@@ -943,7 +1119,15 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('💥 Error:', error);
-    return new Response(JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Error desconocido' }), {
+    const message = error instanceof Error ? error.message : 'Error desconocido';
+    if (supabase && batchId) {
+      const { error: auditError } = await supabase
+        .from('import_batches')
+        .update({ estado: 'fallido', error_message: message, completed_at: new Date().toISOString() })
+        .eq('id', batchId);
+      if (auditError) console.error('No se pudo registrar el fallo del lote:', auditError.message);
+    }
+    return new Response(JSON.stringify({ success: false, error: message, batch_id: batchId }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
     });
   }

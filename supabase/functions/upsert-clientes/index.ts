@@ -95,15 +95,15 @@ Deno.serve(async (req) => {
     
     // ESTRATEGIA DE PROTECCIÓN DE TRACKING:
     // Separamos la lógica en dos pasos para proteger campos de gestión interna
-    // que NO deben sobreescribirse con datos de n8n
+    // que NO deben sobreescribirse con datos de una importación
     
-    // CAMPOS PROTEGIDOS (NO se actualizan desde n8n):
+    // CAMPOS PROTEGIDOS (NO se actualizan desde importaciones):
     // - last_recommendation_at: Lo actualiza generate-recommendations
     // - excluir_recomendaciones: Lo actualiza el usuario manualmente
     // - ultima_visita: Lo actualiza el sistema de visitas
     // - id, created_at, updated_at: Gestión automática de Supabase
     
-    // CAMPOS ACTUALIZABLES (vienen de n8n):
+    // CAMPOS ACTUALIZABLES (provienen de la fuente importada):
     // NOTA: barrio_principal, todos_barrios, direccion_principal, provincia_principal
     // se excluyen porque se sincronizan desde client_places (fuente de verdad geográfica)
     const camposVentas = [

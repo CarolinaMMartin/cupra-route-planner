@@ -1,8 +1,8 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
 
 /**
  * ═══════════════════════════════════════════════════════════════
- * ETL: process-clientes-maestro — v1.0
+ * ETL: process-clientes-maestro — v1.1
  * ═══════════════════════════════════════════════════════════════
  *
  * Ingesta del MAESTRO DE CLIENTES (cartera oficial), independiente de ventas.
@@ -29,7 +29,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const ETL_VERSION = 'maestro-v1.0';
+const ETL_VERSION = 'maestro-v1.1';
+
+interface FileMetadata {
+  name?: string;
+  size?: number;
+  lastModified?: number;
+  sha256?: string | null;
+  sheetName?: string;
+  headerRow?: number;
+}
+
+type SupabaseAdminClient = SupabaseClient<any, 'public', any>;
 
 // === MAPEO BARRIOS → COMUNAS DE CABA ===
 const BARRIOS_A_COMUNA: Record<string, string> = {
@@ -232,18 +243,87 @@ function parseRow(row: Record<string, any>): MaestroRow {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  let supabase: SupabaseAdminClient | null = null;
+  let batchId: string | null = null;
   try {
-    const supabase = createClient(
+    supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     );
 
-    const body = await req.json() as { rows: Record<string, any>[] };
+    const authHeader = req.headers.get('Authorization');
+    const accessToken = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!accessToken) {
+      return new Response(JSON.stringify({ success: false, error: 'Sesión requerida' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401,
+      });
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+    if (authError || !authData.user) {
+      return new Response(JSON.stringify({ success: false, error: 'Sesión inválida o vencida' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401,
+      });
+    }
+
+    const { data: callerProfile, error: profileError } = await supabase
+      .from('profiles')
+      .select('rol')
+      .eq('user_id', authData.user.id)
+      .single();
+    if (profileError || callerProfile?.rol !== 'asignador') {
+      return new Response(JSON.stringify({ success: false, error: 'Solo un asignador puede importar datos' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403,
+      });
+    }
+
+    const body = await req.json() as { rows: Record<string, any>[]; fileMetadata?: FileMetadata };
     const rawRows = body?.rows;
     if (!Array.isArray(rawRows) || rawRows.length === 0) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
       });
+    }
+    if (rawRows.length > 50_000) {
+      return new Response(JSON.stringify({ success: false, error: 'La carga supera el límite de 50.000 filas' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 413,
+      });
+    }
+
+    const fileMetadata = body.fileMetadata || {};
+    const lastModified = typeof fileMetadata.lastModified === 'number' && fileMetadata.lastModified > 0
+      ? new Date(fileMetadata.lastModified).toISOString()
+      : null;
+    const { data: batch, error: batchError } = await supabase
+      .from('import_batches')
+      .insert({
+        tipo: 'maestro',
+        version_etl: ETL_VERSION,
+        archivo_nombre: fileMetadata.name || 'archivo_sin_nombre',
+        archivo_sha256: fileMetadata.sha256 || null,
+        archivo_tamano: fileMetadata.size ?? null,
+        archivo_ultima_modificacion: lastModified,
+        hoja: fileMetadata.sheetName || null,
+        fila_encabezado: fileMetadata.headerRow ?? null,
+        filas_origen: rawRows.length,
+        reemplaza_existentes: false,
+        usuario_id: authData.user.id,
+        usuario_email: authData.user.email || null,
+      })
+      .select('id')
+      .single();
+    if (batchError || !batch) throw new Error(`No se pudo crear el lote de importación: ${batchError?.message || 'sin detalle'}`);
+    batchId = batch.id;
+
+    for (let i = 0; i < rawRows.length; i += 500) {
+      const stagingRows = rawRows.slice(i, i + 500).map((payload, offset) => ({
+        batch_id: batchId,
+        tipo_fila: 'principal',
+        numero_fila: i + offset + 1,
+        payload,
+      }));
+      const { error: stagingError } = await supabase.from('import_staging_rows').insert(stagingRows);
+      if (stagingError) throw new Error(`No se pudo preparar el lote: ${stagingError.message}`);
     }
 
     console.log(`📦 ${ETL_VERSION} — ${rawRows.length} filas recibidas`);
@@ -253,7 +333,6 @@ Deno.serve(async (req) => {
     let sinIdentificador = 0;
     for (const row of rawRows) {
       const p = parseRow(row);
-      if (!p.client_id && !p.cuit_dni && !p.razon_social) continue;
       if (!p.razon_social && !p.cuit_dni && !p.client_id) { sinIdentificador++; continue; }
       parsed.push(p);
     }
@@ -477,8 +556,34 @@ Deno.serve(async (req) => {
 
     console.log('🎉 Maestro procesado:', results);
 
+    const estado = results.clientes_errores > 0 || results.errores.length > 0 || sinResolver > 0
+      ? 'completado_con_errores'
+      : 'completado';
+    const { error: closeBatchError } = await supabase
+      .from('import_batches')
+      .update({
+        estado,
+        resultado: results,
+        reconciliacion: {
+          filas_origen: rawRows.length,
+          clientes_unicos: clientes.length,
+          filas_sin_identificador: sinIdentificador,
+          filas_sin_resolver: sinResolver,
+        },
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', batchId);
+    if (closeBatchError) throw new Error(`Los datos se procesaron pero no se pudo cerrar el lote: ${closeBatchError.message}`);
+
+    const { error: cleanupError } = await supabase
+      .from('import_staging_rows')
+      .delete()
+      .eq('batch_id', batchId);
+    if (cleanupError) console.error('No se pudo limpiar staging:', cleanupError.message);
+
     return new Response(JSON.stringify({
       success: true,
+      batch_id: batchId,
       results,
       metadata: {
         fecha_carga: new Date().toISOString(),
@@ -494,9 +599,18 @@ Deno.serve(async (req) => {
     });
   } catch (error) {
     console.error('💥 Error:', error);
+    const message = error instanceof Error ? error.message : 'Error desconocido';
+    if (supabase && batchId) {
+      const { error: auditError } = await supabase
+        .from('import_batches')
+        .update({ estado: 'fallido', error_message: message, completed_at: new Date().toISOString() })
+        .eq('id', batchId);
+      if (auditError) console.error('No se pudo registrar el fallo del lote:', auditError.message);
+    }
     return new Response(JSON.stringify({
       success: false,
-      error: error instanceof Error ? error.message : 'Error desconocido',
+      error: message,
+      batch_id: batchId,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
     });

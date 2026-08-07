@@ -41,7 +41,7 @@ El sistema es un **planificador inteligente de rutas comerciales** para la fuerz
 
 **Integraciones externas**
 - **Google Maps Platform** vía conector administrado de Lovable: Maps JS, Geocoding y Places (búsqueda de prospectos)
-- Webhook n8n opcional para geocodificación batch (`VITE_N8N_GEOCODING_WEBHOOK_URL`)
+- **Lovable** como entorno de publicación y pruebas, sincronizado desde GitHub, y como gateway de IA durante esta etapa
 
 **Identidad visual** — *Dark Heritage Premium*: charcoal profundo `#0F0F12`, oro mate `#C6A46A`, títulos serif + UI sans. Sin azules.
 
@@ -114,6 +114,8 @@ Campos por bloque:
 
 **`ventas_cupra`** — hechos de venta a nivel línea de factura. `ticket`, `letra`, `fecha_emision`, `cuit_dni`, `codigo_producto`, `marca`, `cajas`, **`facturacion_ars`** (= "Precio Total Final", con IVA; negativo en notas de crédito), `vendedor`, geografía y contacto crudos. FK `client_id → clientes`.
 
+**`import_batches` / `import_staging_rows`** — auditoría de cada carga y staging temporal de las filas originales. Registra archivo, SHA-256, hoja, usuario, versión ETL, resultado y estado. El staging se elimina al completar y se conserva 7 días ante un fallo para diagnóstico o recuperación.
+
 **`prospectos`** — negocios de Google Places aún no clientes. PK de negocio `place_id`, `latitud`/`longitud`, `rating`, `total_ratings`, `tipo_principal`, `tipos[]`, `sirve_vinos`, `estado_negocio`, `es_cliente_cupra`, contacto (`telefono`, `email`, `instagram`, `website`).
 
 **`profiles`** — 1:1 con `auth.users` (poblada por trigger `on_auth_user_created` → `handle_new_user()`). `user_id`, `nombre`, `email`, `rol (app_role)`, `activo`.
@@ -155,12 +157,13 @@ Entrada: dos Excel independientes que envía la distribuidora.
 
 ### 5.1 Maestro de clientes → `process-clientes-maestro`
 
-1. `/carga-datos` detecta el tipo de archivo por cabeceras (busca la fila de encabezado en filas 1–4) y recorre todas las hojas.
+1. `/carga-datos` detecta el tipo de archivo por cabeceras (busca la fila de encabezado entre las primeras 15 filas), recorre todas las hojas y calcula la huella SHA-256 del archivo.
 2. Normaliza CUIT (incluye corrección de notación científica de Excel), razón social (trim + uppercase + espacios simples) y geografía (`normalizarGeografia`: mapeo de ciudad/partido a barrio/comuna de CABA y GBA).
 3. Resuelve el `client_id`: match por CUIT → match por nombre normalizado → alta nueva con el `Id` oficial del maestro.
 4. Escribe **fuente de verdad de cartera**: `vendedor_actual`, contacto, categorías/etiquetas.
 5. Clientes sin ventas se marcan `SIN_COMPRAS` (existen en cartera pero no en `ventas_cupra`).
 6. Coordenadas oficiales del maestro (`Latitud`/`Longitud`) se cargan en `client_places` como `is_primary`.
+7. Cada ejecución queda registrada como lote; sólo usuarios con rol `asignador` pueden iniciar el proceso.
 
 ### 5.2 Informe de ventas → `process-ventas-excel`
 
@@ -169,6 +172,10 @@ Entrada: dos Excel independientes que envía la distribuidora.
 3. **No pisa** `vendedor_actual` del maestro; el vendedor del informe alimenta `vendedor_principal` / `todos_vendedores[]`.
 4. Lee `Latitud`/`Longitud` del informe y las persiste en `client_places`.
 5. Recalcula métricas agregadas del cliente (`monto_total_historico`, `cantidad_ordenes`, `ticket_promedio`, recencia, scores y categorías).
+6. Valida y prepara todo el archivo antes de tocar el histórico. `commit_ventas_import()` realiza el reemplazo/merge y la inserción en una única transacción PostgreSQL: ante cualquier error se revierte el lote y se conservan las ventas anteriores.
+7. Las notas de crédito se cruzan primero con las ventas del archivo y luego con el maestro persistido, para incluir clientes sin ventas positivas en el período.
+
+**Identidad de cliente en ventas:** la columna `ID` del informe de ventas pertenece a ese informe y no coincide con el `Id` oficial del maestro, por lo que nunca se usa como `client_id`. La resolución es: `Número Externo` sólo si ya existe → CUIT único → razón social/fantasía normalizada → CUIT como ID estable para un alta nueva. Si un CUIT está duplicado y el nombre no permite desambiguar, la fila se rechaza y queda reportada en el lote.
 
 ### 5.3 Geocodificación → `geocode-clients`
 
@@ -178,7 +185,7 @@ Entrada: dos Excel independientes que envía la distribuidora.
 
 ### 5.4 Endpoints de upsert directos
 
-`upsert-clientes`, `upsert-ventas-cupra`, `upsert-client-places`, `upsert-prospectos`: recepción por lotes en JSON, validación y `upsert` por clave de negocio. Los usa el frontend de carga y permiten integraciones externas (n8n).
+`upsert-clientes`, `upsert-ventas-cupra`, `upsert-client-places`, `upsert-prospectos`: recepción por lotes en JSON, validación y `upsert` por clave de negocio. Quedan disponibles como API para integraciones autorizadas; la pantalla `/carga-datos` utiliza los ETL especializados anteriores.
 
 ---
 
@@ -243,7 +250,7 @@ Clasificación comercial (`classifyEstado` por `dias_desde_ultima_compra`): `ACT
 ### 7.4 Garantía de cupo (`validateAndFill`)
 
 Reglas de composición sobre la salida del LLM:
-- `MIN_PROSPECTS = 2` prospectos mínimos por ruta
+- Los prospectos completan la ruta sólo cuando no hay 8 clientes elegibles en la zona, salvo instrucciones explícitas del asignador
 - `MAX_LOST = 4` clientes `PERDIDO` como máximo
 - Al menos un caso de recuperación cuando existe
 - Si faltan puntos: se completa por score con clientes y, agotados, con prospectos ampliando el radio (hasta 5 km y fallback amplio). **Un vendedor sin cartera ("modo conquista") recibe 8 prospectos** ordenados por proximidad al ancla de su zona/filtros y rating, ignorando el sesgo de cartera.
@@ -298,7 +305,6 @@ Persistencia: cada corrida escribe en `recomendaciones_ia` con un `request_id` c
 Frontend (`.env`, prefijo `VITE_`, valores publicables):
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`
 - `VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY` (key administrada vigente; `VITE_GOOGLE_MAPS_API_KEY` queda como fallback legacy — **expirada**)
-- `VITE_N8N_GEOCODING_WEBHOOK_URL`
 
 Backend (secrets, sólo accesibles en edge functions): `LOVABLE_API_KEY`, `GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_BROWSER_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`.
 
@@ -315,5 +321,7 @@ Backend (secrets, sólo accesibles en edge functions): `LOVABLE_API_KEY`, `GOOGL
 
 **Puntos de atención conocidos**
 - Migraciones: ~90 archivos versionados en `supabase/migrations/`; cualquier cambio de esquema debe incluir `GRANT` + RLS en la misma migración.
+- Antes de desplegar las versiones nuevas de los ETL debe aplicarse `20260807150000_import_batches_and_staging.sql`; las funciones dependen de las tablas de auditoría y de `commit_ventas_import()`.
+- El staging de lotes fallidos vence a los 7 días. Ejecutar periódicamente `cleanup_expired_import_staging()` con `service_role` (se puede programar con Supabase Cron).
 - `src/integrations/supabase/client.ts` y `types.ts` son autogenerados: no editar a mano.
 - El motor de recomendación es sensible a la calidad de coordenadas: un cliente sin `client_places` no puede entrar en ninguna ruta.

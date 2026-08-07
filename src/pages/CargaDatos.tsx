@@ -90,6 +90,8 @@ const CargaDatos = () => {
   const [profile, setProfile] = useState<any>(null);
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
+  const [fileHash, setFileHash] = useState<string | null>(null);
+  const [batchId, setBatchId] = useState<string | null>(null);
   const [rows, setRows] = useState<Record<string, any>[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [results, setResults] = useState<ProcessResults | null>(null);
@@ -183,7 +185,22 @@ const CargaDatos = () => {
   };
 
   const parseExcel = useCallback(async (f: File) => {
+    const maxFileSize = 15 * 1024 * 1024;
+    if (f.size > maxFileSize) {
+      toast({
+        title: "Archivo demasiado grande",
+        description: "El límite de carga es 15 MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
     const buffer = await f.arrayBuffer();
+    const digest = await crypto.subtle.digest("SHA-256", buffer);
+    const sha256 = Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
     const workbook = XLSX.read(buffer, { type: "array" });
 
     const parsedSheets = workbook.SheetNames.map((name) => ({ name, ...parseSheet(workbook.Sheets[name]) }));
@@ -207,9 +224,18 @@ const CargaDatos = () => {
       toast({ title: "Archivo vacío", description: "No se detectaron filas con datos", variant: "destructive" });
       return;
     }
+    if (elegido.rows.length > 50_000 || (ncSheet?.rows.length || 0) > 50_000) {
+      toast({
+        title: "Archivo demasiado extenso",
+        description: "Cada hoja puede contener hasta 50.000 filas.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const tipo: FileKind = (elegido.tipo as FileKind) || "ventas";
     setFile(f);
+    setFileHash(sha256);
     setFileKind(tipo);
     setSheetName(elegido.name);
     setHeaderRow(elegido.headerIdx + 1);
@@ -217,6 +243,13 @@ const CargaDatos = () => {
     setColumns(Object.keys(elegido.rows[0]));
     setNotasCredito(tipo === "ventas" && ncSheet ? ncSheet.rows : []);
     setStep("preview");
+    } catch (error) {
+      toast({
+        title: "No se pudo leer el archivo",
+        description: error instanceof Error ? error.message : "El archivo no tiene un formato válido.",
+        variant: "destructive",
+      });
+    }
   }, [toast]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -237,14 +270,25 @@ const CargaDatos = () => {
     setProgress(10);
     try {
       setProgress(30);
+      const fileMetadata = {
+        name: file?.name,
+        size: file?.size,
+        lastModified: file?.lastModified,
+        sha256: fileHash,
+        sheetName,
+        headerRow,
+      };
 
       if (fileKind === "maestro") {
-        const { data, error } = await supabase.functions.invoke("process-clientes-maestro", { body: { rows } });
+        const { data, error } = await supabase.functions.invoke("process-clientes-maestro", {
+          body: { rows, fileMetadata },
+        });
         setProgress(90);
         if (error) throw new Error(error.message || "Error al procesar");
         if (!data?.success) throw new Error(data?.error || "Error desconocido");
         setMaestroResults(data.results);
         setMaestroVendedores(data.vendedor_breakdown || []);
+        setBatchId(data.batch_id || null);
         setProgress(100);
         setStep("done");
         toast({
@@ -256,12 +300,18 @@ const CargaDatos = () => {
       }
 
       const { data, error } = await supabase.functions.invoke("process-ventas-excel", {
-        body: { rows, replaceExisting, notasCredito: notasCredito.length ? notasCredito : undefined },
+        body: {
+          rows,
+          replaceExisting,
+          notasCredito: notasCredito.length ? notasCredito : undefined,
+          fileMetadata,
+        },
       });
       setProgress(90);
       if (error) throw new Error(error.message || "Error al procesar");
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
       setResults(data.results);
+      setBatchId(data.batch_id || null);
       // TAREA 7, 9, 10: Guardar datos extendidos
       if (data.calidad) setCalidad(data.calidad);
       if (data.reconciliacion) setReconciliacion(data.reconciliacion);
@@ -302,6 +352,8 @@ const CargaDatos = () => {
   const reset = () => {
     setStep("upload");
     setFile(null);
+    setFileHash(null);
+    setBatchId(null);
     setRows([]);
     setColumns([]);
     setResults(null);
@@ -519,6 +571,7 @@ const CargaDatos = () => {
                 <div className="text-center mb-6">
                   <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-500" />
                   <p className="text-lg font-semibold text-foreground">Maestro de clientes actualizado</p>
+                  {batchId && <p className="text-xs text-muted-foreground mt-1">Lote {batchId}</p>}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
@@ -581,6 +634,7 @@ const CargaDatos = () => {
                       ETL {metadata.version_etl} · Columna: {metadata.columna_facturacion || 'No resuelta'} · {new Date(metadata.fecha_carga).toLocaleString('es-AR')}
                     </p>
                   )}
+                  {batchId && <p className="text-xs text-muted-foreground mt-1">Lote {batchId}</p>}
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center p-3 rounded-lg bg-muted/30">
