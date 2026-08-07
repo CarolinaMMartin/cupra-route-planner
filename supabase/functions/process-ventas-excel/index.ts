@@ -391,6 +391,8 @@ Deno.serve(async (req) => {
     // ============ FASE 1: Normalizar ventas individuales ============
     const ventasRaw: any[] = [];
     const clientesMap = new Map<string, any>();
+    // Coordenadas reales que vienen en el propio informe de ventas (Latitud/Longitud)
+    const coordsPorCliente = new Map<string, { lat: number; long: number; direccion: string | null; ciudad: string | null; provincia: string | null }>();
     let ventasSinClientId = 0;
     let facturacionNullCount = 0;
     // TAREA 12: Track descartados sin client_id
@@ -443,7 +445,27 @@ Deno.serve(async (req) => {
         vendedor, telefono, celular, correo, direccion, ciudad: ciudad_raw,
         provincia: provincia_raw, pais, categorias,
       });
+
+      // Coordenadas del informe (si vienen y son válidas para Argentina)
+      const latRaw = parseNumericValue(getFieldValue(row, ['Latitud', 'latitud', 'Lat', 'lat']));
+      const lngRaw = parseNumericValue(getFieldValue(row, ['Longitud', 'longitud', 'Lng', 'lng', 'Long', 'long']));
+      if (
+        latRaw !== null && lngRaw !== null &&
+        Number.isFinite(latRaw) && Number.isFinite(lngRaw) &&
+        latRaw >= -56 && latRaw <= -21 && lngRaw >= -74 && lngRaw <= -53
+      ) {
+        const numeroCalle = toStr(getFieldValue(row, ['Número', 'Numero', 'numero']));
+        const dirCompleta = [direccion, numeroCalle].filter(Boolean).join(' ').trim() || null;
+        coordsPorCliente.set(client_id, {
+          lat: latRaw,
+          long: lngRaw,
+          direccion: dirCompleta,
+          ciudad: ciudad_raw,
+          provincia: normalizeProvincia(provincia_raw),
+        });
+      }
     }
+
 
     // ============ FASE 1a: Notas de crédito (importes negativos) ============
     // Las hojas de NC no traen CUIT, sólo Razón Social → se matchean por nombre
@@ -798,8 +820,39 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ============ FASE 4b: Coordenadas del informe → client_places ============
+    let coordenadasGuardadas = 0;
+    if (coordsPorCliente.size > 0) {
+      const idsValidos = new Set(clientesEnriquecidos.map(c => String(c.client_id)));
+      const places = Array.from(coordsPorCliente.entries())
+        .filter(([cid]) => idsValidos.has(String(cid)))
+        .map(([cid, p]) => ({
+          client_id: String(cid),
+          lat: p.lat,
+          long: p.long,
+          direccion_principal: p.direccion,
+          provincia_principal: p.provincia,
+          is_primary: true,
+        }));
+
+      for (let i = 0; i < places.length; i += 300) {
+        const batch = places.slice(i, i + 300);
+        const { error } = await supabase
+          .from('client_places')
+          .upsert(batch, { onConflict: 'client_id,lat,long', ignoreDuplicates: false });
+        if (error) {
+          console.error(`❌ client_places batch ${i}:`, error.message);
+          results.errores.push(`Coordenadas batch ${i}: ${error.message}`);
+        } else {
+          coordenadasGuardadas += batch.length;
+        }
+      }
+      console.log(`📍 Coordenadas del informe guardadas: ${coordenadasGuardadas}/${places.length}`);
+    }
+    (results as any).coordenadas_guardadas = coordenadasGuardadas;
 
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
+
 
     // ============ FASE 5: Insert/Upsert ventas ============
     // Fix 2: Updated conflict key includes facturacion_ars

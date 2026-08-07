@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const GOOGLE_API_KEY = Deno.env.get("VITE_GOOGLE_MAPS_API_KEY") || "";
+const GOOGLE_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY") || "";
 
 // Argentina coordinate bounds
 const LAT_MIN = -56, LAT_MAX = -21, LNG_MIN = -74, LNG_MAX = -53;
@@ -221,10 +221,62 @@ Deno.serve(async (req) => {
       await sleep(200); // Throttle: 5 req/sec
     }
 
+    // ===== Reverse geocoding: lugares con coordenadas pero sin barrio =====
+    const reverse = { total: 0, resueltos: 0, errores: 0 };
+    const { data: placesSinBarrio } = await supabase
+      .from("client_places")
+      .select("id, client_id, lat, long, barrio_principal")
+      .is("barrio_principal", null)
+      .not("lat", "is", null)
+      .limit(600);
+
+    reverse.total = (placesSinBarrio || []).length;
+
+    for (const place of placesSinBarrio || []) {
+      try {
+        const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${place.lat},${place.long}&language=es&key=${GOOGLE_API_KEY}`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+        if (data.status !== "OK" || !data.results?.length) { reverse.errores++; await sleep(120); continue; }
+
+        const components = data.results[0].address_components || [];
+        const barrio =
+          extractComponent(components, "sublocality_level_1") ||
+          extractComponent(components, "sublocality") ||
+          extractComponent(components, "neighborhood") ||
+          extractComponent(components, "locality");
+        const adminArea2 = extractComponent(components, "administrative_area_level_2");
+        const provincia = normalizeProvince(extractComponent(components, "administrative_area_level_1"));
+        const comuna = resolveComuna(barrio, adminArea2);
+
+        if (!barrio) { reverse.errores++; await sleep(120); continue; }
+
+        await supabase
+          .from("client_places")
+          .update({ barrio_principal: barrio, comuna, provincia_principal: provincia })
+          .eq("id", place.id);
+
+        await supabase
+          .from("clientes")
+          .update({
+            barrio_principal: barrio,
+            ...(provincia ? { provincia_principal: provincia } : {}),
+          })
+          .eq("client_id", place.client_id)
+          .is("barrio_principal", null);
+
+        reverse.resueltos++;
+      } catch {
+        reverse.errores++;
+      }
+      await sleep(120);
+    }
+
     return new Response(
-      JSON.stringify({ success: true, results }),
+      JSON.stringify({ success: true, results, reverse }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (error: any) {
     return new Response(
       JSON.stringify({ error: error.message }),
