@@ -790,6 +790,56 @@ export type Database = {
         }
         Relationships: []
       }
+      prospect_discovery_queue: {
+        Row: {
+          consulta: string
+          convertido_prospecto_place_id: string | null
+          creado_por: string | null
+          discovered_at: string
+          estado: string
+          fuente: string
+          id: string
+          notas: string | null
+          place_id: string
+          updated_at: string
+          zona: string | null
+        }
+        Insert: {
+          consulta: string
+          convertido_prospecto_place_id?: string | null
+          creado_por?: string | null
+          discovered_at?: string
+          estado?: string
+          fuente?: string
+          id?: string
+          notas?: string | null
+          place_id: string
+          updated_at?: string
+          zona?: string | null
+        }
+        Update: {
+          consulta?: string
+          convertido_prospecto_place_id?: string | null
+          creado_por?: string | null
+          discovered_at?: string
+          estado?: string
+          fuente?: string
+          id?: string
+          notas?: string | null
+          place_id?: string
+          updated_at?: string
+          zona?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_discovery_queue_convertido_prospecto_place_id_fkey"
+            columns: ["convertido_prospecto_place_id"]
+            isOneToOne: false
+            referencedRelation: "prospectos"
+            referencedColumns: ["place_id"]
+          },
+        ]
+      }
       prospectos: {
         Row: {
           barrio: string | null
@@ -1274,6 +1324,8 @@ export type Database = {
         Args: { top_n?: number; vendedor_user_id: string }
         Returns: string[]
       }
+      is_active_assignor: { Args: { _user_id: string }; Returns: boolean }
+      is_active_user: { Args: { _user_id: string }; Returns: boolean }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
