@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,9 +19,11 @@ import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/Vendedo
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
 import { useToast } from "@/hooks/use-toast";
 
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+
 const Index = () => {
-  const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -42,13 +46,27 @@ const Index = () => {
   }, [navigate]);
 
   useEffect(() => {
-    if (session?.user) fetchProfile();
+    if (session?.user) void fetchProfile();
+    // La carga del perfil corresponde al cambio de sesion, no a cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
   const fetchProfile = async () => {
+    const userId = session?.user.id;
+    if (!userId) return;
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('user_id', session.user.id).single();
+      const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).single();
       if (error) throw error;
+      if (data.activo !== true) {
+        toast({
+          title: "Cuenta pendiente de habilitación",
+          description: "Pedile a un asignador que habilite tu acceso.",
+          variant: "destructive",
+        });
+        await supabase.auth.signOut();
+        navigate('/auth');
+        return;
+      }
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);

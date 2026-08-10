@@ -14,7 +14,8 @@ import {
   ExternalLink,
   Globe,
   Download,
-  Plus
+  Plus,
+  Search
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
@@ -25,6 +26,7 @@ import { Badge } from "@/components/ui/badge";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import AgregarProspectoForm from "@/components/vendedor/AgregarProspectoForm";
+import { ProspectDiscoveryDialog } from "@/components/prospectos/ProspectDiscoveryDialog";
 import { Slider } from "@/components/ui/slider";
 import {
   Table,
@@ -93,13 +95,16 @@ const ProspectosDashboard = () => {
   
   // Dialog para agregar prospecto
   const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
+  const [showBuscarProspectos, setShowBuscarProspectos] = useState(false);
   
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
 
+  // La verificacion de acceso y la carga inicial deben ejecutarse solo al montar.
   useEffect(() => {
-    checkAuthAndFetchData();
+    void checkAuthAndFetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkAuthAndFetchData = async () => {
@@ -397,6 +402,14 @@ const ProspectosDashboard = () => {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowBuscarProspectos(true)}
+              className="gap-2"
+            >
+              <Search className="h-4 w-4" />
+              Buscar Prospectos
+            </Button>
             <Button
               variant="outline"
               size="icon"
@@ -857,6 +870,11 @@ const ProspectosDashboard = () => {
           />
         </DialogContent>
       </Dialog>
+
+      <ProspectDiscoveryDialog
+        open={showBuscarProspectos}
+        onOpenChange={setShowBuscarProspectos}
+      />
     </div>
   );
 };

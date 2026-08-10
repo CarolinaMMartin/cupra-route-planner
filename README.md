@@ -11,6 +11,17 @@ gateway usado por la función de recomendaciones. n8n no forma parte del stack: 
 carga de datos y la geocodificación se ejecutan mediante la interfaz y las Edge
 Functions de Supabase.
 
+El descubrimiento de prospectos se inicia desde la plataforma. Las búsquedas de
+Google Places se muestran de forma transitoria y la cola sólo conserva el
+`place_id` y datos internos de seguimiento; el alta comercial definitiva continúa
+siendo revisada por una persona.
+
+Para activar esa búsqueda, la Edge Function admite `GOOGLE_MAPS_API_KEY` y, como
+compatibilidad durante el piloto, `VITE_GOOGLE_MAPS_API_KEY`. Una variable
+`VITE_*` se publica en el navegador: debe estar restringida por dominio/API y
+debe configurarse también en los secretos de Supabase para que exista dentro de
+la Edge Function desplegada.
+
 ## Project info
 
 **URL**: https://lovable.dev/projects/4edb6182-f643-40b4-b2af-197de983701b

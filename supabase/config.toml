@@ -26,3 +26,6 @@ verify_jwt = false
 
 [functions.geocode-clients]
 verify_jwt = false
+
+[functions.prospect-discovery]
+verify_jwt = false

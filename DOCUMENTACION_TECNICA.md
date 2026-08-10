@@ -40,7 +40,7 @@ El sistema es un **planificador inteligente de rutas comerciales** para la fuerz
 - **Lovable AI Gateway** (`https://ai.gateway.lovable.dev/v1/chat/completions`) con modelo `google/gemini-2.5-flash`, autenticado con `LOVABLE_API_KEY`
 
 **Integraciones externas**
-- **Google Maps Platform** vía conector administrado de Lovable: Maps JS, Geocoding y Places (búsqueda de prospectos)
+- **Google Maps Platform**: Maps JS, Geocoding y Places; el descubrimiento asistido consulta Places desde una Edge Function.
 - **Lovable** como entorno de publicación y pruebas, sincronizado desde GitHub, y como gateway de IA durante esta etapa
 
 **Identidad visual** — *Dark Heritage Premium*: charcoal profundo `#0F0F12`, oro mate `#C6A46A`, títulos serif + UI sans. Sin azules.
@@ -116,6 +116,8 @@ Campos por bloque:
 
 **`import_batches` / `import_staging_rows`** — auditoría de cada carga y staging temporal de las filas originales. Registra archivo, SHA-256, hoja, usuario, versión ETL, resultado y estado. El staging se elimina al completar y se conserva 7 días ante un fallo para diagnóstico o recuperación.
 
+**`prospect_discovery_queue`** — cola interna de lugares a investigar. Para resultados de Google Places persiste únicamente `place_id` y metadatos propios (`consulta`, `zona`, `estado`, usuario y notas); no almacena el contenido transitorio mostrado por Google.
+
 **`prospectos`** — negocios de Google Places aún no clientes. PK de negocio `place_id`, `latitud`/`longitud`, `rating`, `total_ratings`, `tipo_principal`, `tipos[]`, `sirve_vinos`, `estado_negocio`, `es_cliente_cupra`, contacto (`telefono`, `email`, `instagram`, `website`).
 
 **`profiles`** — 1:1 con `auth.users` (poblada por trigger `on_auth_user_created` → `handle_new_user()`). `user_id`, `nombre`, `email`, `rol (app_role)`, `activo`.
@@ -147,6 +149,7 @@ Funciones (todas `SECURITY DEFINER` salvo indicación, con `search_path = public
 - RLS activo en las tablas de operación (`clientes`, `client_places`, `prospectos`, `asignaciones_*`, `cliente_feedbacks`, `recomendaciones_ia`, `notificaciones`, `activaciones`).
 - Patrón general: el vendedor sólo ve/edita filas donde `vendedor_id = auth.uid()`; el asignador tiene acceso ampliado vía chequeo de rol.
 - Roles almacenados en `profiles.rol` y consultados por funciones `SECURITY DEFINER` para evitar recursión en políticas.
+- El registro público no acepta roles elegidos por el cliente: toda cuenta nace como `vendedor`, `activo = false`. Sólo un asignador activo puede habilitarla o promoverla; `profiles` vuelve a tener RLS y no admite autoedición de privilegios.
 - Las edge functions con `verify_jwt = false` (ver `supabase/config.toml`) validan sesión/permiso en código y usan `SUPABASE_SERVICE_ROLE_KEY` para escrituras masivas.
 
 ---
@@ -187,6 +190,14 @@ Entrada: dos Excel independientes que envía la distribuidora.
 
 `upsert-clientes`, `upsert-ventas-cupra`, `upsert-client-places`, `upsert-prospectos`: recepción por lotes en JSON, validación y `upsert` por clave de negocio. Quedan disponibles como API para integraciones autorizadas; la pantalla `/carga-datos` utiliza los ETL especializados anteriores.
 
+### 5.5 Descubrimiento asistido de prospectos → `prospect-discovery`
+
+1. Un asignador inicia una búsqueda por rubro y barrio desde el dashboard de prospectos.
+2. La Edge Function consulta Google Places (New) con restricción geográfica a CABA, límite de 10 resultados y un field mask explícito.
+3. Los resultados se muestran de forma transitoria con atribución `Google Maps`, score premium y alertas de coincidencia con clientes/prospectos existentes.
+4. Al agregar un lugar a pendientes sólo se guarda su `place_id`, la consulta, la zona y el estado interno. El usuario abre el lugar en Google Maps, lo investiga y luego lo carga como prospecto operativo mediante el formulario manual.
+5. No se ejecutan búsquedas nocturnas automáticas sobre Google. La automatización posterior debe generar tareas de cobertura por zona o usar una fuente cuya licencia permita construir una base persistente de leads.
+
 ---
 
 ## 6. Edge Functions
@@ -196,6 +207,7 @@ Entrada: dos Excel independientes que envía la distribuidora.
 | `generate-recommendations` | Asignador (UI) | Motor híbrido de recomendación (§7). |
 | `process-clientes-maestro` | `/carga-datos` | Ingesta del maestro de cartera. |
 | `process-ventas-excel` | `/carga-datos` | Ingesta del informe de ventas y recálculo de métricas. |
+| `prospect-discovery` | Dashboard de prospectos | Búsqueda transitoria en CABA y gestión de la cola de investigación. |
 | `geocode-clients` | Asignador / batch | Geocodificación directa e inversa. |
 | `upsert-clientes` / `upsert-ventas-cupra` / `upsert-client-places` / `upsert-prospectos` | API/lotes | Upserts idempotentes. |
 | `check-pending-assignments` | Programada / UI | Detecta asignaciones vencidas o sin visitar y genera notificaciones. |
@@ -304,9 +316,9 @@ Persistencia: cada corrida escribe en `recomendaciones_ia` con un `request_id` c
 
 Frontend (`.env`, prefijo `VITE_`, valores publicables):
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `VITE_SUPABASE_PROJECT_ID`
-- `VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY` (key administrada vigente; `VITE_GOOGLE_MAPS_API_KEY` queda como fallback legacy — **expirada**)
+- `VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY` / `VITE_GOOGLE_MAPS_API_KEY` para Maps JS. Estas claves llegan al navegador y deben restringirse por dominio y por API en Google Cloud.
 
-Backend (secrets, sólo accesibles en edge functions): `LOVABLE_API_KEY`, `GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_BROWSER_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`.
+Backend (secrets, sólo accesibles en edge functions): `LOVABLE_API_KEY`, `GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_BROWSER_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`. `prospect-discovery` acepta temporalmente `VITE_GOOGLE_MAPS_API_KEY` como fallback, pero en el entorno desplegado esa variable debe cargarse también como secreto de la Edge Function; se recomienda una key de servidor separada bajo `GOOGLE_MAPS_API_KEY`.
 
 ---
 
@@ -322,6 +334,7 @@ Backend (secrets, sólo accesibles en edge functions): `LOVABLE_API_KEY`, `GOOGL
 **Puntos de atención conocidos**
 - Migraciones: ~90 archivos versionados en `supabase/migrations/`; cualquier cambio de esquema debe incluir `GRANT` + RLS en la misma migración.
 - Antes de desplegar las versiones nuevas de los ETL debe aplicarse `20260807150000_import_batches_and_staging.sql`; las funciones dependen de las tablas de auditoría y de `commit_ventas_import()`.
+- Antes de desplegar `prospect-discovery` debe aplicarse `20260810120000_prospect_discovery_queue.sql`; además corrige la policy histórica de escritura sobre `prospectos`.
 - El staging de lotes fallidos vence a los 7 días. Ejecutar periódicamente `cleanup_expired_import_staging()` con `service_role` (se puede programar con Supabase Cron).
 - `src/integrations/supabase/client.ts` y `types.ts` son autogenerados: no editar a mano.
 - El motor de recomendación es sensible a la calidad de coordenadas: un cliente sin `client_places` no puede entrar en ninguna ruta.

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,12 +10,14 @@ import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import angelBlanco from "@/assets/angel-blanco.png";
 
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "";
+
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nombre, setNombre] = useState("");
-  const [rol, setRol] = useState<'asignador' | 'vendedor'>('vendedor');
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -53,8 +55,8 @@ const Auth = () => {
       setIsRecoveryMode(false);
       setNewPassword("");
       setConfirmPassword("");
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo actualizar la contraseña" });
+    } catch (error: unknown) {
+      toast({ variant: "destructive", title: "Error", description: getErrorMessage(error) || "No se pudo actualizar la contraseña" });
     } finally {
       setIsLoading(false);
     }
@@ -69,8 +71,8 @@ const Auth = () => {
       toast({ title: "Email enviado", description: "Revisa tu bandeja de entrada." });
       setShowResetPassword(false);
       setEmail("");
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "No se pudo enviar el email" });
+    } catch (error: unknown) {
+      toast({ variant: "destructive", title: "Error", description: getErrorMessage(error) || "No se pudo enviar el email" });
     } finally {
       setIsLoading(false);
     }
@@ -84,8 +86,8 @@ const Auth = () => {
       if (error) throw error;
       toast({ title: "Bienvenido", description: "Inicio de sesión exitoso" });
       navigate("/");
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Error al iniciar sesión" });
+    } catch (error: unknown) {
+      toast({ variant: "destructive", title: "Error", description: getErrorMessage(error) || "Error al iniciar sesión" });
     } finally {
       setIsLoading(false);
     }
@@ -97,21 +99,22 @@ const Auth = () => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email, password,
-        options: { data: { nombre, rol }, emailRedirectTo: `${window.location.origin}/` }
+        options: { data: { nombre, rol: "vendedor" }, emailRedirectTo: `${window.location.origin}/` }
       });
       if (error) throw error;
-      if (data?.user && !data.session) {
-        toast({ variant: "destructive", title: "Usuario ya registrado", description: "Este correo ya está registrado. Iniciá sesión." });
-        return;
-      }
-      toast({ title: "Cuenta creada", description: "Ya puedes iniciar sesión" });
+      if (data.session) await supabase.auth.signOut();
+      toast({
+        title: "Solicitud recibida",
+        description: "Revisá tu email si requiere confirmación. Un asignador debe habilitar la cuenta antes del primer ingreso.",
+      });
       setEmail("");setPassword("");setNombre("");
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error);
       let msg = "Error al crear cuenta";
-      if (error.message?.includes("already registered")) msg = "Este correo ya está registrado.";else
-      if (error.message?.includes("Invalid email")) msg = "Email inválido.";else
-      if (error.message?.includes("Password")) msg = "Contraseña: mínimo 6 caracteres.";else
-      if (error.message) msg = error.message;
+      if (errorMessage.includes("already registered")) msg = "Este correo ya está registrado.";else
+      if (errorMessage.includes("Invalid email")) msg = "Email inválido.";else
+      if (errorMessage.includes("Password")) msg = "Contraseña: mínimo 6 caracteres.";else
+      if (errorMessage) msg = errorMessage;
       toast({ variant: "destructive", title: "Error", description: msg });
     } finally {
       setIsLoading(false);
@@ -222,20 +225,17 @@ const Auth = () => {
                   <Label htmlFor="signup-password" className="text-xs text-muted-foreground uppercase tracking-wider">Contraseña</Label>
                   <Input id="signup-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="bg-secondary/50 border-border/30" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="rol" className="text-xs text-muted-foreground uppercase tracking-wider">Rol</Label>
-                  <select id="rol" value={rol} onChange={(e) => setRol(e.target.value as 'asignador' | 'vendedor')}
-                  className="flex h-10 w-full rounded-lg border border-border/30 bg-secondary/50 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <option value="vendedor">Vendedor</option>
-                    <option value="asignador">Asignador</option>
-                  </select>
-                </div>
                 <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
                   {isLoading ? "Cargando..." : "Crear Cuenta"}
                 </Button>
               </form>
             </TabsContent>
           </Tabs>
+          <div className="flex justify-center gap-3 mt-6 text-xs text-muted-foreground">
+            <Link to="/privacidad" className="hover:text-foreground hover:underline">Privacidad</Link>
+            <span aria-hidden="true">·</span>
+            <Link to="/terminos" className="hover:text-foreground hover:underline">Términos</Link>
+          </div>
         </CardContent>
       </Card>
     </div>);
