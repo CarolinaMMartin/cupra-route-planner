@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.47.10";
+import { composeRecommendationIds } from "./recommendation-composition.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,6 +26,177 @@ const MAX_EXPANSION_KM = 2.0;
 const EXPANSION_STEPS_KM = [3.0, 5.0]; // Progressive expansion if 2km isn't enough
 
 interface AnchorPoint { lat: number; lng: number; }
+
+const CABA_VIEWPORT = {
+  low: { latitude: -34.705, longitude: -58.531 },
+  high: { latitude: -34.526, longitude: -58.335 },
+};
+
+const GOOGLE_PROSPECT_FIELD_MASK = [
+  "places.id",
+  "places.displayName",
+  "places.formattedAddress",
+  "places.addressComponents",
+  "places.location",
+  "places.primaryType",
+  "places.types",
+  "places.businessStatus",
+  "places.rating",
+  "places.userRatingCount",
+  "places.priceLevel",
+].join(",");
+
+interface GoogleAddressComponent {
+  longText?: string;
+  shortText?: string;
+  types?: string[];
+}
+
+interface GooglePlace {
+  id?: string;
+  displayName?: { text?: string };
+  formattedAddress?: string;
+  addressComponents?: GoogleAddressComponent[];
+  location?: { latitude?: number; longitude?: number };
+  primaryType?: string;
+  types?: string[];
+  businessStatus?: string;
+  rating?: number;
+  userRatingCount?: number;
+  priceLevel?: string;
+}
+
+interface GoogleTextSearchResponse {
+  places?: GooglePlace[];
+  error?: { message?: string };
+}
+
+interface DiscoveredProspect {
+  place_id: string;
+  nombre: string;
+  telefono: null;
+  direccion: string;
+  barrio: string | null;
+  comuna: string | null;
+  ciudad: string;
+  provincia: string;
+  latitud: number;
+  longitud: number;
+  rating: number;
+  total_ratings: number;
+  nivel_precio: string | null;
+  tipo_principal: string | null;
+  tipos: string[];
+  sirve_vinos: boolean;
+  website: null;
+  estado_negocio: string | null;
+  es_cliente_cupra: false;
+}
+
+const getAddressComponent = (place: GooglePlace, ...wantedTypes: string[]): string | null => {
+  const component = place.addressComponents?.find((item) =>
+    item.types?.some((type) => wantedTypes.includes(type))
+  );
+  return component?.longText || component?.shortText || null;
+};
+
+async function discoverProspectsFromGoogle(
+  apiKey: string,
+  zones: string[],
+  targetCount: number,
+  excludedPlaceIds: Set<string>,
+  existingClientNames: Set<string>,
+): Promise<DiscoveredProspect[]> {
+  const discovered: DiscoveredProspect[] = [];
+  const seenIds = new Set(excludedPlaceIds);
+  const targetWithBuffer = Math.min(Math.max(targetCount + 8, 20), 100);
+  const requestedZones = Array.from(new Set(zones.map((zone) => zone.trim()).filter(Boolean))).slice(0, 6);
+  const zoneWaves = requestedZones.length > 0
+    ? [requestedZones, ["Ciudad Autónoma de Buenos Aires"]]
+    : [["Ciudad Autónoma de Buenos Aires"]];
+  const searches = [
+    { query: "vinoteca premium", includedType: "liquor_store" },
+    { query: "wine bar", includedType: "wine_bar" },
+    { query: "restaurante de vinos premium", includedType: "restaurant" },
+    { query: "bar de vinos", includedType: "bar" },
+  ];
+
+  for (const zoneWave of zoneWaves) {
+    for (const search of searches) {
+      for (const zone of zoneWave) {
+        const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": apiKey,
+            "X-Goog-FieldMask": GOOGLE_PROSPECT_FIELD_MASK,
+          },
+          body: JSON.stringify({
+            textQuery: `${search.query}, ${zone}, Ciudad Autónoma de Buenos Aires, Argentina`,
+            pageSize: 20,
+            languageCode: "es",
+            regionCode: "AR",
+            includedType: search.includedType,
+            strictTypeFiltering: true,
+            locationRestriction: { rectangle: CABA_VIEWPORT },
+          }),
+        });
+
+        const payload = await response.json() as GoogleTextSearchResponse;
+        if (!response.ok) {
+          const googleMessage = payload.error?.message || "respuesta inválida";
+          console.error(`Google Places ${response.status}:`, googleMessage);
+          if ([400, 401, 403, 429].includes(response.status)) {
+            throw new Error(`Google Places rechazó la búsqueda (${response.status}): ${googleMessage}`);
+          }
+          continue;
+        }
+
+        for (const place of payload.places || []) {
+          const placeId = place.id || "";
+          const nombre = place.displayName?.text?.trim() || "";
+          const latitud = Number(place.location?.latitude);
+          const longitud = Number(place.location?.longitude);
+          if (!placeId || !nombre || !Number.isFinite(latitud) || !Number.isFinite(longitud)) continue;
+          if (place.businessStatus === "CLOSED_PERMANENTLY" || seenIds.has(placeId)) continue;
+          if (existingClientNames.has(normalizeName(nombre))) continue;
+
+          const barrio = getAddressComponent(place, "neighborhood", "sublocality_level_1", "sublocality");
+          const comunaCandidate = getAddressComponent(place, "administrative_area_level_2");
+          const types = place.types || [];
+
+          discovered.push({
+            place_id: placeId,
+            nombre,
+            telefono: null,
+            direccion: place.formattedAddress || `${nombre}, Ciudad Autónoma de Buenos Aires`,
+            barrio,
+            comuna: comunaCandidate?.toLowerCase().startsWith("comuna") ? comunaCandidate : null,
+            ciudad: "Ciudad Autónoma de Buenos Aires",
+            provincia: "Ciudad Autónoma de Buenos Aires",
+            latitud,
+            longitud,
+            rating: Number(place.rating || 0),
+            total_ratings: Number(place.userRatingCount || 0),
+            nivel_precio: place.priceLevel || null,
+            tipo_principal: place.primaryType || null,
+            tipos: types,
+            sirve_vinos: types.includes("wine_bar") || types.includes("liquor_store"),
+            website: null,
+            estado_negocio: place.businessStatus || null,
+            es_cliente_cupra: false,
+          });
+          seenIds.add(placeId);
+        }
+        if (discovered.length >= targetWithBuffer) break;
+      }
+      if (discovered.length >= targetWithBuffer) break;
+    }
+    if (discovered.length >= targetWithBuffer) break;
+  }
+
+  return discovered;
+}
 
 function isWithinRadius(
   lat: number | null,
@@ -166,8 +338,8 @@ interface ScoredCandidate {
 }
 
 // ============================================================
-// SCORING — v9-hotzone
-// All candidates filtered by HARD radius from vendorHotspot
+// SCORING — v11-exact-eight
+// Candidates are scored inside the radius requested by each selection wave.
 // ============================================================
 
 function scoreClients(
@@ -351,7 +523,7 @@ function scoreProspects(
 }
 
 // ============================================================
-// SYSTEM PROMPT — v10-balanced
+// SYSTEM PROMPT — v11-exact-eight
 // ============================================================
 
 function buildSystemPrompt(instrucciones_adicionales?: string): string {
@@ -361,40 +533,36 @@ CONTEXTO: Vendemos vinos en canales ON_TRADE (restaurantes/bares) y OFF_TRADE (v
 
 ${instrucciones_adicionales ? `
 ═══════════════════════════════════════════════════════════
-INSTRUCCIONES DEL CLIENTE (PRIORIDAD MÁXIMA — POR ENCIMA DE CUALQUIER OTRA REGLA):
+INSTRUCCIONES ADICIONALES DEL CLIENTE (aplican dentro de cada grupo):
 ${instrucciones_adicionales}
 
-ESTAS INSTRUCCIONES TIENEN PRIORIDAD ABSOLUTA. Seleccioná candidatos que cumplan estos criterios PRIMERO, incluso si eso significa alterar la composición estándar.
+Usá estas instrucciones para ordenar candidatos dentro de cada grupo. Nunca antepongas prospectos mientras queden clientes internos elegibles.
 ═══════════════════════════════════════════════════════════
 ` : ''}
-REGLAS DE COMPOSICIÓN (se aplican DESPUÉS de las instrucciones del cliente):
+REGLAS DE COMPOSICIÓN:
 1. CUOTA OBLIGATORIA: Seleccioná EXACTAMENTE 8 visitas por vendedor.
-2. COMPOSICIÓN SUGERIDA (flexible si las instrucciones del cliente lo requieren):
-   - Clientes ACTIVOS e INACTIVOS primero (mantener relación)
-   - Máximo 4 clientes PERDIDOS (recuperación)
-   - Mínimo 2 PROSPECTOS (expansión comercial)
-3. RECUPERACIÓN: Incluí al menos 1 cliente PERDIDO (>90 días sin compra) si existe.
-4. CONCENTRACIÓN GEOGRÁFICA: Rutas densas, NO viajes largos.
-5. Los candidatos ya fueron filtrados por cartera y radio geográfico.
-6. JUSTIFICACIÓN: Para cada visita, escribí 2-3 líneas explicando por qué fue seleccionada.
-7. NUNCA repitas el mismo client_id para distintos vendedores.
+2. PRIORIDAD NO NEGOCIABLE: agota primero todos los clientes internos elegibles del vendedor.
+3. Si hay menos de 8 clientes internos elegibles, completa los lugares faltantes con PROSPECTOS.
+4. Nunca reemplaces un cliente interno elegible por un prospecto.
+5. Dentro de los clientes, prioriza ACTIVOS e INACTIVOS y luego oportunidades de recuperación.
+6. CONCENTRACIÓN GEOGRÁFICA: rutas densas, sin viajes largos innecesarios.
+7. Los candidatos ya fueron filtrados por cartera y radio geográfico.
+8. JUSTIFICACIÓN: para cada visita, explica brevemente por qué fue seleccionada.
+9. NUNCA repitas el mismo client_id para distintos vendedores.
 
-IMPORTANTE: Si las instrucciones del cliente piden priorizar un tipo de negocio, producto, canal o criterio específico, TU SELECCIÓN DEBE REFLEJARLO aunque rompa la composición sugerida.
+IMPORTANTE: Las instrucciones adicionales pueden ordenar candidatos dentro de cada grupo, pero no pueden anteponer prospectos mientras queden clientes internos elegibles.
 
 FORMATO: Usá la tool "generate_recommendations" con la estructura indicada.`;
   return base;
 }
 
 // ============================================================
-// POST-IA VALIDATION — v10-balanced (composition rules)
+// POST-IA VALIDATION — v11-exact-eight
 // Rules:
-//   1. ACTIVO/INACTIVO clients first (highest priority)
-//   2. At least 1 PERDIDO (recovery) if available
-//   3. PROSPECTOS only fill slots when there are not enough eligible clients
-//   4. Max 4 PERDIDOS before using prospects
+//   1. Return exactly 8 recommendations or fail the request.
+//   2. ACTIVO/INACTIVO clients first, then the remaining internal clients.
+//   3. PROSPECTOS fill only the slots left after internal clients are exhausted.
 // ============================================================
-
-const MAX_LOST = 4;
 
 function validateAndFill(
   aiRecs: any[],
@@ -402,96 +570,42 @@ function validateAndFill(
   prospectPool: ScoredCandidate[],
   vendedorId: string,
   globalPickedIds: Set<string>,
-  hasCustomInstructions: boolean = false,
 ): any[] {
   const allCandidates = new Map<string, ScoredCandidate>();
   [...clientPool, ...prospectPool].forEach(c => allCandidates.set(c.client_id, c));
 
-  const pickedIds = new Set<string>();
-  const result: any[] = [];
-
-  const isAvailable = (id: string) => !pickedIds.has(id) && !globalPickedIds.has(id);
-  const addRec = (rec: any) => { result.push(rec); pickedIds.add(rec.client_id); };
-
-  // Determine minimum client slots: if clients available, at least 5 of 8 must be clients
-  const MIN_CLIENTS = clientPool.length > 0 ? Math.min(5, clientPool.length) : 0;
-  const MAX_PROSPECT_SLOTS = 8 - MIN_CLIENTS;
-
-  // ── STEP 1: Accept valid AI picks, but enforce client minimum ──
-  let aiProspectCount = 0;
-  const deferredProspects: any[] = []; // AI-picked prospects beyond quota
-
+  const aiRecommendationById = new Map<string, any>();
   for (const r of aiRecs) {
-    if (result.length >= 8) break;
     if (r.vendedor_id !== vendedorId) continue;
-    if (!isAvailable(r.client_id)) continue;
+    if (globalPickedIds.has(r.client_id)) continue;
     if (!allCandidates.has(r.client_id)) continue;
-
-    const candidate = allCandidates.get(r.client_id)!;
-    if (candidate.es_prospecto && !hasCustomInstructions) {
-      // Default business rule: prospects are fallback inventory. Preserve the
-      // AI choice for later, after all eligible clients have been considered.
-      deferredProspects.push(r);
-      continue;
-    }
-    if (candidate.es_prospecto) {
-      if (aiProspectCount >= MAX_PROSPECT_SLOTS) {
-        deferredProspects.push(r); // Save for later if we have room
-        continue;
-      }
-      aiProspectCount++;
-    }
-    addRec(r);
+    if (!aiRecommendationById.has(r.client_id)) aiRecommendationById.set(r.client_id, r);
   }
 
-  console.log(`   📋 AI picks aceptados: ${result.length}/8 para ${vendedorId.slice(0, 8)} (${MIN_CLIENTS} client min enforced)`);
+  const orderedIds = composeRecommendationIds({
+    preferredIds: Array.from(aiRecommendationById.keys()),
+    clients: clientPool,
+    prospects: prospectPool,
+    unavailableIds: globalPickedIds,
+  });
+  const pickedIds = new Set(orderedIds);
+  const isAvailable = (id: string) => !pickedIds.has(id) && !globalPickedIds.has(id);
+  const result = orderedIds.map((candidateId) => {
+    const aiRecommendation = aiRecommendationById.get(candidateId);
+    if (aiRecommendation) return aiRecommendation;
+    const candidate = allCandidates.get(candidateId)!;
+    const recoveryReason = candidate.estado_comercial === 'PERDIDO'
+      ? `Recuperación: ${candidate.razon_social} (${candidate.dias_desde_ultima_compra} días sin compra)`
+      : undefined;
+    return makeRec(candidate, vendedorId, recoveryReason);
+  });
 
-  // ── STEP 2: Fill remaining slots — clients first, then prospects ──
-  if (result.length < 8) {
-    // Priority: Active/Inactive clients
-    const activeClients = clientPool.filter(c => c.estado_comercial === 'ACTIVO' || c.estado_comercial === 'INACTIVO');
-    for (const c of activeClients) {
-      if (result.length >= 8) break;
-      if (!isAvailable(c.client_id)) continue;
-      addRec(makeRec(c, vendedorId));
-    }
+  const selectedClientCount = orderedIds.filter((candidateId) => !allCandidates.get(candidateId)?.es_prospecto).length;
+  console.log(`   📋 Composición validada: ${selectedClientCount} clientes internos + ${result.length - selectedClientCount} prospectos`);
 
-    // Lost clients (max 4 before falling back to prospects)
-    const lostClients = clientPool.filter(c => c.estado_comercial === 'PERDIDO');
-    let currentLost = result.filter(r => {
-      const c = allCandidates.get(r.client_id);
-      return c && c.estado_comercial === 'PERDIDO';
-    }).length;
-    for (const c of lostClients) {
-      if (result.length >= 8) break;
-      if (currentLost >= MAX_LOST) break;
-      if (!isAvailable(c.client_id)) continue;
-      addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social} (${c.dias_desde_ultima_compra} días sin compra)`));
-      currentLost++;
-    }
-
-    // Fill with deferred AI prospects first, then pool prospects
-    for (const r of deferredProspects) {
-      if (result.length >= 8) break;
-      if (!isAvailable(r.client_id)) continue;
-      addRec(r);
-    }
-    for (const c of prospectPool) {
-      if (result.length >= 8) break;
-      if (!isAvailable(c.client_id)) continue;
-      addRec(makeRec(c, vendedorId));
-    }
-
-    // Still not full? Fill with remaining lost
-    for (const c of lostClients) {
-      if (result.length >= 8) break;
-      if (!isAvailable(c.client_id)) continue;
-      addRec(makeRec(c, vendedorId, `Recuperación: ${c.razon_social}`));
-    }
-  }
-
-  // ── STEP 3: Soft rebalancing (ONLY if no custom instructions) ──
-  if (!hasCustomInstructions && result.length >= 8) {
+  // STEP 3: recovery preference never introduces a prospect or changes the
+  // client-first composition; it only reorders internal-client choices.
+  if (result.length >= 8) {
     // Ensure at least 1 recovery if available
     const hasRecovery = result.some(r => {
       const c = allCandidates.get(r.client_id);
@@ -538,7 +652,7 @@ function makeRec(c: ScoredCandidate, vendedorId: string, justificacion?: string)
 }
 
 // ============================================================
-// MAIN HANDLER — v9-hotzone
+// MAIN HANDLER — v11-exact-eight
 // ============================================================
 
 Deno.serve(async (req) => {
@@ -562,7 +676,7 @@ Deno.serve(async (req) => {
       instrucciones_adicionales,
     } = await req.json();
 
-    console.log("🔧 Version: v9-hotzone");
+    console.log("🔧 Version: v11-exact-eight");
     console.log("📥 Request:", { vendedores, provincia, comuna, barrio, area_id, max_recomendaciones });
 
     // ---- 1. Resolve area filters ----
@@ -717,6 +831,84 @@ Deno.serve(async (req) => {
       return true;
     });
 
+    // If the internal portfolio cannot cover 8 visits per seller, discover
+    // enough new prospects now and persist them in the operational repository.
+    // Estimate the real shortage using only internal clients that can be routed
+    // (valid coordinates) and without counting a shared client twice.
+    const reservedInternalIds = new Set<string>();
+    let totalClientDeficit = 0;
+    for (const vendedor of vendedoresData) {
+      const eligibleIds = allClientesEnZona
+        .filter((cliente) => isClientAffiliated(cliente, vendedor.user_id, sellerNameMap))
+        .filter((cliente) => (cliente.cantidad_ordenes && cliente.cantidad_ordenes > 0) || cliente.vendedor_actual)
+        .filter((cliente) => {
+          const place = placesMap.get(cliente.client_id);
+          const lat = Number(place?.lat);
+          const lng = Number(place?.long);
+          return Number.isFinite(lat) && Number.isFinite(lng)
+            && lat >= -60 && lat <= -20 && lng >= -80 && lng <= -40;
+        })
+        .map((cliente) => cliente.client_id)
+        .filter((clientId) => !reservedInternalIds.has(clientId));
+
+      const reservedForVendor = eligibleIds.slice(0, 8);
+      reservedForVendor.forEach((clientId) => reservedInternalIds.add(clientId));
+      totalClientDeficit += 8 - reservedForVendor.length;
+    }
+
+    const missingProspects = Math.max(0, totalClientDeficit - prospectos.length);
+    if (missingProspects > 0) {
+      const googleApiKey = Deno.env.get("GOOGLE_MAPS_API_KEY")
+        || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY")
+        || "";
+      if (!googleApiKey) {
+        throw new Error(`Faltan ${missingProspects} prospectos para completar 8 y Google Maps no está configurado.`);
+      }
+
+      const excludedPlaceIds = new Set<string>([
+        ...prospectos.map((prospecto) => prospecto.place_id),
+        ...Array.from(prospectosAsignadosHoy).filter((id): id is string => typeof id === "string"),
+      ]);
+      for (const place of clientPlaces || []) {
+        const link = String(place.google_maps_link || "");
+        const placeId = link.match(/[?&]query_place_id=([^&]+)/)?.[1];
+        if (placeId) excludedPlaceIds.add(decodeURIComponent(placeId));
+      }
+
+      const existingClientNames = new Set(
+        [...allClientesEnZona, ...portfolioClients]
+          .map((cliente) => normalizeName(cliente.razon_social || cliente.fantasia || ""))
+          .filter(Boolean),
+      );
+      const discoveryZones = [
+        ...barriosFinales.map((value: string) => String(value)),
+        ...comunasFinales.map((value: string) => String(value)),
+      ];
+
+      const discovered = await discoverProspectsFromGoogle(
+        googleApiKey,
+        discoveryZones,
+        missingProspects,
+        excludedPlaceIds,
+        existingClientNames,
+      );
+      const newProspects = discovered.filter((prospecto) => !clientNamesAndCoords.some((cliente) => (
+        calcularDistanciaKm(cliente.lat, cliente.lng, prospecto.latitud, prospecto.longitud) < 0.1
+        && nameTokenOverlap(prospecto.nombre, cliente.name) >= 0.4
+      )));
+
+      if (newProspects.length > 0) {
+        const { error: discoveryUpsertError } = await supabaseClient
+          .from("prospectos")
+          .upsert(newProspects, { onConflict: "place_id" });
+        if (discoveryUpsertError) {
+          throw new Error(`No se pudieron guardar los nuevos prospectos: ${discoveryUpsertError.message}`);
+        }
+        prospectos = [...prospectos, ...newProspects];
+        console.log(`🔎 Google Maps agregó ${newProspects.length} prospectos al repositorio operativo.`);
+      }
+    }
+
     console.log(`🆕 Prospectos disponibles: ${prospectos.length}`);
 
     // ---- 7. Zone center fallback ----
@@ -826,30 +1018,49 @@ Deno.serve(async (req) => {
 
       console.log(`📊 ${vendedor.nombre}: ${clientPool.length} clientes + ${prospectPool.length} prospectos en radio ${HARD_RADIUS_KM}km`);
 
-      // === PROGRESSIVE EXPANSION: If total < 8, expand in steps ===
+      // === CLIENT EXPANSION: exhaust internal clients before prospecting ===
       const expansionRadii = [MAX_EXPANSION_KM, ...EXPANSION_STEPS_KM];
-      let currentTotal = clientPool.length + prospectPool.length;
-
       for (const expandRadius of expansionRadii) {
-        if (currentTotal >= 8) break;
+        if (clientPool.length >= 8) break;
 
-        console.log(`⚠️ ${vendedor.nombre}: Solo ${currentTotal} candidatos. Expandiendo a ${expandRadius}km...`);
-        const existingIds = new Set([...clientPool, ...prospectPool].map(c => c.client_id));
+        console.log(`⚠️ ${vendedor.nombre}: Solo ${clientPool.length} clientes internos. Expandiendo clientes a ${expandRadius}km...`);
+        const existingClientIds = new Set(clientPool.map(c => c.client_id));
 
-        // Expand CLIENTS from portfolio within larger radius
         const extraClientPool = scoreClients(
           myValidClients, placesMap, feedbacksMapClientes,
           vendedor.user_id, sellerNameMap,
           vendorHotspot, expandRadius, otherHotspots,
-        ).filter(c => !existingIds.has(c.client_id));
+        ).filter(c => !existingClientIds.has(c.client_id));
 
         if (extraClientPool.length > 0) {
           clientPool = [...clientPool, ...extraClientPool];
-          extraClientPool.forEach(c => existingIds.add(c.client_id));
           console.log(`🆕 ${vendedor.nombre}: +${extraClientPool.length} clientes en ${expandRadius}km`);
         }
+      }
 
-        // Expand PROSPECTS with geo bounding box
+      // If fewer than 8 clients fit the walking radii, evaluate every routed
+      // internal client in the selected zone before allowing any prospect.
+      if (clientPool.length < 8) {
+        const existingClientIds = new Set(clientPool.map(c => c.client_id));
+        const remainingZoneClients = scoreClients(
+          myValidClients, placesMap, feedbacksMapClientes,
+          vendedor.user_id, sellerNameMap,
+          vendorHotspot, 100, otherHotspots,
+        ).filter(c => !existingClientIds.has(c.client_id));
+        clientPool = [...clientPool, ...remainingZoneClients];
+        if (remainingZoneClients.length > 0) {
+          console.log(`🆕 ${vendedor.nombre}: +${remainingZoneClients.length} clientes del resto de la zona`);
+        }
+      }
+
+      // === PROSPECT EXPANSION: only for the slots clients could not cover ===
+      let currentTotal = clientPool.length + prospectPool.length;
+      for (const expandRadius of expansionRadii) {
+        if (currentTotal >= 8) break;
+
+        console.log(`⚠️ ${vendedor.nombre}: Faltan ${8 - currentTotal} visitas. Expandiendo prospectos a ${expandRadius}km...`);
+        const existingIds = new Set([...clientPool, ...prospectPool].map(c => c.client_id));
+
         const degPerKm = 0.009; // ~1km in degrees
         const deltaLat = expandRadius * degPerKm;
         const deltaLng = expandRadius * degPerKm * 1.2; // longitude correction
@@ -909,7 +1120,13 @@ Deno.serve(async (req) => {
 
         const { data: fallbackProspectos } = await fallbackQuery;
 
-        const fallbackFiltered = (fallbackProspectos || []).filter(p =>
+        const fallbackById = new Map<string, any>();
+        [...prospectos, ...(fallbackProspectos || [])].forEach((prospecto) => {
+          if (prospecto?.place_id && !fallbackById.has(prospecto.place_id)) {
+            fallbackById.set(prospecto.place_id, prospecto);
+          }
+        });
+        const fallbackFiltered = Array.from(fallbackById.values()).filter(p =>
           !prospectosAsignadosHoy.has(p.place_id) &&
           !existingIds.has(p.place_id) &&
           !p.client_id
@@ -964,14 +1181,14 @@ ${prospects.length > 0 ? prospects.slice(0, 15).map(formatCandidate).join('\n') 
 
     const prompt = `${hasCustomInstructions ? `
 ═══════════════════════════════════════════════════════════
-⚡ INSTRUCCIONES DEL CLIENTE (PRIORIDAD MÁXIMA):
+⚡ INSTRUCCIONES ADICIONALES DEL CLIENTE:
 ${instrucciones_adicionales}
-Aplicá estas instrucciones ANTES que cualquier regla de composición.
+Aplicá estas instrucciones sin alterar la regla obligatoria: clientes internos primero y prospectos sólo para completar hasta 8.
 ═══════════════════════════════════════════════════════════
 ` : ''}${vendorSections}
 
 TOTAL ESPERADO: ${vendedoresData.length * 8} recomendaciones (8 por vendedor).
-Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${hasCustomInstructions ? `\nRECORDÁ: Las instrucciones del cliente tienen PRIORIDAD ABSOLUTA sobre la composición estándar.` : ' Priorizá clientes sobre prospectos.'}`;
+Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${hasCustomInstructions ? `\nRECORDÁ: aplicá las instrucciones dentro de cada grupo, manteniendo clientes internos antes que prospectos.` : ' Priorizá clientes sobre prospectos.'}`;
 
     console.log(`📏 Prompt: ${prompt.length} chars`);
 
@@ -1051,7 +1268,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
     console.log(`🎯 IA seleccionó ${aiRecommendations.recomendaciones.length} recomendaciones`);
 
     // ============================================================
-    // 12. VALIDATE + FILL — v9-hotzone (linear pool, recovery swap)
+    // 12. VALIDATE + FILL — v11-exact-eight
     // ============================================================
     let validatedRecs: any[] = [];
     const globalPickedIds = new Set<string>();
@@ -1070,8 +1287,14 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         prospectPool,
         vendedor.user_id,
         globalPickedIds,
-        hasCustomInstructions,
       );
+
+      if (vendorRecs.length !== 8) {
+        throw new Error(
+          `No se pudo completar la cuota de 8 para ${vendedor.nombre}: `
+          + `${vendorRecs.length} candidatos válidos (${clientPool.length} clientes, ${prospectPool.length} prospectos).`,
+        );
+      }
 
       vendorRecs.forEach((r: any) => globalPickedIds.add(r.client_id));
       validatedRecs.push(...vendorRecs);
@@ -1244,12 +1467,31 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
       }
     }
 
+    const expectedRecommendationCount = vendedoresData.length * 8;
+    const enrichedCountByVendor = new Map<string, number>();
+    for (const recommendation of enrichedRecommendations) {
+      enrichedCountByVendor.set(
+        recommendation.vendedor_recomendado_id,
+        (enrichedCountByVendor.get(recommendation.vendedor_recomendado_id) || 0) + 1,
+      );
+    }
+    const incompleteVendors = vendedoresData.filter(
+      (vendedor) => (enrichedCountByVendor.get(vendedor.user_id) || 0) !== 8,
+    );
+    if (enrichedRecommendations.length !== expectedRecommendationCount || incompleteVendors.length > 0) {
+      throw new Error(
+        `No se guardó ninguna recomendación: la cuota obligatoria es 8 por vendedor. `
+        + `Resultado preparado ${enrichedRecommendations.length}/${expectedRecommendationCount}; `
+        + `incompletos: ${incompleteVendors.map((vendedor) => vendedor.nombre).join(', ') || 'ninguno'}.`,
+      );
+    }
+
     // Save to DB
     const recommendationsForDb = enrichedRecommendations.map(({ lat, long, estado_comercial, vendedor_recomendado_nombre, ...rest }) => rest);
     const { error: insertError } = await supabaseClient.from("recomendaciones_ia").insert(recommendationsForDb);
     if (insertError) { console.error("❌ Error insertando:", insertError); throw insertError; }
 
-    console.log(`✅ ${enrichedRecommendations.length} recomendaciones guardadas (v9-hotzone)`);
+    console.log(`✅ ${enrichedRecommendations.length} recomendaciones guardadas (v11-exact-eight)`);
 
     const distribucion: Record<string, number> = {};
     const zonas = new Set<string>();

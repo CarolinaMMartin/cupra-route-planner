@@ -16,6 +16,13 @@ Google Places se muestran de forma transitoria y la cola sólo conserva el
 `place_id` y datos internos de seguimiento; el alta comercial definitiva continúa
 siendo revisada por una persona.
 
+La generación automática mantiene otra regla operativa: entrega exactamente 8
+visitas por vendedor, agota primero los clientes internos elegibles y sólo completa
+el déficit con prospectos. Si el repositorio de `prospectos` no alcanza, la Edge
+Function consulta Google Places bajo demanda, descarta duplicados y agrega los
+candidatos necesarios al repositorio antes de generar. No interviene n8n ni existe
+una búsqueda nocturna en esta etapa del piloto.
+
 Para activar esa búsqueda, la Edge Function admite `GOOGLE_MAPS_API_KEY` y, como
 compatibilidad durante el piloto, `VITE_GOOGLE_MAPS_API_KEY`. Una variable
 `VITE_*` se publica en el navegador: debe estar restringida por dominio/API y

@@ -196,7 +196,16 @@ Entrada: dos Excel independientes que envía la distribuidora.
 2. La Edge Function consulta Google Places (New) con restricción geográfica a CABA, límite de 10 resultados y un field mask explícito.
 3. Los resultados se muestran de forma transitoria con atribución `Google Maps`, score premium y alertas de coincidencia con clientes/prospectos existentes.
 4. Al agregar un lugar a pendientes sólo se guarda su `place_id`, la consulta, la zona y el estado interno. El usuario abre el lugar en Google Maps, lo investiga y luego lo carga como prospecto operativo mediante el formulario manual.
-5. No se ejecutan búsquedas nocturnas automáticas sobre Google. La automatización posterior debe generar tareas de cobertura por zona o usar una fuente cuya licencia permita construir una base persistente de leads.
+5. Este buscador manual no ejecuta búsquedas nocturnas: administra una cola de investigación separada del abastecimiento automático del motor de rutas.
+
+### 5.6 Reposición operativa de prospectos → `generate-recommendations`
+
+1. Antes de generar, se calcula por vendedor cuántos clientes internos elegibles, no asignados y con coordenadas existen en la zona.
+2. El déficit es `8 - clientes internos`; nunca se reserva un cupo mínimo de prospectos.
+3. Si los prospectos operativos disponibles no cubren el déficit, la función consulta Google Places en CABA por vinotecas, wine bars, restaurantes y bares vinculados al vino.
+4. Descarta cerrados, `place_id` ya usado, coincidencias de nombre y duplicados semánticos cercanos a clientes existentes.
+5. Los candidatos resultantes se incorporan a `prospectos` y quedan disponibles para la recomendación, asignación, mapa y seguimiento comercial.
+6. Es una reposición bajo demanda al generar rutas; no existe un proceso nocturno ni interviene n8n.
 
 ---
 
@@ -204,7 +213,7 @@ Entrada: dos Excel independientes que envía la distribuidora.
 
 | Función | Disparo | Responsabilidad |
 |---|---|---|
-| `generate-recommendations` | Asignador (UI) | Motor híbrido de recomendación (§7). |
+| `generate-recommendations` | Asignador (UI) | Motor híbrido, reposición bajo demanda de prospectos y garantía de 8 por vendedor (§7). |
 | `process-clientes-maestro` | `/carga-datos` | Ingesta del maestro de cartera. |
 | `process-ventas-excel` | `/carga-datos` | Ingesta del informe de ventas y recálculo de métricas. |
 | `prospect-discovery` | Dashboard de prospectos | Búsqueda transitoria en CABA y gestión de la cola de investigación. |
@@ -256,16 +265,18 @@ Clasificación comercial (`classifyEstado` por `dias_desde_ultima_compra`): `ACT
 ### 7.3 Capa LLM
 
 - Modelo `google/gemini-2.5-flash` vía Lovable AI Gateway.
-- El prompt (`buildSystemPrompt`, v10-balanced) recibe por vendedor el listado de candidatos ya scoreados, sus feedbacks recientes, estado comercial e instrucciones adicionales libres del asignador.
+- El prompt (`buildSystemPrompt`, v11-exact-eight) recibe por vendedor el listado de candidatos ya scoreados, sus feedbacks recientes, estado comercial e instrucciones adicionales libres del asignador.
 - El LLM **selecciona y justifica** dentro del set permitido; no puede inventar candidatos fuera del pool geográfico.
 
 ### 7.4 Garantía de cupo (`validateAndFill`)
 
 Reglas de composición sobre la salida del LLM:
-- Los prospectos completan la ruta sólo cuando no hay 8 clientes elegibles en la zona, salvo instrucciones explícitas del asignador
-- `MAX_LOST = 4` clientes `PERDIDO` como máximo
+- La cuota es exactamente 8 por vendedor; si no se completa, la corrida falla antes de persistir recomendaciones
+- Se expanden y agotan primero los clientes internos elegibles de la zona; las instrucciones adicionales no pueden cambiar esta prioridad
+- Los prospectos ocupan exclusivamente `8 - cantidad_de_clientes_internos_elegibles`
+- Si el repositorio no cubre ese déficit, se repone desde Google Places en la misma corrida
 - Al menos un caso de recuperación cuando existe
-- Si faltan puntos: se completa por score con clientes y, agotados, con prospectos ampliando el radio (hasta 5 km y fallback amplio). **Un vendedor sin cartera ("modo conquista") recibe 8 prospectos** ordenados por proximidad al ancla de su zona/filtros y rating, ignorando el sesgo de cartera.
+- La expansión de clientes usa 1,5 km → 2 km → 3 km → 5 km → resto de la zona. Recién después se amplían prospectos. **Un vendedor sin cartera ("modo conquista") recibe 8 prospectos** ordenados por proximidad al ancla de su zona/filtros y rating.
 - Deduplicación semántica por solapamiento de tokens del nombre (`nameTokenOverlap`) para evitar la misma sucursal duplicada como cliente y prospecto.
 
 Persistencia: cada corrida escribe en `recomendaciones_ia` con un `request_id` común y actualiza `last_recommendation_at` en clientes/prospectos recomendados.

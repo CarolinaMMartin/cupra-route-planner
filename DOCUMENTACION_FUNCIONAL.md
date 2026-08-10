@@ -84,7 +84,7 @@ Los prospectos (bares, vinotecas, restaurantes que todavía no compran) no está
 | No saber a quién visitar | Scoring comercial 0–5 + recencia + rotación → ranking diario automático |
 | Rutas absurdas | Anclaje en el clúster más denso de la cartera del vendedor + radio 1,5 km |
 | Pérdida por recencia | Clasificación ACTIVO / INACTIVO / PERDIDO y cupo obligatorio de recuperación |
-| Territorio estancado | Mínimo 2 prospectos de Google Places por ruta; modo conquista con 8 prospectos |
+| Territorio estancado | Google Places completa automáticamente los lugares que falten después de agotar la cartera interna |
 
 ---
 
@@ -114,7 +114,7 @@ Los prospectos (bares, vinotecas, restaurantes que todavía no compran) no está
 | Visitas efectivas / día | Rutas densas (radio 1,5 km) |
 | Tasa de cumplimiento de ruta | Kanban + check-in/checkout + supervisión en vivo |
 | Clientes recuperados / mes | Cupo obligatorio de al menos un caso de recuperación por ruta |
-| Nuevos puntos de venta abiertos | Mínimo 2 prospectos por ruta, alta desde la calle |
+| Nuevos puntos de venta abiertos | Prospectos incorporados sólo cuando la cartera interna no alcanza el cupo diario |
 | % cartera sin visitar > 90 días | Score de rotación y sugerencias inteligentes |
 
 ---
@@ -238,13 +238,13 @@ El corte del día, las asignaciones y las limpiezas automáticas usan siempre la
 ### 7.2 Reglas de asignación
 
 **R8 — Cupo fijo de 8 puntos por vendedor.**
-Si no hay suficientes clientes cerca, se completa con prospectos ampliando el radio. El cupo nunca queda corto.
+Cada corrida entrega exactamente 8 puntos por vendedor. Si no puede completar el cupo, la corrida falla y no guarda una ruta parcial.
 
-**R9 — Mínimo 2 prospectos por ruta.**
-Garantiza que todos los días haya prospección, no solo mantenimiento.
+**R9 — Clientes internos antes que prospectos.**
+Se consideran primero todos los clientes internos elegibles de la cartera dentro de la zona seleccionada. Sólo los lugares que falten para llegar a 8 se completan con prospectos.
 
-**R10 — Máximo 4 clientes PERDIDOS por ruta.**
-Una ruta entera de clientes perdidos es desmoralizante e improductiva. Se acota.
+**R10 — Reposición automática de prospectos.**
+Si el repositorio operativo no alcanza para cubrir el déficit, el motor busca negocios en Google Places dentro de CABA, descarta duplicados y cerrados, incorpora candidatos al repositorio y completa la ruta.
 
 **R11 — Al menos un caso de recuperación cuando existe.**
 Si hay clientes inactivos recuperables en la zona, uno entra sí o sí.
@@ -291,7 +291,7 @@ Toma todos los clientes de su cartera con coordenadas, busca **dónde están má
 
 Si el asignador puso filtros (provincia, ciudad, barrio), esos filtros se aplican antes: el ancla se busca solo dentro de lo permitido.
 
-Si en 1,5 km no llega a 8 candidatos, el círculo se abre a 2 km, después 3, después 5, y en último caso a un radio amplio de hasta 20 km. Preferimos una ruta más extendida que una ruta incompleta.
+Si en 1,5 km no llega a 8 clientes internos, el círculo se abre a 2 km, después 3, después 5, y finalmente considera el resto de los clientes elegibles de la zona. Recién después se habilitan prospectos para cubrir el déficit.
 
 ### Etapa 2 — "¿Quién merece la visita?"
 
@@ -322,9 +322,9 @@ El modelo **elige y justifica** dentro del pool que le dieron. No puede inventar
 
 ### Etapa 4 — "El control de calidad"
 
-Antes de mostrar nada, el sistema verifica la composición de cada ruta contra las reglas R8 a R14: ¿son 8? ¿hay al menos 2 prospectos? ¿no hay más de 4 perdidos? ¿entró un caso de recuperación? ¿no hay duplicados (la misma sucursal como cliente y como prospecto)?
+Antes de mostrar nada, el sistema verifica la composición de cada ruta contra las reglas R8 a R14: ¿son exactamente 8? ¿se agotaron los clientes internos antes de usar prospectos? ¿entró un caso de recuperación cuando correspondía? ¿hay duplicados?
 
-Si algo falta, completa por score. Recién ahí la ruta llega a la pantalla del asignador.
+Si faltan prospectos, consulta Google Places, descarta coincidencias con clientes y lugares ya usados, guarda los candidatos operativos y completa por score. Si aun así no llega a 8, no guarda nada y devuelve un error explícito.
 
 ### Qué ve el asignador del razonamiento
 
@@ -513,7 +513,7 @@ Si termina la ruta antes de tiempo o le queda tiempo en una zona:
 
 ```text
    PROSPECTO (Google Places)
-        │  alta desde calle o carga masiva
+        │  alta desde calle o reposición automática ante déficit
         ▼
    CANDIDATO  ──── entra al pool de recomendación por geografía + rating
         │
@@ -535,7 +535,7 @@ Si termina la ruta antes de tiempo o le queda tiempo en una zona:
    CLIENTE
      ├── ACTIVO   (≤ 30 días desde última compra)
      ├── INACTIVO (31–90 días)  ──► candidato prioritario de recuperación
-     └── PERDIDO  (> 90 días)   ──► máximo 4 por ruta
+     └── PERDIDO  (> 90 días)   ──► cliente interno; se considera antes que un prospecto
 ```
 
 ---
@@ -634,7 +634,7 @@ Rutina sugerida usando la pantalla de supervisión:
 3. **Cargar el informe de ventas** (idealmente los últimos 12 meses).
 4. **Correr la geocodificación** hasta que casi todos los clientes tengan barrio.
 5. **Definir las áreas**: agrupar barrios/comunas y vincular vendedores. Esto es clave para los vendedores sin cartera.
-6. **Cargar una base inicial de prospectos** de las zonas de interés.
+6. **Verificar la integración de Google Maps**. La base de prospectos puede comenzar vacía: se abastece cuando una generación detecta que faltan clientes internos.
 7. Correr una primera generación de prueba y revisar que las rutas tengan sentido geográfico.
 
 ### 14.2 Rutina diaria del asignador
@@ -681,13 +681,13 @@ Rutina sugerida usando la pantalla de supervisión:
 ## 15. Preguntas frecuentes y resolución de problemas
 
 **"Un vendedor recibió menos de 8 puntos."**
-No debería pasar: el cupo está garantizado. Si ocurre, casi siempre es que los filtros geográficos aplicados son demasiado estrechos y no hay ni clientes ni prospectos en esa zona. Ampliar el filtro o cargar prospectos de la zona.
+No debe pasar: la generación guarda 8 o no guarda ninguna recomendación para esa corrida. Si Google Places o la base fallan, se muestra el error para corregirlo y volver a generar.
 
 **"Un vendedor nuevo, sin cartera, ¿qué recibe?"**
 Ocho prospectos (modo conquista), elegidos por cercanía al centro de su área asignada y por rating. Por eso es importante que todo vendedor esté vinculado a un área.
 
 **"Se repiten clientes de un día para el otro."**
-El score de rotación lo evita, pero si la zona tiene pocos puntos elegibles puede pasar. Solución: ampliar la zona, cargar más prospectos, o usar el modo Personalizado para diversificar.
+El score de rotación lo evita, pero si la zona tiene pocos puntos elegibles puede pasar. Solución: ampliar la zona o usar el modo Personalizado para diversificar; el repositorio de prospectos se repone automáticamente cuando hace falta.
 
 **"Dos vendedores están en el mismo barrio."**
 La regla de 300 m evita que compartan la misma cuadra, no el mismo barrio. Si querés separación por barrio, usá filtros geográficos distintos por corrida o el modo Por área.

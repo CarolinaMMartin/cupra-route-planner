@@ -61,6 +61,12 @@ CREATE INDEX idx_import_staging_rows_expires_at
 
 ALTER TABLE public.import_staging_rows ENABLE ROW LEVEL SECURITY;
 
+-- RLS does not grant table privileges by itself. Keep the versioned schema in
+-- sync with the grants required by PostgREST and the service-role ETL clients.
+GRANT SELECT ON TABLE public.import_batches, public.import_staging_rows TO authenticated;
+GRANT ALL ON TABLE public.import_batches, public.import_staging_rows TO service_role;
+GRANT USAGE, SELECT ON SEQUENCE public.import_staging_rows_id_seq TO service_role;
+
 CREATE POLICY "Asignadores pueden ver staging de importaciones"
   ON public.import_staging_rows
   FOR SELECT

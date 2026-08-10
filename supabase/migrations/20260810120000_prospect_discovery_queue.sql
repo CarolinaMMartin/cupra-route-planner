@@ -25,6 +25,11 @@ CREATE INDEX idx_prospect_discovery_queue_creado_por
 
 ALTER TABLE public.prospect_discovery_queue ENABLE ROW LEVEL SECURITY;
 
+-- Explicit privileges required by PostgREST; RLS continues to decide which
+-- authenticated users may read, while mutations run through the Edge Function.
+GRANT SELECT ON TABLE public.prospect_discovery_queue TO authenticated;
+GRANT ALL ON TABLE public.prospect_discovery_queue TO service_role;
+
 CREATE POLICY "Asignadores pueden ver cola de prospectos"
   ON public.prospect_discovery_queue
   FOR SELECT
