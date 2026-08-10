@@ -585,6 +585,119 @@ export type Database = {
           },
         ]
       }
+      import_batches: {
+        Row: {
+          archivo_nombre: string
+          archivo_sha256: string | null
+          archivo_tamano: number | null
+          archivo_ultima_modificacion: string | null
+          calidad: Json | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          estado: string
+          fila_encabezado: number | null
+          filas_notas_credito: number
+          filas_origen: number
+          hoja: string | null
+          id: string
+          reconciliacion: Json | null
+          reemplaza_existentes: boolean
+          resultado: Json
+          started_at: string
+          tipo: string
+          usuario_email: string | null
+          usuario_id: string | null
+          version_etl: string
+        }
+        Insert: {
+          archivo_nombre: string
+          archivo_sha256?: string | null
+          archivo_tamano?: number | null
+          archivo_ultima_modificacion?: string | null
+          calidad?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          estado?: string
+          fila_encabezado?: number | null
+          filas_notas_credito?: number
+          filas_origen?: number
+          hoja?: string | null
+          id?: string
+          reconciliacion?: Json | null
+          reemplaza_existentes?: boolean
+          resultado?: Json
+          started_at?: string
+          tipo: string
+          usuario_email?: string | null
+          usuario_id?: string | null
+          version_etl: string
+        }
+        Update: {
+          archivo_nombre?: string
+          archivo_sha256?: string | null
+          archivo_tamano?: number | null
+          archivo_ultima_modificacion?: string | null
+          calidad?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          estado?: string
+          fila_encabezado?: number | null
+          filas_notas_credito?: number
+          filas_origen?: number
+          hoja?: string | null
+          id?: string
+          reconciliacion?: Json | null
+          reemplaza_existentes?: boolean
+          resultado?: Json
+          started_at?: string
+          tipo?: string
+          usuario_email?: string | null
+          usuario_id?: string | null
+          version_etl?: string
+        }
+        Relationships: []
+      }
+      import_staging_rows: {
+        Row: {
+          batch_id: string
+          created_at: string
+          expires_at: string
+          id: number
+          numero_fila: number
+          payload: Json
+          tipo_fila: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          expires_at?: string
+          id?: number
+          numero_fila: number
+          payload: Json
+          tipo_fila: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: number
+          numero_fila?: number
+          payload?: Json
+          tipo_fila?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_staging_rows_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notificaciones: {
         Row: {
           asignacion_id: string | null
@@ -1148,6 +1261,11 @@ export type Database = {
     }
     Functions: {
       clean_old_recommendations: { Args: never; Returns: undefined }
+      cleanup_expired_import_staging: { Args: never; Returns: number }
+      commit_ventas_import: {
+        Args: { p_replace_existing?: boolean; p_rows: Json }
+        Returns: number
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
