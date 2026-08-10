@@ -585,6 +585,119 @@ export type Database = {
           },
         ]
       }
+      import_batches: {
+        Row: {
+          archivo_nombre: string
+          archivo_sha256: string | null
+          archivo_tamano: number | null
+          archivo_ultima_modificacion: string | null
+          calidad: Json | null
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          estado: string
+          fila_encabezado: number | null
+          filas_notas_credito: number
+          filas_origen: number
+          hoja: string | null
+          id: string
+          reconciliacion: Json | null
+          reemplaza_existentes: boolean
+          resultado: Json
+          started_at: string
+          tipo: string
+          usuario_email: string | null
+          usuario_id: string | null
+          version_etl: string
+        }
+        Insert: {
+          archivo_nombre: string
+          archivo_sha256?: string | null
+          archivo_tamano?: number | null
+          archivo_ultima_modificacion?: string | null
+          calidad?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          estado?: string
+          fila_encabezado?: number | null
+          filas_notas_credito?: number
+          filas_origen?: number
+          hoja?: string | null
+          id?: string
+          reconciliacion?: Json | null
+          reemplaza_existentes?: boolean
+          resultado?: Json
+          started_at?: string
+          tipo: string
+          usuario_email?: string | null
+          usuario_id?: string | null
+          version_etl: string
+        }
+        Update: {
+          archivo_nombre?: string
+          archivo_sha256?: string | null
+          archivo_tamano?: number | null
+          archivo_ultima_modificacion?: string | null
+          calidad?: Json | null
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          estado?: string
+          fila_encabezado?: number | null
+          filas_notas_credito?: number
+          filas_origen?: number
+          hoja?: string | null
+          id?: string
+          reconciliacion?: Json | null
+          reemplaza_existentes?: boolean
+          resultado?: Json
+          started_at?: string
+          tipo?: string
+          usuario_email?: string | null
+          usuario_id?: string | null
+          version_etl?: string
+        }
+        Relationships: []
+      }
+      import_staging_rows: {
+        Row: {
+          batch_id: string
+          created_at: string
+          expires_at: string
+          id: number
+          numero_fila: number
+          payload: Json
+          tipo_fila: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          expires_at?: string
+          id?: number
+          numero_fila: number
+          payload: Json
+          tipo_fila: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: number
+          numero_fila?: number
+          payload?: Json
+          tipo_fila?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_staging_rows_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notificaciones: {
         Row: {
           asignacion_id: string | null
@@ -676,6 +789,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      prospect_discovery_queue: {
+        Row: {
+          consulta: string
+          convertido_prospecto_place_id: string | null
+          creado_por: string | null
+          discovered_at: string
+          estado: string
+          fuente: string
+          id: string
+          notas: string | null
+          place_id: string
+          updated_at: string
+          zona: string | null
+        }
+        Insert: {
+          consulta: string
+          convertido_prospecto_place_id?: string | null
+          creado_por?: string | null
+          discovered_at?: string
+          estado?: string
+          fuente?: string
+          id?: string
+          notas?: string | null
+          place_id: string
+          updated_at?: string
+          zona?: string | null
+        }
+        Update: {
+          consulta?: string
+          convertido_prospecto_place_id?: string | null
+          creado_por?: string | null
+          discovered_at?: string
+          estado?: string
+          fuente?: string
+          id?: string
+          notas?: string | null
+          place_id?: string
+          updated_at?: string
+          zona?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospect_discovery_queue_convertido_prospecto_place_id_fkey"
+            columns: ["convertido_prospecto_place_id"]
+            isOneToOne: false
+            referencedRelation: "prospectos"
+            referencedColumns: ["place_id"]
+          },
+        ]
       }
       prospectos: {
         Row: {
@@ -1148,6 +1311,11 @@ export type Database = {
     }
     Functions: {
       clean_old_recommendations: { Args: never; Returns: undefined }
+      cleanup_expired_import_staging: { Args: never; Returns: number }
+      commit_ventas_import: {
+        Args: { p_replace_existing?: boolean; p_rows: Json }
+        Returns: number
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -1156,6 +1324,8 @@ export type Database = {
         Args: { top_n?: number; vendedor_user_id: string }
         Returns: string[]
       }
+      is_active_assignor: { Args: { _user_id: string }; Returns: boolean }
+      is_active_user: { Args: { _user_id: string }; Returns: boolean }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
