@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +15,11 @@ import * as XLSX from "xlsx";
 
 type Step = "upload" | "preview" | "processing" | "done";
 type FileKind = "ventas" | "maestro";
+type Profile = Database["public"]["Tables"]["profiles"]["Row"];
+type SpreadsheetRow = Record<string, unknown>;
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Error inesperado";
 
 interface MaestroResults {
   clientes_nuevos: number;
@@ -86,13 +93,13 @@ interface GeocodeResults {
 const CargaDatos = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [fileHash, setFileHash] = useState<string | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
-  const [rows, setRows] = useState<Record<string, any>[]>([]);
+  const [rows, setRows] = useState<SpreadsheetRow[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [results, setResults] = useState<ProcessResults | null>(null);
   const [progress, setProgress] = useState(0);
@@ -103,7 +110,7 @@ const CargaDatos = () => {
   const [fileKind, setFileKind] = useState<FileKind>("ventas");
   const [sheetName, setSheetName] = useState<string>("");
   const [headerRow, setHeaderRow] = useState<number>(1);
-  const [notasCredito, setNotasCredito] = useState<Record<string, any>[]>([]);
+  const [notasCredito, setNotasCredito] = useState<SpreadsheetRow[]>([]);
   const [maestroResults, setMaestroResults] = useState<MaestroResults | null>(null);
   const [maestroVendedores, setMaestroVendedores] = useState<{ vendedor: string; clientes: number }[]>([]);
 
@@ -155,26 +162,26 @@ const CargaDatos = () => {
   }, [profile, fetchPendingGeocount]);
 
   // ── Detección automática de hoja, fila de encabezados y tipo de archivo ──
-  const norm = (s: any) =>
-    String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  const norm = useCallback((s: unknown) =>
+    String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, ""), []);
 
-  const parseSheet = (sheet: XLSX.WorkSheet) => {
-    const aoa = XLSX.utils.sheet_to_json<any[]>(sheet, { header: 1, defval: null, blankrows: false });
+  const parseSheet = useCallback((sheet: XLSX.WorkSheet) => {
+    const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, blankrows: false });
     let headerIdx = -1;
     for (let i = 0; i < Math.min(aoa.length, 15); i++) {
       const cells = (aoa[i] || []).filter((c) => c !== null && String(c).trim() !== "");
       const texto = cells.filter((c) => typeof c === "string" && String(c).trim().length > 1);
       if (cells.length >= 3 && texto.length >= 3) { headerIdx = i; break; }
     }
-    if (headerIdx === -1) return { headerIdx: -1, rows: [] as Record<string, any>[], keys: [] as string[] };
+    if (headerIdx === -1) return { headerIdx: -1, rows: [] as SpreadsheetRow[], keys: [] as string[] };
     const rows = XLSX.utils
-      .sheet_to_json<Record<string, any>>(sheet, { range: headerIdx, defval: null })
+      .sheet_to_json<SpreadsheetRow>(sheet, { range: headerIdx, defval: null })
       .filter((r) => Object.values(r).some((v) => v !== null && String(v).trim() !== ""));
     const keys = rows.length > 0 ? Object.keys(rows[0]).map(norm) : [];
     return { headerIdx, rows, keys };
-  };
+  }, [norm]);
 
-  const classify = (keys: string[]): "ventas" | "maestro" | "notas" | null => {
+  const classify = useCallback((keys: string[]): "ventas" | "maestro" | "notas" | null => {
     const has = (...c: string[]) => c.some((k) => keys.includes(norm(k)));
     const esVenta = has("Ticket") && (has("Precio Total Final", "Total Final", "Total Bruto", "Facturación Ar$") || has("CUIT / DNI"));
     if (esVenta) return "ventas";
@@ -182,7 +189,7 @@ const CargaDatos = () => {
       return "maestro";
     }
     return null;
-  };
+  }, [norm]);
 
   const parseExcel = useCallback(async (f: File) => {
     const maxFileSize = 15 * 1024 * 1024;
@@ -250,7 +257,7 @@ const CargaDatos = () => {
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [classify, parseSheet, toast]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -321,8 +328,8 @@ const CargaDatos = () => {
       setStep("done");
       toast({ title: "Carga completada", description: `${data.results.ventas_procesadas} ventas y ${data.results.clientes_actualizados} clientes procesados` });
       fetchPendingGeocount();
-    } catch (err: any) {
-      toast({ title: "Error en la carga", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Error en la carga", description: getErrorMessage(err), variant: "destructive" });
       setStep("preview");
     }
   };
@@ -342,8 +349,8 @@ const CargaDatos = () => {
         description: `${data.results.geocoded} de ${data.results.total} clientes geocodificados`,
       });
       fetchPendingGeocount();
-    } catch (err: any) {
-      toast({ title: "Error en geocodificación", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      toast({ title: "Error en geocodificación", description: getErrorMessage(err), variant: "destructive" });
     } finally {
       setIsGeocoding(false);
     }
