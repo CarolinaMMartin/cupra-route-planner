@@ -1,6 +1,6 @@
 -- Cola interna para descubrir prospectos sin persistir contenido de Google Places.
 
-CREATE TABLE public.prospect_discovery_queue (
+CREATE TABLE IF NOT EXISTS public.prospect_discovery_queue (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   place_id text NOT NULL UNIQUE,
   fuente text NOT NULL DEFAULT 'google_places'
@@ -16,9 +16,9 @@ CREATE TABLE public.prospect_discovery_queue (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_prospect_discovery_queue_estado
+CREATE INDEX IF NOT EXISTS idx_prospect_discovery_queue_estado
   ON public.prospect_discovery_queue (estado, discovered_at DESC);
-CREATE INDEX idx_prospect_discovery_queue_creado_por
+CREATE INDEX IF NOT EXISTS idx_prospect_discovery_queue_creado_por
   ON public.prospect_discovery_queue (creado_por, discovered_at DESC);
 
 GRANT SELECT ON public.prospect_discovery_queue TO authenticated;
@@ -26,12 +26,14 @@ GRANT ALL ON public.prospect_discovery_queue TO service_role;
 
 ALTER TABLE public.prospect_discovery_queue ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Asignadores pueden ver cola de prospectos" ON public.prospect_discovery_queue;
 CREATE POLICY "Asignadores pueden ver cola de prospectos"
   ON public.prospect_discovery_queue
   FOR SELECT
   TO authenticated
   USING (public.get_user_role(auth.uid()) = 'asignador'::public.app_role);
 
+DROP TRIGGER IF EXISTS update_prospect_discovery_queue_updated_at ON public.prospect_discovery_queue;
 CREATE TRIGGER update_prospect_discovery_queue_updated_at
   BEFORE UPDATE ON public.prospect_discovery_queue
   FOR EACH ROW
@@ -140,6 +142,7 @@ CREATE POLICY "Asignadores activos gestionan perfiles"
   USING (public.is_active_assignor(auth.uid()))
   WITH CHECK (public.is_active_assignor(auth.uid()));
 
+DROP POLICY IF EXISTS "Solo usuarios activos acceden a prospectos" ON public.prospectos;
 CREATE POLICY "Solo usuarios activos acceden a prospectos"
   ON public.prospectos
   AS RESTRICTIVE
@@ -148,6 +151,7 @@ CREATE POLICY "Solo usuarios activos acceden a prospectos"
   USING (public.is_active_user(auth.uid()))
   WITH CHECK (public.is_active_user(auth.uid()));
 
+DROP POLICY IF EXISTS "Solo asignadores activos acceden a cola de prospectos" ON public.prospect_discovery_queue;
 CREATE POLICY "Solo asignadores activos acceden a cola de prospectos"
   ON public.prospect_discovery_queue
   AS RESTRICTIVE
