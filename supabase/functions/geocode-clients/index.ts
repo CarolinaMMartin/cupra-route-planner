@@ -6,7 +6,23 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const GOOGLE_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY") || "";
+const GOOGLE_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || "";
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
+const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
+
+async function geocodeFetch(params: string): Promise<any> {
+  const resp = await fetch(`${GATEWAY_URL}/maps/api/geocode/json?${params}`, {
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "X-Connection-Api-Key": GOOGLE_API_KEY,
+    },
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Gateway ${resp.status}: ${body}`);
+  }
+  return await resp.json();
+}
 
 // Argentina coordinate bounds
 const LAT_MIN = -56, LAT_MAX = -21, LNG_MIN = -74, LNG_MAX = -53;
@@ -86,9 +102,15 @@ Deno.serve(async (req) => {
   }
 
   try {
-    if (!GOOGLE_API_KEY) {
+    let limit = 0;
+    try {
+      const body = await req.json();
+      limit = Number(body?.limit) > 0 ? Number(body.limit) : 0;
+    } catch { /* sin body */ }
+
+    if (!GOOGLE_API_KEY || !LOVABLE_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "GOOGLE_MAPS_API_KEY not configured" }),
+        JSON.stringify({ error: "Credenciales del conector Google Maps no configuradas" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -114,9 +136,10 @@ Deno.serve(async (req) => {
 
     const placedClientIds = new Set((existingPlaces || []).map((p: any) => p.client_id));
 
-    const pending = (allClients || []).filter(
+    let pending = (allClients || []).filter(
       (c: any) => !placedClientIds.has(c.client_id) && c.direccion_principal && c.ciudad_principal
     );
+    if (limit > 0) pending = pending.slice(0, limit);
 
     const results = {
       total: pending.length,
@@ -136,9 +159,7 @@ Deno.serve(async (req) => {
       const address = parts.join(", ");
 
       try {
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_API_KEY}`;
-        const resp = await fetch(url);
-        const data = await resp.json();
+        const data = await geocodeFetch(`address=${encodeURIComponent(address)}&language=es&region=ar`);
 
         if (data.status !== "OK" || !data.results?.length) {
           results.errors++;
@@ -228,15 +249,13 @@ Deno.serve(async (req) => {
       .select("id, client_id, lat, long, barrio_principal")
       .is("barrio_principal", null)
       .not("lat", "is", null)
-      .limit(600);
+      .limit(limit > 0 ? limit : 600);
 
     reverse.total = (placesSinBarrio || []).length;
 
     for (const place of placesSinBarrio || []) {
       try {
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${place.lat},${place.long}&language=es&key=${GOOGLE_API_KEY}`;
-        const resp = await fetch(url);
-        const data = await resp.json();
+        const data = await geocodeFetch(`latlng=${place.lat},${place.long}&language=es`);
         if (data.status !== "OK" || !data.results?.length) { reverse.errores++; await sleep(120); continue; }
 
         const components = data.results[0].address_components || [];
