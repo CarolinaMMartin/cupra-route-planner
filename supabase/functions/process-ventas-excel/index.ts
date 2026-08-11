@@ -556,6 +556,7 @@ Deno.serve(async (req) => {
       if (!client_id) {
         ventasSinClientId += 1;
         descartados.push({ cuit_dni, razon_social });
+        filasDescartadas.push({ origen: 'venta', motivo: 'sin_identidad_cliente', payload: row });
         continue;
       }
 
@@ -565,7 +566,9 @@ Deno.serve(async (req) => {
         cajas, codigo_producto, nombre: producto, marca, facturacion_ars: facturacion,
         vendedor, telefono, celular, correo, direccion, ciudad: ciudad_raw,
         provincia: provincia_raw, pais, categorias,
+        tipo_comprobante: 'venta',
       });
+
 
       // Coordenadas del informe (si vienen y son válidas para Argentina)
       const latRaw = parseNumericValue(getFieldValue(row, ['Latitud', 'latitud', 'Lat', 'lat']));
