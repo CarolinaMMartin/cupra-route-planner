@@ -803,14 +803,16 @@ Deno.serve(async (req) => {
         categorias.split(/[/|,;]/).forEach((cat: string) => { const t = cat.trim(); if (t) c.categorias_set.add(t); });
       }
       c.monto_total += facturacion || 0;
-      c.cantidad_lineas += 1;
+      const esNotaCredito = venta.tipo_comprobante === 'nota_credito';
+      if (!esNotaCredito) c.cantidad_lineas += 1;
 
       // TAREA 1: Contar tickets únicos via Set — usar solo campo Ticket (DISTINCT)
-      if (venta.ticket) {
+      // Las notas de crédito netean el monto pero NO cuentan como órdenes
+      if (venta.ticket && !esNotaCredito) {
         c.tickets_set.add(venta.ticket);
       }
 
-      if (fecha_iso) {
+      if (fecha_iso && !esNotaCredito) {
         const d = new Date(fecha_iso);
         c.fechas.push(d);
         // Track vendedor de la venta más reciente para vendedor_actual
@@ -819,6 +821,7 @@ Deno.serve(async (req) => {
           c.vendedor_ultima_venta = vendedor;
         }
       }
+
       c.razon_social = razon_social || c.razon_social;
       c.fantasia = fantasia || c.fantasia;
     }
