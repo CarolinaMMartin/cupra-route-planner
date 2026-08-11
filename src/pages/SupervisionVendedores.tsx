@@ -469,7 +469,7 @@ const SupervisionVendedores = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">
+              <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">
                 Supervisión de Vendedores
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
@@ -542,7 +542,7 @@ const SupervisionVendedores = () => {
         {/* 2. Filtros */}
         <Collapsible open={openFilters} onOpenChange={setOpenFilters} className="w-full">
           <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
-            <div className="flex items-center gap-2 font-serif text-lg text-foreground">
+            <div className="flex items-center gap-2 font-sans text-lg text-foreground">
               <Filter className="h-5 w-5 text-primary" />
               <span>Filtros de Búsqueda</span>
             </div>
@@ -605,7 +605,7 @@ const SupervisionVendedores = () => {
         {/* 3. Activaciones por Vendedor */}
         <Collapsible open={openActividades} onOpenChange={setOpenActividades} className="w-full">
           <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
-            <div className="flex items-center gap-2 font-serif text-lg text-foreground">
+            <div className="flex items-center gap-2 font-sans text-lg text-foreground">
               <Activity className="h-5 w-5 text-primary" />
               <span>Activaciones por Vendedor</span>
             </div>
@@ -619,7 +619,7 @@ const SupervisionVendedores = () => {
         {/* 4. Resumen por Vendedor */}
         <Collapsible open={openResumen} onOpenChange={setOpenResumen} className="w-full">
           <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
-            <div className="flex items-center gap-2 font-serif text-lg text-foreground">
+            <div className="flex items-center gap-2 font-sans text-lg text-foreground">
               <Users className="h-5 w-5 text-primary" />
               <span>Resumen por Vendedor</span>
               {vendedorStats.length > 0 &&
@@ -671,7 +671,7 @@ const SupervisionVendedores = () => {
         {/* 5. Detalle de Asignaciones */}
         <Collapsible open={openDetalle} onOpenChange={setOpenDetalle} className="w-full">
           <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
-            <div className="flex items-center gap-2 font-serif text-lg text-foreground">
+            <div className="flex items-center gap-2 font-sans text-lg text-foreground">
               <ClipboardList className="h-5 w-5 text-primary" />
               <span>Detalle de Asignaciones</span>
               <span className="text-sm font-normal text-muted-foreground ml-2">({asignaciones.length} registros)</span>

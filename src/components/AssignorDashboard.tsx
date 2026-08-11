@@ -22,6 +22,7 @@ import TodayAssignments from "./assignor/TodayAssignments";
 import AIInsightsCard from "./assignor/AIInsightsCard";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
 import EditAssignmentsTable from "./assignor/EditAssignmentsTable";
+import RecommendationProgress from "./assignor/RecommendationProgress";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useRecommendationsStore } from "@/hooks/useRecommendationsStore";
@@ -81,7 +82,26 @@ const AssignorDashboard = () => {
 
   const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
   const [showExitDialog, setShowExitDialog] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    if (!isLoading) {
+      setGenerationProgress(0);
+      return;
+    }
+
+    const startedAt = Date.now();
+    setGenerationProgress(4);
+
+    const progressInterval = window.setInterval(() => {
+      const elapsedSeconds = (Date.now() - startedAt) / 1000;
+      const estimatedProgress = 4 + 90 * (1 - Math.exp(-elapsedSeconds / 24));
+      setGenerationProgress(Math.min(94, estimatedProgress));
+    }, 500);
+
+    return () => window.clearInterval(progressInterval);
+  }, [isLoading]);
 
   const handleCancelRecommendations = () => {
     if (abortControllerRef.current) {
@@ -201,6 +221,9 @@ const AssignorDashboard = () => {
         });
       });
 
+      setGenerationProgress(100);
+      await new Promise((resolve) => window.setTimeout(resolve, 350));
+
       setRecommendations(mappedRecommendations);
       setAiInsights(data.resumen);
       setFlowStep("preselection");
@@ -248,6 +271,10 @@ const AssignorDashboard = () => {
 
   return (
     <div className="space-y-10">
+      {isLoading && (
+        <RecommendationProgress progress={generationProgress} onCancel={handleCancelRecommendations} />
+      )}
+
       <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -264,7 +291,7 @@ const AssignorDashboard = () => {
       {flowStep === "recommendations" && (
         <div className="space-y-8">
           <div>
-            <h1 className="text-3xl font-serif text-foreground tracking-tight">Panel de Asignación</h1>
+            <h1 className="text-3xl font-sans text-foreground tracking-tight">Panel de Asignación</h1>
             <p className="text-sm text-muted-foreground mt-2">Recomendaciones inteligentes y gestión de asignaciones</p>
           </div>
 
@@ -309,7 +336,7 @@ const AssignorDashboard = () => {
       {flowStep === "edit-select" && (
         <Card>
           <CardHeader>
-            <CardTitle className="font-serif text-2xl">Modificar Asignaciones</CardTitle>
+            <CardTitle className="font-sans text-2xl">Modificar Asignaciones</CardTitle>
             <CardDescription>Selecciona las asignaciones que deseas modificar</CardDescription>
           </CardHeader>
           <CardContent>
@@ -332,7 +359,7 @@ const AssignorDashboard = () => {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <div>
-                  <CardTitle className="font-serif text-2xl">Preselección</CardTitle>
+                  <CardTitle className="font-sans text-2xl">Preselección</CardTitle>
                   <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
                 </div>
                 <div className="flex gap-2">

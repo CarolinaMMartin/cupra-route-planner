@@ -257,7 +257,7 @@ const ManualAssignment = () => {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <UserCheck className="w-5 h-5 text-primary" />
-            <CardTitle className="text-lg font-serif">Vendedor Destino</CardTitle>
+            <CardTitle className="text-lg font-sans">Vendedor Destino</CardTitle>
           </div>
           <CardDescription>Seleccioná el vendedor al que se asignarán los clientes</CardDescription>
         </CardHeader>
@@ -289,8 +289,8 @@ const ManualAssignment = () => {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <Lightbulb className="w-5 h-5 text-amber-500" />
-            <CardTitle className="text-lg font-serif">Sugerencias Inteligentes</CardTitle>
+            <Lightbulb className="w-5 h-5 text-primary" />
+            <CardTitle className="text-lg font-sans">Sugerencias Inteligentes</CardTitle>
           </div>
           <CardDescription>Filtros rápidos para encontrar oportunidades</CardDescription>
         </CardHeader>
@@ -332,7 +332,7 @@ const ManualAssignment = () => {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Search className="w-5 h-5 text-primary" />
-            <CardTitle className="text-lg font-serif">Buscar Clientes</CardTitle>
+            <CardTitle className="text-lg font-sans">Buscar Clientes</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">

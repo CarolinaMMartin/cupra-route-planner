@@ -23,7 +23,7 @@ export default function Legal() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="font-serif text-2xl">
+            <CardTitle className="font-sans text-2xl">
               {isPrivacy ? "Política de Privacidad" : "Términos de Uso"}
             </CardTitle>
             <p className="text-xs text-muted-foreground">Versión piloto · Actualizada el 10 de agosto de 2026</p>

@@ -132,7 +132,7 @@ const Auth = () => {
               <img src={cupraLogo} alt="Cupra Wines" className="h-10 w-auto opacity-70" />
             </div>
             <div>
-              <CardTitle className="text-2xl font-serif">Nueva Contraseña</CardTitle>
+              <CardTitle className="text-2xl font-sans">Nueva Contraseña</CardTitle>
               <CardDescription className="text-sm mt-2">Ingresa tu nueva contraseña</CardDescription>
             </div>
           </CardHeader>
@@ -167,7 +167,7 @@ const Auth = () => {
             <img src={cupraLogo} alt="Cupra Wines" className="h-10 w-auto opacity-70" />
           </div>
           <div>
-            <CardTitle className="text-2xl font-serif">Sistema de Planificación</CardTitle>
+            <CardTitle className="text-2xl font-sans">Sistema de Planificación</CardTitle>
             <CardDescription className="text-sm mt-2 tracking-wide">Gestión Estratégica de Ventas</CardDescription>
           </div>
         </CardHeader>

@@ -429,7 +429,7 @@ const TableAssignment = ({
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-serif text-foreground tracking-tight">Asignar Clientes</h1>
+        <h1 className="text-3xl font-sans text-foreground tracking-tight">Asignar Clientes</h1>
         <div className="flex items-center gap-2 mt-1">
           <p className="text-sm text-muted-foreground">
             Selecciona clientes y asignalos a un vendedor rápido y eficientemente
