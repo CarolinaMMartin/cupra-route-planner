@@ -57,8 +57,19 @@ interface VendedorBreakdown {
 
 interface Reconciliacion {
   filas_excel: number;
+  filas_excel_recibidas?: number;
+  filas_excel_notas_credito?: number;
+  notas_credito_aplicadas?: number;
+  notas_credito_sin_match?: number;
+  notas_credito_duplicadas?: number;
+  notas_credito_sin_importe?: number;
+  monto_notas_credito?: number;
   filas_procesadas: number;
   filas_deduplicadas: number;
+  filas_venta_insertadas?: number;
+  filas_nota_credito_insertadas?: number;
+  filas_descartadas_total?: number;
+  filas_descartadas_por_motivo?: Record<string, number>;
   filas_descartadas_sin_id: number;
   facturacion_total_procesada: number;
   tickets_unicos: number;
@@ -67,6 +78,7 @@ interface Reconciliacion {
   tickets_compartidos: number;
   vendedor_breakdown?: VendedorBreakdown[];
 }
+
 
 interface ETLMetadata {
   fecha_carga: string;
