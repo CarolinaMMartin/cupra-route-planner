@@ -419,7 +419,7 @@ const ProspectosDashboard = () => {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
-              <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">
+              <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">
                 Dashboard de Prospectos
               </h1>
               <p className="text-sm text-muted-foreground mt-1">

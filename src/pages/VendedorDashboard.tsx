@@ -262,7 +262,7 @@ const VendedorDashboard = () => {
         <div className="flex items-center gap-3">
           <img src={cupraLogo} alt="Cupra Wines" className="h-8 md:h-12 w-auto" />
           <div>
-            <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">Mi Dashboard</h1>
+            <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Mi Dashboard</h1>
             <p className="text-sm text-muted-foreground mt-1 hidden md:block">Resumen de asignaciones y actividad</p>
           </div>
         </div>
@@ -329,7 +329,7 @@ const VendedorDashboard = () => {
       {/* Tabs de historial */}
       <Card>
         <CardHeader className="p-3 md:p-6">
-          <CardTitle className="text-sm md:text-base font-serif">Historial de Asignaciones</CardTitle>
+          <CardTitle className="text-sm md:text-base font-sans">Historial de Asignaciones</CardTitle>
         </CardHeader>
         <CardContent className="p-3 md:p-6 pt-0 md:pt-0">
           <Tabs defaultValue="todas" className="w-full">

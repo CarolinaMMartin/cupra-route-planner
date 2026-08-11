@@ -114,7 +114,7 @@ const ClientDetailCard = ({
           {/* Header básico */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1">
-              <h3 className="font-serif font-semibold text-lg">{cliente.nombre}</h3>
+              <h3 className="font-sans font-semibold text-lg">{cliente.nombre}</h3>
               {cliente.fantasia && cliente.fantasia !== cliente.nombre && (
                 <p className="text-sm text-muted-foreground">({cliente.fantasia})</p>
               )}

@@ -412,7 +412,7 @@ const CargaDatos = () => {
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         <div>
-          <h1 className="text-2xl md:text-3xl font-serif text-foreground tracking-tight">
+          <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">
             Carga de Datos
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
@@ -843,7 +843,7 @@ const CargaDatos = () => {
 
         {/* ── Section 2: Batch Geocoding ── */}
         <div className="pt-4 border-t border-border/30">
-          <h2 className="text-xl font-serif text-foreground tracking-tight">
+          <h2 className="text-xl font-sans text-foreground tracking-tight">
             Geocodificación de Clientes
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
