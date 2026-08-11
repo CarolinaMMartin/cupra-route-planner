@@ -723,16 +723,81 @@ const CargaDatos = () => {
                     <p className="text-xs text-muted-foreground">Facturación total procesada</p>
                     <p className="text-xl font-bold text-accent">{formatCurrency(reconciliacion.facturacion_total_procesada)}</p>
                   </div>
-                  {reconciliacion.filas_descartadas_sin_id > 0 && (
-                    <p className="text-xs text-amber-500 mt-2">
-                      ⚠️ {reconciliacion.filas_descartadas_sin_id} filas descartadas sin identificador ni razón social
-                    </p>
+
+                  {/* Conciliación fila por fila: Excel vs base */}
+                  <div className="mt-4">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">Cómo cierra el conteo</p>
+                    <div className="border border-border/40 rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <tbody className="divide-y divide-border/20">
+                          <tr>
+                            <td className="px-3 py-1.5 text-foreground/80">Filas de venta leídas del Excel</td>
+                            <td className="px-3 py-1.5 text-right font-medium text-foreground">{(reconciliacion.filas_excel_recibidas ?? reconciliacion.filas_excel).toLocaleString()}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-3 py-1.5 text-foreground/80">Notas de crédito leídas del Excel</td>
+                            <td className="px-3 py-1.5 text-right font-medium text-foreground">{(reconciliacion.filas_excel_notas_credito ?? 0).toLocaleString()}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-3 py-1.5 text-foreground/80">Ventas cargadas en la base</td>
+                            <td className="px-3 py-1.5 text-right font-medium text-foreground">{(reconciliacion.filas_venta_insertadas ?? reconciliacion.filas_deduplicadas).toLocaleString()}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-3 py-1.5 text-foreground/80">Notas de crédito cargadas (importe negativo)</td>
+                            <td className="px-3 py-1.5 text-right font-medium text-foreground">{(reconciliacion.filas_nota_credito_insertadas ?? reconciliacion.notas_credito_aplicadas ?? 0).toLocaleString()}</td>
+                          </tr>
+                          <tr className="bg-muted/20">
+                            <td className="px-3 py-1.5 font-medium text-foreground">Total de filas en la base</td>
+                            <td className="px-3 py-1.5 text-right font-bold text-foreground">{reconciliacion.filas_deduplicadas.toLocaleString()}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-3 py-1.5 text-foreground/80">Filas omitidas</td>
+                            <td className="px-3 py-1.5 text-right font-medium text-amber-500">{(reconciliacion.filas_descartadas_total ?? reconciliacion.filas_descartadas_sin_id).toLocaleString()}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {reconciliacion.filas_descartadas_por_motivo && Object.keys(reconciliacion.filas_descartadas_por_motivo).length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Motivo de las filas omitidas</p>
+                      <div className="border border-border/40 rounded-lg overflow-hidden">
+                        <table className="w-full text-xs">
+                          <tbody className="divide-y divide-border/20">
+                            {Object.entries(reconciliacion.filas_descartadas_por_motivo).map(([key, count]) => {
+                              const [origen, motivo] = key.split(':');
+                              const labels: Record<string, string> = {
+                                sin_identidad_cliente: 'Sin cliente identificable',
+                                duplicada_exacta: 'Fila duplicada exacta',
+                                sin_razon_social: 'Sin razón social',
+                                cliente_no_conciliado: 'Cliente no encontrado en la base',
+                                sin_importe: 'Sin importe',
+                              };
+                              return (
+                                <tr key={key}>
+                                  <td className="px-3 py-1.5 text-foreground/80">
+                                    {origen === 'nota_credito' ? 'Nota de crédito' : 'Venta'} — {labels[motivo] || motivo}
+                                  </td>
+                                  <td className="px-3 py-1.5 text-right font-medium text-foreground">{count.toLocaleString()}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1.5">
+                        Las filas omitidas quedan guardadas 7 días con su motivo para poder revisarlas.
+                      </p>
+                    </div>
                   )}
+
                   {reconciliacion.tickets_compartidos > 0 && (
-                    <p className="text-xs text-amber-500 mt-1">
+                    <p className="text-xs text-amber-500 mt-2">
                       ⚠️ {reconciliacion.tickets_compartidos} tickets compartidos entre múltiples clientes
                     </p>
                   )}
+
                   {/* Fix 4: Desglose por vendedor */}
                   {reconciliacion.vendedor_breakdown && reconciliacion.vendedor_breakdown.length > 0 && (
                     <div className="mt-4">
