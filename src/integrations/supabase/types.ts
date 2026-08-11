@@ -1174,6 +1174,7 @@ export type Database = {
           razon_social: string | null
           telefono: string | null
           ticket: string | null
+          tipo_comprobante: string
           vendedor: string | null
         }
         Insert: {
@@ -1199,6 +1200,7 @@ export type Database = {
           razon_social?: string | null
           telefono?: string | null
           ticket?: string | null
+          tipo_comprobante?: string
           vendedor?: string | null
         }
         Update: {
@@ -1224,6 +1226,7 @@ export type Database = {
           razon_social?: string | null
           telefono?: string | null
           ticket?: string | null
+          tipo_comprobante?: string
           vendedor?: string | null
         }
         Relationships: [

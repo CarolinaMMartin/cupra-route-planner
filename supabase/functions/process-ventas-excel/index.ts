@@ -430,15 +430,23 @@ Deno.serve(async (req) => {
       await stageRows(rawNotasCredito, 'nota_credito');
     }
 
+    // Conciliación: toda fila que no llega a la base queda registrada con su motivo
+    const filasDescartadas: { origen: 'venta' | 'nota_credito'; motivo: string; payload: Record<string, any> }[] = [];
+
     // ── Fix 3: Deduplicación estricta — eliminar filas 100% idénticas ──
     const rowHashes = new Set<string>();
     let exactDuplicates = 0;
     const rows = rawRows.filter(row => {
       const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
-      if (rowHashes.has(hash)) { exactDuplicates++; return false; }
+      if (rowHashes.has(hash)) {
+        exactDuplicates++;
+        filasDescartadas.push({ origen: 'venta', motivo: 'duplicada_exacta', payload: row });
+        return false;
+      }
       rowHashes.add(hash);
       return true;
     });
+
     if (exactDuplicates > 0) {
       console.log(`🗑️ Fix 3: ${exactDuplicates} filas 100% idénticas eliminadas (${rawRows.length} → ${rows.length})`);
     }
@@ -499,6 +507,7 @@ Deno.serve(async (req) => {
     // TAREA 12: Track descartados sin client_id
     const descartados: { cuit_dni: string | null; razon_social: string | null }[] = [];
 
+
     for (const row of rows) {
       const externalClientId = normalizeClientId(getFieldValue(row, ['client_id', 'Número Externo', 'Numero Externo']));
       const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
@@ -553,6 +562,7 @@ Deno.serve(async (req) => {
       if (!client_id) {
         ventasSinClientId += 1;
         descartados.push({ cuit_dni, razon_social });
+        filasDescartadas.push({ origen: 'venta', motivo: 'sin_identidad_cliente', payload: row });
         continue;
       }
 
@@ -562,7 +572,9 @@ Deno.serve(async (req) => {
         cajas, codigo_producto, nombre: producto, marca, facturacion_ars: facturacion,
         vendedor, telefono, celular, correo, direccion, ciudad: ciudad_raw,
         provincia: provincia_raw, pais, categorias,
+        tipo_comprobante: 'venta',
       });
+
 
       // Coordenadas del informe (si vienen y son válidas para Argentina)
       const latRaw = parseNumericValue(getFieldValue(row, ['Latitud', 'latitud', 'Lat', 'lat']));
@@ -591,7 +603,10 @@ Deno.serve(async (req) => {
     // permite netear notas de clientes que no tuvieron una venta en el período.
     let notasCreditoAplicadas = 0;
     let notasCreditoSinMatch = 0;
+    let notasCreditoDuplicadas = 0;
+    let notasCreditoSinImporte = 0;
     let montoNotasCredito = 0;
+
     if (rawNotasCredito.length > 0) {
       const rsToClient = new Map<string, any>();
       for (const v of ventasRaw) {
@@ -626,18 +641,34 @@ Deno.serve(async (req) => {
       const ncHashes = new Set<string>();
       for (const row of rawNotasCredito) {
         const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
-        if (ncHashes.has(hash)) continue;
+        if (ncHashes.has(hash)) {
+          notasCreditoDuplicadas++;
+          filasDescartadas.push({ origen: 'nota_credito', motivo: 'duplicada_exacta', payload: row });
+          continue;
+        }
         ncHashes.add(hash);
 
         const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
-        if (!razon_social) { notasCreditoSinMatch++; continue; }
+        if (!razon_social) {
+          notasCreditoSinMatch++;
+          filasDescartadas.push({ origen: 'nota_credito', motivo: 'sin_razon_social', payload: row });
+          continue;
+        }
         const base = rsToClient.get(normalizeBusinessName(razon_social) || '');
-        if (!base) { notasCreditoSinMatch++; continue; }
+        if (!base) {
+          notasCreditoSinMatch++;
+          filasDescartadas.push({ origen: 'nota_credito', motivo: 'cliente_no_conciliado', payload: row });
+          continue;
+        }
 
         const importe = parseNumericValue(
           getFieldValue(row, ['Total Final', 'Precio Total Final', 'Importe No Gravado', 'Importe Neto'])
         );
-        if (importe === null || importe === undefined || importe === 0) continue;
+        if (importe === null || importe === undefined || importe === 0) {
+          notasCreditoSinImporte++;
+          filasDescartadas.push({ origen: 'nota_credito', motivo: 'sin_importe', payload: row });
+          continue;
+        }
         const monto = -Math.abs(importe);
 
         ventasRaw.push({
@@ -657,11 +688,13 @@ Deno.serve(async (req) => {
           telefono: base.telefono, celular: base.celular, correo: base.correo,
           direccion: base.direccion, ciudad: base.ciudad, provincia: base.provincia,
           pais: base.pais, categorias: base.categorias,
+          tipo_comprobante: 'nota_credito',
         });
         notasCreditoAplicadas++;
         montoNotasCredito += monto;
       }
-      console.log(`🧾 Notas de crédito: ${notasCreditoAplicadas} aplicadas, ${notasCreditoSinMatch} sin match, monto ${Math.round(montoNotasCredito)}`);
+      console.log(`🧾 Notas de crédito: ${notasCreditoAplicadas} aplicadas, ${notasCreditoSinMatch} sin match, ${notasCreditoDuplicadas} duplicadas, ${notasCreditoSinImporte} sin importe, monto ${Math.round(montoNotasCredito)}`);
+
     }
 
     if (facturacionNullCount > 0) {
@@ -770,14 +803,16 @@ Deno.serve(async (req) => {
         categorias.split(/[/|,;]/).forEach((cat: string) => { const t = cat.trim(); if (t) c.categorias_set.add(t); });
       }
       c.monto_total += facturacion || 0;
-      c.cantidad_lineas += 1;
+      const esNotaCredito = venta.tipo_comprobante === 'nota_credito';
+      if (!esNotaCredito) c.cantidad_lineas += 1;
 
       // TAREA 1: Contar tickets únicos via Set — usar solo campo Ticket (DISTINCT)
-      if (venta.ticket) {
+      // Las notas de crédito netean el monto pero NO cuentan como órdenes
+      if (venta.ticket && !esNotaCredito) {
         c.tickets_set.add(venta.ticket);
       }
 
-      if (fecha_iso) {
+      if (fecha_iso && !esNotaCredito) {
         const d = new Date(fecha_iso);
         c.fechas.push(d);
         // Track vendedor de la venta más reciente para vendedor_actual
@@ -786,6 +821,7 @@ Deno.serve(async (req) => {
           c.vendedor_ultima_venta = vendedor;
         }
       }
+
       c.razon_social = razon_social || c.razon_social;
       c.fantasia = fantasia || c.fantasia;
     }
@@ -1061,14 +1097,30 @@ Deno.serve(async (req) => {
     }
     vendedorBreakdown.sort((a, b) => b.monto - a.monto);
 
+    const ventasInsertadas = ventasDeduplicadas.filter(v => v.tipo_comprobante !== 'nota_credito').length;
+    const notasInsertadas = ventasDeduplicadas.length - ventasInsertadas;
+    const motivosDescarte = filasDescartadas.reduce((acc, f) => {
+      const key = `${f.origen}:${f.motivo}`;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
     const reconciliacion = {
       filas_excel: rows.length,
+      filas_excel_recibidas: rawRows.length,
+      filas_excel_notas_credito: rawNotasCredito.length,
       notas_credito_aplicadas: notasCreditoAplicadas,
       notas_credito_sin_match: notasCreditoSinMatch,
+      notas_credito_duplicadas: notasCreditoDuplicadas,
+      notas_credito_sin_importe: notasCreditoSinImporte,
       monto_notas_credito: Math.round(montoNotasCredito * 100) / 100,
 
       filas_procesadas: ventasRaw.length,
       filas_deduplicadas: ventasDeduplicadas.length,
+      filas_venta_insertadas: ventasInsertadas,
+      filas_nota_credito_insertadas: notasInsertadas,
+      filas_descartadas_total: filasDescartadas.length,
+      filas_descartadas_por_motivo: motivosDescarte,
       filas_descartadas_sin_id: ventasSinClientId,
       filas_cuit_ambiguo: ventasCuitAmbiguo,
       facturacion_total_procesada: totalFacturacionProcesada,
@@ -1100,11 +1152,27 @@ Deno.serve(async (req) => {
       .eq('id', batchId);
     if (closeBatchError) throw new Error(`Las ventas se procesaron pero no se pudo cerrar el lote: ${closeBatchError.message}`);
 
+    // Persistimos en staging solo las filas descartadas (con motivo) y limpiamos el resto
+    if (filasDescartadas.length > 0) {
+      for (let i = 0; i < filasDescartadas.length; i += 500) {
+        const chunk = filasDescartadas.slice(i, i + 500).map((f, offset) => ({
+          batch_id: batchId,
+          tipo_fila: 'descartada',
+          numero_fila: i + offset + 1,
+          payload: { origen: f.origen, motivo: f.motivo, fila: f.payload },
+        }));
+        const { error: descartError } = await supabase.from('import_staging_rows').insert(chunk);
+        if (descartError) console.error('No se pudieron guardar filas descartadas:', descartError.message);
+      }
+    }
+
     const { error: cleanupError } = await supabase
       .from('import_staging_rows')
       .delete()
-      .eq('batch_id', batchId);
+      .eq('batch_id', batchId)
+      .in('tipo_fila', ['principal', 'nota_credito']);
     if (cleanupError) console.error('No se pudo limpiar staging:', cleanupError.message);
+
 
     return new Response(JSON.stringify({
       success: true,
