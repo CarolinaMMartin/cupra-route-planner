@@ -632,18 +632,34 @@ Deno.serve(async (req) => {
       const ncHashes = new Set<string>();
       for (const row of rawNotasCredito) {
         const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
-        if (ncHashes.has(hash)) continue;
+        if (ncHashes.has(hash)) {
+          notasCreditoDuplicadas++;
+          filasDescartadas.push({ origen: 'nota_credito', motivo: 'duplicada_exacta', payload: row });
+          continue;
+        }
         ncHashes.add(hash);
 
         const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
-        if (!razon_social) { notasCreditoSinMatch++; continue; }
+        if (!razon_social) {
+          notasCreditoSinMatch++;
+          filasDescartadas.push({ origen: 'nota_credito', motivo: 'sin_razon_social', payload: row });
+          continue;
+        }
         const base = rsToClient.get(normalizeBusinessName(razon_social) || '');
-        if (!base) { notasCreditoSinMatch++; continue; }
+        if (!base) {
+          notasCreditoSinMatch++;
+          filasDescartadas.push({ origen: 'nota_credito', motivo: 'cliente_no_conciliado', payload: row });
+          continue;
+        }
 
         const importe = parseNumericValue(
           getFieldValue(row, ['Total Final', 'Precio Total Final', 'Importe No Gravado', 'Importe Neto'])
         );
-        if (importe === null || importe === undefined || importe === 0) continue;
+        if (importe === null || importe === undefined || importe === 0) {
+          notasCreditoSinImporte++;
+          filasDescartadas.push({ origen: 'nota_credito', motivo: 'sin_importe', payload: row });
+          continue;
+        }
         const monto = -Math.abs(importe);
 
         ventasRaw.push({
@@ -663,11 +679,13 @@ Deno.serve(async (req) => {
           telefono: base.telefono, celular: base.celular, correo: base.correo,
           direccion: base.direccion, ciudad: base.ciudad, provincia: base.provincia,
           pais: base.pais, categorias: base.categorias,
+          tipo_comprobante: 'nota_credito',
         });
         notasCreditoAplicadas++;
         montoNotasCredito += monto;
       }
-      console.log(`🧾 Notas de crédito: ${notasCreditoAplicadas} aplicadas, ${notasCreditoSinMatch} sin match, monto ${Math.round(montoNotasCredito)}`);
+      console.log(`🧾 Notas de crédito: ${notasCreditoAplicadas} aplicadas, ${notasCreditoSinMatch} sin match, ${notasCreditoDuplicadas} duplicadas, ${notasCreditoSinImporte} sin importe, monto ${Math.round(montoNotasCredito)}`);
+
     }
 
     if (facturacionNullCount > 0) {
