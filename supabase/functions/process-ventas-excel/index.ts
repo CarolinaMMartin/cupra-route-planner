@@ -498,6 +498,9 @@ Deno.serve(async (req) => {
     let facturacionNullCount = 0;
     // TAREA 12: Track descartados sin client_id
     const descartados: { cuit_dni: string | null; razon_social: string | null }[] = [];
+    // Conciliación: toda fila que no llega a la base queda registrada con su motivo
+    const filasDescartadas: { origen: 'venta' | 'nota_credito'; motivo: string; payload: Record<string, any> }[] = [];
+
 
     for (const row of rows) {
       const externalClientId = normalizeClientId(getFieldValue(row, ['client_id', 'Número Externo', 'Numero Externo']));
