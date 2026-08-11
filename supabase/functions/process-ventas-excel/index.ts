@@ -597,7 +597,10 @@ Deno.serve(async (req) => {
     // permite netear notas de clientes que no tuvieron una venta en el período.
     let notasCreditoAplicadas = 0;
     let notasCreditoSinMatch = 0;
+    let notasCreditoDuplicadas = 0;
+    let notasCreditoSinImporte = 0;
     let montoNotasCredito = 0;
+
     if (rawNotasCredito.length > 0) {
       const rsToClient = new Map<string, any>();
       for (const v of ventasRaw) {
