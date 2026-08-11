@@ -1094,14 +1094,30 @@ Deno.serve(async (req) => {
     }
     vendedorBreakdown.sort((a, b) => b.monto - a.monto);
 
+    const ventasInsertadas = ventasDeduplicadas.filter(v => v.tipo_comprobante !== 'nota_credito').length;
+    const notasInsertadas = ventasDeduplicadas.length - ventasInsertadas;
+    const motivosDescarte = filasDescartadas.reduce((acc, f) => {
+      const key = `${f.origen}:${f.motivo}`;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
     const reconciliacion = {
       filas_excel: rows.length,
+      filas_excel_recibidas: rawRows.length,
+      filas_excel_notas_credito: rawNotasCredito.length,
       notas_credito_aplicadas: notasCreditoAplicadas,
       notas_credito_sin_match: notasCreditoSinMatch,
+      notas_credito_duplicadas: notasCreditoDuplicadas,
+      notas_credito_sin_importe: notasCreditoSinImporte,
       monto_notas_credito: Math.round(montoNotasCredito * 100) / 100,
 
       filas_procesadas: ventasRaw.length,
       filas_deduplicadas: ventasDeduplicadas.length,
+      filas_venta_insertadas: ventasInsertadas,
+      filas_nota_credito_insertadas: notasInsertadas,
+      filas_descartadas_total: filasDescartadas.length,
+      filas_descartadas_por_motivo: motivosDescarte,
       filas_descartadas_sin_id: ventasSinClientId,
       filas_cuit_ambiguo: ventasCuitAmbiguo,
       facturacion_total_procesada: totalFacturacionProcesada,
@@ -1133,11 +1149,27 @@ Deno.serve(async (req) => {
       .eq('id', batchId);
     if (closeBatchError) throw new Error(`Las ventas se procesaron pero no se pudo cerrar el lote: ${closeBatchError.message}`);
 
+    // Persistimos en staging solo las filas descartadas (con motivo) y limpiamos el resto
+    if (filasDescartadas.length > 0) {
+      for (let i = 0; i < filasDescartadas.length; i += 500) {
+        const chunk = filasDescartadas.slice(i, i + 500).map((f, offset) => ({
+          batch_id: batchId,
+          tipo_fila: 'descartada',
+          numero_fila: i + offset + 1,
+          payload: { origen: f.origen, motivo: f.motivo, fila: f.payload },
+        }));
+        const { error: descartError } = await supabase.from('import_staging_rows').insert(chunk);
+        if (descartError) console.error('No se pudieron guardar filas descartadas:', descartError.message);
+      }
+    }
+
     const { error: cleanupError } = await supabase
       .from('import_staging_rows')
       .delete()
-      .eq('batch_id', batchId);
+      .eq('batch_id', batchId)
+      .in('tipo_fila', ['principal', 'nota_credito']);
     if (cleanupError) console.error('No se pudo limpiar staging:', cleanupError.message);
+
 
     return new Response(JSON.stringify({
       success: true,
