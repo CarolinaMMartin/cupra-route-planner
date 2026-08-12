@@ -102,20 +102,21 @@ export async function geocodeAddress(request: GeocodingRequest): Promise<Geocodi
       place_id: result.place_id,
     };
   } catch (error: any) {
-    console.error("Error al llamar Google Geocoding API:", error);
+    console.error("Error al geocodificar con Google Maps:", error);
 
-    if (error.name === "AbortError") {
+    const code = error?.code || error?.name;
+    if (code === "ZERO_RESULTS") {
       return {
         status: "ERROR",
-        error_code: "TIMEOUT",
-        message: "El servicio tardó demasiado en responder. Intenta nuevamente.",
+        error_code: "NO_RESULTS",
+        message: "No se encontraron resultados para esa dirección.",
       };
     }
 
     return {
       status: "ERROR",
       error_code: "NETWORK_ERROR",
-      message: "Error de conexión. Verifica tu conexión a internet e intenta nuevamente.",
+      message: "No se pudo conectar con Google Maps. Verificá tu conexión e intentá nuevamente.",
     };
   }
 }
