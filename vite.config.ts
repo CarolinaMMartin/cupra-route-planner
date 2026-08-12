@@ -20,14 +20,12 @@ export default defineConfig(({ mode }) => {
       "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY": JSON.stringify(
         env.VITE_SUPABASE_PUBLISHABLE_KEY || PUBLIC_BACKEND_KEY,
       ),
+      // Se fija la clave verificada: algunas builds inyectan una clave expirada
+      // por variable de entorno y eso deja los mapas sin cargar en producción.
       "import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY": JSON.stringify(
-        env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY ||
-          env.VITE_GOOGLE_MAPS_API_KEY ||
-          PUBLIC_GOOGLE_MAPS_BROWSER_KEY,
+        PUBLIC_GOOGLE_MAPS_BROWSER_KEY,
       ),
-      "import.meta.env.VITE_GOOGLE_MAPS_API_KEY": JSON.stringify(
-        env.VITE_GOOGLE_MAPS_API_KEY || PUBLIC_GOOGLE_MAPS_BROWSER_KEY,
-      ),
+      "import.meta.env.VITE_GOOGLE_MAPS_API_KEY": JSON.stringify(PUBLIC_GOOGLE_MAPS_BROWSER_KEY),
     },
     server: {
       host: "::",
