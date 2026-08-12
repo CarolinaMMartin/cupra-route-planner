@@ -218,10 +218,11 @@ Deno.serve(async (req) => {
     const googleApiKey = Deno.env.get('GOOGLE_MAPS_API_KEY')
       || Deno.env.get('VITE_GOOGLE_MAPS_API_KEY')
       || '';
-    if (!googleApiKey) {
+    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY') || '';
+    if (!googleApiKey || !lovableApiKey) {
       return jsonResponse({
         success: false,
-        error: 'Google Places no está configurado: falta GOOGLE_MAPS_API_KEY o VITE_GOOGLE_MAPS_API_KEY',
+        error: 'Google Places no está configurado: falta la conexión de Google Maps',
       }, 503);
     }
 
@@ -238,20 +239,33 @@ Deno.serve(async (req) => {
       searchBody.strictTypeFiltering = true;
     }
 
-    const googleResponse = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': googleApiKey,
-        'X-Goog-FieldMask': GOOGLE_FIELD_MASK,
+    const googleResponse = await fetch(
+      'https://connector-gateway.lovable.dev/google_maps/places/v1/places:searchText',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${lovableApiKey}`,
+          'X-Connection-Api-Key': googleApiKey,
+          'X-Goog-FieldMask': GOOGLE_FIELD_MASK,
+        },
+        body: JSON.stringify(searchBody),
       },
-      body: JSON.stringify(searchBody),
-    });
-    const googleData = await googleResponse.json() as GoogleSearchResponse;
+    );
+    const rawText = await googleResponse.text();
+    let googleData: GoogleSearchResponse;
+    try {
+      googleData = JSON.parse(rawText) as GoogleSearchResponse;
+    } catch {
+      console.error('Google Places non-JSON response:', googleResponse.status, rawText.slice(0, 300));
+      return jsonResponse({ success: false, error: 'Google Places no pudo completar la búsqueda' }, 502);
+    }
     if (!googleResponse.ok) {
       console.error('Google Places error:', googleData);
       return jsonResponse({ success: false, error: 'Google Places no pudo completar la búsqueda' }, 502);
     }
+
+
 
     const places = (googleData.places || [])
       .filter((place): place is GooglePlace & { id: string } => Boolean(place.id) && place.businessStatus !== 'CLOSED_PERMANENTLY');
