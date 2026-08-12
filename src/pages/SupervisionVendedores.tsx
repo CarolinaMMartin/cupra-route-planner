@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import AppNav from "@/components/AppNav";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -456,20 +457,15 @@ const SupervisionVendedores = () => {
   const visitaFiltersDisabled = filters.estado === "Por visitar";
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
+    <div className="min-h-screen bg-background">
+      <AppNav />
+      <div className="p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-3">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate("/")}
-              className="text-muted-foreground hover:text-foreground">
-              
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
             <div>
+
               <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">
                 Supervisión de Vendedores
               </h1>
@@ -825,6 +821,7 @@ const SupervisionVendedores = () => {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>);
 
 };

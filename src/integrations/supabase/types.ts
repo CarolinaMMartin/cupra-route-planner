@@ -1329,6 +1329,7 @@ export type Database = {
       }
       is_active_assignor: { Args: { _user_id: string }; Returns: boolean }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
+      sync_places_catalog: { Args: never; Returns: number }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {

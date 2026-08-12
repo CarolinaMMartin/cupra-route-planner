@@ -73,6 +73,9 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkQueueing, setIsBulkQueueing] = useState(false);
   const [isPromoting, setIsPromoting] = useState(false);
+  const [onlyNew, setOnlyNew] = useState(true);
+  const [searchSummary, setSearchSummary] = useState<{ total: number; nuevos: number; yaCargados: number } | null>(null);
+
 
   const selectableResults = results.filter(
     (result) => !result.queued && !result.existing_prospect && !result.existing_client,
@@ -129,13 +132,24 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
           query: query.trim(),
           zone: zone.trim() || undefined,
           includedType: includedType === "all" ? null : includedType,
+          excludeExisting: onlyNew,
         },
       });
       if (error) throw new Error(error.message);
       if (!data?.success) throw new Error(data?.error || "La búsqueda no pudo completarse");
       setResults(data.results || []);
+      setSearchSummary({
+        total: data.total_encontrados ?? (data.results || []).length,
+        nuevos: data.nuevos ?? (data.results || []).length,
+        yaCargados: data.ya_cargados ?? 0,
+      });
       if (!data.results?.length) {
-        toast({ title: "Sin resultados", description: "Probá otra zona o quitá el filtro de tipo." });
+        toast({
+          title: onlyNew ? "Sin comercios nuevos" : "Sin resultados",
+          description: onlyNew && (data.ya_cargados ?? 0) > 0
+            ? `Los ${data.ya_cargados} encontrados ya están cargados. Probá otra zona, otro tipo o desactivá "Solo nuevos".`
+            : "Probá otra zona o quitá el filtro de tipo.",
+        });
       }
     } catch (error) {
       toast({
@@ -147,6 +161,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
       setIsSearching(false);
     }
   };
+
 
   const promoteQueue = async (placeIds: string[]) => {
     if (placeIds.length === 0) return;
@@ -327,6 +342,20 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
             Buscar
           </Button>
         </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox checked={onlyNew} onCheckedChange={(value) => setOnlyNew(value === true)} />
+            Mostrar solo comercios nuevos (ocultar los ya cargados)
+          </label>
+          {searchSummary && (
+            <span>
+              {searchSummary.total} encontrados · {searchSummary.nuevos} nuevos · {searchSummary.yaCargados} ya cargados
+            </span>
+          )}
+        </div>
+
+
 
         {results.length > 0 && (
           <section className="rounded-lg border bg-muted/10 p-3 space-y-3">

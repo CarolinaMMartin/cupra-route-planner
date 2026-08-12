@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import AppNav from "@/components/AppNav";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -483,20 +484,13 @@ const ProspectosDashboard = () => {
   return (
     <TooltipProvider>
       <div className="min-h-screen">
+        <AppNav />
         {/* Header sticky compacto */}
-        <header className="sticky top-0 z-40 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <header className="sticky top-14 z-40 border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
           <div className="max-w-[1920px] mx-auto px-4 md:px-6 py-3 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => navigate('/')}
-                className="h-[38px] w-[38px] border-border/60 shrink-0"
-                aria-label="Volver"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
               <div className="min-w-0">
+
                 <h1 className="text-xl md:text-2xl font-sans text-foreground tracking-tight truncate">
                   Dashboard de Prospectos
                 </h1>

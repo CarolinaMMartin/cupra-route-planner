@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import AppNav from "@/components/AppNav";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -264,8 +265,9 @@ const ClientesEdicion = () => {
   }
 
   return (
-    <div className="min-h-screen p-4 md:p-6">
-      <div className="max-w-[1920px] mx-auto space-y-6">
+    <div className="min-h-screen">
+      <AppNav />
+      <div className="max-w-[1920px] mx-auto space-y-6 p-4 md:p-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">

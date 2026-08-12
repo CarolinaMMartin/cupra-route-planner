@@ -54,7 +54,9 @@ interface SearchRequest {
   query: string;
   zone?: string;
   includedType?: string | null;
+  excludeExisting?: boolean;
 }
+
 
 interface QueueRequest {
   action: 'queue';
@@ -349,49 +351,68 @@ Deno.serve(async (req) => {
     }
 
     const textQuery = [query, zone, 'Ciudad Autónoma de Buenos Aires', 'Argentina'].filter(Boolean).join(', ');
-    const searchBody: Record<string, unknown> = {
-      textQuery,
-      pageSize: 20,
-      languageCode: 'es',
-      regionCode: 'AR',
-      locationRestriction: { rectangle: CABA_VIEWPORT },
-    };
-    if (includedType) {
-      searchBody.includedType = includedType;
-      searchBody.strictTypeFiltering = true;
-    }
 
-    const googleResponse = await fetch(
-      'https://connector-gateway.lovable.dev/google_maps/places/v1/places:searchText',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${lovableApiKey}`,
-          'X-Connection-Api-Key': googleApiKey,
-          'X-Goog-FieldMask': GOOGLE_FIELD_MASK,
+    // Paginamos hasta 3 páginas (60 lugares) para no devolver siempre los mismos 20.
+    const collected: Array<GooglePlace & { id: string }> = [];
+    const seenIds = new Set<string>();
+    let pageToken: string | undefined = undefined;
+
+    for (let page = 0; page < 3; page++) {
+      const searchBody: Record<string, unknown> = {
+        textQuery,
+        pageSize: 20,
+        languageCode: 'es',
+        regionCode: 'AR',
+        locationRestriction: { rectangle: CABA_VIEWPORT },
+      };
+      if (includedType) {
+        searchBody.includedType = includedType;
+        searchBody.strictTypeFiltering = true;
+      }
+      if (pageToken) searchBody.pageToken = pageToken;
+
+      const googleResponse = await fetch(
+        'https://connector-gateway.lovable.dev/google_maps/places/v1/places:searchText',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${lovableApiKey}`,
+            'X-Connection-Api-Key': googleApiKey,
+            'X-Goog-FieldMask': `${GOOGLE_FIELD_MASK},nextPageToken`,
+          },
+          body: JSON.stringify(searchBody),
         },
-        body: JSON.stringify(searchBody),
-      },
-    );
-    const rawText = await googleResponse.text();
-    let googleData: GoogleSearchResponse;
-    try {
-      googleData = JSON.parse(rawText) as GoogleSearchResponse;
-    } catch {
-      console.error('Google Places non-JSON response:', googleResponse.status, rawText.slice(0, 300));
-      return jsonResponse({ success: false, error: 'Google Places no pudo completar la búsqueda' }, 502);
+      );
+      const rawText = await googleResponse.text();
+      let googleData: GoogleSearchResponse & { nextPageToken?: string };
+      try {
+        googleData = JSON.parse(rawText) as GoogleSearchResponse & { nextPageToken?: string };
+      } catch {
+        console.error('Google Places non-JSON response:', googleResponse.status, rawText.slice(0, 300));
+        if (page === 0) return jsonResponse({ success: false, error: 'Google Places no pudo completar la búsqueda' }, 502);
+        break;
+      }
+      if (!googleResponse.ok) {
+        console.error('Google Places error:', googleData);
+        if (page === 0) return jsonResponse({ success: false, error: 'Google Places no pudo completar la búsqueda' }, 502);
+        break;
+      }
+
+      for (const place of googleData.places || []) {
+        if (!place.id || place.businessStatus === 'CLOSED_PERMANENTLY') continue;
+        if (seenIds.has(place.id)) continue;
+        seenIds.add(place.id);
+        collected.push(place as GooglePlace & { id: string });
+      }
+
+      pageToken = googleData.nextPageToken;
+      if (!pageToken) break;
     }
-    if (!googleResponse.ok) {
-      console.error('Google Places error:', googleData);
-      return jsonResponse({ success: false, error: 'Google Places no pudo completar la búsqueda' }, 502);
-    }
 
-
-
-    const places = (googleData.places || [])
-      .filter((place): place is GooglePlace & { id: string } => Boolean(place.id) && place.businessStatus !== 'CLOSED_PERMANENTLY');
+    const places = collected;
     const placeIds = places.map((place) => place.id);
+
 
     const queuedIds = new Set<string>();
     const existingProspectIds = new Set<string>();
@@ -439,11 +460,20 @@ Deno.serve(async (req) => {
       };
     }).sort((a, b) => b.premium_score - a.premium_score);
 
+    const isNew = (item: typeof results[number]) => !item.queued && !item.existing_prospect && !item.existing_client;
+    const excludeExisting = (body as SearchRequest).excludeExisting !== false;
+    const nuevos = results.filter(isNew);
+    const visibles = excludeExisting ? nuevos : results;
+
     return jsonResponse({
       success: true,
-      results,
+      results: visibles,
+      total_encontrados: results.length,
+      nuevos: nuevos.length,
+      ya_cargados: results.length - nuevos.length,
       storage_policy: 'Solo se persiste place_id y metadatos internos de seguimiento.',
     });
+
   } catch (error) {
     console.error('prospect-discovery error:', error);
     return jsonResponse({

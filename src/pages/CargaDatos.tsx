@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import AppNav from "@/components/AppNav";
 import type { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -407,20 +408,7 @@ const CargaDatos = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-background/90 backdrop-blur-xl sticky top-0 z-50 border-b border-border/20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-14">
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="h-8 w-8">
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <img src={cupraLogo} alt="Cupra" className="h-7 w-auto opacity-70" />
-            </div>
-            <h1 className="text-sm font-medium text-muted-foreground">Carga de Datos</h1>
-          </div>
-        </div>
-      </header>
+      <AppNav />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         <div>

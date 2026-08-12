@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import cupraLogo from "@/assets/cupra-logo-new.png";
+import AppNav from "@/components/AppNav";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -78,10 +79,15 @@ async function getCurrentProfileId() {
 }
 
 async function getData() {
+  // Mantiene el catálogo de barrios al día con clientes y prospectos cargados.
+  const { error: syncError } = await supabase.rpc("sync_places_catalog");
+  if (syncError) console.warn("No se pudo sincronizar el catálogo de barrios:", syncError.message);
+
   const [areasRes, placesRes, areasPlacesRes, areasVendedoresRes, profilesRes] =
     await Promise.all([
       supabase.from("areas").select("*").order("nombre"),
-      supabase.from("places").select("*"),
+      supabase.from("places").select("*").order("barrio_principal"),
+
       supabase.from("areas_places").select("*"),
       supabase.from("areas_vendedores").select("*"),
       supabase.from("profiles").select("id, nombre, email").eq("activo", true),
@@ -558,7 +564,10 @@ export default function AreasManager() {
   }
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6">
+    <div className="min-h-screen bg-background">
+      <AppNav />
+      <div className="p-4 md:p-6">
+
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4">
@@ -1025,6 +1034,8 @@ export default function AreasManager() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+      </div>
     </div>
   );
+
 }

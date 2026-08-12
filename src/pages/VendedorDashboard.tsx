@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import AppNav from "@/components/AppNav";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -257,7 +258,9 @@ const VendedorDashboard = () => {
   }
 
   return (
-    <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 overflow-x-hidden">
+    <div className="min-h-screen">
+      <AppNav rightSlot={<NotificacionesPanel />} />
+      <div className="container mx-auto p-3 md:p-6 space-y-4 md:space-y-6 overflow-x-hidden">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div className="flex items-center gap-3">
           <img src={cupraLogo} alt="Cupra Wines" className="h-8 md:h-12 w-auto" />
@@ -265,14 +268,6 @@ const VendedorDashboard = () => {
             <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Mi Dashboard</h1>
             <p className="text-sm text-muted-foreground mt-1 hidden md:block">Resumen de asignaciones y actividad</p>
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <NotificacionesPanel />
-          <Button variant="outline" size="sm" onClick={() => navigate("/")} className="gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            <span className="hidden sm:inline">Volver a Asignaciones</span>
-            <span className="sm:hidden">Volver</span>
-          </Button>
         </div>
       </div>
 
@@ -643,6 +638,7 @@ const VendedorDashboard = () => {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 };
