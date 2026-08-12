@@ -290,60 +290,62 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
     fetchLocations();
   }, [sucursales, map]);
 
-  // Update markers based on selected clients
+  // Render every resolved location; selection only changes emphasis
   useEffect(() => {
     if (!map || locations.length === 0) return;
 
-    // Remove markers that are no longer selected
-    markers.forEach((marker, id) => {
-      if (!selectedIds.includes(id)) {
+    const nextMarkers = new Map(markers);
+    const validIds = new Set(locations.map((l) => l.id));
+
+    nextMarkers.forEach((marker, id) => {
+      if (!validIds.has(id)) {
         marker.setMap(null);
-        markers.delete(id);
+        nextMarkers.delete(id);
       }
     });
 
-    // Add markers for selected clients
     const bounds = new google.maps.LatLngBounds();
     let hasValidBounds = false;
 
     locations.forEach((location) => {
-      if (selectedIds.includes(location.id)) {
-        if (!markers.has(location.id)) {
-          const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : '#999999';
-          const marker = new google.maps.Marker({
-            position: { lat: location.lat, lng: location.lng },
-            map,
-            title: location.name,
-            icon: createColoredMarkerIcon(vendorColor),
-            animation: google.maps.Animation.DROP,
-          });
+      const isSelected = selectedIds.includes(location.id);
+      const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : '#999999';
+      let marker = nextMarkers.get(location.id);
 
-          // Add info window
-          const infoWindow = new google.maps.InfoWindow({
-            content: `
-              <div style="padding: 8px;">
-                <h3 style="margin: 0 0 4px 0; font-weight: 600;">${location.name}</h3>
-                <p style="margin: 0; font-size: 12px; color: #666;">${location.direccion}</p>
-                ${location.vendedor ? `<p style="margin: 4px 0 0 0; font-size: 12px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${vendorColor};margin-right:4px;vertical-align:middle;"></span>${location.vendedor}</p>` : ''}
-              </div>
-            `,
-          });
+      if (!marker) {
+        marker = new google.maps.Marker({
+          position: { lat: location.lat, lng: location.lng },
+          map,
+          title: location.name,
+          icon: createColoredMarkerIcon(vendorColor),
+        });
 
-          marker.addListener("click", () => {
-            infoWindow.open(map, marker);
-          });
+        const infoWindow = new google.maps.InfoWindow({
+          content: `
+            <div style="padding: 8px;">
+              <h3 style="margin: 0 0 4px 0; font-weight: 600;">${location.name}</h3>
+              <p style="margin: 0; font-size: 12px; color: #666;">${location.direccion}</p>
+              ${location.vendedor ? `<p style="margin: 4px 0 0 0; font-size: 12px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${vendorColor};margin-right:4px;vertical-align:middle;"></span>${location.vendedor}</p>` : ''}
+            </div>
+          `,
+        });
 
-          markers.set(location.id, marker);
-        }
+        marker.addListener("click", () => {
+          infoWindow.open(map, marker!);
+        });
 
-        bounds.extend({ lat: location.lat, lng: location.lng });
-        hasValidBounds = true;
+        nextMarkers.set(location.id, marker);
       }
+
+      marker.setOpacity(isSelected ? 1 : 0.4);
+      marker.setZIndex(isSelected ? 2 : 1);
+
+      bounds.extend({ lat: location.lat, lng: location.lng });
+      hasValidBounds = true;
     });
 
-    setMarkers(new Map(markers));
+    setMarkers(nextMarkers);
 
-    // Fit map to show all markers
     if (hasValidBounds) {
       map.fitBounds(bounds);
     }
