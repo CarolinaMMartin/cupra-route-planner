@@ -384,8 +384,8 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                     {result.existing_client && (
                       <p className="text-xs text-amber-600">Posible cliente existente: {result.existing_client.nombre}</p>
                     )}
-                    {result.existing_prospect && <p className="text-xs text-amber-600">Ya existe como prospecto operativo.</p>}
-                    {result.queued && <p className="text-xs text-muted-foreground">Ya está en pendientes.</p>}
+                    {result.existing_prospect && <p className="text-xs text-amber-600">Ya está cargado como prospecto.</p>}
+
 
                     {result.attributions?.length > 0 && (
                       <div className="text-[11px] text-muted-foreground">
