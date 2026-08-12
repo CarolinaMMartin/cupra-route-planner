@@ -206,15 +206,17 @@ const FilterPanel = ({
         <div className="space-y-6">
           <div className="space-y-2">
             <Label htmlFor="area-filter" className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Área</Label>
-            <Select value={selectedArea} onValueChange={handleAreaChange} disabled={isLoadingAreas}>
-              <SelectTrigger id="area-filter" className="bg-secondary/30 border-border/30 h-11">
-                <SelectValue placeholder="Seleccionar área..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Sin área seleccionada</SelectItem>
-                {areas.map((area) => <SelectItem key={area.id} value={area.id}>{area.nombre}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              options={[{ value: 'none', label: 'Sin área seleccionada' }, ...areas.map(a => ({ value: a.id, label: a.nombre }))]}
+              value={selectedArea}
+              onValueChange={handleAreaChange}
+              disabled={isLoadingAreas}
+              placeholder="Seleccionar área..."
+              searchPlaceholder="Buscar área..."
+              emptyMessage="No se encontró esa área."
+              className="bg-secondary/30 border-border/30 h-11"
+            />
+
           </div>
 
           {selectedAreaData && (
