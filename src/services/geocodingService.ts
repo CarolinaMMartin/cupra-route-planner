@@ -91,7 +91,7 @@ export async function geocodeAddress(request: GeocodingRequest): Promise<Geocodi
       lat,
       lng,
       formatted_address: result.formatted_address,
-      location_type: result.geometry.location_type,
+      location_type: String(result.geometry.location_type),
       barrio,
       comuna: adminArea2?.toLowerCase().startsWith("comuna") ? adminArea2 : null,
       ciudad,
