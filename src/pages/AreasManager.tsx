@@ -78,10 +78,15 @@ async function getCurrentProfileId() {
 }
 
 async function getData() {
+  // Mantiene el catálogo de barrios al día con clientes y prospectos cargados.
+  const { error: syncError } = await supabase.rpc("sync_places_catalog");
+  if (syncError) console.warn("No se pudo sincronizar el catálogo de barrios:", syncError.message);
+
   const [areasRes, placesRes, areasPlacesRes, areasVendedoresRes, profilesRes] =
     await Promise.all([
       supabase.from("areas").select("*").order("nombre"),
-      supabase.from("places").select("*"),
+      supabase.from("places").select("*").order("barrio_principal"),
+
       supabase.from("areas_places").select("*"),
       supabase.from("areas_vendedores").select("*"),
       supabase.from("profiles").select("id, nombre, email").eq("activo", true),
