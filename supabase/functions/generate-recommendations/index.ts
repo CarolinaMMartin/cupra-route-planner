@@ -25,7 +25,51 @@ const HARD_RADIUS_KM = 1.5;
 const MAX_EXPANSION_KM = 2.0;
 const EXPANSION_STEPS_KM = [3.0, 5.0]; // Progressive expansion if 2km isn't enough
 
+// ---- Identity dedup (evita recomendar el mismo negocio 2 veces) ----
+function normalizeIdentityText(value: string | null | undefined): string {
+  return (value || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildIdentityKey(opts: {
+  esProspecto: boolean;
+  cuit?: string | null;
+  nombre?: string | null;
+  direccion?: string | null;
+  lat?: number | null;
+  long?: number | null;
+}): string {
+  const cuit = (opts.cuit || "").replace(/\D/g, "");
+  if (cuit.length >= 8) return `cuit:${cuit}`;
+  const nombre = normalizeIdentityText(opts.nombre);
+  const dir = normalizeIdentityText(opts.direccion).split(" ").slice(0, 4).join(" ");
+  if (nombre && dir) return `nd:${nombre}|${dir}`;
+  if (nombre && opts.lat != null && opts.long != null) {
+    return `ng:${nombre}|${opts.lat.toFixed(3)},${opts.long.toFixed(3)}`;
+  }
+  return `n:${nombre || Math.random().toString(36)}`;
+}
+
+/** Deja un único candidato por identidad (el de mayor score) y descarta los ya usados. */
+function dedupeByIdentity(
+  candidates: ScoredCandidate[],
+  usedIdentities: Set<string>,
+): ScoredCandidate[] {
+  const best = new Map<string, ScoredCandidate>();
+  for (const c of candidates) {
+    if (usedIdentities.has(c.identity_key)) continue;
+    const prev = best.get(c.identity_key);
+    if (!prev || c.score_total > prev.score_total) best.set(c.identity_key, c);
+  }
+  return Array.from(best.values()).sort((a, b) => b.score_total - a.score_total);
+}
+
 interface AnchorPoint { lat: number; lng: number; }
+
 
 const CABA_VIEWPORT = {
   low: { latitude: -34.705, longitude: -58.531 },
