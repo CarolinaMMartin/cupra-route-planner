@@ -1358,12 +1358,17 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         globalPickedIdentities,
       );
 
-      if (vendorRecs.length !== 8) {
-        throw new Error(
-          `No se pudo completar la cuota de 8 para ${vendedor.nombre}: `
-          + `${vendorRecs.length} candidatos válidos (${clientPool.length} clientes, ${prospectPool.length} prospectos).`,
+      if (vendorRecs.length === 0) {
+        console.warn(`⚠️ ${vendedor.nombre}: sin candidatos disponibles (${clientPool.length}C / ${prospectPool.length}P). Se omite.`);
+        continue;
+      }
+      if (vendorRecs.length < 8) {
+        console.warn(
+          `⚠️ Cuota parcial para ${vendedor.nombre}: ${vendorRecs.length}/8 `
+          + `(${clientPool.length} clientes, ${prospectPool.length} prospectos disponibles).`,
         );
       }
+
 
       const vendorCandidateIndex = new Map<string, ScoredCandidate>();
       [...(vendorClientPools.get(vendedor.user_id) || []), ...(vendorProspectPools.get(vendedor.user_id) || [])]
