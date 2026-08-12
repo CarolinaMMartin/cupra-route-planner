@@ -73,12 +73,6 @@ interface TodayAssignmentsProps {
   onEditAssignments?: () => void;
 }
 
-/** Capitalizes first letter of each word, lowercases the rest */
-const toTitleCase = (str: string) =>
-  str
-    .toLowerCase()
-    .replace(/(?:^|\s|[-/])\S/g, (match) => match.toUpperCase());
-
 const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
