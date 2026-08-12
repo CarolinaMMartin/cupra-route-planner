@@ -40,6 +40,7 @@ import { toTitleCase } from "@/lib/format";
 
 interface Cliente {
   client_id: string;
+  cuit_dni: string | null;
   razon_social: string | null;
   fantasia: string | null;
   ciudad_principal: string | null;
@@ -47,8 +48,24 @@ interface Cliente {
   vendedor_actual: string | null;
   vendedor_principal: string | null;
   monto_total_historico: number | null;
+  ultima_compra: string | null;
   dias_desde_ultima_compra: number | null;
   cantidad_ordenes: number | null;
+}
+
+interface ClienteGrupo {
+  key: string;
+  clientIds: string[];
+  razon_social: string | null;
+  fantasia: string | null;
+  ciudad_principal: string | null;
+  provincia_principal: string | null;
+  vendedor_actual: string | null;
+  vendedor_principal: string | null;
+  monto_total_historico: number;
+  dias_sin_compra: number | null;
+  cantidad_ordenes: number;
+  registros: number;
 }
 
 interface Vendedor {
@@ -62,6 +79,17 @@ const formatCurrency = (v: number | null) =>
   v != null ? `$${v.toLocaleString("es-AR", { maximumFractionDigits: 0 })}` : "—";
 
 const normalizeRS = (rs: string) => rs.trim().toUpperCase().replace(/\s+/g, " ");
+
+// Días reales desde la última compra, calculados en horario Argentina (UTC-3)
+const diasDesde = (fecha: string | null): number | null => {
+  if (!fecha) return null;
+  const parsed = new Date(`${fecha.slice(0, 10)}T00:00:00-03:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const hoyAR = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const hoy = new Date(`${hoyAR.toISOString().slice(0, 10)}T00:00:00-03:00`);
+  return Math.max(0, Math.round((hoy.getTime() - parsed.getTime()) / 86400000));
+};
+
 
 const ManualAssignment = () => {
   const { toast } = useToast();
