@@ -28,7 +28,7 @@ export interface GeocodingResponse {
   place_id?: string;
 }
 
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+const GOOGLE_MAPS_API_KEY = GOOGLE_MAPS_BROWSER_KEY;
 
 function extractComponent(components: any[], type: string): string | null {
   const c = components.find((comp: any) => comp.types?.includes(type));
