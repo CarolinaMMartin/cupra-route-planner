@@ -94,6 +94,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       setLoading(true);
       resetVendorColors();
       const service = new google.maps.places.PlacesService(map);
+      const geocoder = new google.maps.Geocoder();
       const fetchedLocations: ClientLocation[] = [];
 
       const resolveRecommendedVendor = (sucursal: Sucursal) => {
@@ -192,6 +193,65 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
             });
           }
 
+          // Fallback 1: place_id extraído del link de Google Maps
+          const linkPlaceId = (sucursal as any).place_id as string | undefined;
+          if (linkPlaceId && !isManualPlaceId(linkPlaceId)) {
+            const fromPlace = await new Promise<ClientLocation | null>((resolve) => {
+              service.getDetails({ placeId: linkPlaceId }, (place, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+                  const vendedor = resolveRecommendedVendor(sucursal);
+                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
+                  resolve({
+                    id: sucursal.id,
+                    name: sucursal.nombre || place.name || "Sin nombre",
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    direccion: place.formatted_address || sucursal.direccion_principal || sucursal.direccion || "",
+                    vendedor,
+                    estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
+                  });
+                } else {
+                  resolve(null);
+                }
+              });
+            });
+            if (fromPlace) return fromPlace;
+          }
+
+          // Fallback 2: geocodificar la dirección textual
+          const direccionTexto = [
+            sucursal.direccion_principal || sucursal.direccion,
+            sucursal.barrio_principal,
+            (sucursal as any).ciudad_principa || sucursal.todas_ciudades?.[0],
+            sucursal.provincia_principal,
+            "Argentina",
+          ].filter(Boolean).join(", ");
+
+          if (direccionTexto && direccionTexto !== "Argentina") {
+            const geocoded = await new Promise<ClientLocation | null>((resolve) => {
+              geocoder.geocode({ address: direccionTexto }, (res, status) => {
+                if (status === "OK" && res?.[0]?.geometry?.location) {
+                  const loc = res[0].geometry.location;
+                  const vendedor = resolveRecommendedVendor(sucursal);
+                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
+                  resolve({
+                    id: sucursal.id,
+                    name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
+                    lat: loc.lat(),
+                    lng: loc.lng(),
+                    direccion: res[0].formatted_address,
+                    vendedor,
+                    estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
+                  });
+                } else {
+                  resolve(null);
+                }
+              });
+            });
+            if (geocoded) return geocoded;
+          }
+
+          console.warn(`[ResultsMap] Sin ubicación resoluble:`, sucursal.nombre);
           return null;
         } catch (err) {
           console.error(`Error fetching location for ${sucursal.nombre}:`, err);
@@ -230,60 +290,62 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
     fetchLocations();
   }, [sucursales, map]);
 
-  // Update markers based on selected clients
+  // Render every resolved location; selection only changes emphasis
   useEffect(() => {
     if (!map || locations.length === 0) return;
 
-    // Remove markers that are no longer selected
-    markers.forEach((marker, id) => {
-      if (!selectedIds.includes(id)) {
+    const nextMarkers = new Map(markers);
+    const validIds = new Set(locations.map((l) => l.id));
+
+    nextMarkers.forEach((marker, id) => {
+      if (!validIds.has(id)) {
         marker.setMap(null);
-        markers.delete(id);
+        nextMarkers.delete(id);
       }
     });
 
-    // Add markers for selected clients
     const bounds = new google.maps.LatLngBounds();
     let hasValidBounds = false;
 
     locations.forEach((location) => {
-      if (selectedIds.includes(location.id)) {
-        if (!markers.has(location.id)) {
-          const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : '#999999';
-          const marker = new google.maps.Marker({
-            position: { lat: location.lat, lng: location.lng },
-            map,
-            title: location.name,
-            icon: createColoredMarkerIcon(vendorColor),
-            animation: google.maps.Animation.DROP,
-          });
+      const isSelected = selectedIds.includes(location.id);
+      const vendorColor = location.vendedor ? getVendorColor(location.vendedor) : '#999999';
+      let marker = nextMarkers.get(location.id);
 
-          // Add info window
-          const infoWindow = new google.maps.InfoWindow({
-            content: `
-              <div style="padding: 8px;">
-                <h3 style="margin: 0 0 4px 0; font-weight: 600;">${location.name}</h3>
-                <p style="margin: 0; font-size: 12px; color: #666;">${location.direccion}</p>
-                ${location.vendedor ? `<p style="margin: 4px 0 0 0; font-size: 12px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${vendorColor};margin-right:4px;vertical-align:middle;"></span>${location.vendedor}</p>` : ''}
-              </div>
-            `,
-          });
+      if (!marker) {
+        marker = new google.maps.Marker({
+          position: { lat: location.lat, lng: location.lng },
+          map,
+          title: location.name,
+          icon: createColoredMarkerIcon(vendorColor),
+        });
 
-          marker.addListener("click", () => {
-            infoWindow.open(map, marker);
-          });
+        const infoWindow = new google.maps.InfoWindow({
+          content: `
+            <div style="padding: 8px;">
+              <h3 style="margin: 0 0 4px 0; font-weight: 600;">${location.name}</h3>
+              <p style="margin: 0; font-size: 12px; color: #666;">${location.direccion}</p>
+              ${location.vendedor ? `<p style="margin: 4px 0 0 0; font-size: 12px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${vendorColor};margin-right:4px;vertical-align:middle;"></span>${location.vendedor}</p>` : ''}
+            </div>
+          `,
+        });
 
-          markers.set(location.id, marker);
-        }
+        marker.addListener("click", () => {
+          infoWindow.open(map, marker!);
+        });
 
-        bounds.extend({ lat: location.lat, lng: location.lng });
-        hasValidBounds = true;
+        nextMarkers.set(location.id, marker);
       }
+
+      marker.setOpacity(isSelected ? 1 : 0.4);
+      marker.setZIndex(isSelected ? 2 : 1);
+
+      bounds.extend({ lat: location.lat, lng: location.lng });
+      hasValidBounds = true;
     });
 
-    setMarkers(new Map(markers));
+    setMarkers(nextMarkers);
 
-    // Fit map to show all markers
     if (hasValidBounds) {
       map.fitBounds(bounds);
     }
@@ -333,6 +395,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                 {selectedIds.length} de {sucursales.length}
               </Badge>
             </div>
+            {!loading && locations.length < sucursales.length && (
+              <p className="flex items-start gap-1.5 text-xs text-amber-500">
+                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                {sucursales.length - locations.length} sin ubicación georreferenciada
+              </p>
+            )}
             {onToggleAll && (
               <Button
                 variant="outline"
