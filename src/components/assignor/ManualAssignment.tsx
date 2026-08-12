@@ -458,7 +458,7 @@ const ManualAssignment = () => {
                         </TableCell>
                         <TableCell>
                           {c.vendedor_actual ? (
-                            <Badge variant="secondary" className="text-xs">{c.vendedor_actual}</Badge>
+                            <Badge variant="secondary" className="text-xs">{toTitleCase(c.vendedor_actual)}</Badge>
                           ) : (
                             <span className="text-xs text-muted-foreground italic">Sin asignar</span>
                           )}
