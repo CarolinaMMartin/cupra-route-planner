@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger } from
 "@/components/ui/dropdown-menu";
-import { LogOut, User, BarChart3, Layers, ClipboardList, Store, UserCog, ChevronDown, Upload } from "lucide-react";
+import { LogOut, User, BarChart3, Layers, ClipboardList, Store, UserCog, ChevronDown, Upload, Home } from "lucide-react";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import angelBlanco from "@/assets/angel-blanco.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
@@ -156,6 +156,18 @@ const Index = () => {
             <nav className="flex items-center gap-0.5">
               {profile.rol === 'asignador' &&
               <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-sm"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("cupra:volver-inicio"));
+                      navigate("/");
+                    }}>
+                    <Home className="w-4 h-4" />
+                    <span className="hidden sm:inline">Volver al inicio</span>
+                  </Button>
+
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="gap-1.5 text-sm">

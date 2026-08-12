@@ -115,6 +115,18 @@ const AssignorDashboard = () => {
   const [generationProgress, setGenerationProgress] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // El botón "Volver al inicio" vive en la barra superior fija (Index) y avisa por evento.
+  useEffect(() => {
+    const handler = () => {
+      if (flowStep === "recommendations") return;
+      setShowExitDialog(true);
+    };
+    window.addEventListener("cupra:volver-inicio", handler);
+    return () => window.removeEventListener("cupra:volver-inicio", handler);
+  }, [flowStep]);
+
+
+
   useEffect(() => {
     if (!isLoading) {
       setGenerationProgress(0);
@@ -273,7 +285,14 @@ const AssignorDashboard = () => {
   const handleContinueToAssignment = () => setFlowStep("assignment");
   const handleBackToPreselection = () => setFlowStep("preselection");
   const handleBackToRecommendations = () => { setShowExitDialog(false); resetToInitial(); setSelectedCiudad("all"); setSelectedProvincia("all"); setSelectedVendedor("all"); setSelectedVendedoresIds([]); };
+  // Guardar y salir: conserva las recomendaciones y la selección (persistidas) para retomarlas luego.
+  const handleSaveAndExit = () => {
+    setShowExitDialog(false);
+    setFlowStep("recommendations");
+    toast({ title: "Búsqueda guardada", description: "Podés retomarla desde 'Nueva Asignación'." });
+  };
   const handleAssignmentComplete = () => handleBackToRecommendations();
+
   const handleEditAssignments = () => setFlowStep("edit-select");
   const handleContinueToEditKanban = (assignments: any[]) => { setSelectedExistingAssignments(assignments); setFlowStep("edit-kanban"); };
   const handleBackFromEditKanban = () => setFlowStep("edit-select");
@@ -309,11 +328,14 @@ const AssignorDashboard = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Salir del flujo?</AlertDialogTitle>
-            <AlertDialogDescription>Se perderán las recomendaciones y selecciones actuales.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Podés guardar la búsqueda para retomarla más tarde, o descartarla.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBackToRecommendations}>Confirmar</AlertDialogAction>
+            <Button variant="outline" onClick={handleBackToRecommendations}>Descartar</Button>
+            <AlertDialogAction onClick={handleSaveAndExit}>Guardar y salir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -324,6 +346,19 @@ const AssignorDashboard = () => {
             <h1 className="text-3xl font-sans text-foreground tracking-tight">Panel de Asignación</h1>
             <p className="text-sm text-muted-foreground mt-2">Recomendaciones inteligentes y gestión de asignaciones</p>
           </div>
+
+          {recommendations.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+              <p className="text-sm text-foreground/80">
+                Tenés una búsqueda guardada con {recommendations.length} recomendaciones{selectedSucursales.length > 0 ? ` (${selectedSucursales.length} seleccionadas)` : ""}.
+              </p>
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={() => setFlowStep("preselection")}>Retomar</Button>
+                <Button size="sm" variant="ghost" onClick={handleBackToRecommendations}>Descartar</Button>
+              </div>
+            </div>
+          )}
+
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="w-full max-w-md">
@@ -387,19 +422,8 @@ const AssignorDashboard = () => {
 
           <Card>
             <CardHeader className="border-b border-border/60 pb-4">
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-full flex justify-start">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1.5 text-sm"
-                    onClick={() => setShowExitDialog(true)}
-                  >
-                    <Home className="w-4 h-4" />
-                    Volver al inicio
-                  </Button>
-                </div>
-                <div className="space-y-1 text-center">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
                   <CardTitle className="font-sans text-2xl tracking-tight">Preselección</CardTitle>
                   <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
                 </div>
@@ -425,6 +449,7 @@ const AssignorDashboard = () => {
                 </div>
               </div>
             </CardHeader>
+
 
             <CardContent className="pt-6">
               {viewMode === "list" ? (
