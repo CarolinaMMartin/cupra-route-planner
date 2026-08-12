@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import AppNav from "@/components/AppNav";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -820,6 +821,7 @@ const SupervisionVendedores = () => {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>);
 
 };
