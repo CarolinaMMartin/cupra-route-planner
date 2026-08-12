@@ -355,6 +355,7 @@ function isClientAffiliated(cliente: any, vendedorUserId: string, sellerNameMap:
 
 interface ScoredCandidate {
   client_id: string;
+  identity_key: string;
   razon_social: string;
   es_prospecto: boolean;
   estado_comercial: EstadoComercial;
@@ -450,6 +451,13 @@ function scoreClients(
 
     candidates.push({
       client_id: c.client_id,
+      identity_key: buildIdentityKey({
+        esProspecto: false,
+        cuit: c.cuit_dni,
+        nombre: c.razon_social || c.fantasia,
+        direccion: place?.direccion_principal || c.direccion_principal,
+        lat, long,
+      }),
       razon_social: c.razon_social || c.fantasia || 'Sin nombre',
       es_prospecto: false,
       estado_comercial: estado,
@@ -531,6 +539,13 @@ function scoreProspects(
 
     candidates.push({
       client_id: p.place_id,
+      identity_key: buildIdentityKey({
+        esProspecto: true,
+        cuit: null,
+        nombre: p.nombre,
+        direccion: p.direccion,
+        lat, long,
+      }),
       razon_social: p.nombre,
       es_prospecto: true,
       estado_comercial: 'POTENCIAL',
@@ -614,7 +629,15 @@ function validateAndFill(
   prospectPool: ScoredCandidate[],
   vendedorId: string,
   globalPickedIds: Set<string>,
+  globalPickedIdentities: Set<string> = new Set<string>(),
 ): any[] {
+  // DEDUP DURO por identidad de negocio (CUIT o nombre+dirección):
+  // evita que el mismo cliente aparezca 2 veces por registros duplicados en DB.
+  const usedIdentities = new Set(globalPickedIdentities);
+  clientPool = dedupeByIdentity(clientPool, usedIdentities);
+  clientPool.forEach(c => usedIdentities.add(c.identity_key));
+  prospectPool = dedupeByIdentity(prospectPool, usedIdentities);
+
   const allCandidates = new Map<string, ScoredCandidate>();
   [...clientPool, ...prospectPool].forEach(c => allCandidates.set(c.client_id, c));
 
@@ -1316,6 +1339,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
     // ============================================================
     let validatedRecs: any[] = [];
     const globalPickedIds = new Set<string>();
+    const globalPickedIdentities = new Set<string>();
 
     for (const vendedor of vendedoresData) {
       const clientPool = (vendorClientPools.get(vendedor.user_id) || []).filter(c => !globalPickedIds.has(c.client_id));
@@ -1331,6 +1355,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         prospectPool,
         vendedor.user_id,
         globalPickedIds,
+        globalPickedIdentities,
       );
 
       if (vendorRecs.length !== 8) {
@@ -1340,7 +1365,14 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         );
       }
 
-      vendorRecs.forEach((r: any) => globalPickedIds.add(r.client_id));
+      const vendorCandidateIndex = new Map<string, ScoredCandidate>();
+      [...(vendorClientPools.get(vendedor.user_id) || []), ...(vendorProspectPools.get(vendedor.user_id) || [])]
+        .forEach(c => { if (!vendorCandidateIndex.has(c.client_id)) vendorCandidateIndex.set(c.client_id, c); });
+      vendorRecs.forEach((r: any) => {
+        globalPickedIds.add(r.client_id);
+        const key = vendorCandidateIndex.get(r.client_id)?.identity_key;
+        if (key) globalPickedIdentities.add(key);
+      });
       validatedRecs.push(...vendorRecs);
 
       // Log distribution
