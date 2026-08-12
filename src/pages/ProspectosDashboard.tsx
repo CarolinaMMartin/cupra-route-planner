@@ -874,6 +874,7 @@ const ProspectosDashboard = () => {
       <ProspectDiscoveryDialog
         open={showBuscarProspectos}
         onOpenChange={setShowBuscarProspectos}
+        onConverted={fetchProspectosData}
       />
     </div>
   );
