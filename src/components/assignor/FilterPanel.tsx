@@ -45,27 +45,35 @@ const FilterPanel = ({
   const { toast } = useToast();
 
   const provincias = useMemo(() => {
-    const set = new Set<string>();
+    const set = new Set<string>(GEO_PROVINCIAS);
     placesData.forEach(place => { if (place.provincia_principal) set.add(place.provincia_principal); });
     return Array.from(set).sort();
   }, [placesData]);
 
+  const provinciaScope = useMemo(
+    () => (selectedProvincia === 'all' ? [] : [selectedProvincia]),
+    [selectedProvincia]
+  );
+
   const comunas = useMemo(() => {
-    const filtered = placesData.filter(place => selectedProvincia === 'all' || place.provincia_principal === selectedProvincia);
-    const set = new Set<string>();
-    filtered.forEach(place => { if (place.comuna) set.add(place.comuna); });
+    const set = new Set<string>(geoComunas(provinciaScope));
+    placesData
+      .filter(place => selectedProvincia === 'all' || place.provincia_principal === selectedProvincia)
+      .forEach(place => { if (place.comuna) set.add(place.comuna); });
     return Array.from(set).sort().map(c => ({ label: c, value: c }));
-  }, [placesData, selectedProvincia]);
+  }, [placesData, selectedProvincia, provinciaScope]);
 
   const barrios = useMemo(() => {
-    const filtered = placesData.filter(place =>
-      (selectedProvincia === 'all' || place.provincia_principal === selectedProvincia) &&
-      (selectedComuna.length === 0 || selectedComuna.includes(place.comuna || ''))
-    );
-    const set = new Set<string>();
-    filtered.forEach(place => { if (place.barrio_principal) set.add(place.barrio_principal); });
+    const set = new Set<string>(geoBarrios(provinciaScope, selectedComuna));
+    placesData
+      .filter(place =>
+        (selectedProvincia === 'all' || place.provincia_principal === selectedProvincia) &&
+        (selectedComuna.length === 0 || selectedComuna.includes(place.comuna || ''))
+      )
+      .forEach(place => { if (place.barrio_principal) set.add(place.barrio_principal); });
     return Array.from(set).sort().map(b => ({ label: b, value: b }));
-  }, [placesData, selectedProvincia, selectedComuna]);
+  }, [placesData, selectedProvincia, selectedComuna, provinciaScope]);
+
 
   const handleProvinciaChange = (value: string) => { setSelectedProvincia(value); setSelectedComuna([]); setSelectedBarrio([]); };
   const handleAreaChange = async (areaId: string) => { setSelectedArea(areaId); };
