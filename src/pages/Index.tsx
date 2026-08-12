@@ -156,6 +156,18 @@ const Index = () => {
             <nav className="flex items-center gap-0.5">
               {profile.rol === 'asignador' &&
               <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1.5 text-sm"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent("cupra:volver-inicio"));
+                      navigate("/");
+                    }}>
+                    <Home className="w-4 h-4" />
+                    <span className="hidden sm:inline">Volver al inicio</span>
+                  </Button>
+
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="gap-1.5 text-sm">
