@@ -132,6 +132,12 @@ const FilterPanel = ({
     const ids = areaVendedores.map(v => v.id);
     const nombres = areaVendedores.map(v => v.nombre);
 
+    if (ids.length === 0) {
+      toast({ variant: "destructive", title: "Área sin vendedores", description: `El área "${area.nombre}" no tiene vendedores asignados. Asigná vendedores al área o usá el modo Personalizado.` });
+      return;
+    }
+
+
     onRequestRecommendations(
       { area_id: selectedArea, cantidad_vendedores: ids.length },
       { ids, nombres },
