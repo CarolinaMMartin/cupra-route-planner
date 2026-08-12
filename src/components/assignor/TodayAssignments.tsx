@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { toTitleCase } from "@/lib/format";
 import { Users, Calendar, Edit, Trash2, MapPin, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,12 +72,6 @@ interface Assignment {
 interface TodayAssignmentsProps {
   onEditAssignments?: () => void;
 }
-
-/** Capitalizes first letter of each word, lowercases the rest */
-const toTitleCase = (str: string) =>
-  str
-    .toLowerCase()
-    .replace(/(?:^|\s|[-/])\S/g, (match) => match.toUpperCase());
 
 const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -232,7 +227,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
 
   const assignmentsByVendedor = assignments.reduce(
     (acc, assignment) => {
-      const vendedorNombre = assignment.vendedor?.nombre || "Vendedor desconocido";
+      const vendedorNombre = toTitleCase(assignment.vendedor?.nombre) || "Vendedor desconocido";
       if (!acc[vendedorNombre]) {
         acc[vendedorNombre] = { email: assignment.vendedor?.email || "", clientes: [] };
       }
