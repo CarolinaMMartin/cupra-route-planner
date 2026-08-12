@@ -1659,6 +1659,8 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         distribucion_por_vendedor: distribucion,
         zonas_priorizadas: Array.from(zonas).slice(0, 5),
         request_id,
+        advertencia: cuotaIncompleta,
+
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
 
