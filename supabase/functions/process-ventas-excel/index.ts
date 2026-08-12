@@ -823,11 +823,12 @@ Deno.serve(async (req) => {
       const esNotaCredito = venta.tipo_comprobante === 'nota_credito';
       if (!esNotaCredito) c.cantidad_lineas += 1;
 
-      // TAREA 1: Contar tickets únicos via Set — usar solo campo Ticket (DISTINCT)
+      // TAREA 1: Contar comprobantes únicos (ticket + letra + fecha) via Set.
       // Las notas de crédito netean el monto pero NO cuentan como órdenes
       if (venta.ticket && !esNotaCredito) {
-        c.tickets_set.add(venta.ticket);
+        c.tickets_set.add(`${venta.ticket}|${venta.letra || ''}|${venta.fecha_emision || ''}`);
       }
+
 
       if (fecha_iso && !esNotaCredito) {
         const d = new Date(fecha_iso);
