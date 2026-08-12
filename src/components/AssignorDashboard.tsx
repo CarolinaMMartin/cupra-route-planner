@@ -316,11 +316,14 @@ const AssignorDashboard = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>¿Salir del flujo?</AlertDialogTitle>
-            <AlertDialogDescription>Se perderán las recomendaciones y selecciones actuales.</AlertDialogDescription>
+            <AlertDialogDescription>
+              Podés guardar la búsqueda para retomarla más tarde, o descartarla.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleBackToRecommendations}>Confirmar</AlertDialogAction>
+            <Button variant="outline" onClick={handleBackToRecommendations}>Descartar</Button>
+            <AlertDialogAction onClick={handleSaveAndExit}>Guardar y salir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -331,6 +334,19 @@ const AssignorDashboard = () => {
             <h1 className="text-3xl font-sans text-foreground tracking-tight">Panel de Asignación</h1>
             <p className="text-sm text-muted-foreground mt-2">Recomendaciones inteligentes y gestión de asignaciones</p>
           </div>
+
+          {recommendations.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+              <p className="text-sm text-foreground/80">
+                Tenés una búsqueda guardada con {recommendations.length} recomendaciones{selectedSucursales.length > 0 ? ` (${selectedSucursales.length} seleccionadas)` : ""}.
+              </p>
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={() => setFlowStep("preselection")}>Retomar</Button>
+                <Button size="sm" variant="ghost" onClick={handleBackToRecommendations}>Descartar</Button>
+              </div>
+            </div>
+          )}
+
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="w-full max-w-md">
