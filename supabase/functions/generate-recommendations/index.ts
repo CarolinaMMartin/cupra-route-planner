@@ -25,7 +25,51 @@ const HARD_RADIUS_KM = 1.5;
 const MAX_EXPANSION_KM = 2.0;
 const EXPANSION_STEPS_KM = [3.0, 5.0]; // Progressive expansion if 2km isn't enough
 
+// ---- Identity dedup (evita recomendar el mismo negocio 2 veces) ----
+function normalizeIdentityText(value: string | null | undefined): string {
+  return (value || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildIdentityKey(opts: {
+  esProspecto: boolean;
+  cuit?: string | null;
+  nombre?: string | null;
+  direccion?: string | null;
+  lat?: number | null;
+  long?: number | null;
+}): string {
+  const cuit = (opts.cuit || "").replace(/\D/g, "");
+  if (cuit.length >= 8) return `cuit:${cuit}`;
+  const nombre = normalizeIdentityText(opts.nombre);
+  const dir = normalizeIdentityText(opts.direccion).split(" ").slice(0, 4).join(" ");
+  if (nombre && dir) return `nd:${nombre}|${dir}`;
+  if (nombre && opts.lat != null && opts.long != null) {
+    return `ng:${nombre}|${opts.lat.toFixed(3)},${opts.long.toFixed(3)}`;
+  }
+  return `n:${nombre || Math.random().toString(36)}`;
+}
+
+/** Deja un único candidato por identidad (el de mayor score) y descarta los ya usados. */
+function dedupeByIdentity(
+  candidates: ScoredCandidate[],
+  usedIdentities: Set<string>,
+): ScoredCandidate[] {
+  const best = new Map<string, ScoredCandidate>();
+  for (const c of candidates) {
+    if (usedIdentities.has(c.identity_key)) continue;
+    const prev = best.get(c.identity_key);
+    if (!prev || c.score_total > prev.score_total) best.set(c.identity_key, c);
+  }
+  return Array.from(best.values()).sort((a, b) => b.score_total - a.score_total);
+}
+
 interface AnchorPoint { lat: number; lng: number; }
+
 
 const CABA_VIEWPORT = {
   low: { latitude: -34.705, longitude: -58.531 },
@@ -311,6 +355,7 @@ function isClientAffiliated(cliente: any, vendedorUserId: string, sellerNameMap:
 
 interface ScoredCandidate {
   client_id: string;
+  identity_key: string;
   razon_social: string;
   es_prospecto: boolean;
   estado_comercial: EstadoComercial;
@@ -406,6 +451,13 @@ function scoreClients(
 
     candidates.push({
       client_id: c.client_id,
+      identity_key: buildIdentityKey({
+        esProspecto: false,
+        cuit: c.cuit_dni,
+        nombre: c.razon_social || c.fantasia,
+        direccion: place?.direccion_principal || c.direccion_principal,
+        lat, long,
+      }),
       razon_social: c.razon_social || c.fantasia || 'Sin nombre',
       es_prospecto: false,
       estado_comercial: estado,
@@ -487,6 +539,13 @@ function scoreProspects(
 
     candidates.push({
       client_id: p.place_id,
+      identity_key: buildIdentityKey({
+        esProspecto: true,
+        cuit: null,
+        nombre: p.nombre,
+        direccion: p.direccion,
+        lat, long,
+      }),
       razon_social: p.nombre,
       es_prospecto: true,
       estado_comercial: 'POTENCIAL',
@@ -570,7 +629,15 @@ function validateAndFill(
   prospectPool: ScoredCandidate[],
   vendedorId: string,
   globalPickedIds: Set<string>,
+  globalPickedIdentities: Set<string> = new Set<string>(),
 ): any[] {
+  // DEDUP DURO por identidad de negocio (CUIT o nombre+dirección):
+  // evita que el mismo cliente aparezca 2 veces por registros duplicados en DB.
+  const usedIdentities = new Set(globalPickedIdentities);
+  clientPool = dedupeByIdentity(clientPool, usedIdentities);
+  clientPool.forEach(c => usedIdentities.add(c.identity_key));
+  prospectPool = dedupeByIdentity(prospectPool, usedIdentities);
+
   const allCandidates = new Map<string, ScoredCandidate>();
   [...clientPool, ...prospectPool].forEach(c => allCandidates.set(c.client_id, c));
 
@@ -1272,6 +1339,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
     // ============================================================
     let validatedRecs: any[] = [];
     const globalPickedIds = new Set<string>();
+    const globalPickedIdentities = new Set<string>();
 
     for (const vendedor of vendedoresData) {
       const clientPool = (vendorClientPools.get(vendedor.user_id) || []).filter(c => !globalPickedIds.has(c.client_id));
@@ -1287,6 +1355,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         prospectPool,
         vendedor.user_id,
         globalPickedIds,
+        globalPickedIdentities,
       );
 
       if (vendorRecs.length !== 8) {
@@ -1296,7 +1365,14 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         );
       }
 
-      vendorRecs.forEach((r: any) => globalPickedIds.add(r.client_id));
+      const vendorCandidateIndex = new Map<string, ScoredCandidate>();
+      [...(vendorClientPools.get(vendedor.user_id) || []), ...(vendorProspectPools.get(vendedor.user_id) || [])]
+        .forEach(c => { if (!vendorCandidateIndex.has(c.client_id)) vendorCandidateIndex.set(c.client_id, c); });
+      vendorRecs.forEach((r: any) => {
+        globalPickedIds.add(r.client_id);
+        const key = vendorCandidateIndex.get(r.client_id)?.identity_key;
+        if (key) globalPickedIdentities.add(key);
+      });
       validatedRecs.push(...vendorRecs);
 
       // Log distribution
