@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import { useNavigate } from "react-router-dom";
 import AppNav from "@/components/AppNav";
 import { supabase } from "@/integrations/supabase/client";
@@ -132,7 +133,7 @@ const SupervisionVendedores = () => {
       eq("user_id", user.id).
       single();
 
-      if (profile?.rol !== "asignador") {
+      if (!isAssignorLike(profile?.rol)) {
         toast({
           variant: "destructive",
           title: "Acceso denegado",

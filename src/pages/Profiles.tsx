@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import AppNav from "@/components/AppNav";
+import { isAssignorLike, canManageAssignors, ROLE_LABELS, type AppRole } from "@/lib/roles";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,7 @@ const Profiles = () => {
   const [profile, setProfile] = useState<any>(null);
   const [profiles, setProfiles] = useState<any[]>([]);
   const [filteredProfiles, setFilteredProfiles] = useState<any[]>([]);
-  const [filterRole, setFilterRole] = useState<"todos" | "vendedor" | "asignador">("todos");
+  const [filterRole, setFilterRole] = useState<"todos" | AppRole>("todos");
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<any>(null);
@@ -56,7 +57,7 @@ const Profiles = () => {
   const [formData, setFormData] = useState<{
     nombre: string;
     email: string;
-    rol: "asignador" | "vendedor";
+    rol: AppRole;
     activo: boolean;
   }>({
     nombre: "",
@@ -94,7 +95,7 @@ const Profiles = () => {
   }, [session]);
 
   useEffect(() => {
-    if (profile?.rol === 'asignador') {
+    if (isAssignorLike(profile?.rol)) {
       fetchProfiles();
     }
   }, [profile]);
@@ -118,7 +119,7 @@ const Profiles = () => {
       if (error) throw error;
       setProfile(data);
       
-      if (data.rol !== 'asignador') {
+      if (!isAssignorLike(data.rol)) {
         toast({
           variant: "destructive",
           title: "Acceso denegado",
@@ -151,6 +152,10 @@ const Profiles = () => {
       });
     }
   };
+
+  /** Un asignador solo puede gestionar vendedores; el administrador gestiona todo. */
+  const puedeGestionar = (target: any) =>
+    canManageAssignors(profile?.rol) || target?.rol === 'vendedor';
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -330,6 +335,7 @@ const Profiles = () => {
                 <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="vendedor">Vendedores</SelectItem>
                 <SelectItem value="asignador">Asignadores</SelectItem>
+                <SelectItem value="administrador">Administradores</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -353,8 +359,8 @@ const Profiles = () => {
                   <TableCell className="font-medium">{profileItem.nombre}</TableCell>
                   <TableCell>{profileItem.email}</TableCell>
                   <TableCell>
-                    <Badge variant={profileItem.rol === 'asignador' ? "default" : "secondary"}>
-                      {profileItem.rol}
+                    <Badge variant={isAssignorLike(profileItem.rol) ? "default" : "secondary"}>
+                      {ROLE_LABELS[profileItem.rol] ?? profileItem.rol}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -375,6 +381,7 @@ const Profiles = () => {
                         size="sm"
                         variant="outline"
                         onClick={() => handleOpenDialog(profileItem)}
+                        disabled={!puedeGestionar(profileItem)}
                       >
                         <Pencil className="w-4 h-4" />
                       </Button>
@@ -382,13 +389,14 @@ const Profiles = () => {
                         <Switch
                           checked={profileItem.activo}
                           onCheckedChange={() => toggleActivo(profileItem)}
+                          disabled={!puedeGestionar(profileItem)}
                         />
                       )}
                       <Button
                         size="sm"
                         variant="destructive"
                         onClick={() => handleDeleteClick(profileItem)}
-                        disabled={profileItem.user_id === session?.user?.id}
+                        disabled={profileItem.user_id === session?.user?.id || !puedeGestionar(profileItem)}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -431,14 +439,19 @@ const Profiles = () => {
                 <Label htmlFor="rol">Rol</Label>
                 <Select
                   value={formData.rol}
-                  onValueChange={(value) => setFormData({ ...formData, rol: value as "asignador" | "vendedor" })}
+                  onValueChange={(value) => setFormData({ ...formData, rol: value as AppRole })}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="vendedor">Vendedor</SelectItem>
-                    <SelectItem value="asignador">Asignador</SelectItem>
+                    {canManageAssignors(profile?.rol) && (
+                      <>
+                        <SelectItem value="asignador">Asignador</SelectItem>
+                        <SelectItem value="administrador">Administrador</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

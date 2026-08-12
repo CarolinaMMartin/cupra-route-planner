@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -82,7 +83,7 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
               <span className="hidden sm:inline">Volver al inicio</span>
             </Button>
 
-            {profile?.rol === "asignador" && (
+            {isAssignorLike(profile?.rol) && (
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -93,10 +94,12 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="center" className="w-48">
-                    <DropdownMenuItem onClick={() => navigate("/clientes-dashboard")} className="gap-2 cursor-pointer">
-                      <BarChart3 className="w-4 h-4" />
-                      Clientes
-                    </DropdownMenuItem>
+                    {canViewSalesDashboard(profile?.rol) && (
+                      <DropdownMenuItem onClick={() => navigate("/clientes-dashboard")} className="gap-2 cursor-pointer">
+                        <BarChart3 className="w-4 h-4" />
+                        Clientes
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => navigate("/prospectos-dashboard")} className="gap-2 cursor-pointer">
                       <Store className="w-4 h-4" />
                       Prospectos

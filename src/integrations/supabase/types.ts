@@ -1327,13 +1327,15 @@ export type Database = {
         Args: { top_n?: number; vendedor_user_id: string }
         Returns: string[]
       }
+      is_active_admin: { Args: { _user_id: string }; Returns: boolean }
       is_active_assignor: { Args: { _user_id: string }; Returns: boolean }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
+      is_assignor_like: { Args: { _user_id: string }; Returns: boolean }
       sync_places_catalog: { Args: never; Returns: number }
       unaccent: { Args: { "": string }; Returns: string }
     }
     Enums: {
-      app_role: "asignador" | "vendedor"
+      app_role: "asignador" | "vendedor" | "administrador"
       estado_asignacion: "Asignado" | "Por visitar" | "Visitado"
     }
     CompositeTypes: {
@@ -1462,7 +1464,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["asignador", "vendedor"],
+      app_role: ["asignador", "vendedor", "administrador"],
       estado_asignacion: ["Asignado", "Por visitar", "Visitado"],
     },
   },

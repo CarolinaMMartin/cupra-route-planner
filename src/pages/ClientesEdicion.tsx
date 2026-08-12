@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import AppNav from "@/components/AppNav";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -66,7 +67,7 @@ const ClientesEdicion = () => {
         .eq('user_id', session.user.id)
         .single();
 
-      if (profile?.rol !== 'asignador') {
+      if (!canViewSalesDashboard(profile?.rol)) {
         toast({
           title: "Acceso denegado",
           description: "No tienes permisos para acceder a esta página",
