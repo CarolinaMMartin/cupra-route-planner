@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Brain, TrendingUp, MapPin, Users } from "lucide-react";
+import { TrendingUp, MapPin, Users } from "lucide-react";
 
 interface AIInsightsProps {
   resumen: {
@@ -20,10 +20,7 @@ const AIInsightsCard = ({ resumen, vendedores }: AIInsightsProps) => {
   return (
     <Card className="bg-gradient-to-br from-primary/5 to-secondary/5 border-primary/20">
       <CardHeader>
-        <div className="flex items-center gap-2">
-          <Brain className="w-5 h-5 text-primary" />
-          <CardTitle className="text-lg">Análisis de IA</CardTitle>
-        </div>
+        <CardTitle className="text-lg">Análisis de IA</CardTitle>
         <CardDescription>Recomendaciones generadas con inteligencia artificial</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
