@@ -40,6 +40,7 @@ import { toTitleCase } from "@/lib/format";
 
 interface Cliente {
   client_id: string;
+  cuit_dni: string | null;
   razon_social: string | null;
   fantasia: string | null;
   ciudad_principal: string | null;
@@ -47,8 +48,24 @@ interface Cliente {
   vendedor_actual: string | null;
   vendedor_principal: string | null;
   monto_total_historico: number | null;
+  ultima_compra: string | null;
   dias_desde_ultima_compra: number | null;
   cantidad_ordenes: number | null;
+}
+
+interface ClienteGrupo {
+  key: string;
+  clientIds: string[];
+  razon_social: string | null;
+  fantasia: string | null;
+  ciudad_principal: string | null;
+  provincia_principal: string | null;
+  vendedor_actual: string | null;
+  vendedor_principal: string | null;
+  monto_total_historico: number;
+  dias_sin_compra: number | null;
+  cantidad_ordenes: number;
+  registros: number;
 }
 
 interface Vendedor {
@@ -62,6 +79,17 @@ const formatCurrency = (v: number | null) =>
   v != null ? `$${v.toLocaleString("es-AR", { maximumFractionDigits: 0 })}` : "—";
 
 const normalizeRS = (rs: string) => rs.trim().toUpperCase().replace(/\s+/g, " ");
+
+// Días reales desde la última compra, calculados en horario Argentina (UTC-3)
+const diasDesde = (fecha: string | null): number | null => {
+  if (!fecha) return null;
+  const parsed = new Date(`${fecha.slice(0, 10)}T00:00:00-03:00`);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const hoyAR = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const hoy = new Date(`${hoyAR.toISOString().slice(0, 10)}T00:00:00-03:00`);
+  return Math.max(0, Math.round((hoy.getTime() - parsed.getTime()) / 86400000));
+};
+
 
 const ManualAssignment = () => {
   const { toast } = useToast();
@@ -108,7 +136,7 @@ const ManualAssignment = () => {
     try {
       let q = supabase
         .from("clientes")
-        .select("client_id, razon_social, fantasia, ciudad_principal, provincia_principal, vendedor_actual, vendedor_principal, monto_total_historico, dias_desde_ultima_compra, cantidad_ordenes")
+        .select("client_id, cuit_dni, ultima_compra, razon_social, fantasia, ciudad_principal, provincia_principal, vendedor_actual, vendedor_principal, monto_total_historico, dias_desde_ultima_compra, cantidad_ordenes")
         .order("monto_total_historico", { ascending: false })
         .limit(200);
 
@@ -158,21 +186,66 @@ const ManualAssignment = () => {
     return Array.from(set).sort();
   }, [clientes]);
 
-  // ── Selection helpers ──
-  const toggleClient = (clientId: string) => {
+  // ── Unificar registros duplicados del mismo cliente (mismo CUIT o misma razón social) ──
+  const grupos = useMemo<ClienteGrupo[]>(() => {
+    const map = new Map<string, ClienteGrupo>();
+    const ultimaCompraPorGrupo = new Map<string, string>();
+
+    for (const c of clientes) {
+      const key = (c.cuit_dni?.trim() || normalizeRS(c.razon_social || c.fantasia || c.client_id));
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, {
+          key,
+          clientIds: [c.client_id],
+          razon_social: c.razon_social,
+          fantasia: c.fantasia,
+          ciudad_principal: c.ciudad_principal,
+          provincia_principal: c.provincia_principal,
+          vendedor_actual: c.vendedor_actual,
+          vendedor_principal: c.vendedor_principal,
+          monto_total_historico: c.monto_total_historico || 0,
+          dias_sin_compra: null,
+          cantidad_ordenes: c.cantidad_ordenes || 0,
+          registros: 1,
+        });
+      } else {
+        existing.clientIds.push(c.client_id);
+        existing.monto_total_historico += c.monto_total_historico || 0;
+        existing.cantidad_ordenes += c.cantidad_ordenes || 0;
+        existing.registros += 1;
+        existing.ciudad_principal ||= c.ciudad_principal;
+        existing.provincia_principal ||= c.provincia_principal;
+        existing.vendedor_actual ||= c.vendedor_actual;
+        existing.vendedor_principal ||= c.vendedor_principal;
+      }
+      // La última compra del cliente unificado es la más reciente de sus registros
+      const prev = ultimaCompraPorGrupo.get(key);
+      if (c.ultima_compra && (!prev || c.ultima_compra > prev)) {
+        ultimaCompraPorGrupo.set(key, c.ultima_compra);
+      }
+    }
+
+    return Array.from(map.values())
+      .map(g => ({ ...g, dias_sin_compra: diasDesde(ultimaCompraPorGrupo.get(g.key) || null) }))
+      .sort((a, b) => b.monto_total_historico - a.monto_total_historico);
+  }, [clientes]);
+
+  // ── Selection helpers (por cliente unificado) ──
+  const toggleClient = (groupKey: string) => {
     setSelectedClients(prev => {
       const next = new Set(prev);
-      if (next.has(clientId)) next.delete(clientId);
-      else next.add(clientId);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
       return next;
     });
   };
 
   const toggleAll = () => {
-    if (selectedClients.size === clientes.length) {
+    if (selectedClients.size === grupos.length) {
       setSelectedClients(new Set());
     } else {
-      setSelectedClients(new Set(clientes.map(c => c.client_id)));
+      setSelectedClients(new Set(grupos.map(g => g.key)));
     }
   };
 
@@ -188,8 +261,10 @@ const ManualAssignment = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No autenticado");
 
-      const clientIds = Array.from(selectedClients);
+      const selectedGrupos = grupos.filter(g => selectedClients.has(g.key));
+      const clientIds = selectedGrupos.flatMap(g => g.clientIds);
       const selectedClientesData = clientes.filter(c => clientIds.includes(c.client_id));
+
 
       // 1. Create assignments in asignaciones_vendedores_clientes
       const assignments = clientIds.map(client_id => ({
@@ -375,7 +450,7 @@ const ManualAssignment = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">
-                  {clientes.length} resultado(s)
+                  {grupos.length} cliente(s){grupos.length !== clientes.length ? ` · ${clientes.length} registros unificados` : ""}
                 </span>
                 {selectedClients.size > 0 && (
                   <Badge variant="default" className="gap-1">
@@ -408,7 +483,7 @@ const ManualAssignment = () => {
               <Search className="w-8 h-8 opacity-40" />
               <p className="text-sm">Usá el buscador o las sugerencias inteligentes para encontrar clientes</p>
             </div>
-          ) : clientes.length === 0 ? (
+          ) : grupos.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
               <AlertCircle className="w-8 h-8 opacity-40" />
               <p className="text-sm">No se encontraron clientes con esos criterios</p>
@@ -420,7 +495,7 @@ const ManualAssignment = () => {
                   <TableRow>
                     <TableHead className="w-10">
                       <Checkbox
-                        checked={selectedClients.size === clientes.length && clientes.length > 0}
+                        checked={selectedClients.size === grupos.length && grupos.length > 0}
                         onCheckedChange={toggleAll}
                       />
                     </TableHead>
@@ -433,22 +508,29 @@ const ManualAssignment = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clientes.map(c => {
-                    const isSelected = selectedClients.has(c.client_id);
+                  {grupos.map(c => {
+                    const isSelected = selectedClients.has(c.key);
                     return (
                       <TableRow
-                        key={c.client_id}
+                        key={c.key}
                         className={`cursor-pointer transition-colors ${isSelected ? "bg-primary/5" : "hover:bg-accent/30"}`}
-                        onClick={() => toggleClient(c.client_id)}
+                        onClick={() => toggleClient(c.key)}
                       >
                         <TableCell onClick={e => e.stopPropagation()}>
                           <Checkbox
                             checked={isSelected}
-                            onCheckedChange={() => toggleClient(c.client_id)}
+                            onCheckedChange={() => toggleClient(c.key)}
                           />
                         </TableCell>
                         <TableCell className="font-medium">
-                          {c.razon_social || c.fantasia || "Sin nombre"}
+                          <div className="flex items-center gap-2">
+                            <span>{c.razon_social || c.fantasia || "Sin nombre"}</span>
+                            {c.registros > 1 && (
+                              <Badge variant="outline" className="text-[10px] font-normal">
+                                {c.registros} registros
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {c.ciudad_principal || "—"}
@@ -467,11 +549,13 @@ const ManualAssignment = () => {
                           {formatCurrency(c.monto_total_historico)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {c.dias_desde_ultima_compra != null ? (
-                            <Badge variant={c.dias_desde_ultima_compra > 90 ? "destructive" : c.dias_desde_ultima_compra > 30 ? "secondary" : "default"} className="text-xs">
-                              {c.dias_desde_ultima_compra}d
+                          {c.dias_sin_compra != null ? (
+                            <Badge variant={c.dias_sin_compra > 90 ? "destructive" : c.dias_sin_compra > 30 ? "secondary" : "default"} className="text-xs">
+                              {c.dias_sin_compra}d
                             </Badge>
-                          ) : "—"}
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Sin compras</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
