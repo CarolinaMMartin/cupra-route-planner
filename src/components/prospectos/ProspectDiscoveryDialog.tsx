@@ -480,7 +480,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
           </section>
         )}
 
-        </section>
+
       </DialogContent>
     </Dialog>
   );
