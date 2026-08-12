@@ -168,11 +168,13 @@ async function discoverProspectsFromGoogle(
   for (const zoneWave of zoneWaves) {
     for (const search of searches) {
       for (const zone of zoneWave) {
-        const response = await fetch("https://places.googleapis.com/v1/places:searchText", {
+        const gatewayKey = Deno.env.get("LOVABLE_API_KEY") || "";
+        const response = await fetch("https://connector-gateway.lovable.dev/google_maps/places/v1/places:searchText", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Goog-Api-Key": apiKey,
+            "Authorization": `Bearer ${gatewayKey}`,
+            "X-Connection-Api-Key": apiKey,
             "X-Goog-FieldMask": GOOGLE_PROSPECT_FIELD_MASK,
           },
           body: JSON.stringify({
@@ -185,6 +187,7 @@ async function discoverProspectsFromGoogle(
             locationRestriction: { rectangle: CABA_VIEWPORT },
           }),
         });
+
 
         const payload = await response.json() as GoogleTextSearchResponse;
         if (!response.ok) {
