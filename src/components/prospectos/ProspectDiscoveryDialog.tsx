@@ -343,6 +343,20 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
           </Button>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <Checkbox checked={onlyNew} onCheckedChange={(value) => setOnlyNew(value === true)} />
+            Mostrar solo comercios nuevos (ocultar los ya cargados)
+          </label>
+          {searchSummary && (
+            <span>
+              {searchSummary.total} encontrados · {searchSummary.nuevos} nuevos · {searchSummary.yaCargados} ya cargados
+            </span>
+          )}
+        </div>
+
+
+
         {results.length > 0 && (
           <section className="rounded-lg border bg-muted/10 p-3 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
