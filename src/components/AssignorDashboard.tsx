@@ -387,44 +387,45 @@ const AssignorDashboard = () => {
 
           <Card>
             <CardHeader className="border-b border-border/60 pb-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <CardTitle className="font-sans text-2xl tracking-tight">Preselección</CardTitle>
-                  <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-full flex justify-start">
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="gap-2"
+                    className="gap-1.5 text-sm"
                     onClick={() => setShowExitDialog(true)}
                   >
                     <Home className="w-4 h-4" />
                     Volver al inicio
                   </Button>
-                  <div className="flex items-center rounded-md border border-border p-0.5">
-                    <Button
-                      variant={viewMode === "list" ? "secondary" : "ghost"}
-                      size="sm"
-                      className="gap-2 px-3"
-                      onClick={() => setViewMode("list")}
-                    >
-                      <List className="w-4 h-4" />
-                      Lista
-                    </Button>
-                    <Button
-                      variant={viewMode === "map" ? "secondary" : "ghost"}
-                      size="sm"
-                      className="gap-2 px-3"
-                      onClick={() => setViewMode("map")}
-                    >
-                      <MapPin className="w-4 h-4" />
-                      Mapa
-                    </Button>
-                  </div>
+                </div>
+                <div className="space-y-1 text-center">
+                  <CardTitle className="font-sans text-2xl tracking-tight">Preselección</CardTitle>
+                  <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
+                </div>
+                <div className="flex items-center rounded-md border border-border p-0.5">
+                  <Button
+                    variant={viewMode === "list" ? "secondary" : "ghost"}
+                    size="sm"
+                    className="gap-2 px-3"
+                    onClick={() => setViewMode("list")}
+                  >
+                    <List className="w-4 h-4" />
+                    Lista
+                  </Button>
+                  <Button
+                    variant={viewMode === "map" ? "secondary" : "ghost"}
+                    size="sm"
+                    className="gap-2 px-3"
+                    onClick={() => setViewMode("map")}
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Mapa
+                  </Button>
                 </div>
               </div>
             </CardHeader>
+
             <CardContent className="pt-6">
               {viewMode === "list" ? (
                 <PreselectionStep recommendations={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleContinueToAssignment} />
