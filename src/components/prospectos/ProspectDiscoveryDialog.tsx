@@ -283,8 +283,9 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
         <DialogHeader>
           <DialogTitle>Buscar nuevos prospectos</DialogTitle>
           <DialogDescription>
-            Explorá comercios de CABA y guardá lugares para investigar. Los datos del resultado no se copian a la base.
+            Buscá comercios de CABA y agregalos a Prospectos en un solo paso. Se descartan automáticamente los que ya son clientes o prospectos.
           </DialogDescription>
+
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_auto] gap-3 items-end">
