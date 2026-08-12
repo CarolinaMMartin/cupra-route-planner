@@ -273,7 +273,14 @@ const AssignorDashboard = () => {
   const handleContinueToAssignment = () => setFlowStep("assignment");
   const handleBackToPreselection = () => setFlowStep("preselection");
   const handleBackToRecommendations = () => { setShowExitDialog(false); resetToInitial(); setSelectedCiudad("all"); setSelectedProvincia("all"); setSelectedVendedor("all"); setSelectedVendedoresIds([]); };
+  // Guardar y salir: conserva las recomendaciones y la selección (persistidas) para retomarlas luego.
+  const handleSaveAndExit = () => {
+    setShowExitDialog(false);
+    setFlowStep("recommendations");
+    toast({ title: "Búsqueda guardada", description: "Podés retomarla desde 'Nueva Asignación'." });
+  };
   const handleAssignmentComplete = () => handleBackToRecommendations();
+
   const handleEditAssignments = () => setFlowStep("edit-select");
   const handleContinueToEditKanban = (assignments: any[]) => { setSelectedExistingAssignments(assignments); setFlowStep("edit-kanban"); };
   const handleBackFromEditKanban = () => setFlowStep("edit-select");
