@@ -40,6 +40,7 @@ import {
 "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { toTitleCase } from "@/lib/format";
 import ActividadesResumen from "@/components/assignor/ActividadesResumen";
 
 interface VendedorStats {

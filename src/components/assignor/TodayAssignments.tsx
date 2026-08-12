@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { toTitleCase } from "@/lib/format";
 import { Users, Calendar, Edit, Trash2, MapPin, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -232,7 +233,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
 
   const assignmentsByVendedor = assignments.reduce(
     (acc, assignment) => {
-      const vendedorNombre = assignment.vendedor?.nombre || "Vendedor desconocido";
+      const vendedorNombre = toTitleCase(assignment.vendedor?.nombre) || "Vendedor desconocido";
       if (!acc[vendedorNombre]) {
         acc[vendedorNombre] = { email: assignment.vendedor?.email || "", clientes: [] };
       }
