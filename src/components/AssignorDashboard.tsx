@@ -73,12 +73,42 @@ const AssignorDashboard = () => {
 
   useEffect(() => {
     const loadPlacesData = async () => {
-      const { data, error } = await supabase.from("places").select("comuna, barrio_principal, provincia_principal");
-      if (error) { console.error("Error loading places:", error); return; }
-      setPlacesData(data || []);
+      // Zonas reales: se arman con los lugares de clientes + prospectos
+      const [clientRes, prospectRes] = await Promise.all([
+        supabase.from("client_places").select("comuna, barrio_principal, provincia_principal").limit(20000),
+        supabase.from("prospectos").select("comuna, barrio, provincia").limit(20000),
+      ]);
+
+      if (clientRes.error) console.error("Error loading client_places:", clientRes.error);
+      if (prospectRes.error) console.error("Error loading prospectos zones:", prospectRes.error);
+
+      const combined = [
+        ...(clientRes.data || []).map((p) => ({
+          comuna: p.comuna,
+          barrio_principal: p.barrio_principal,
+          provincia_principal: p.provincia_principal,
+        })),
+        ...(prospectRes.data || []).map((p) => ({
+          comuna: p.comuna,
+          barrio_principal: p.barrio,
+          provincia_principal: p.provincia,
+        })),
+      ];
+
+      // Deduplicar combinaciones
+      const seen = new Set<string>();
+      const unique = combined.filter((p) => {
+        const key = `${p.provincia_principal || ""}|${p.comuna || ""}|${p.barrio_principal || ""}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      setPlacesData(unique);
     };
     loadPlacesData();
   }, []);
+
 
   const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
   const [showExitDialog, setShowExitDialog] = useState(false);
