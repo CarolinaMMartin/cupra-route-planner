@@ -284,6 +284,7 @@ const Profiles = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
+      <AppNav profile={{ nombre: profile.nombre, rol: profile.rol }} />
       <header className="bg-card shadow-soft border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
@@ -318,16 +319,7 @@ const Profiles = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6 flex items-center justify-between">
-          <Button
-            variant="outline"
-            onClick={() => navigate("/")}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Volver
-          </Button>
-
+        <div className="mb-6 flex items-center justify-end">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={filterRole} onValueChange={(value: any) => setFilterRole(value)}>

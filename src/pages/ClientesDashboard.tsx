@@ -375,19 +375,12 @@ const ClientesDashboard = () => {
 
   return (
     <TooltipProvider>
-    <div className="min-h-screen p-5 md:p-8">
-      <div className="max-w-[1920px] mx-auto space-y-7">
+    <div className="min-h-screen">
+      <AppNav />
+      <div className="max-w-[1920px] mx-auto space-y-7 p-5 md:p-8">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => navigate('/')}
-              className="border-border/60"
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
             <div>
               <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">
                 Dashboard de Consultas
