@@ -256,42 +256,23 @@ const FilterPanel = ({
       {/* Mode: Custom */}
       {mode === 'custom' && (
         <form onSubmit={handleSubmitCustom} className="space-y-6">
-          <Collapsible open={isVendedoresOpen} onOpenChange={setIsVendedoresOpen}>
-            <CollapsibleTrigger asChild>
-              <button type="button" className="w-full flex items-center justify-between py-3.5 px-5 rounded-xl bg-secondary/20 hover:bg-secondary/30 transition-colors">
-                <div className="flex items-center gap-2.5">
-                  <span className="text-sm font-medium">Vendedores</span>
-                  <span className="text-xs text-muted-foreground">{selectedVendedores.length} de {vendedores.length} seleccionados</span>
-                </div>
-                <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isVendedoresOpen ? 'rotate-90' : ''}`} />
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="pt-4 space-y-3">
-                <div className="flex justify-end">
-                  <Button type="button" variant="ghost" size="sm" onClick={toggleAllVendedores} disabled={isLoadingVendedores} className="text-xs">
-                    {selectedVendedores.length === vendedores.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
-                  </Button>
-                </div>
-                {isLoadingVendedores ? (
-                  <p className="text-sm text-muted-foreground">Cargando...</p>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {vendedores.map(vendedor => (
-                      <label key={vendedor.id} className={`flex items-center gap-2.5 p-3 rounded-lg cursor-pointer transition-all duration-150 ${
-                        selectedVendedores.includes(vendedor.id)
-                          ? 'bg-primary/8 border border-primary/15'
-                          : 'bg-secondary/20 border border-transparent hover:bg-secondary/30'
-                      }`}>
-                        <Checkbox checked={selectedVendedores.includes(vendedor.id)} onCheckedChange={() => toggleVendedor(vendedor.id)} />
-                        <span className="text-sm">{vendedor.nombre}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Vendedores</Label>
+              <Button type="button" variant="ghost" size="sm" onClick={toggleAllVendedores} disabled={isLoadingVendedores} className="h-7 px-2 text-xs text-muted-foreground">
+                {selectedVendedores.length === vendedores.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+              </Button>
+            </div>
+            <MultiSelect
+              options={vendedores.map(v => ({ label: v.nombre, value: v.id }))}
+              selected={selectedVendedores}
+              onChange={setSelectedVendedores}
+              placeholder={isLoadingVendedores ? "Cargando vendedores..." : "Buscar y seleccionar vendedores..."}
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground">{selectedVendedores.length} de {vendedores.length} seleccionados</p>
+          </div>
+
 
           {/* Geographic filters */}
           <div className="space-y-4">
