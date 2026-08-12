@@ -27,6 +27,28 @@ const GOOGLE_FIELD_MASK = [
   'places.attributions',
 ].join(',');
 
+const PLACE_DETAIL_FIELD_MASK = [
+  'id',
+  'displayName',
+  'formattedAddress',
+  'addressComponents',
+  'location',
+  'primaryType',
+  'types',
+  'businessStatus',
+  'googleMapsUri',
+  'rating',
+  'userRatingCount',
+  'priceLevel',
+  'nationalPhoneNumber',
+  'websiteUri',
+].join(',');
+
+const getKeys = () => ({
+  googleApiKey: Deno.env.get('GOOGLE_MAPS_API_KEY') || Deno.env.get('VITE_GOOGLE_MAPS_API_KEY') || '',
+  lovableApiKey: Deno.env.get('LOVABLE_API_KEY') || '',
+});
+
 interface SearchRequest {
   action: 'search';
   query: string;
@@ -52,7 +74,12 @@ interface StatusRequest {
   status: string;
 }
 
-type DiscoveryRequest = SearchRequest | QueueRequest | ListRequest | StatusRequest;
+interface PromoteRequest {
+  action: 'promote';
+  placeIds: string[];
+}
+
+type DiscoveryRequest = SearchRequest | QueueRequest | ListRequest | StatusRequest | PromoteRequest;
 
 interface GoogleAttribution {
   provider?: string;
@@ -210,6 +237,93 @@ Deno.serve(async (req) => {
         added: newIds.length + discardedIds.length,
         already_queued: placeIds.length - newIds.length - discardedIds.length,
       });
+    }
+
+    if (body.action === 'promote') {
+      const placeIds = Array.from(new Set((body.placeIds || []).filter(isValidPlaceId))).slice(0, 25);
+      if (placeIds.length === 0) return jsonResponse({ success: false, error: 'Lugares requeridos' }, 400);
+
+      const { googleApiKey, lovableApiKey } = getKeys();
+      if (!googleApiKey || !lovableApiKey) {
+        return jsonResponse({ success: false, error: 'Google Places no está configurado' }, 503);
+      }
+
+      const created: string[] = [];
+      const skipped: Array<{ place_id: string; motivo: string }> = [];
+
+      for (const placeId of placeIds) {
+        const detailResponse = await fetch(
+          `https://connector-gateway.lovable.dev/google_maps/places/v1/places/${encodeURIComponent(placeId)}?languageCode=es&regionCode=AR`,
+          {
+            headers: {
+              Authorization: `Bearer ${lovableApiKey}`,
+              'X-Connection-Api-Key': googleApiKey,
+              'X-Goog-FieldMask': PLACE_DETAIL_FIELD_MASK,
+            },
+          },
+        );
+        const detailText = await detailResponse.text();
+        if (!detailResponse.ok) {
+          console.error('Place details error:', detailResponse.status, detailText.slice(0, 300));
+          skipped.push({ place_id: placeId, motivo: 'No se pudo leer el detalle en Google' });
+          continue;
+        }
+        let place: GooglePlace & {
+          addressComponents?: Array<{ longText?: string; types?: string[] }>;
+          nationalPhoneNumber?: string;
+          websiteUri?: string;
+        };
+        try {
+          place = JSON.parse(detailText);
+        } catch {
+          skipped.push({ place_id: placeId, motivo: 'Respuesta inválida de Google' });
+          continue;
+        }
+
+        const component = (type: string) => place.addressComponents
+          ?.find((item) => item.types?.includes(type))?.longText || null;
+
+        const nombre = place.displayName?.text?.trim();
+        const direccion = place.formattedAddress?.trim();
+        if (!nombre || !direccion) {
+          skipped.push({ place_id: placeId, motivo: 'Faltan nombre o dirección' });
+          continue;
+        }
+
+        const { error: insertError } = await supabase.from('prospectos').upsert({
+          place_id: placeId,
+          nombre,
+          direccion,
+          telefono: place.nationalPhoneNumber || null,
+          barrio: component('sublocality_level_1') || component('sublocality') || null,
+          ciudad: component('locality') || 'Ciudad Autónoma de Buenos Aires',
+          provincia: component('administrative_area_level_1') || 'Ciudad Autónoma de Buenos Aires',
+          latitud: place.location?.latitude ?? 0,
+          longitud: place.location?.longitude ?? 0,
+          rating: place.rating ?? 0,
+          total_ratings: place.userRatingCount ?? 0,
+          nivel_precio: place.priceLevel || null,
+          tipo_principal: place.primaryType || null,
+          tipos: place.types || [],
+          sirve_vinos: (place.types || []).some((type) => ['liquor_store', 'wine_bar', 'bar', 'restaurant'].includes(type)),
+          website: place.websiteUri || null,
+          estado_negocio: place.businessStatus || null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'place_id' });
+
+        if (insertError) {
+          skipped.push({ place_id: placeId, motivo: insertError.message });
+          continue;
+        }
+
+        await supabase
+          .from('prospect_discovery_queue')
+          .update({ estado: 'CONVERTIDO', convertido_prospecto_place_id: placeId })
+          .eq('place_id', placeId);
+        created.push(placeId);
+      }
+
+      return jsonResponse({ success: true, created: created.length, skipped });
     }
 
     if (body.action !== 'search') return jsonResponse({ success: false, error: 'Acción inválida' }, 400);
