@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ClienteAsignado } from "./VendedorKanban";
 import { getGoogleMapsUrl, isManualPlaceId, getGoogleMapsUrlFromCoords } from "@/lib/utils";
+import { GOOGLE_MAPS_BROWSER_KEY, loadGoogleMaps } from "@/lib/googleMaps";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
