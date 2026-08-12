@@ -418,68 +418,68 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
               })}
             </div>
             <p className="text-xs text-muted-foreground">
-              Se conserva únicamente el identificador del lugar y datos internos de seguimiento. Verificá el comercio antes de cargarlo como prospecto operativo.
+              Al agregar, el comercio se carga directamente en la pantalla de Prospectos con nombre, dirección, barrio, teléfono y coordenadas. Verificá los datos antes de asignarlo.
             </p>
           </section>
         )}
 
-        <section className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium text-sm">Pendientes de investigación</h3>
-              <Badge variant="outline">{queue.length}</Badge>
+        {(isLoadingQueue || queue.length > 0) && (
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium text-sm">Pendientes de búsquedas anteriores</h3>
+                <Badge variant="outline">{queue.length}</Badge>
+              </div>
+              {queue.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="gap-2"
+                  disabled={isPromoting}
+                  onClick={() => promoteQueue(queue.map((item) => item.place_id))}
+                >
+                  {isPromoting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Agregar todos a Prospectos
+                </Button>
+              )}
             </div>
-            {queue.length > 0 && (
-              <Button
-                size="sm"
-                variant="secondary"
-                className="gap-2"
-                disabled={isPromoting}
-                onClick={() => promoteQueue(queue.map((item) => item.place_id))}
-              >
-                {isPromoting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Convertir todos a prospectos
-              </Button>
-            )}
-          </div>
 
-          {isLoadingQueue ? (
-            <div className="py-6 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-          ) : queue.length === 0 ? (
-            <div className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
-              Todavía no hay lugares pendientes.
-            </div>
-          ) : (
-            <div className="divide-y rounded-lg border">
-              {queue.map((item) => (
-                <div key={item.id} className="p-3 flex items-center gap-3">
-                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{item.notas || item.consulta}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {item.consulta} · {item.zona || "Toda CABA"} · {new Date(item.discovered_at).toLocaleDateString("es-AR")}
-                    </p>
+            {isLoadingQueue ? (
+              <div className="py-6 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : (
+              <div className="divide-y rounded-lg border">
+                {queue.map((item) => (
+                  <div key={item.id} className="p-3 flex items-center gap-3">
+                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{item.notas || item.consulta}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {item.consulta} · {item.zona || "Toda CABA"} · {new Date(item.discovered_at).toLocaleDateString("es-AR")}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="hidden sm:inline-flex">{item.estado === "NUEVO" ? "Nuevo" : "En revisión"}</Badge>
+                    <Button variant="ghost" size="icon" asChild title="Abrir en Google Maps">
+                      <a href={queueMapsUrl(item.place_id)} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /></a>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isPromoting}
+                      onClick={() => promoteQueue([item.place_id])}
+                      title="Cargarlo en la pantalla de Prospectos"
+                    >
+                      Agregar a Prospectos
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => discardQueueItem(item)} title="Descartar">
+                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                    </Button>
                   </div>
-                  <Badge variant="secondary" className="hidden sm:inline-flex">{item.estado === "NUEVO" ? "Nuevo" : "En revisión"}</Badge>
-                  <Button variant="ghost" size="icon" asChild title="Abrir en Google Maps">
-                    <a href={queueMapsUrl(item.place_id)} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /></a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isPromoting}
-                    onClick={() => promoteQueue([item.place_id])}
-                    title="Crear prospecto operativo"
-                  >
-                    Convertir
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => discardQueueItem(item)} title="Descartar">
-                    <Trash2 className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
         </section>
       </DialogContent>
     </Dialog>
