@@ -38,11 +38,13 @@ function extractComponent(components: any[], type: string): string | null {
 }
 
 /**
- * Llama directamente a Google Geocoding API para geocodificar una dirección
+ * Geocodifica una dirección usando el SDK de Google Maps.
+ * (La clave de navegador está restringida por dominio y no puede usarse
+ * contra la API REST de Geocoding.)
  */
 export async function geocodeAddress(request: GeocodingRequest): Promise<GeocodingResponse> {
   if (!GOOGLE_MAPS_API_KEY) {
-    console.error("VITE_GOOGLE_MAPS_API_KEY no está configurada");
+    console.error("No hay clave de Google Maps configurada");
     return {
       status: "ERROR",
       error_code: "CONFIG_ERROR",
@@ -54,34 +56,26 @@ export async function geocodeAddress(request: GeocodingRequest): Promise<Geocodi
   const fullAddress = parts.join(", ");
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    await loadGoogleMaps();
 
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(fullAddress)}&key=${GOOGLE_MAPS_API_KEY}`;
-    const response = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
+    const geocoder = new google.maps.Geocoder();
+    const { results } = await geocoder.geocode({
+      address: fullAddress,
+      region: "ar",
+    });
 
-    if (!response.ok) {
+    if (!results?.length) {
       return {
         status: "ERROR",
-        error_code: "NETWORK_ERROR",
-        message: "Error de conexión con Google Geocoding API. Intenta nuevamente.",
+        error_code: "NO_RESULTS",
+        message: "No se encontraron resultados para esa dirección.",
       };
     }
 
-    const data = await response.json();
-
-    if (data.status !== "OK" || !data.results?.length) {
-      return {
-        status: "ERROR",
-        error_code: data.status || "NO_RESULTS",
-        message: data.error_message || "No se encontraron resultados para esa dirección.",
-      };
-    }
-
-    const result = data.results[0];
-    const { lat, lng } = result.geometry.location;
-    const components = result.address_components || [];
+    const result = results[0];
+    const lat = result.geometry.location.lat();
+    const lng = result.geometry.location.lng();
+    const components: any[] = result.address_components || [];
 
     const barrio =
       extractComponent(components, "sublocality_level_1") ||
