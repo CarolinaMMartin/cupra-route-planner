@@ -181,6 +181,11 @@ const ManualAssignment = () => {
     return Array.from(set).sort();
   }, [clientes]);
 
+  const provincias = useMemo(() => {
+    const set = new Set(clientes.map(c => c.provincia_principal).filter(Boolean) as string[]);
+    return Array.from(set).sort();
+  }, [clientes]);
+
   // ── Unificar registros duplicados del mismo cliente (mismo CUIT o misma razón social) ──
   const grupos = useMemo<ClienteGrupo[]>(() => {
     const map = new Map<string, ClienteGrupo>();
