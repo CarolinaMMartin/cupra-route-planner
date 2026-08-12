@@ -148,77 +148,6 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
     }
   };
 
-  const handleQueue = async (result: ProspectSearchResult) => {
-    setQueueingId(result.place_id);
-    try {
-      const { data, error } = await supabase.functions.invoke("prospect-discovery", {
-        body: {
-          action: "queue",
-          placeIds: [result.place_id],
-          names: { [result.place_id]: result.nombre },
-          query: query.trim(),
-          zone: zone.trim() || undefined,
-        },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "No se pudo guardar el pendiente");
-
-      setResults((current) => current.map((item) => (
-        item.place_id === result.place_id ? { ...item, queued: true } : item
-      )));
-      await loadQueue();
-      toast({ title: "Agregado a pendientes", description: `${result.nombre} quedó abajo, en "Pendientes de investigación".` });
-    } catch (error) {
-      toast({
-        title: "No se pudo agregar",
-        description: error instanceof Error ? error.message : "Error inesperado",
-        variant: "destructive",
-      });
-    } finally {
-      setQueueingId(null);
-    }
-  };
-
-  const handleBulkQueue = async () => {
-    if (selectedIds.length === 0) return;
-    setIsBulkQueueing(true);
-    try {
-      const names: Record<string, string> = {};
-      for (const result of results) {
-        if (selectedIds.includes(result.place_id)) names[result.place_id] = result.nombre;
-      }
-      const { data, error } = await supabase.functions.invoke("prospect-discovery", {
-        body: {
-          action: "queue",
-          placeIds: selectedIds,
-          names,
-          query: query.trim(),
-          zone: zone.trim() || undefined,
-        },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "No se pudieron guardar los pendientes");
-
-      setResults((current) => current.map((item) => (
-        selectedIds.includes(item.place_id) ? { ...item, queued: true } : item
-      )));
-      setSelectedIds([]);
-      await loadQueue();
-      toast({
-        title: `${data.added ?? selectedIds.length} agregados a pendientes`,
-        description: "Los ves abajo, en \"Pendientes de investigación\".",
-      });
-    } catch (error) {
-      toast({
-        title: "No se pudieron agregar",
-        description: error instanceof Error ? error.message : "Error inesperado",
-        variant: "destructive",
-      });
-    } finally {
-      setIsBulkQueueing(false);
-    }
-  };
-
   const promoteQueue = async (placeIds: string[]) => {
     if (placeIds.length === 0) return;
     setIsPromoting(true);
@@ -230,10 +159,10 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
       if (!data?.success) throw new Error(data?.error || "No se pudo convertir");
       setQueue((current) => current.filter((item) => !placeIds.includes(item.place_id)));
       toast({
-        title: `${data.created} convertidos a prospectos`,
+        title: `${data.created} agregados a Prospectos`,
         description: data.skipped?.length
           ? `${data.skipped.length} no se pudieron convertir.`
-          : "Ya aparecen en la pantalla de Prospectos.",
+          : "Ya aparecen en la tabla de la pantalla de Prospectos.",
       });
       onConverted?.();
     } catch (error) {
@@ -246,6 +175,87 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
       setIsPromoting(false);
     }
   };
+
+  // Un solo paso: guarda el lugar en la cola y lo convierte en prospecto operativo.
+  const addAsProspects = async (
+    items: Array<{ place_id: string; nombre: string }>,
+  ): Promise<boolean> => {
+    if (items.length === 0) return false;
+    const placeIds = items.map((item) => item.place_id);
+    const names: Record<string, string> = {};
+    for (const item of items) names[item.place_id] = item.nombre;
+
+    const { data, error } = await supabase.functions.invoke("prospect-discovery", {
+      body: {
+        action: "queue",
+        placeIds,
+        names,
+        query: query.trim(),
+        zone: zone.trim() || undefined,
+      },
+    });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || "No se pudo guardar el prospecto");
+
+    const { data: promoted, error: promoteError } = await supabase.functions.invoke("prospect-discovery", {
+      body: { action: "promote", placeIds },
+    });
+    if (promoteError) throw new Error(promoteError.message);
+    if (!promoted?.success) throw new Error(promoted?.error || "No se pudo convertir a prospecto");
+
+    setResults((current) => current.map((item) => (
+      placeIds.includes(item.place_id) ? { ...item, queued: true, existing_prospect: true } : item
+    )));
+    await loadQueue();
+    onConverted?.();
+
+    const created = promoted.created ?? placeIds.length;
+    toast({
+      title: created === 1
+        ? "Prospecto agregado"
+        : `${created} prospectos agregados`,
+      description: promoted.skipped?.length
+        ? `${promoted.skipped.length} no se pudieron agregar (datos incompletos en Google).`
+        : "Ya aparecen en la tabla de Prospectos.",
+    });
+    return true;
+  };
+
+  const handleAddOne = async (result: ProspectSearchResult) => {
+    setQueueingId(result.place_id);
+    try {
+      await addAsProspects([{ place_id: result.place_id, nombre: result.nombre }]);
+    } catch (error) {
+      toast({
+        title: "No se pudo agregar",
+        description: error instanceof Error ? error.message : "Error inesperado",
+        variant: "destructive",
+      });
+    } finally {
+      setQueueingId(null);
+    }
+  };
+
+  const handleBulkAdd = async () => {
+    if (selectedIds.length === 0) return;
+    setIsBulkQueueing(true);
+    try {
+      const items = results
+        .filter((result) => selectedIds.includes(result.place_id))
+        .map((result) => ({ place_id: result.place_id, nombre: result.nombre }));
+      await addAsProspects(items);
+      setSelectedIds([]);
+    } catch (error) {
+      toast({
+        title: "No se pudieron agregar",
+        description: error instanceof Error ? error.message : "Error inesperado",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkQueueing(false);
+    }
+  };
+
 
   const discardQueueItem = async (item: QueueItem) => {
     try {
