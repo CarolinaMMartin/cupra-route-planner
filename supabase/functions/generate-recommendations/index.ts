@@ -1117,11 +1117,14 @@ Deno.serve(async (req) => {
         const remainingZoneClients = scoreClients(
           myValidClients, placesMap, feedbacksMapClientes,
           vendedor.user_id, sellerNameMap,
-          vendorHotspot, 100, otherHotspots,
-        ).filter(c => !existingClientIds.has(c.client_id));
+          vendorHotspot, ZONE_FALLBACK_MAX_KM, otherHotspots,
+        )
+          .filter(c => !existingClientIds.has(c.client_id))
+          .sort((a, b) => a.distancia_km - b.distancia_km)
+          .slice(0, Math.max(0, 8 - clientPool.length));
         clientPool = [...clientPool, ...remainingZoneClients];
         if (remainingZoneClients.length > 0) {
-          console.log(`🆕 ${vendedor.nombre}: +${remainingZoneClients.length} clientes del resto de la zona`);
+          console.log(`🆕 ${vendedor.nombre}: +${remainingZoneClients.length} clientes del resto de la zona (≤${ZONE_FALLBACK_MAX_KM}km)`);
         }
       }
 
