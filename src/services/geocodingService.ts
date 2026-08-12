@@ -2,6 +2,8 @@
 // La clave usada en el navegador debe estar restringida por dominio y por API
 // desde Google Cloud Console.
 
+import { GOOGLE_MAPS_BROWSER_KEY } from "@/lib/googleMaps";
+
 export interface GeocodingRequest {
   direccion: string;
   barrio?: string;
