@@ -507,30 +507,47 @@ Deno.serve(async (req) => {
     // TAREA 12: Track descartados sin client_id
     const descartados: { cuit_dni: string | null; razon_social: string | null }[] = [];
 
+    // Identidad estable dentro del propio archivo: filas con el mismo CUIT (o la
+    // misma razón social cuando no hay CUIT) deben caer en el mismo client_id.
+    const localCuitToId = new Map<string, string>();
+    const localNameToId = new Map<string, string>();
 
     for (const row of rows) {
       const externalClientId = normalizeClientId(getFieldValue(row, ['client_id', 'Número Externo', 'Numero Externo']));
       const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
       const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
       const fantasia = toStr(getFieldValue(row, ['Fantasía', 'Fantasia', 'fantasia']));
+      const nameKey = normalizeBusinessName(razon_social) || normalizeBusinessName(fantasia) || null;
       const nameMatch = nameToClientId.get(normalizeBusinessName(razon_social) || '')
         || nameToClientId.get(normalizeBusinessName(fantasia) || '');
       const cuitMatches = cuit_dni ? (cuitToClientIds.get(cuit_dni) || []) : [];
       let client_id: string | null = null;
 
-      if (externalClientId && existingClientIds.has(externalClientId)) {
-        client_id = externalClientId;
-      } else if (cuitMatches.length === 1) {
+      // El CUIT manda sobre el "Número Externo": ese Id viene por comprobante y
+      // usarlo primero crea un cliente nuevo por cada factura.
+      if (cuitMatches.length === 1) {
         client_id = cuitMatches[0];
+      } else if (cuit_dni && localCuitToId.has(cuit_dni)) {
+        client_id = localCuitToId.get(cuit_dni)!;
       } else if (nameMatch && (cuitMatches.length === 0 || cuitMatches.includes(nameMatch))) {
         client_id = nameMatch;
       } else if (cuitMatches.length > 1) {
         ventasCuitAmbiguo++;
       } else if (nameMatch) {
         client_id = nameMatch;
+      } else if (!cuit_dni && nameKey && localNameToId.has(nameKey)) {
+        client_id = localNameToId.get(nameKey)!;
       } else if (cuit_dni) {
         client_id = cuit_dni;
+      } else if (externalClientId && existingClientIds.has(externalClientId)) {
+        client_id = externalClientId;
       }
+
+      if (client_id) {
+        if (cuit_dni && !localCuitToId.has(cuit_dni)) localCuitToId.set(cuit_dni, client_id);
+        if (!cuit_dni && nameKey && !localNameToId.has(nameKey)) localNameToId.set(nameKey, client_id);
+      }
+
       const ticket = toStr(getFieldValue(row, ['Ticket', 'ticket', 'Comprobante', 'comprobante']));
       const letra = toStr(getFieldValue(row, ['Letra', 'letra']));
       const fecha_raw = getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision', 'Fecha', 'fecha']);
