@@ -1627,13 +1627,15 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
     const incompleteVendors = vendedoresData.filter(
       (vendedor) => (enrichedCountByVendor.get(vendedor.user_id) || 0) !== 8,
     );
-    if (enrichedRecommendations.length !== expectedRecommendationCount || incompleteVendors.length > 0) {
-      throw new Error(
-        `No se guardó ninguna recomendación: la cuota obligatoria es 8 por vendedor. `
-        + `Resultado preparado ${enrichedRecommendations.length}/${expectedRecommendationCount}; `
-        + `incompletos: ${incompleteVendors.map((vendedor) => vendedor.nombre).join(', ') || 'ninguno'}.`,
-      );
+    if (enrichedRecommendations.length === 0) {
+      throw new Error("No se encontraron candidatos disponibles para ningún vendedor con los filtros seleccionados.");
     }
+    const cuotaIncompleta = incompleteVendors.length > 0
+      ? `Cuota parcial: ${enrichedRecommendations.length}/${expectedRecommendationCount}. `
+        + `Sin completar 8: ${incompleteVendors.map((v) => `${v.nombre} (${enrichedCountByVendor.get(v.user_id) || 0})`).join(', ')}.`
+      : null;
+    if (cuotaIncompleta) console.warn(`⚠️ ${cuotaIncompleta}`);
+
 
     // Save to DB
     const recommendationsForDb = enrichedRecommendations.map(({ lat, long, estado_comercial, vendedor_recomendado_nombre, ...rest }) => rest);
