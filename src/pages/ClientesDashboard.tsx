@@ -14,6 +14,7 @@
  * La tabla `clientes` solo se usa para filtros, segmentación y ZonaKPIs.
  */
 import { useEffect, useState, useMemo } from "react";
+import AppNav from "@/components/AppNav";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
