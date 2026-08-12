@@ -407,10 +407,11 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                         size="sm"
                         className="flex-1"
                         disabled={blocked || queueingId === result.place_id}
-                        onClick={() => handleQueue(result)}
+                        onClick={() => handleAddOne(result)}
                       >
-                        {queueingId === result.place_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Agregar a pendientes"}
+                        {queueingId === result.place_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Agregar a Prospectos"}
                       </Button>
+
                     </div>
                   </article>
                 );
