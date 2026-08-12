@@ -227,55 +227,44 @@ Deno.serve(async (req) => {
     }
 
     const textQuery = [query, zone, 'Ciudad Autónoma de Buenos Aires', 'Argentina'].filter(Boolean).join(', ');
-    const params = new URLSearchParams({
-      query: textQuery,
-      language: 'es',
-      region: 'ar',
-      location: `${(CABA_VIEWPORT.low.latitude + CABA_VIEWPORT.high.latitude) / 2},${(CABA_VIEWPORT.low.longitude + CABA_VIEWPORT.high.longitude) / 2}`,
-      radius: '12000',
-    });
-    if (includedType) params.set('type', includedType);
+    const searchBody: Record<string, unknown> = {
+      textQuery,
+      pageSize: 10,
+      languageCode: 'es',
+      regionCode: 'AR',
+      locationRestriction: { rectangle: CABA_VIEWPORT },
+    };
+    if (includedType) {
+      searchBody.includedType = includedType;
+      searchBody.strictTypeFiltering = true;
+    }
 
     const googleResponse = await fetch(
-      `https://connector-gateway.lovable.dev/google_maps/maps/api/place/textsearch/json?${params}`,
+      'https://connector-gateway.lovable.dev/google_maps/places/v1/places:searchText',
       {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${lovableApiKey}`,
           'X-Connection-Api-Key': googleApiKey,
+          'X-Goog-FieldMask': GOOGLE_FIELD_MASK,
         },
+        body: JSON.stringify(searchBody),
       },
     );
     const rawText = await googleResponse.text();
-    let legacy: any;
+    let googleData: GoogleSearchResponse;
     try {
-      legacy = JSON.parse(rawText);
+      googleData = JSON.parse(rawText) as GoogleSearchResponse;
     } catch {
       console.error('Google Places non-JSON response:', googleResponse.status, rawText.slice(0, 300));
       return jsonResponse({ success: false, error: 'Google Places no pudo completar la búsqueda' }, 502);
     }
-    if (!googleResponse.ok || (legacy.status && legacy.status !== 'OK' && legacy.status !== 'ZERO_RESULTS')) {
-      console.error('Google Places error:', legacy);
+    if (!googleResponse.ok) {
+      console.error('Google Places error:', googleData);
       return jsonResponse({ success: false, error: 'Google Places no pudo completar la búsqueda' }, 502);
     }
 
-    const googleData: GoogleSearchResponse = {
-      places: (legacy.results || []).map((r: any) => ({
-        id: r.place_id,
-        displayName: { text: r.name },
-        formattedAddress: r.formatted_address,
-        location: r.geometry?.location
-          ? { latitude: r.geometry.location.lat, longitude: r.geometry.location.lng }
-          : undefined,
-        primaryType: r.types?.[0],
-        types: r.types || [],
-        businessStatus: r.business_status,
-        googleMapsUri: `https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(r.place_id)}`,
-        rating: r.rating,
-        userRatingCount: r.user_ratings_total,
-        priceLevel: typeof r.price_level === 'number' ? String(r.price_level) : undefined,
-        attributions: r.html_attributions || [],
-      })),
-    };
 
 
     const places = (googleData.places || [])
