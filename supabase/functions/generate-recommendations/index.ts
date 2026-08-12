@@ -1292,6 +1292,9 @@ Deno.serve(async (req) => {
 
 
 
+      // Cercanía primero: dentro de cada grupo la ruta arranca por lo más próximo.
+      clientPool.sort((a, b) => a.distancia_km - b.distancia_km);
+      prospectPool.sort((a, b) => a.distancia_km - b.distancia_km);
       vendorClientPools.set(vendedor.user_id, clientPool);
       vendorProspectPools.set(vendedor.user_id, prospectPool);
     }
