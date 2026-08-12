@@ -162,7 +162,12 @@ Deno.serve(async (req) => {
     if (body.action === 'queue') {
       const query = String(body.query || '').trim().slice(0, 120);
       const zone = String(body.zone || '').trim().slice(0, 80) || null;
-      const placeIds = Array.from(new Set((body.placeIds || []).filter(isValidPlaceId))).slice(0, 20);
+      const placeIds = Array.from(new Set((body.placeIds || []).filter(isValidPlaceId))).slice(0, 60);
+      const rawNames = (body as QueueRequest).names || {};
+      const noteFor = (placeId: string): string | null => {
+        const value = rawNames?.[placeId];
+        return typeof value === 'string' && value.trim() ? value.trim().slice(0, 200) : null;
+      };
       if (!query || placeIds.length === 0) {
         return jsonResponse({ success: false, error: 'Consulta y lugares requeridos' }, 400);
       }
@@ -183,19 +188,21 @@ Deno.serve(async (req) => {
             place_id: placeId,
             consulta: query,
             zona: zone,
+            notas: noteFor(placeId),
             creado_por: authData.user.id,
           })),
         );
         if (insertError) throw new Error(`No se pudo guardar la cola: ${insertError.message}`);
       }
 
-      if (discardedIds.length > 0) {
+      for (const placeId of discardedIds) {
         const { error: reactivateError } = await supabase
           .from('prospect_discovery_queue')
-          .update({ estado: 'NUEVO', consulta: query, zona: zone, creado_por: authData.user.id })
-          .in('place_id', discardedIds);
+          .update({ estado: 'NUEVO', consulta: query, zona: zone, notas: noteFor(placeId), creado_por: authData.user.id })
+          .eq('place_id', placeId);
         if (reactivateError) throw new Error(`No se pudo reactivar la cola: ${reactivateError.message}`);
       }
+
 
       return jsonResponse({
         success: true,
