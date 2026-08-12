@@ -290,13 +290,15 @@ const FilterPanel = ({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Provincia</Label>
-                <Select value={selectedProvincia} onValueChange={handleProvinciaChange}>
-                  <SelectTrigger className="bg-secondary/20 border-border/20 h-10"><SelectValue placeholder="Todas" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas las provincias</SelectItem>
-                    {provincias.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={[{ value: 'all', label: 'Todas las provincias' }, ...provincias.map(p => ({ value: p, label: p }))]}
+                  value={selectedProvincia}
+                  onValueChange={handleProvinciaChange}
+                  placeholder="Todas"
+                  searchPlaceholder="Buscar provincia..."
+                  className="bg-secondary/20 border-border/20 h-10"
+                />
+
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">Comuna / Distrito</Label>
