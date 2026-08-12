@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface ProspectSearchResult {
   place_id: string;
@@ -31,6 +32,7 @@ interface QueueItem {
   estado: "NUEVO" | "EN_REVISION";
   consulta: string;
   zona: string | null;
+  notas: string | null;
   discovered_at: string;
 }
 
@@ -67,6 +69,23 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingQueue, setIsLoadingQueue] = useState(false);
   const [queueingId, setQueueingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkQueueing, setIsBulkQueueing] = useState(false);
+
+  const selectableResults = results.filter(
+    (result) => !result.queued && !result.existing_prospect && !result.existing_client,
+  );
+  const allSelected = selectableResults.length > 0 && selectableResults.every((r) => selectedIds.includes(r.place_id));
+
+  const toggleSelection = (placeId: string) => {
+    setSelectedIds((current) => current.includes(placeId)
+      ? current.filter((id) => id !== placeId)
+      : [...current, placeId]);
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(allSelected ? [] : selectableResults.map((r) => r.place_id));
+  };
 
   const loadQueue = useCallback(async () => {
     setIsLoadingQueue(true);
@@ -100,6 +119,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
 
     setIsSearching(true);
     setResults([]);
+    setSelectedIds([]);
     try {
       const { data, error } = await supabase.functions.invoke("prospect-discovery", {
         body: {
@@ -133,6 +153,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
         body: {
           action: "queue",
           placeIds: [result.place_id],
+          names: { [result.place_id]: result.nombre },
           query: query.trim(),
           zone: zone.trim() || undefined,
         },
@@ -144,7 +165,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
         item.place_id === result.place_id ? { ...item, queued: true } : item
       )));
       await loadQueue();
-      toast({ title: "Agregado a pendientes", description: `${result.nombre} quedó para revisión.` });
+      toast({ title: "Agregado a pendientes", description: `${result.nombre} quedó abajo, en "Pendientes de investigación".` });
     } catch (error) {
       toast({
         title: "No se pudo agregar",
@@ -153,6 +174,46 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
       });
     } finally {
       setQueueingId(null);
+    }
+  };
+
+  const handleBulkQueue = async () => {
+    if (selectedIds.length === 0) return;
+    setIsBulkQueueing(true);
+    try {
+      const names: Record<string, string> = {};
+      for (const result of results) {
+        if (selectedIds.includes(result.place_id)) names[result.place_id] = result.nombre;
+      }
+      const { data, error } = await supabase.functions.invoke("prospect-discovery", {
+        body: {
+          action: "queue",
+          placeIds: selectedIds,
+          names,
+          query: query.trim(),
+          zone: zone.trim() || undefined,
+        },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || "No se pudieron guardar los pendientes");
+
+      setResults((current) => current.map((item) => (
+        selectedIds.includes(item.place_id) ? { ...item, queued: true } : item
+      )));
+      setSelectedIds([]);
+      await loadQueue();
+      toast({
+        title: `${data.added ?? selectedIds.length} agregados a pendientes`,
+        description: "Los ves abajo, en \"Pendientes de investigación\".",
+      });
+    } catch (error) {
+      toast({
+        title: "No se pudieron agregar",
+        description: error instanceof Error ? error.message : "Error inesperado",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkQueueing(false);
     }
   };
 
@@ -228,9 +289,23 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
 
         {results.length > 0 && (
           <section className="rounded-lg border bg-muted/10 p-3 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="font-medium text-sm">Resultados transitorios</h3>
-              <span translate="no" className="text-xs font-normal text-[#5e5e5e] whitespace-nowrap">Google Maps</span>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <h3 className="font-medium text-sm">Resultados transitorios ({results.length})</h3>
+                {selectableResults.length > 0 && (
+                  <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
+                    <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
+                    Seleccionar todos ({selectableResults.length})
+                  </label>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                <Button size="sm" disabled={selectedIds.length === 0 || isBulkQueueing} onClick={handleBulkQueue} className="gap-2">
+                  {isBulkQueueing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Agregar {selectedIds.length > 0 ? `${selectedIds.length} ` : ""}a pendientes
+                </Button>
+                <span translate="no" className="text-xs font-normal text-[#5e5e5e] whitespace-nowrap">Google Maps</span>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {results.map((result) => {
@@ -238,9 +313,18 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
                 return (
                   <article key={result.place_id} className="rounded-lg border bg-background p-3 space-y-2">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex items-start gap-2">
+                        {!blocked && (
+                          <Checkbox
+                            className="mt-1"
+                            checked={selectedIds.includes(result.place_id)}
+                            onCheckedChange={() => toggleSelection(result.place_id)}
+                          />
+                        )}
+                        <div className="min-w-0">
                         <p className="font-medium truncate">{result.nombre}</p>
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{result.direccion || "Sin dirección informada"}</p>
+                        </div>
                       </div>
                       <Badge variant="secondary" className="shrink-0">Score {result.premium_score}</Badge>
                     </div>
@@ -315,9 +399,9 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
                 <div key={item.id} className="p-3 flex items-center gap-3">
                   <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{item.consulta}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.zona || "Toda CABA"} · {new Date(item.discovered_at).toLocaleDateString("es-AR")}
+                    <p className="text-sm font-medium truncate">{item.notas || item.consulta}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {item.consulta} · {item.zona || "Toda CABA"} · {new Date(item.discovered_at).toLocaleDateString("es-AR")}
                     </p>
                   </div>
                   <Badge variant="secondary" className="hidden sm:inline-flex">{item.estado === "NUEVO" ? "Nuevo" : "En revisión"}</Badge>
