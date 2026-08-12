@@ -115,6 +115,18 @@ const AssignorDashboard = () => {
   const [generationProgress, setGenerationProgress] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
 
+  // El botón "Volver al inicio" vive en la barra superior fija (Index) y avisa por evento.
+  useEffect(() => {
+    const handler = () => {
+      if (flowStep === "recommendations") return;
+      setShowExitDialog(true);
+    };
+    window.addEventListener("cupra:volver-inicio", handler);
+    return () => window.removeEventListener("cupra:volver-inicio", handler);
+  }, [flowStep]);
+
+
+
   useEffect(() => {
     if (!isLoading) {
       setGenerationProgress(0);
