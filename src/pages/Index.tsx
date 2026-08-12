@@ -15,6 +15,8 @@ import { LogOut, User, BarChart3, Layers, ClipboardList, Store, UserCog, Chevron
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import angelBlanco from "@/assets/angel-blanco.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
+import AppNav from "@/components/AppNav";
+
 import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/VendedorKanbanWrapper";
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
 import { useToast } from "@/hooks/use-toast";
