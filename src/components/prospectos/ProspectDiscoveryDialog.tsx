@@ -331,7 +331,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
           <section className="rounded-lg border bg-muted/10 p-3 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <h3 className="font-medium text-sm">Resultados transitorios ({results.length})</h3>
+                <h3 className="font-medium text-sm">Resultados ({results.length})</h3>
                 {selectableResults.length > 0 && (
                   <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                     <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
@@ -340,10 +340,11 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                 )}
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" disabled={selectedIds.length === 0 || isBulkQueueing} onClick={handleBulkQueue} className="gap-2">
+                <Button size="sm" disabled={selectedIds.length === 0 || isBulkQueueing} onClick={handleBulkAdd} className="gap-2">
                   {isBulkQueueing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Agregar {selectedIds.length > 0 ? `${selectedIds.length} ` : ""}a pendientes
+                  Agregar {selectedIds.length > 0 ? `${selectedIds.length} ` : ""}a Prospectos
                 </Button>
+
                 <span translate="no" className="text-xs font-normal text-[#5e5e5e] whitespace-nowrap">Google Maps</span>
               </div>
             </div>
