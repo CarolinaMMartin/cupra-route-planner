@@ -395,6 +395,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                 {selectedIds.length} de {sucursales.length}
               </Badge>
             </div>
+            {!loading && locations.length < sucursales.length && (
+              <p className="flex items-start gap-1.5 text-xs text-amber-500">
+                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                {sucursales.length - locations.length} sin ubicación georreferenciada
+              </p>
+            )}
             {onToggleAll && (
               <Button
                 variant="outline"
