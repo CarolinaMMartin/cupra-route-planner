@@ -39,6 +39,7 @@ interface QueueRequest {
   placeIds: string[];
   query: string;
   zone?: string;
+  names?: Record<string, string>;
 }
 
 interface ListRequest {
@@ -142,7 +143,7 @@ Deno.serve(async (req) => {
         .select('id, place_id, fuente, estado, consulta, zona, notas, discovered_at, updated_at')
         .in('estado', ['NUEVO', 'EN_REVISION'])
         .order('discovered_at', { ascending: false })
-        .limit(50);
+        .limit(200);
       if (error) throw new Error(`No se pudo leer la cola: ${error.message}`);
       return jsonResponse({ success: true, queue: data || [] });
     }
@@ -236,7 +237,7 @@ Deno.serve(async (req) => {
     const textQuery = [query, zone, 'Ciudad Autónoma de Buenos Aires', 'Argentina'].filter(Boolean).join(', ');
     const searchBody: Record<string, unknown> = {
       textQuery,
-      pageSize: 10,
+      pageSize: 20,
       languageCode: 'es',
       regionCode: 'AR',
       locationRestriction: { rectangle: CABA_VIEWPORT },
