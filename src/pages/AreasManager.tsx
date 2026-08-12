@@ -1033,6 +1033,8 @@ export default function AreasManager() {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+      </div>
     </div>
   );
+
 }
