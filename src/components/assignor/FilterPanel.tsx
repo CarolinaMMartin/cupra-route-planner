@@ -132,6 +132,12 @@ const FilterPanel = ({
     const ids = areaVendedores.map(v => v.id);
     const nombres = areaVendedores.map(v => v.nombre);
 
+    if (ids.length === 0) {
+      toast({ variant: "destructive", title: "Área sin vendedores", description: `El área "${area.nombre}" no tiene vendedores asignados. Asigná vendedores al área o usá el modo Personalizado.` });
+      return;
+    }
+
+
     onRequestRecommendations(
       { area_id: selectedArea, cantidad_vendedores: ids.length },
       { ids, nombres },
@@ -223,9 +229,12 @@ const FilterPanel = ({
             <div className="rounded-xl bg-secondary/20 p-5 space-y-3">
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-xs font-medium text-muted-foreground mr-1">Vendedores</span>
-                {vendedores.filter(v => selectedAreaData.vendedores.includes(v.profileId)).map(v => (
-                  <Badge key={v.id} variant="secondary" className="text-xs font-normal">{v.nombre.split(' ')[0]}</Badge>
-                ))}
+                {vendedores.filter(v => selectedAreaData.vendedores.includes(v.profileId)).length > 0 ? (
+                  vendedores.filter(v => selectedAreaData.vendedores.includes(v.profileId)).map(v => (
+                    <Badge key={v.id} variant="secondary" className="text-xs font-normal">{v.nombre.split(' ')[0]}</Badge>
+                  ))
+                ) : (<span className="text-xs text-destructive">Sin vendedores asignados</span>)}
+
               </div>
               <div className="flex flex-wrap gap-1.5 items-center">
                 <span className="text-xs font-medium text-muted-foreground mr-1">Barrios</span>
