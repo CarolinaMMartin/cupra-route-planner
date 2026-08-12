@@ -136,7 +136,7 @@ const ManualAssignment = () => {
     try {
       let q = supabase
         .from("clientes")
-        .select("client_id, razon_social, fantasia, ciudad_principal, provincia_principal, vendedor_actual, vendedor_principal, monto_total_historico, dias_desde_ultima_compra, cantidad_ordenes")
+        .select("client_id, cuit_dni, ultima_compra, razon_social, fantasia, ciudad_principal, provincia_principal, vendedor_actual, vendedor_principal, monto_total_historico, dias_desde_ultima_compra, cantidad_ordenes")
         .order("monto_total_historico", { ascending: false })
         .limit(200);
 
