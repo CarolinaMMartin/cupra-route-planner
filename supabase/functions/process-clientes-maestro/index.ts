@@ -337,7 +337,10 @@ Deno.serve(async (req) => {
       parsed.push(p);
     }
 
-    // ── FASE 2: Resolución de client_id (Id → CUIT → Razón Social) ──
+    // ── FASE 2: Resolución de client_id (CUIT → Razón Social → Id del archivo) ──
+    // IMPORTANTE: el CUIT manda sobre el "Id" del archivo. El Id que traen los
+    // informes suele ser por comprobante, no por empresa: usarlo primero genera
+    // un cliente nuevo por cada factura (duplicados masivos).
     const cuits = Array.from(new Set(parsed.map((p) => p.cuit_dni).filter(Boolean))) as string[];
     const cuitToClientId = new Map<string, string>();
     const nameToClientId = new Map<string, string>();
@@ -361,13 +364,27 @@ Deno.serve(async (req) => {
     let sinResolver = 0;
     const noResueltos: { razon_social: string | null; cuit_dni: string | null }[] = [];
 
+    // Identidad estable dentro del propio archivo: si dos filas comparten CUIT
+    // (o razón social sin CUIT) deben terminar en el mismo client_id.
+    const localCuitToId = new Map<string, string>();
+    const localNameToId = new Map<string, string>();
+
     for (const p of parsed) {
+      const nameKey = p.razon_social ? normalizeName(p.razon_social) : null;
       const resolved =
-        p.client_id ||
         (p.cuit_dni ? cuitToClientId.get(p.cuit_dni) : undefined) ||
-        (p.razon_social ? nameToClientId.get(normalizeName(p.razon_social)!) : undefined) ||
+        (p.cuit_dni ? localCuitToId.get(p.cuit_dni) : undefined) ||
+        (nameKey && !p.cuit_dni ? nameToClientId.get(nameKey) : undefined) ||
+        (nameKey && !p.cuit_dni ? localNameToId.get(nameKey) : undefined) ||
+        p.client_id ||
         p.cuit_dni ||
         null;
+
+      if (resolved) {
+        if (p.cuit_dni && !localCuitToId.has(p.cuit_dni)) localCuitToId.set(p.cuit_dni, resolved);
+        if (nameKey && !p.cuit_dni && !localNameToId.has(nameKey)) localNameToId.set(nameKey, resolved);
+      }
+
 
       if (!resolved) {
         sinResolver++;
