@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, List, Plus, Calendar } from "lucide-react";
+import { MapPin, List, Plus, Calendar, Home } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FilterPanel from "./assignor/FilterPanel";
 import ResultsMap from "./assignor/ResultsMap";
@@ -386,20 +386,46 @@ const AssignorDashboard = () => {
           )}
 
           <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle className="font-sans text-2xl">Preselección</CardTitle>
+            <CardHeader className="border-b border-border/60 pb-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <CardTitle className="font-sans text-2xl tracking-tight">Preselección</CardTitle>
                   <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setShowExitDialog(true)}>← Volver</Button>
-                  <Button variant={viewMode === "list" ? "default" : "outline"} size="sm" onClick={() => setViewMode("list")}><List className="w-4 h-4" /></Button>
-                  <Button variant={viewMode === "map" ? "default" : "outline"} size="sm" onClick={() => setViewMode("map")}><MapPin className="w-4 h-4" /></Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setShowExitDialog(true)}
+                  >
+                    <Home className="w-4 h-4" />
+                    Volver al inicio
+                  </Button>
+                  <div className="flex items-center rounded-md border border-border p-0.5">
+                    <Button
+                      variant={viewMode === "list" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="gap-2 px-3"
+                      onClick={() => setViewMode("list")}
+                    >
+                      <List className="w-4 h-4" />
+                      Lista
+                    </Button>
+                    <Button
+                      variant={viewMode === "map" ? "secondary" : "ghost"}
+                      size="sm"
+                      className="gap-2 px-3"
+                      onClick={() => setViewMode("map")}
+                    >
+                      <MapPin className="w-4 h-4" />
+                      Mapa
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               {viewMode === "list" ? (
                 <PreselectionStep recommendations={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleContinueToAssignment} />
               ) : (
