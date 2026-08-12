@@ -148,77 +148,6 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
     }
   };
 
-  const handleQueue = async (result: ProspectSearchResult) => {
-    setQueueingId(result.place_id);
-    try {
-      const { data, error } = await supabase.functions.invoke("prospect-discovery", {
-        body: {
-          action: "queue",
-          placeIds: [result.place_id],
-          names: { [result.place_id]: result.nombre },
-          query: query.trim(),
-          zone: zone.trim() || undefined,
-        },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "No se pudo guardar el pendiente");
-
-      setResults((current) => current.map((item) => (
-        item.place_id === result.place_id ? { ...item, queued: true } : item
-      )));
-      await loadQueue();
-      toast({ title: "Agregado a pendientes", description: `${result.nombre} quedó abajo, en "Pendientes de investigación".` });
-    } catch (error) {
-      toast({
-        title: "No se pudo agregar",
-        description: error instanceof Error ? error.message : "Error inesperado",
-        variant: "destructive",
-      });
-    } finally {
-      setQueueingId(null);
-    }
-  };
-
-  const handleBulkQueue = async () => {
-    if (selectedIds.length === 0) return;
-    setIsBulkQueueing(true);
-    try {
-      const names: Record<string, string> = {};
-      for (const result of results) {
-        if (selectedIds.includes(result.place_id)) names[result.place_id] = result.nombre;
-      }
-      const { data, error } = await supabase.functions.invoke("prospect-discovery", {
-        body: {
-          action: "queue",
-          placeIds: selectedIds,
-          names,
-          query: query.trim(),
-          zone: zone.trim() || undefined,
-        },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "No se pudieron guardar los pendientes");
-
-      setResults((current) => current.map((item) => (
-        selectedIds.includes(item.place_id) ? { ...item, queued: true } : item
-      )));
-      setSelectedIds([]);
-      await loadQueue();
-      toast({
-        title: `${data.added ?? selectedIds.length} agregados a pendientes`,
-        description: "Los ves abajo, en \"Pendientes de investigación\".",
-      });
-    } catch (error) {
-      toast({
-        title: "No se pudieron agregar",
-        description: error instanceof Error ? error.message : "Error inesperado",
-        variant: "destructive",
-      });
-    } finally {
-      setIsBulkQueueing(false);
-    }
-  };
-
   const promoteQueue = async (placeIds: string[]) => {
     if (placeIds.length === 0) return;
     setIsPromoting(true);
@@ -230,10 +159,10 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
       if (!data?.success) throw new Error(data?.error || "No se pudo convertir");
       setQueue((current) => current.filter((item) => !placeIds.includes(item.place_id)));
       toast({
-        title: `${data.created} convertidos a prospectos`,
+        title: `${data.created} agregados a Prospectos`,
         description: data.skipped?.length
           ? `${data.skipped.length} no se pudieron convertir.`
-          : "Ya aparecen en la pantalla de Prospectos.",
+          : "Ya aparecen en la tabla de la pantalla de Prospectos.",
       });
       onConverted?.();
     } catch (error) {
@@ -246,6 +175,87 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
       setIsPromoting(false);
     }
   };
+
+  // Un solo paso: guarda el lugar en la cola y lo convierte en prospecto operativo.
+  const addAsProspects = async (
+    items: Array<{ place_id: string; nombre: string }>,
+  ): Promise<boolean> => {
+    if (items.length === 0) return false;
+    const placeIds = items.map((item) => item.place_id);
+    const names: Record<string, string> = {};
+    for (const item of items) names[item.place_id] = item.nombre;
+
+    const { data, error } = await supabase.functions.invoke("prospect-discovery", {
+      body: {
+        action: "queue",
+        placeIds,
+        names,
+        query: query.trim(),
+        zone: zone.trim() || undefined,
+      },
+    });
+    if (error) throw new Error(error.message);
+    if (!data?.success) throw new Error(data?.error || "No se pudo guardar el prospecto");
+
+    const { data: promoted, error: promoteError } = await supabase.functions.invoke("prospect-discovery", {
+      body: { action: "promote", placeIds },
+    });
+    if (promoteError) throw new Error(promoteError.message);
+    if (!promoted?.success) throw new Error(promoted?.error || "No se pudo convertir a prospecto");
+
+    setResults((current) => current.map((item) => (
+      placeIds.includes(item.place_id) ? { ...item, queued: true, existing_prospect: true } : item
+    )));
+    await loadQueue();
+    onConverted?.();
+
+    const created = promoted.created ?? placeIds.length;
+    toast({
+      title: created === 1
+        ? "Prospecto agregado"
+        : `${created} prospectos agregados`,
+      description: promoted.skipped?.length
+        ? `${promoted.skipped.length} no se pudieron agregar (datos incompletos en Google).`
+        : "Ya aparecen en la tabla de Prospectos.",
+    });
+    return true;
+  };
+
+  const handleAddOne = async (result: ProspectSearchResult) => {
+    setQueueingId(result.place_id);
+    try {
+      await addAsProspects([{ place_id: result.place_id, nombre: result.nombre }]);
+    } catch (error) {
+      toast({
+        title: "No se pudo agregar",
+        description: error instanceof Error ? error.message : "Error inesperado",
+        variant: "destructive",
+      });
+    } finally {
+      setQueueingId(null);
+    }
+  };
+
+  const handleBulkAdd = async () => {
+    if (selectedIds.length === 0) return;
+    setIsBulkQueueing(true);
+    try {
+      const items = results
+        .filter((result) => selectedIds.includes(result.place_id))
+        .map((result) => ({ place_id: result.place_id, nombre: result.nombre }));
+      await addAsProspects(items);
+      setSelectedIds([]);
+    } catch (error) {
+      toast({
+        title: "No se pudieron agregar",
+        description: error instanceof Error ? error.message : "Error inesperado",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkQueueing(false);
+    }
+  };
+
 
   const discardQueueItem = async (item: QueueItem) => {
     try {
@@ -273,8 +283,9 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
         <DialogHeader>
           <DialogTitle>Buscar nuevos prospectos</DialogTitle>
           <DialogDescription>
-            Explorá comercios de CABA y guardá lugares para investigar. Los datos del resultado no se copian a la base.
+            Buscá comercios de CABA y agregalos a Prospectos en un solo paso. Se descartan automáticamente los que ya son clientes o prospectos.
           </DialogDescription>
+
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_auto] gap-3 items-end">
@@ -321,7 +332,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
           <section className="rounded-lg border bg-muted/10 p-3 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <h3 className="font-medium text-sm">Resultados transitorios ({results.length})</h3>
+                <h3 className="font-medium text-sm">Resultados ({results.length})</h3>
                 {selectableResults.length > 0 && (
                   <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer">
                     <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
@@ -330,10 +341,11 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                 )}
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" disabled={selectedIds.length === 0 || isBulkQueueing} onClick={handleBulkQueue} className="gap-2">
+                <Button size="sm" disabled={selectedIds.length === 0 || isBulkQueueing} onClick={handleBulkAdd} className="gap-2">
                   {isBulkQueueing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  Agregar {selectedIds.length > 0 ? `${selectedIds.length} ` : ""}a pendientes
+                  Agregar {selectedIds.length > 0 ? `${selectedIds.length} ` : ""}a Prospectos
                 </Button>
+
                 <span translate="no" className="text-xs font-normal text-[#5e5e5e] whitespace-nowrap">Google Maps</span>
               </div>
             </div>
@@ -373,8 +385,8 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                     {result.existing_client && (
                       <p className="text-xs text-amber-600">Posible cliente existente: {result.existing_client.nombre}</p>
                     )}
-                    {result.existing_prospect && <p className="text-xs text-amber-600">Ya existe como prospecto operativo.</p>}
-                    {result.queued && <p className="text-xs text-muted-foreground">Ya está en pendientes.</p>}
+                    {result.existing_prospect && <p className="text-xs text-amber-600">Ya está cargado como prospecto.</p>}
+
 
                     {result.attributions?.length > 0 && (
                       <div className="text-[11px] text-muted-foreground">
@@ -396,79 +408,80 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                         size="sm"
                         className="flex-1"
                         disabled={blocked || queueingId === result.place_id}
-                        onClick={() => handleQueue(result)}
+                        onClick={() => handleAddOne(result)}
                       >
-                        {queueingId === result.place_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Agregar a pendientes"}
+                        {queueingId === result.place_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Agregar a Prospectos"}
                       </Button>
+
                     </div>
                   </article>
                 );
               })}
             </div>
             <p className="text-xs text-muted-foreground">
-              Se conserva únicamente el identificador del lugar y datos internos de seguimiento. Verificá el comercio antes de cargarlo como prospecto operativo.
+              Al agregar, el comercio se carga directamente en la pantalla de Prospectos con nombre, dirección, barrio, teléfono y coordenadas. Verificá los datos antes de asignarlo.
             </p>
           </section>
         )}
 
-        <section className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h3 className="font-medium text-sm">Pendientes de investigación</h3>
-              <Badge variant="outline">{queue.length}</Badge>
+        {(isLoadingQueue || queue.length > 0) && (
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="font-medium text-sm">Pendientes de búsquedas anteriores</h3>
+                <Badge variant="outline">{queue.length}</Badge>
+              </div>
+              {queue.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="gap-2"
+                  disabled={isPromoting}
+                  onClick={() => promoteQueue(queue.map((item) => item.place_id))}
+                >
+                  {isPromoting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  Agregar todos a Prospectos
+                </Button>
+              )}
             </div>
-            {queue.length > 0 && (
-              <Button
-                size="sm"
-                variant="secondary"
-                className="gap-2"
-                disabled={isPromoting}
-                onClick={() => promoteQueue(queue.map((item) => item.place_id))}
-              >
-                {isPromoting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Convertir todos a prospectos
-              </Button>
-            )}
-          </div>
 
-          {isLoadingQueue ? (
-            <div className="py-6 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-          ) : queue.length === 0 ? (
-            <div className="rounded-lg border border-dashed py-6 text-center text-sm text-muted-foreground">
-              Todavía no hay lugares pendientes.
-            </div>
-          ) : (
-            <div className="divide-y rounded-lg border">
-              {queue.map((item) => (
-                <div key={item.id} className="p-3 flex items-center gap-3">
-                  <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{item.notas || item.consulta}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {item.consulta} · {item.zona || "Toda CABA"} · {new Date(item.discovered_at).toLocaleDateString("es-AR")}
-                    </p>
+            {isLoadingQueue ? (
+              <div className="py-6 flex justify-center"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : (
+              <div className="divide-y rounded-lg border">
+                {queue.map((item) => (
+                  <div key={item.id} className="p-3 flex items-center gap-3">
+                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{item.notas || item.consulta}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {item.consulta} · {item.zona || "Toda CABA"} · {new Date(item.discovered_at).toLocaleDateString("es-AR")}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="hidden sm:inline-flex">{item.estado === "NUEVO" ? "Nuevo" : "En revisión"}</Badge>
+                    <Button variant="ghost" size="icon" asChild title="Abrir en Google Maps">
+                      <a href={queueMapsUrl(item.place_id)} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /></a>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isPromoting}
+                      onClick={() => promoteQueue([item.place_id])}
+                      title="Cargarlo en la pantalla de Prospectos"
+                    >
+                      Agregar a Prospectos
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => discardQueueItem(item)} title="Descartar">
+                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                    </Button>
                   </div>
-                  <Badge variant="secondary" className="hidden sm:inline-flex">{item.estado === "NUEVO" ? "Nuevo" : "En revisión"}</Badge>
-                  <Button variant="ghost" size="icon" asChild title="Abrir en Google Maps">
-                    <a href={queueMapsUrl(item.place_id)} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /></a>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={isPromoting}
-                    onClick={() => promoteQueue([item.place_id])}
-                    title="Crear prospecto operativo"
-                  >
-                    Convertir
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => discardQueueItem(item)} title="Descartar">
-                    <Trash2 className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+
       </DialogContent>
     </Dialog>
   );
