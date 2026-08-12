@@ -181,26 +181,66 @@ const ManualAssignment = () => {
     return Array.from(set).sort();
   }, [clientes]);
 
-  const provincias = useMemo(() => {
-    const set = new Set(clientes.map(c => c.provincia_principal).filter(Boolean) as string[]);
-    return Array.from(set).sort();
+  // ── Unificar registros duplicados del mismo cliente (mismo CUIT o misma razón social) ──
+  const grupos = useMemo<ClienteGrupo[]>(() => {
+    const map = new Map<string, ClienteGrupo>();
+    const ultimaCompraPorGrupo = new Map<string, string>();
+
+    for (const c of clientes) {
+      const key = (c.cuit_dni?.trim() || normalizeRS(c.razon_social || c.fantasia || c.client_id));
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, {
+          key,
+          clientIds: [c.client_id],
+          razon_social: c.razon_social,
+          fantasia: c.fantasia,
+          ciudad_principal: c.ciudad_principal,
+          provincia_principal: c.provincia_principal,
+          vendedor_actual: c.vendedor_actual,
+          vendedor_principal: c.vendedor_principal,
+          monto_total_historico: c.monto_total_historico || 0,
+          dias_sin_compra: null,
+          cantidad_ordenes: c.cantidad_ordenes || 0,
+          registros: 1,
+        });
+      } else {
+        existing.clientIds.push(c.client_id);
+        existing.monto_total_historico += c.monto_total_historico || 0;
+        existing.cantidad_ordenes += c.cantidad_ordenes || 0;
+        existing.registros += 1;
+        existing.ciudad_principal ||= c.ciudad_principal;
+        existing.provincia_principal ||= c.provincia_principal;
+        existing.vendedor_actual ||= c.vendedor_actual;
+        existing.vendedor_principal ||= c.vendedor_principal;
+      }
+      // La última compra del cliente unificado es la más reciente de sus registros
+      const prev = ultimaCompraPorGrupo.get(key);
+      if (c.ultima_compra && (!prev || c.ultima_compra > prev)) {
+        ultimaCompraPorGrupo.set(key, c.ultima_compra);
+      }
+    }
+
+    return Array.from(map.values())
+      .map(g => ({ ...g, dias_sin_compra: diasDesde(ultimaCompraPorGrupo.get(g.key) || null) }))
+      .sort((a, b) => b.monto_total_historico - a.monto_total_historico);
   }, [clientes]);
 
-  // ── Selection helpers ──
-  const toggleClient = (clientId: string) => {
+  // ── Selection helpers (por cliente unificado) ──
+  const toggleClient = (groupKey: string) => {
     setSelectedClients(prev => {
       const next = new Set(prev);
-      if (next.has(clientId)) next.delete(clientId);
-      else next.add(clientId);
+      if (next.has(groupKey)) next.delete(groupKey);
+      else next.add(groupKey);
       return next;
     });
   };
 
   const toggleAll = () => {
-    if (selectedClients.size === clientes.length) {
+    if (selectedClients.size === grupos.length) {
       setSelectedClients(new Set());
     } else {
-      setSelectedClients(new Set(clientes.map(c => c.client_id)));
+      setSelectedClients(new Set(grupos.map(g => g.key)));
     }
   };
 
@@ -216,8 +256,10 @@ const ManualAssignment = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No autenticado");
 
-      const clientIds = Array.from(selectedClients);
+      const selectedGrupos = grupos.filter(g => selectedClients.has(g.key));
+      const clientIds = selectedGrupos.flatMap(g => g.clientIds);
       const selectedClientesData = clientes.filter(c => clientIds.includes(c.client_id));
+
 
       // 1. Create assignments in asignaciones_vendedores_clientes
       const assignments = clientIds.map(client_id => ({
