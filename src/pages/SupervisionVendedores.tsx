@@ -152,7 +152,7 @@ const SupervisionVendedores = () => {
       eq("activo", true);
 
       if (data) {
-        setVendedores(data.map((v) => ({ id: v.user_id, nombre: v.nombre })));
+        setVendedores(data.map((v) => ({ id: v.user_id, nombre: toTitleCase(v.nombre) })));
       }
     };
     fetchVendedores();
@@ -312,7 +312,7 @@ const SupervisionVendedores = () => {
         if (!statsMap.has(a.vendedor_id)) {
           statsMap.set(a.vendedor_id, {
             vendedor_id: a.vendedor_id,
-            nombre: vendedor.nombre,
+            nombre: toTitleCase(vendedor.nombre),
             email: vendedor.email,
             total: 0,
             pendientes: 0,
@@ -392,7 +392,7 @@ const SupervisionVendedores = () => {
           visited_at: a.visited_at,
           es_prospecto: a.es_prospecto,
           origen_asignacion: a.origen_asignacion,
-          vendedor_nombre: vendedor?.nombre || "Desconocido",
+          vendedor_nombre: toTitleCase(vendedor?.nombre) || "Desconocido",
           cliente_nombre: clienteNombre,
           direccion,
           tipo_cierre: tipoCierre,
