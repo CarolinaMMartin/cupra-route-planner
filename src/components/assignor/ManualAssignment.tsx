@@ -450,7 +450,7 @@ const ManualAssignment = () => {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">
-                  {clientes.length} resultado(s)
+                  {grupos.length} cliente(s){grupos.length !== clientes.length ? ` · ${clientes.length} registros unificados` : ""}
                 </span>
                 {selectedClients.size > 0 && (
                   <Badge variant="default" className="gap-1">
@@ -483,7 +483,7 @@ const ManualAssignment = () => {
               <Search className="w-8 h-8 opacity-40" />
               <p className="text-sm">Usá el buscador o las sugerencias inteligentes para encontrar clientes</p>
             </div>
-          ) : clientes.length === 0 ? (
+          ) : grupos.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
               <AlertCircle className="w-8 h-8 opacity-40" />
               <p className="text-sm">No se encontraron clientes con esos criterios</p>
@@ -495,7 +495,7 @@ const ManualAssignment = () => {
                   <TableRow>
                     <TableHead className="w-10">
                       <Checkbox
-                        checked={selectedClients.size === clientes.length && clientes.length > 0}
+                        checked={selectedClients.size === grupos.length && grupos.length > 0}
                         onCheckedChange={toggleAll}
                       />
                     </TableHead>
@@ -508,22 +508,29 @@ const ManualAssignment = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {clientes.map(c => {
-                    const isSelected = selectedClients.has(c.client_id);
+                  {grupos.map(c => {
+                    const isSelected = selectedClients.has(c.key);
                     return (
                       <TableRow
-                        key={c.client_id}
+                        key={c.key}
                         className={`cursor-pointer transition-colors ${isSelected ? "bg-primary/5" : "hover:bg-accent/30"}`}
-                        onClick={() => toggleClient(c.client_id)}
+                        onClick={() => toggleClient(c.key)}
                       >
                         <TableCell onClick={e => e.stopPropagation()}>
                           <Checkbox
                             checked={isSelected}
-                            onCheckedChange={() => toggleClient(c.client_id)}
+                            onCheckedChange={() => toggleClient(c.key)}
                           />
                         </TableCell>
                         <TableCell className="font-medium">
-                          {c.razon_social || c.fantasia || "Sin nombre"}
+                          <div className="flex items-center gap-2">
+                            <span>{c.razon_social || c.fantasia || "Sin nombre"}</span>
+                            {c.registros > 1 && (
+                              <Badge variant="outline" className="text-[10px] font-normal">
+                                {c.registros} registros
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {c.ciudad_principal || "—"}
@@ -542,11 +549,13 @@ const ManualAssignment = () => {
                           {formatCurrency(c.monto_total_historico)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {c.dias_desde_ultima_compra != null ? (
-                            <Badge variant={c.dias_desde_ultima_compra > 90 ? "destructive" : c.dias_desde_ultima_compra > 30 ? "secondary" : "default"} className="text-xs">
-                              {c.dias_desde_ultima_compra}d
+                          {c.dias_sin_compra != null ? (
+                            <Badge variant={c.dias_sin_compra > 90 ? "destructive" : c.dias_sin_compra > 30 ? "secondary" : "default"} className="text-xs">
+                              {c.dias_sin_compra}d
                             </Badge>
-                          ) : "—"}
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Sin compras</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
