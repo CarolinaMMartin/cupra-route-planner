@@ -387,19 +387,8 @@ const AssignorDashboard = () => {
 
           <Card>
             <CardHeader className="border-b border-border/60 pb-4">
-              <div className="flex flex-col items-center gap-4">
-                <div className="w-full flex justify-start">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1.5 text-sm"
-                    onClick={() => setShowExitDialog(true)}
-                  >
-                    <Home className="w-4 h-4" />
-                    Volver al inicio
-                  </Button>
-                </div>
-                <div className="space-y-1 text-center">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
                   <CardTitle className="font-sans text-2xl tracking-tight">Preselección</CardTitle>
                   <CardDescription>Selecciona los clientes que deseas asignar</CardDescription>
                 </div>
@@ -425,6 +414,7 @@ const AssignorDashboard = () => {
                 </div>
               </div>
             </CardHeader>
+
 
             <CardContent className="pt-6">
               {viewMode === "list" ? (
