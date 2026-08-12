@@ -638,6 +638,7 @@ const VendedorDashboard = () => {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 };
