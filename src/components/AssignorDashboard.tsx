@@ -157,7 +157,7 @@ const AssignorDashboard = () => {
     );
 
     try {
-      toast({ title: "Analizando con IA...", description: "Generando recomendaciones inteligentes." });
+
 
       const payload = {
         vendedores: selectedVendedoresData.ids,
