@@ -1219,6 +1219,71 @@ Deno.serve(async (req) => {
         console.log(`🆕 ${vendedor.nombre}: +${fallbackScored.length} prospectos global fallback. Total final: ${clientPool.length}C + ${prospectPool.length}P`);
       }
 
+      // === LIVE DISCOVERY: si el repositorio no alcanza, buscamos prospectos
+      // nuevos en Google Maps dentro del barrio/comuna pedido y los guardamos ===
+      currentTotal = clientPool.length + prospectPool.length;
+      if (currentTotal < 8) {
+        const googleApiKey = Deno.env.get("GOOGLE_MAPS_API_KEY")
+          || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY")
+          || "";
+        if (!googleApiKey) {
+          console.warn(`⚠️ ${vendedor.nombre}: faltan ${8 - currentTotal} candidatos y Google Maps no está configurado.`);
+        } else {
+          const existingIds = new Set([...clientPool, ...prospectPool].map(c => c.client_id));
+          const excludedPlaceIds = new Set<string>([
+            ...existingIds,
+            ...prospectos.map((p: any) => p.place_id),
+            ...extraProspectosLoaded.map((p: any) => p.place_id),
+            ...Array.from(prospectosAsignadosHoy).filter((id): id is string => typeof id === "string"),
+          ]);
+          const existingClientNames = new Set(
+            [...allClientesEnZona, ...portfolioClients]
+              .map((cliente: any) => normalizeName(cliente.razon_social || cliente.fantasia || ""))
+              .filter(Boolean),
+          );
+          const discoveryZones = [
+            ...barriosFinales.map((value: string) => String(value)),
+            ...comunasFinales.map((value: string) => String(value)),
+          ];
+
+          try {
+            const discovered = await discoverProspectsFromGoogle(
+              googleApiKey,
+              discoveryZones,
+              (8 - currentTotal) + 8,
+              excludedPlaceIds,
+              existingClientNames,
+            );
+            const newProspects = discovered.filter((prospecto) => !clientNamesAndCoords.some((cliente) => (
+              calcularDistanciaKm(cliente.lat, cliente.lng, prospecto.latitud, prospecto.longitud) < 0.1
+              && nameTokenOverlap(prospecto.nombre, cliente.name) >= 0.4
+            )));
+
+            if (newProspects.length > 0) {
+              const { error: liveUpsertError } = await supabaseClient
+                .from("prospectos")
+                .upsert(newProspects, { onConflict: "place_id" });
+              if (liveUpsertError) {
+                console.error(`No se pudieron guardar los prospectos descubiertos: ${liveUpsertError.message}`);
+              } else {
+                extraProspectosLoaded.push(...newProspects);
+                const liveScored = scoreProspects(
+                  newProspects, feedbacksMapProspectos,
+                  vendorHotspot, 100, otherHotspots,
+                ).filter(c => !existingIds.has(c.client_id));
+                prospectPool = [...prospectPool, ...liveScored];
+                currentTotal = clientPool.length + prospectPool.length;
+                console.log(`🔎 ${vendedor.nombre}: +${liveScored.length} prospectos nuevos desde Google Maps. Total: ${clientPool.length}C + ${prospectPool.length}P`);
+              }
+            }
+          } catch (discoveryError) {
+            console.error(`Google discovery falló para ${vendedor.nombre}:`, discoveryError);
+          }
+        }
+      }
+
+
+
       vendorClientPools.set(vendedor.user_id, clientPool);
       vendorProspectPools.set(vendedor.user_id, prospectPool);
     }
