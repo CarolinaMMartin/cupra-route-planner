@@ -54,7 +54,9 @@ interface SearchRequest {
   query: string;
   zone?: string;
   includedType?: string | null;
+  excludeExisting?: boolean;
 }
+
 
 interface QueueRequest {
   action: 'queue';
