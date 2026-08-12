@@ -34,6 +34,9 @@ import {
 import { Search, UserCheck, Users, AlertCircle, Lightbulb, Clock, UserX, TrendingDown, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { toTitleCase } from "@/lib/format";
+
 
 interface Cliente {
   client_id: string;
@@ -259,23 +262,19 @@ const ManualAssignment = () => {
             <UserCheck className="w-5 h-5 text-primary" />
             <CardTitle className="text-lg font-sans">Vendedor Destino</CardTitle>
           </div>
-          <CardDescription>Seleccioná el vendedor al que se asignarán los clientes</CardDescription>
+          <CardDescription>Buscá y seleccioná el vendedor al que se asignarán los clientes</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-            {vendedores.map(v => (
-              <button
-                key={v.user_id}
-                onClick={() => setSelectedVendedorId(prev => prev === v.user_id ? "" : v.user_id)}
-                className={`px-3 py-2 rounded-lg border text-sm font-medium transition-all text-left ${
-                  selectedVendedorId === v.user_id
-                    ? "border-primary bg-primary/10 text-primary ring-1 ring-primary/30"
-                    : "border-border bg-card hover:bg-accent/50 text-foreground"
-                }`}
-              >
-                {v.nombre}
-              </button>
-            ))}
+          <div className="max-w-md">
+            <SearchableSelect
+              options={vendedores.map(v => ({ value: v.user_id, label: toTitleCase(v.nombre) }))}
+              value={selectedVendedorId}
+              onValueChange={setSelectedVendedorId}
+              placeholder="Seleccionar vendedor..."
+              searchPlaceholder="Escribí el nombre..."
+              emptyMessage="No se encontró ese vendedor."
+              className="h-11"
+            />
           </div>
           {!selectedVendedorId && (
             <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
@@ -284,6 +283,7 @@ const ManualAssignment = () => {
           )}
         </CardContent>
       </Card>
+
 
       {/* ── Smart Suggestions ── */}
       <Card>
