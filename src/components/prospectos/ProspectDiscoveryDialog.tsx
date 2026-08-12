@@ -39,6 +39,7 @@ interface QueueItem {
 interface ProspectDiscoveryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onConverted?: () => void;
 }
 
 const formatType = (type: string | null) => type
@@ -59,7 +60,7 @@ const queueMapsUrl = (placeId: string) => (
   `https://www.google.com/maps/search/?api=1&query=place&query_place_id=${encodeURIComponent(placeId)}`
 );
 
-export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscoveryDialogProps) {
+export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: ProspectDiscoveryDialogProps) {
   const { toast } = useToast();
   const [query, setQuery] = useState("vinoteca premium");
   const [zone, setZone] = useState("");
@@ -71,6 +72,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
   const [queueingId, setQueueingId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkQueueing, setIsBulkQueueing] = useState(false);
+  const [isPromoting, setIsPromoting] = useState(false);
 
   const selectableResults = results.filter(
     (result) => !result.queued && !result.existing_prospect && !result.existing_client,
@@ -214,6 +216,34 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
       });
     } finally {
       setIsBulkQueueing(false);
+    }
+  };
+
+  const promoteQueue = async (placeIds: string[]) => {
+    if (placeIds.length === 0) return;
+    setIsPromoting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("prospect-discovery", {
+        body: { action: "promote", placeIds },
+      });
+      if (error) throw new Error(error.message);
+      if (!data?.success) throw new Error(data?.error || "No se pudo convertir");
+      setQueue((current) => current.filter((item) => !placeIds.includes(item.place_id)));
+      toast({
+        title: `${data.created} convertidos a prospectos`,
+        description: data.skipped?.length
+          ? `${data.skipped.length} no se pudieron convertir.`
+          : "Ya aparecen en la pantalla de Prospectos.",
+      });
+      onConverted?.();
+    } catch (error) {
+      toast({
+        title: "No se pudo convertir",
+        description: error instanceof Error ? error.message : "Error inesperado",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPromoting(false);
     }
   };
 
@@ -383,8 +413,22 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
 
         <section className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium text-sm">Pendientes de investigación</h3>
-            <Badge variant="outline">{queue.length}</Badge>
+            <div className="flex items-center gap-2">
+              <h3 className="font-medium text-sm">Pendientes de investigación</h3>
+              <Badge variant="outline">{queue.length}</Badge>
+            </div>
+            {queue.length > 0 && (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="gap-2"
+                disabled={isPromoting}
+                onClick={() => promoteQueue(queue.map((item) => item.place_id))}
+              >
+                {isPromoting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Convertir todos a prospectos
+              </Button>
+            )}
           </div>
 
           {isLoadingQueue ? (
@@ -407,6 +451,15 @@ export function ProspectDiscoveryDialog({ open, onOpenChange }: ProspectDiscover
                   <Badge variant="secondary" className="hidden sm:inline-flex">{item.estado === "NUEVO" ? "Nuevo" : "En revisión"}</Badge>
                   <Button variant="ghost" size="icon" asChild title="Abrir en Google Maps">
                     <a href={queueMapsUrl(item.place_id)} target="_blank" rel="noreferrer"><ExternalLink className="h-4 w-4" /></a>
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={isPromoting}
+                    onClick={() => promoteQueue([item.place_id])}
+                    title="Crear prospecto operativo"
+                  >
+                    Convertir
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => discardQueueItem(item)} title="Descartar">
                     <Trash2 className="h-4 w-4 text-muted-foreground" />
