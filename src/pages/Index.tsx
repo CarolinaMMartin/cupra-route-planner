@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -175,7 +176,7 @@ const Index = () => {
 
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
-        {profile.rol === 'asignador' ? <AssignorDashboard /> : <VendedorKanban ref={kanbanRef} />}
+        {isAssignorLike(profile.rol) ? <AssignorDashboard /> : <VendedorKanban ref={kanbanRef} />}
       </main>
     </div>);
 

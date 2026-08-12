@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import AppNav from "@/components/AppNav";
 import type { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
@@ -150,7 +151,7 @@ const CargaDatos = () => {
     if (session?.user) {
       supabase.from("profiles").select("*").eq("user_id", session.user.id).single()
         .then(({ data }) => {
-          if (data?.rol !== "asignador") { navigate("/"); return; }
+          if (!isAssignorLike(data?.rol)) { navigate("/"); return; }
           setProfile(data);
         });
     }

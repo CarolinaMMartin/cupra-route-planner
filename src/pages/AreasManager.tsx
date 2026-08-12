@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -268,7 +269,7 @@ export default function AreasManager() {
         .eq("user_id", userId)
         .maybeSingle();
       
-      if (!profile || profile.rol !== "asignador") {
+      if (!profile || !isAssignorLike(profile.rol)) {
         toast({
           title: "Acceso restringido",
           description: "No tienes permisos para acceder a esta página",
