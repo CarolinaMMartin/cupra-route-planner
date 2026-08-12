@@ -129,13 +129,24 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
           query: query.trim(),
           zone: zone.trim() || undefined,
           includedType: includedType === "all" ? null : includedType,
+          excludeExisting: onlyNew,
         },
       });
       if (error) throw new Error(error.message);
       if (!data?.success) throw new Error(data?.error || "La búsqueda no pudo completarse");
       setResults(data.results || []);
+      setSearchSummary({
+        total: data.total_encontrados ?? (data.results || []).length,
+        nuevos: data.nuevos ?? (data.results || []).length,
+        yaCargados: data.ya_cargados ?? 0,
+      });
       if (!data.results?.length) {
-        toast({ title: "Sin resultados", description: "Probá otra zona o quitá el filtro de tipo." });
+        toast({
+          title: onlyNew ? "Sin comercios nuevos" : "Sin resultados",
+          description: onlyNew && (data.ya_cargados ?? 0) > 0
+            ? `Los ${data.ya_cargados} encontrados ya están cargados. Probá otra zona, otro tipo o desactivá "Solo nuevos".`
+            : "Probá otra zona o quitá el filtro de tipo.",
+        });
       }
     } catch (error) {
       toast({
@@ -147,6 +158,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
       setIsSearching(false);
     }
   };
+
 
   const promoteQueue = async (placeIds: string[]) => {
     if (placeIds.length === 0) return;
