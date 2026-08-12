@@ -94,6 +94,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       setLoading(true);
       resetVendorColors();
       const service = new google.maps.places.PlacesService(map);
+      const geocoder = new google.maps.Geocoder();
       const fetchedLocations: ClientLocation[] = [];
 
       const resolveRecommendedVendor = (sucursal: Sucursal) => {
@@ -192,6 +193,65 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
             });
           }
 
+          // Fallback 1: place_id extraído del link de Google Maps
+          const linkPlaceId = (sucursal as any).place_id as string | undefined;
+          if (linkPlaceId && !isManualPlaceId(linkPlaceId)) {
+            const fromPlace = await new Promise<ClientLocation | null>((resolve) => {
+              service.getDetails({ placeId: linkPlaceId }, (place, status) => {
+                if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
+                  const vendedor = resolveRecommendedVendor(sucursal);
+                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
+                  resolve({
+                    id: sucursal.id,
+                    name: sucursal.nombre || place.name || "Sin nombre",
+                    lat: place.geometry.location.lat(),
+                    lng: place.geometry.location.lng(),
+                    direccion: place.formatted_address || sucursal.direccion_principal || sucursal.direccion || "",
+                    vendedor,
+                    estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
+                  });
+                } else {
+                  resolve(null);
+                }
+              });
+            });
+            if (fromPlace) return fromPlace;
+          }
+
+          // Fallback 2: geocodificar la dirección textual
+          const direccionTexto = [
+            sucursal.direccion_principal || sucursal.direccion,
+            sucursal.barrio_principal,
+            (sucursal as any).ciudad_principa || sucursal.todas_ciudades?.[0],
+            sucursal.provincia_principal,
+            "Argentina",
+          ].filter(Boolean).join(", ");
+
+          if (direccionTexto && direccionTexto !== "Argentina") {
+            const geocoded = await new Promise<ClientLocation | null>((resolve) => {
+              geocoder.geocode({ address: direccionTexto }, (res, status) => {
+                if (status === "OK" && res?.[0]?.geometry?.location) {
+                  const loc = res[0].geometry.location;
+                  const vendedor = resolveRecommendedVendor(sucursal);
+                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
+                  resolve({
+                    id: sucursal.id,
+                    name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
+                    lat: loc.lat(),
+                    lng: loc.lng(),
+                    direccion: res[0].formatted_address,
+                    vendedor,
+                    estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
+                  });
+                } else {
+                  resolve(null);
+                }
+              });
+            });
+            if (geocoded) return geocoded;
+          }
+
+          console.warn(`[ResultsMap] Sin ubicación resoluble:`, sucursal.nombre);
           return null;
         } catch (err) {
           console.error(`Error fetching location for ${sucursal.nombre}:`, err);
