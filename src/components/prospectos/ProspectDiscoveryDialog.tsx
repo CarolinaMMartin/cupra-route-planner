@@ -73,6 +73,9 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkQueueing, setIsBulkQueueing] = useState(false);
   const [isPromoting, setIsPromoting] = useState(false);
+  const [onlyNew, setOnlyNew] = useState(true);
+  const [searchSummary, setSearchSummary] = useState<{ total: number; nuevos: number; yaCargados: number } | null>(null);
+
 
   const selectableResults = results.filter(
     (result) => !result.queued && !result.existing_prospect && !result.existing_client,
