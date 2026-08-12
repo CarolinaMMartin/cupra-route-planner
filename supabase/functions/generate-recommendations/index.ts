@@ -1209,15 +1209,18 @@ Deno.serve(async (req) => {
 
         extraProspectosLoaded.push(...fallbackFiltered);
 
-        // Large radius so entire zone can be evaluated by score
-        const fallbackRadius = 100;
+        // Radio acotado: la zona se evalúa por score pero sin salir del área caminable ampliada
+        const fallbackRadius = ZONE_FALLBACK_MAX_KM;
         const fallbackScored = scoreProspects(
           fallbackFiltered,
           feedbacksMapProspectos,
           vendorHotspot,
           fallbackRadius,
           otherHotspots,
-        ).filter(c => !existingIds.has(c.client_id));
+        )
+          .filter(c => !existingIds.has(c.client_id))
+          .sort((a, b) => a.distancia_km - b.distancia_km)
+          .slice(0, Math.max(0, 8 - currentTotal));
 
         prospectPool = [...prospectPool, ...fallbackScored];
         currentTotal = clientPool.length + prospectPool.length;
