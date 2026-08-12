@@ -21,6 +21,16 @@ import { useToast } from "@/hooks/use-toast";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
+const STARTUP_TIMEOUT_MS = 12_000;
+
+const withTimeout = <T,>(promise: PromiseLike<T>, message: string): Promise<T> =>
+  Promise.race([
+    Promise.resolve(promise),
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), STARTUP_TIMEOUT_MS);
+    }),
+  ]);
+
 const Index = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -38,11 +48,15 @@ const Index = () => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       if (!session) {
+        setProfile(null);
         setIsLoading(false);
         navigate("/auth");
       }
     });
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    withTimeout(
+      supabase.auth.getSession(),
+      "La validación de la sesión demoró demasiado."
+    ).then(({ data: { session } }) => {
       setSession(session);
       if (!session) {
         setIsLoading(false);
@@ -64,12 +78,18 @@ const Index = () => {
 
   const fetchProfile = async () => {
     const userId = session?.user.id;
-    if (!userId) return;
+    if (!userId) {
+      setIsLoading(false);
+      return;
+    }
     setLoadError(null);
     setIsLoading(true);
     try {
       // maybeSingle: si el perfil todavia no existe no lanza excepcion.
-      const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle();
+      const { data, error } = await withTimeout(
+        supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
+        "La carga del perfil demoró demasiado."
+      );
       if (error) throw error;
       if (!data) {
         setLoadError("No encontramos tu perfil. Pedile a un asignador que habilite tu cuenta.");
@@ -88,7 +108,7 @@ const Index = () => {
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
-      setLoadError("No pudimos cargar tu perfil. Revisá tu conexión e intentá de nuevo.");
+      setLoadError("No pudimos iniciar la aplicación. Reintentá; si el problema continúa, cerrá sesión y volvé a ingresar.");
     } finally {
       setIsLoading(false);
     }
