@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, MapPin, X, ChevronRight, LayoutGrid, Search, Square, Hand } from "lucide-react";
 import ManualAssignment from "./ManualAssignment";
 import { MultiSelect } from "@/components/ui/multi-select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { toTitleCase } from "@/lib/format";
+import { GEO_PROVINCIAS, geoComunas, geoBarrios } from "@/data/geoBuenosAires";
+
 
 interface Vendedor { id: string; profileId: string; nombre: string; email: string; }
 interface Area { id: string; nombre: string; vendedores: string[]; barrios: string[]; }
