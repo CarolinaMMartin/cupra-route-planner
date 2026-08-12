@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Sucursal } from "@/types/sales";
 import { isManualPlaceId } from "@/lib/utils";
+import { GOOGLE_MAPS_BROWSER_KEY, loadGoogleMaps } from "@/lib/googleMaps";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -27,23 +28,8 @@ interface ClientLocation {
   hasOverlap?: boolean;
 }
 
-// Load Google Maps Script
-const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (typeof window.google !== "undefined") {
-      resolve();
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Google Maps script"));
-    document.head.appendChild(script);
-  });
-};
+// Carga centralizada del script de Google Maps
+const loadGoogleMapsScript = (apiKey: string) => loadGoogleMaps(apiKey);
 
 const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue }: ResultsMapProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -56,12 +42,10 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
 
   // Initialize Google Maps
   useEffect(() => {
-    const apiKey =
-      import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY ||
-      import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const apiKey = GOOGLE_MAPS_BROWSER_KEY;
 
-    if (!apiKey || apiKey === "your_google_maps_api_key_here") {
-      setError("Por favor, configura VITE_GOOGLE_MAPS_API_KEY en tu archivo .env");
+    if (!apiKey) {
+      setError("El mapa no está configurado. Contactá al administrador.");
       setLoading(false);
       return;
     }

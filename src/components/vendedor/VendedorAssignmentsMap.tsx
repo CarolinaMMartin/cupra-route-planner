@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ClienteAsignado } from "./VendedorKanban";
 import { getGoogleMapsUrl, isManualPlaceId, getGoogleMapsUrlFromCoords } from "@/lib/utils";
+import { GOOGLE_MAPS_BROWSER_KEY, loadGoogleMaps } from "@/lib/googleMaps";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,28 +13,10 @@ interface VendedorAssignmentsMapProps {
   assignments: Record<string, ClienteAsignado[]>;
 }
 
-const GOOGLE_MAPS_API_KEY =
-  import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY ||
-  import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
-  "";
+const GOOGLE_MAPS_API_KEY = GOOGLE_MAPS_BROWSER_KEY;
 
-// Función para cargar el script de Google Maps
-const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (window.google && window.google.maps) {
-      resolve();
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Error al cargar Google Maps'));
-    document.head.appendChild(script);
-  });
-};
+// Carga centralizada del script de Google Maps
+const loadGoogleMapsScript = (apiKey: string) => loadGoogleMaps(apiKey);
 
 const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) => {
   const mapRef = useRef<HTMLDivElement>(null);
