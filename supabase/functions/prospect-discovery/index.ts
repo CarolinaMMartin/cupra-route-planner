@@ -458,11 +458,20 @@ Deno.serve(async (req) => {
       };
     }).sort((a, b) => b.premium_score - a.premium_score);
 
+    const isNew = (item: typeof results[number]) => !item.queued && !item.existing_prospect && !item.existing_client;
+    const excludeExisting = (body as SearchRequest).excludeExisting !== false;
+    const nuevos = results.filter(isNew);
+    const visibles = excludeExisting ? nuevos : results;
+
     return jsonResponse({
       success: true,
-      results,
+      results: visibles,
+      total_encontrados: results.length,
+      nuevos: nuevos.length,
+      ya_cargados: results.length - nuevos.length,
       storage_policy: 'Solo se persiste place_id y metadatos internos de seguimiento.',
     });
+
   } catch (error) {
     console.error('prospect-discovery error:', error);
     return jsonResponse({
