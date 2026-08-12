@@ -24,6 +24,8 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
 const HARD_RADIUS_KM = 1.5;
 const MAX_EXPANSION_KM = 2.0;
 const EXPANSION_STEPS_KM = [3.0, 5.0]; // Progressive expansion if 2km isn't enough
+// Último recurso: nunca proponer visitas más lejos que esto del hotspot del vendedor.
+const ZONE_FALLBACK_MAX_KM = 8.0;
 
 // ---- Identity dedup (evita recomendar el mismo negocio 2 veces) ----
 function normalizeIdentityText(value: string | null | undefined): string {
@@ -1115,11 +1117,14 @@ Deno.serve(async (req) => {
         const remainingZoneClients = scoreClients(
           myValidClients, placesMap, feedbacksMapClientes,
           vendedor.user_id, sellerNameMap,
-          vendorHotspot, 100, otherHotspots,
-        ).filter(c => !existingClientIds.has(c.client_id));
+          vendorHotspot, ZONE_FALLBACK_MAX_KM, otherHotspots,
+        )
+          .filter(c => !existingClientIds.has(c.client_id))
+          .sort((a, b) => a.distancia_km - b.distancia_km)
+          .slice(0, Math.max(0, 8 - clientPool.length));
         clientPool = [...clientPool, ...remainingZoneClients];
         if (remainingZoneClients.length > 0) {
-          console.log(`🆕 ${vendedor.nombre}: +${remainingZoneClients.length} clientes del resto de la zona`);
+          console.log(`🆕 ${vendedor.nombre}: +${remainingZoneClients.length} clientes del resto de la zona (≤${ZONE_FALLBACK_MAX_KM}km)`);
         }
       }
 
@@ -1204,15 +1209,18 @@ Deno.serve(async (req) => {
 
         extraProspectosLoaded.push(...fallbackFiltered);
 
-        // Large radius so entire zone can be evaluated by score
-        const fallbackRadius = 100;
+        // Radio acotado: la zona se evalúa por score pero sin salir del área caminable ampliada
+        const fallbackRadius = ZONE_FALLBACK_MAX_KM;
         const fallbackScored = scoreProspects(
           fallbackFiltered,
           feedbacksMapProspectos,
           vendorHotspot,
           fallbackRadius,
           otherHotspots,
-        ).filter(c => !existingIds.has(c.client_id));
+        )
+          .filter(c => !existingIds.has(c.client_id))
+          .sort((a, b) => a.distancia_km - b.distancia_km)
+          .slice(0, Math.max(0, 8 - currentTotal));
 
         prospectPool = [...prospectPool, ...fallbackScored];
         currentTotal = clientPool.length + prospectPool.length;
@@ -1284,6 +1292,9 @@ Deno.serve(async (req) => {
 
 
 
+      // Cercanía primero: dentro de cada grupo la ruta arranca por lo más próximo.
+      clientPool.sort((a, b) => a.distancia_km - b.distancia_km);
+      prospectPool.sort((a, b) => a.distancia_km - b.distancia_km);
       vendorClientPools.set(vendedor.user_id, clientPool);
       vendorProspectPools.set(vendedor.user_id, prospectPool);
     }
