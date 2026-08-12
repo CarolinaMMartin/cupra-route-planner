@@ -1409,15 +1409,85 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
     const globalPickedIds = new Set<string>();
     const globalPickedIdentities = new Set<string>();
 
+    const googleApiKeyTopUp = Deno.env.get("GOOGLE_MAPS_API_KEY")
+      || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY")
+      || "";
+
+    // Descubre prospectos nuevos en Google Maps para completar la cuota de 8
+    // cuando el repositorio (ya descontando lo tomado por otros vendedores) no alcanza.
+    const topUpFromGoogle = async (
+      vendedorId: string,
+      missing: number,
+      takenIds: Set<string>,
+    ): Promise<ScoredCandidate[]> => {
+      if (!googleApiKeyTopUp || missing <= 0) return [];
+      const hotspot = vendorHotspots.get(vendedorId) || zoneCenterFallback;
+      if (!hotspot) return [];
+
+      const otherHotspots = [...vendorHotspots.entries()]
+        .filter(([id]) => id !== vendedorId)
+        .map(([, h]) => h);
+
+      const excludedPlaceIds = new Set<string>([
+        ...takenIds,
+        ...prospectos.map((p: any) => p.place_id),
+        ...extraProspectosLoaded.map((p: any) => p.place_id),
+        ...Array.from(prospectosAsignadosHoy).filter((id): id is string => typeof id === "string"),
+      ]);
+      const existingClientNames = new Set(
+        [...allClientesEnZona, ...portfolioClients]
+          .map((cliente: any) => normalizeName(cliente.razon_social || cliente.fantasia || ""))
+          .filter(Boolean),
+      );
+      const discoveryZones = [
+        ...barriosFinales.map((value: string) => String(value)),
+        ...comunasFinales.map((value: string) => String(value)),
+      ];
+
+      try {
+        const discovered = await discoverProspectsFromGoogle(
+          googleApiKeyTopUp,
+          discoveryZones,
+          missing + 8,
+          excludedPlaceIds,
+          existingClientNames,
+        );
+        const newProspects = discovered.filter((prospecto) => !clientNamesAndCoords.some((cliente) => (
+          calcularDistanciaKm(cliente.lat, cliente.lng, prospecto.latitud, prospecto.longitud) < 0.1
+          && nameTokenOverlap(prospecto.nombre, cliente.name) >= 0.4
+        )));
+        if (newProspects.length === 0) return [];
+
+        const { error: upsertError } = await supabaseClient
+          .from("prospectos")
+          .upsert(newProspects, { onConflict: "place_id" });
+        if (upsertError) {
+          console.error(`No se pudieron guardar los prospectos de top-up: ${upsertError.message}`);
+          return [];
+        }
+        extraProspectosLoaded.push(...newProspects);
+
+        const scored = scoreProspects(
+          newProspects, feedbacksMapProspectos,
+          hotspot, 100, otherHotspots,
+        ).filter(c => !takenIds.has(c.client_id));
+        console.log(`🔎 Top-up Google: +${scored.length} prospectos para completar cuota.`);
+        return scored;
+      } catch (discoveryError) {
+        console.error(`Top-up Google falló:`, discoveryError);
+        return [];
+      }
+    };
+
     for (const vendedor of vendedoresData) {
-      const clientPool = (vendorClientPools.get(vendedor.user_id) || []).filter(c => !globalPickedIds.has(c.client_id));
-      const prospectPool = (vendorProspectPools.get(vendedor.user_id) || []).filter(c => !globalPickedIds.has(c.client_id));
+      let clientPool = (vendorClientPools.get(vendedor.user_id) || []).filter(c => !globalPickedIds.has(c.client_id));
+      let prospectPool = (vendorProspectPools.get(vendedor.user_id) || []).filter(c => !globalPickedIds.has(c.client_id));
 
       const filteredAiRecs = aiRecommendations.recomendaciones.filter(
         (r: any) => !globalPickedIds.has(r.client_id)
       );
 
-      const vendorRecs = validateAndFill(
+      let vendorRecs = validateAndFill(
         filteredAiRecs,
         clientPool,
         prospectPool,
@@ -1425,6 +1495,33 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         globalPickedIds,
         globalPickedIdentities,
       );
+
+      // Si tras el dedupe global no llegamos a 8, buscamos en Google Maps
+      // con los criterios (barrios/comunas) y reintentamos.
+      if (vendorRecs.length < 8) {
+        const takenIds = new Set<string>([
+          ...globalPickedIds,
+          ...clientPool.map(c => c.client_id),
+          ...prospectPool.map(c => c.client_id),
+        ]);
+        const extra = await topUpFromGoogle(vendedor.user_id, 8 - vendorRecs.length, takenIds);
+        if (extra.length > 0) {
+          prospectPool = [...prospectPool, ...extra];
+          vendorProspectPools.set(vendedor.user_id, [
+            ...(vendorProspectPools.get(vendedor.user_id) || []),
+            ...extra,
+          ]);
+          vendorRecs = validateAndFill(
+            filteredAiRecs,
+            clientPool,
+            prospectPool,
+            vendedor.user_id,
+            globalPickedIds,
+            globalPickedIdentities,
+          );
+        }
+      }
+
 
       if (vendorRecs.length === 0) {
         console.warn(`⚠️ ${vendedor.nombre}: sin candidatos disponibles (${clientPool.length}C / ${prospectPool.length}P). Se omite.`);
