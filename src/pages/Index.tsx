@@ -25,6 +25,7 @@ const Index = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const kanbanRef = useRef<VendedorKanbanRef>(null);
@@ -36,11 +37,21 @@ const Index = () => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (!session) navigate("/auth");
+      if (!session) {
+        setIsLoading(false);
+        navigate("/auth");
+      }
     });
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (!session) navigate("/auth");
+      if (!session) {
+        setIsLoading(false);
+        navigate("/auth");
+      }
+    }).catch((error) => {
+      console.error('Error getting session:', error);
+      setIsLoading(false);
+      navigate("/auth");
     });
     return () => subscription.unsubscribe();
   }, [navigate]);
@@ -54,9 +65,16 @@ const Index = () => {
   const fetchProfile = async () => {
     const userId = session?.user.id;
     if (!userId) return;
+    setLoadError(null);
+    setIsLoading(true);
     try {
-      const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).single();
+      // maybeSingle: si el perfil todavia no existe no lanza excepcion.
+      const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle();
       if (error) throw error;
+      if (!data) {
+        setLoadError("No encontramos tu perfil. Pedile a un asignador que habilite tu cuenta.");
+        return;
+      }
       if (data.activo !== true) {
         toast({
           title: "Cuenta pendiente de habilitación",
@@ -70,6 +88,7 @@ const Index = () => {
       setProfile(data);
     } catch (error) {
       console.error('Error fetching profile:', error);
+      setLoadError("No pudimos cargar tu perfil. Revisá tu conexión e intentá de nuevo.");
     } finally {
       setIsLoading(false);
     }
@@ -81,6 +100,21 @@ const Index = () => {
     navigate("/auth");
   };
 
+  if (!isLoading && loadError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-6">
+        <div className="text-center space-y-4 max-w-sm">
+          <img src={cupraLogo} alt="Cupra Wines" className="w-24 h-auto mx-auto opacity-60" />
+          <p className="text-sm text-muted-foreground">{loadError}</p>
+          <div className="flex gap-2 justify-center">
+            <Button variant="outline" size="sm" onClick={() => void fetchProfile()}>Reintentar</Button>
+            <Button variant="ghost" size="sm" onClick={handleLogout}>Cerrar sesión</Button>
+          </div>
+        </div>
+      </div>);
+
+  }
+
   if (isLoading || !session || !profile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -91,6 +125,7 @@ const Index = () => {
       </div>);
 
   }
+
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden relative">
