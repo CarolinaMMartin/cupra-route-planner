@@ -712,14 +712,8 @@ export default function AreasManager() {
     return true;
   });
 
-  const filteredPlaces = allPlaces.filter((place) => {
-    const query = placeSearchFilter.toLowerCase();
-    return (
-      place.barrio_principal?.toLowerCase().includes(query) ||
-      place.comuna?.toLowerCase().includes(query) ||
-      place.provincia_principal?.toLowerCase().includes(query)
-    );
-  });
+  const vendedorNombre = (id: string) => profiles.find((p) => p.id === id)?.nombre || "—";
+
 
   if (loading) {
     return (
