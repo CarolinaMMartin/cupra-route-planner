@@ -260,7 +260,7 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
               </>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );
