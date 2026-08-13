@@ -491,6 +491,8 @@ function scoreClients(
     let score_rotacion = 100;
     if (c.last_recommendation_at) {
       const daysSinceRec = (Date.now() - new Date(c.last_recommendation_at).getTime()) / (1000 * 60 * 60 * 24);
+      // COOLDOWN DURO: no repetir el mismo negocio antes de N días.
+      if (cooldownDays > 0 && daysSinceRec < cooldownDays) continue;
       score_rotacion = Math.min(100, daysSinceRec * 5);
     }
 
@@ -511,7 +513,15 @@ function scoreClients(
     );
     if (hasNegativeFeedback) continue;
 
-    const score_total = score_geo * 0.50 + score_vendedor * 0.25 + score_comercial * 0.15 + score_rotacion * 0.10 + overlapPenalty;
+    // FEEDBACK DEL VENDEDOR: si pidió volver más adelante, no se recomienda antes de esa fecha.
+    const revisit = revisitMap?.get(c.client_id);
+    let revisitBonus = 0;
+    if (revisit) {
+      if (revisit.dueAt > Date.now()) continue;
+      revisitBonus = 30; // ya está vencido el pedido de volver → prioridad
+    }
+
+    const score_total = score_geo * 0.50 + score_vendedor * 0.25 + score_comercial * 0.15 + score_rotacion * 0.10 + overlapPenalty + revisitBonus;
 
     candidates.push({
       client_id: c.client_id,
