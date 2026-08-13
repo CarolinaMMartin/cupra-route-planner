@@ -838,12 +838,30 @@ function validateAndFill(
   return result.slice(0, 8);
 }
 
+function justificacionComercial(c: ScoredCandidate): string {
+  const cuadras = Math.max(1, Math.round((c.distancia_km * 1000) / 100));
+  const cerca = `Queda a unas ${cuadras} cuadras del resto de la ruta`;
+  if (c.es_prospecto) {
+    const rubro = c.tipo_negocio ? `${c.tipo_negocio}` : "Local del rubro";
+    const rep = c.rating ? ` con buena reputación (${c.rating})` : "";
+    return `${rubro} de ${c.barrio || "la zona"}${rep} que todavía no nos compra. ${cerca}: sirve para sumar cobertura nueva sin estirar el día.`;
+  }
+  const dias = c.dias_desde_ultima_compra;
+  if (c.estado_comercial === "ACTIVO") {
+    return `Cliente activo de ${c.barrio || "la zona"}${dias != null ? `, compró hace ${dias} días` : ""}. ${cerca}: visita de mantenimiento para sostener el ritmo de compra.`;
+  }
+  if (c.estado_comercial === "INACTIVO") {
+    return `Bajó el ritmo${dias != null ? `: hace ${dias} días que no compra` : ""}. ${cerca}: conviene pasar antes de que se enfríe del todo.`;
+  }
+  return `Cliente a recuperar${dias != null ? `: hace ${dias} días que no compra` : ""}. ${cerca}: vale la visita de reconquista.`;
+}
+
 function makeRec(c: ScoredCandidate, vendedorId: string, justificacion?: string): any {
   return {
     client_id: c.client_id,
     vendedor_id: vendedorId,
     prioridad: c.estado_comercial === 'ACTIVO' ? 'alta' : 'media',
-    justificacion: justificacion || `Auto: ${c.razon_social} (${c.estado_comercial}) - Score ${c.score_total}, dist ${c.distancia_km}km`,
+    justificacion: justificacion || justificacionComercial(c),
     score_final: c.score_total,
     factores: {
       score_comercial: c.score_comercial,
@@ -854,6 +872,7 @@ function makeRec(c: ScoredCandidate, vendedorId: string, justificacion?: string)
     },
   };
 }
+
 
 // ============================================================
 // MAIN HANDLER — v11-exact-eight
