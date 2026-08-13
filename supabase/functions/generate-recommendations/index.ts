@@ -2159,11 +2159,42 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
     if (enrichedRecommendations.length === 0) {
       throw new Error("No se encontraron candidatos disponibles para ningún vendedor con los filtros seleccionados.");
     }
-    const cuotaIncompleta = incompleteVendors.length > 0
-      ? `Cuota parcial: ${enrichedRecommendations.length}/${expectedRecommendationCount}. `
-        + `Sin completar 8: ${incompleteVendors.map((v) => `${v.nombre} (${enrichedCountByVendor.get(v.user_id) || 0})`).join(', ')}.`
-      : null;
+    const zonaTexto = [...barriosFinales, ...comunasFinales].filter(Boolean).join(", ") || "la zona seleccionada";
+    const avisosCobertura: string[] = [];
+    for (const vendedor of vendedoresData) {
+      const cob = coberturaPorVendedor.get(vendedor.user_id);
+      if (!cob) continue;
+      const propios = cob.obtenido.cartera_activa + cob.obtenido.reactivacion;
+      const partes: string[] = [];
+      if (cob.clientes_propios_en_zona <= 1) {
+        partes.push(
+          `En ${zonaTexto}, ${vendedor.nombre} tiene ${cob.clientes_propios_en_zona === 0 ? "cero clientes propios" : "un solo cliente propio"}. `
+          + `Se completó la ruta con ${cob.obtenido.prospectos} lugares nuevos de la zona para que el día rinda.`,
+        );
+      } else if (cob.obtenido.cartera_activa < CUPO_CARTERA_ACTIVA || cob.obtenido.reactivacion < CUPO_REACTIVACION) {
+        partes.push(
+          `Ruta de ${vendedor.nombre}: ${cob.obtenido.cartera_activa} de cartera activa y ${cob.obtenido.reactivacion} de reactivación `
+          + `(objetivo ${CUPO_CARTERA_ACTIVA} y ${CUPO_REACTIVACION}); se completó con ${cob.obtenido.prospectos} prospectos cercanos.`,
+        );
+      }
+      if (cob.prospectos_de_maps > 0) {
+        partes.push(`Se buscaron lugares nuevos en el mapa: ${cob.prospectos_de_maps} se incorporaron a la ruta de ${vendedor.nombre}.`);
+      }
+      if (cob.total < 8) {
+        partes.push(`Sólo se pudieron armar ${cob.total} de 8 visitas para ${vendedor.nombre} con los filtros elegidos. Probá ampliar la zona.`);
+      }
+      if (partes.length > 0) avisosCobertura.push(partes.join(" "));
+      if (propios === 0 && cob.total > 0) {
+        console.log(`ℹ️ ${vendedor.nombre}: ruta 100% de prospección.`);
+      }
+    }
+    const cuotaIncompleta = avisosCobertura.length > 0
+      ? avisosCobertura.join(" ")
+      : (incompleteVendors.length > 0
+        ? `Se armaron ${enrichedRecommendations.length} de ${expectedRecommendationCount} visitas con los filtros elegidos.`
+        : null);
     if (cuotaIncompleta) console.warn(`⚠️ ${cuotaIncompleta}`);
+
 
 
     // Save to DB
