@@ -1113,6 +1113,17 @@ Deno.serve(async (req) => {
       }
     });
 
+    // Feedback del vendedor → fecha mínima de próxima visita ("volver en X días/semanas").
+    const revisitMapClientes = buildRevisitMap(feedbacksMapClientes);
+    const revisitMapProspectos = buildRevisitMap(feedbacksMapProspectos);
+    const scoreOpts: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapClientes };
+    const scoreOptsP: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapProspectos };
+    // Versión relajada del cooldown: sólo se usa como último recurso para llegar a 8.
+    const scoreOptsRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapClientes };
+    const scoreOptsPRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapProspectos };
+    console.log(`🗣️ Feedback con pedido de revisita: ${revisitMapClientes.size} clientes / ${revisitMapProspectos.size} prospectos`);
+
+
     // ============================================================
     // 9. PER-VENDOR: Hotspot → Hard radius → Pool 1 + Pool 2
     // ============================================================
