@@ -219,9 +219,11 @@ const ClientesDashboard = () => {
     clientesData.forEach(cliente => {
       const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
       if (vendedor) uniqueVendedores.add(vendedor);
+      (cliente.todos_vendedores || []).forEach(v => { if (v) uniqueVendedores.add(v); });
     });
     return Array.from(uniqueVendedores).sort();
   }, [clientesData]);
+
 
   const canales = useMemo(() => {
     const uniqueCanales = new Set<string>();
@@ -242,7 +244,11 @@ const ClientesDashboard = () => {
       const matchBarrio = selectedBarrio === "all" || 
         barriosCliente.some(b => normalize(b) === normalize(selectedBarrio));
       const vendedorCliente = cliente.vendedor_actual || cliente.vendedor_principal;
-      const matchVendedor = selectedVendedor === "all" || vendedorCliente === selectedVendedor;
+      const historicos = (cliente.todos_vendedores || []).filter(Boolean);
+      const matchVendedor = selectedVendedor === "all" ||
+        normalize(vendedorCliente) === normalize(selectedVendedor) ||
+        historicos.some(v => normalize(v) === normalize(selectedVendedor));
+
       const matchCanal = selectedCanal === "all" || cliente.canal === selectedCanal;
       const matchSearch = searchTerm === "" || 
         (cliente.razon_social || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
