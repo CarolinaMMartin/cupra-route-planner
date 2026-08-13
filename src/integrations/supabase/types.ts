@@ -1150,6 +1150,27 @@ export type Database = {
           },
         ]
       }
+      vendedores_canonicos: {
+        Row: {
+          created_at: string
+          nombre_display: string
+          updated_at: string
+          vendedor_key: string
+        }
+        Insert: {
+          created_at?: string
+          nombre_display: string
+          updated_at?: string
+          vendedor_key: string
+        }
+        Update: {
+          created_at?: string
+          nombre_display?: string
+          updated_at?: string
+          vendedor_key?: string
+        }
+        Relationships: []
+      }
       ventas_cupra: {
         Row: {
           cajas: number | null
@@ -1313,6 +1334,7 @@ export type Database = {
       }
     }
     Functions: {
+      canonical_vendedor: { Args: { _nombre: string }; Returns: string }
       clean_old_recommendations: { Args: never; Returns: undefined }
       cleanup_expired_import_staging: { Args: never; Returns: number }
       commit_ventas_import: {
@@ -1333,6 +1355,7 @@ export type Database = {
       is_assignor_like: { Args: { _user_id: string }; Returns: boolean }
       sync_places_catalog: { Args: never; Returns: number }
       unaccent: { Args: { "": string }; Returns: string }
+      vendedor_key: { Args: { _nombre: string }; Returns: string }
     }
     Enums: {
       app_role: "asignador" | "vendedor" | "administrador"
