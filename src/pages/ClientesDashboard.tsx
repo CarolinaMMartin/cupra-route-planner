@@ -30,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ZonaKPIs from "@/components/clientes/ZonaKPIs";
 import ClienteDetalleDialog from "@/components/clientes/ClienteDetalleDialog";
-import { toTitleCase } from "@/lib/format";
+import { toTitleCase, vendorKey, sameVendor, dedupeVendors } from "@/lib/format";
 
 
 interface BarrioVentas {
@@ -134,18 +134,19 @@ const ClientesDashboard = () => {
 
     // Top Vendedores: GROUP BY vendedor, SUM(facturacion_ars)
     if (allVentas.length > 0) {
-      const vendedorMap = new Map<string, { ventas: number; tickets: Set<string> }>();
+      const vendedorMap = new Map<string, { nombre: string; ventas: number; tickets: Set<string> }>();
       for (const v of allVentas) {
         if (!v.vendedor) continue;
-        if (!vendedorMap.has(v.vendedor)) {
-          vendedorMap.set(v.vendedor, { ventas: 0, tickets: new Set() });
+        const key = vendorKey(v.vendedor);
+        if (!vendedorMap.has(key)) {
+          vendedorMap.set(key, { nombre: v.vendedor, ventas: 0, tickets: new Set() });
         }
-        const entry = vendedorMap.get(v.vendedor)!;
+        const entry = vendedorMap.get(key)!;
         entry.ventas += Number(v.facturacion_ars || 0);
         if (v.ticket) entry.tickets.add(v.ticket);
       }
-      const vendedorArr = Array.from(vendedorMap.entries())
-        .map(([vendedor, data]) => ({ vendedor, ventas: data.ventas, tickets: data.tickets.size }))
+      const vendedorArr = Array.from(vendedorMap.values())
+        .map((data) => ({ vendedor: data.nombre, ventas: data.ventas, tickets: data.tickets.size }))
         .sort((a, b) => b.ventas - a.ventas);
       setVentasVendedorData(vendedorArr);
     }
@@ -215,13 +216,13 @@ const ClientesDashboard = () => {
   }, [clientesData, selectedProvincia, selectedCiudad]);
 
   const vendedores = useMemo(() => {
-    const uniqueVendedores = new Set<string>();
+    const todos: string[] = [];
     clientesData.forEach(cliente => {
       const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
-      if (vendedor) uniqueVendedores.add(vendedor);
-      (cliente.todos_vendedores || []).forEach(v => { if (v) uniqueVendedores.add(v); });
+      if (vendedor) todos.push(vendedor);
+      (cliente.todos_vendedores || []).forEach(v => { if (v) todos.push(v); });
     });
-    return Array.from(uniqueVendedores).sort();
+    return dedupeVendors(todos).sort((a, b) => a.localeCompare(b, 'es'));
   }, [clientesData]);
 
 
@@ -246,8 +247,8 @@ const ClientesDashboard = () => {
       const vendedorCliente = cliente.vendedor_actual || cliente.vendedor_principal;
       const historicos = (cliente.todos_vendedores || []).filter(Boolean);
       const matchVendedor = selectedVendedor === "all" ||
-        normalize(vendedorCliente) === normalize(selectedVendedor) ||
-        historicos.some(v => normalize(v) === normalize(selectedVendedor));
+        sameVendor(vendedorCliente, selectedVendedor) ||
+        historicos.some(v => sameVendor(v, selectedVendedor));
 
       const matchCanal = selectedCanal === "all" || cliente.canal === selectedCanal;
       const matchSearch = searchTerm === "" || 
@@ -372,16 +373,17 @@ const ClientesDashboard = () => {
   // TAREA 4: Top vendedores desde ventas_cupra (fuente transaccional)
   const topVendedores = useMemo(() => {
     if (!hasActiveFilters) return ventasVendedorData.slice(0, 10);
-    const map = new Map<string, { ventas: number; tickets: Set<string> }>();
+    const map = new Map<string, { nombre: string; ventas: number; tickets: Set<string> }>();
     for (const v of filteredVentas) {
       if (!v.vendedor) continue;
-      if (!map.has(v.vendedor)) map.set(v.vendedor, { ventas: 0, tickets: new Set() });
-      const e = map.get(v.vendedor)!;
+      const key = vendorKey(v.vendedor);
+      if (!map.has(key)) map.set(key, { nombre: v.vendedor, ventas: 0, tickets: new Set() });
+      const e = map.get(key)!;
       e.ventas += Number(v.facturacion_ars || 0);
       if (v.ticket) e.tickets.add(v.ticket);
     }
-    return Array.from(map.entries())
-      .map(([vendedor, d]) => ({ vendedor, ventas: d.ventas, tickets: d.tickets.size }))
+    return Array.from(map.values())
+      .map((d) => ({ vendedor: d.nombre, ventas: d.ventas, tickets: d.tickets.size }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
   }, [ventasVendedorData, filteredVentas, hasActiveFilters]);
