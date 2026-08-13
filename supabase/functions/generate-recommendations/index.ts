@@ -305,6 +305,13 @@ async function discoverProspectsFromGoogle(
           if (!placeId || !nombre || !Number.isFinite(latitud) || !Number.isFinite(longitud)) continue;
           if (place.businessStatus === "CLOSED_PERMANENTLY" || seenIds.has(placeId)) continue;
           if (existingClientNames.has(normalizeName(nombre))) continue;
+          // Calidad: mínimo de reseñas y rubro coherente con el canal mayorista.
+          if (!esProspectoComercialmenteValido({
+            rating: place.rating ?? null,
+            total_ratings: place.userRatingCount ?? null,
+            tipo_principal: place.primaryType ?? null,
+            tipos: place.types ?? [],
+          })) continue;
 
           const barrio = getAddressComponent(place, "neighborhood", "sublocality_level_1", "sublocality");
           const comunaCandidate = getAddressComponent(place, "administrative_area_level_2");
@@ -1163,10 +1170,7 @@ Deno.serve(async (req) => {
         excludedPlaceIds,
         existingClientNames,
       );
-      const newProspects = discovered.filter((prospecto) => !clientNamesAndCoords.some((cliente) => (
-        calcularDistanciaKm(cliente.lat, cliente.lng, prospecto.latitud, prospecto.longitud) < 0.1
-        && nameTokenOverlap(prospecto.nombre, cliente.name) >= 0.4
-      )));
+      const newProspects = discovered.filter(registrarGate);
 
       if (newProspects.length > 0) {
         const { error: discoveryUpsertError } = await supabaseClient
@@ -1498,10 +1502,7 @@ Deno.serve(async (req) => {
               excludedPlaceIds,
               existingClientNames,
             );
-            const newProspects = discovered.filter((prospecto) => !clientNamesAndCoords.some((cliente) => (
-              calcularDistanciaKm(cliente.lat, cliente.lng, prospecto.latitud, prospecto.longitud) < 0.1
-              && nameTokenOverlap(prospecto.nombre, cliente.name) >= 0.4
-            )));
+            const newProspects = discovered.filter(registrarGate);
 
             if (newProspects.length > 0) {
               const { error: liveUpsertError } = await supabaseClient
@@ -1722,10 +1723,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           excludedPlaceIds,
           existingClientNames,
         );
-        const newProspects = discovered.filter((prospecto) => !clientNamesAndCoords.some((cliente) => (
-          calcularDistanciaKm(cliente.lat, cliente.lng, prospecto.latitud, prospecto.longitud) < 0.1
-          && nameTokenOverlap(prospecto.nombre, cliente.name) >= 0.4
-        )));
+        const newProspects = discovered.filter(registrarGate);
         if (newProspects.length === 0) return [];
 
         const { error: upsertError } = await supabaseClient
