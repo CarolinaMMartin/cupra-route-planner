@@ -30,6 +30,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ZonaKPIs from "@/components/clientes/ZonaKPIs";
 import ClienteDetalleDialog from "@/components/clientes/ClienteDetalleDialog";
+import { toTitleCase } from "@/lib/format";
+
 
 interface BarrioVentas {
   barrio: string;
@@ -598,12 +600,13 @@ const ClientesDashboard = () => {
                   <SelectTrigger className="bg-muted/50 border-border/60">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
+                  <SelectContent className="bg-popover z-50 max-h-72 overflow-y-auto scroll-visible">
                     <SelectItem value="all">Todos</SelectItem>
                     {vendedores.map(v => (
-                      <SelectItem key={v} value={v}>{v}</SelectItem>
+                      <SelectItem key={v} value={v}>{toTitleCase(v)}</SelectItem>
                     ))}
                   </SelectContent>
+
                 </Select>
               </div>
 
@@ -760,7 +763,7 @@ const ClientesDashboard = () => {
                             className="border-b border-border/20 cursor-pointer hover:bg-card/60 transition-colors"
                           >
                             <td className="py-2.5 px-4">
-                              <span className="font-medium block truncate">{cliente.razon_social || cliente.fantasia || 'Sin nombre'}</span>
+                              <span className="font-medium block truncate">{toTitleCase(cliente.razon_social || cliente.fantasia) || 'Sin nombre'}</span>
                               {cliente.cuit_dni && (
                                 <span className="block text-xs text-muted-foreground">{cliente.cuit_dni}</span>
                               )}
@@ -769,7 +772,7 @@ const ClientesDashboard = () => {
                               {[cliente.barrio_principal, cliente.ciudad_principal].filter(Boolean).join(' · ') || '—'}
                             </td>
                             <td className="py-2.5 px-4 text-muted-foreground truncate">
-                              {cliente.vendedor_actual || cliente.vendedor_principal || '—'}
+                              {toTitleCase(cliente.vendedor_actual || cliente.vendedor_principal) || '—'}
                             </td>
                             <td className="py-2.5 px-4 text-center text-muted-foreground">{tickets || 0}</td>
                             <td className="py-2.5 px-4 text-center text-muted-foreground">
@@ -904,7 +907,7 @@ const ClientesDashboard = () => {
                       </Badge>
                       <div className="min-w-0">
                         <span className="text-sm font-medium text-foreground truncate block">
-                          {vendedor.vendedor}
+                          {toTitleCase(vendedor.vendedor)}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {vendedor.tickets} tickets

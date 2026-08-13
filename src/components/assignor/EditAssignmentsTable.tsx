@@ -27,6 +27,7 @@ import {
 import { Save, Search, ChevronDown, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { toTitleCase } from "@/lib/format";
 
 interface Vendedor {
   id: string;
@@ -272,7 +273,7 @@ const EditAssignmentsTable = ({
           <SelectContent>
             <SelectItem value="all">Todos los vendedores</SelectItem>
             {vendedores.map((v) => (
-              <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
+              <SelectItem key={v.id} value={v.id}>{toTitleCase(v.nombre)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -298,7 +299,7 @@ const EditAssignmentsTable = ({
             </div>
             {vendedores.map((v) => (
               <DropdownMenuItem key={v.id} onClick={() => assignSelectedTo(v.id)}>
-                {v.nombre}
+                {toTitleCase(v.nombre)}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -405,7 +406,7 @@ const EditAssignmentsTable = ({
                         </SelectTrigger>
                         <SelectContent>
                           {vendedores.map((v) => (
-                            <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
+                            <SelectItem key={v.id} value={v.id}>{toTitleCase(v.nombre)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

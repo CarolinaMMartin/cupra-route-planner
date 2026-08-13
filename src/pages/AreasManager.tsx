@@ -38,6 +38,7 @@ import { Plus, MapPin, Loader2, Trash2, Pencil, Save, Search, X, SlidersHorizont
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { GEO_BA } from "@/data/geoBuenosAires";
+import { toTitleCase } from "@/lib/format";
 
 
 // Types
@@ -817,7 +818,7 @@ export default function AreasManager() {
                       <SelectContent>
                         <SelectItem value="todos">Todos</SelectItem>
                         {profiles.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
+                          <SelectItem key={p.id} value={p.id}>{toTitleCase(p.nombre)}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

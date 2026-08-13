@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { toTitleCase } from "@/lib/format";
 
 const Profiles = () => {
   const [session, setSession] = useState<any>(null);
@@ -305,7 +306,7 @@ const Profiles = () => {
               <div className="text-right">
                 <p className="font-medium flex items-center gap-2">
                   <User className="w-4 h-4" />
-                  {profile.nombre}
+                  {toTitleCase(profile.nombre)}
                 </p>
                 <p className="text-sm text-muted-foreground capitalize">{profile.rol}</p>
               </div>

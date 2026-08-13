@@ -572,7 +572,7 @@ const SupervisionVendedores = () => {
                       <SelectTrigger className="bg-card"><SelectValue placeholder="Todos los vendedores" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">Todos los vendedores</SelectItem>
-                        {vendedores.map((v) => <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>)}
+                        {vendedores.map((v) => <SelectItem key={v.id} value={v.id}>{toTitleCase(v.nombre)}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>

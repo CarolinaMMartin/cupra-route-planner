@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { toTitleCase } from "@/lib/format";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -110,14 +111,14 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
       <DialogContent className="max-w-5xl max-h-[88vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl">
-            {cliente.razon_social || cliente.fantasia || "Cliente"}
+            {toTitleCase(cliente.razon_social || cliente.fantasia) || "Cliente"}
           </DialogTitle>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground pt-1">
             {cliente.cuit_dni && <Badge variant="secondary">CUIT/DNI {cliente.cuit_dni}</Badge>}
             {cliente.canal && <Badge variant="outline">{cliente.canal}</Badge>}
             {(cliente.vendedor_actual || cliente.vendedor_principal) && (
               <span className="flex items-center gap-1">
-                <Users className="h-3 w-3" /> Vendedor actual: {cliente.vendedor_actual || cliente.vendedor_principal}
+                <Users className="h-3 w-3" /> Vendedor actual: {toTitleCase(cliente.vendedor_actual || cliente.vendedor_principal)}
               </span>
             )}
           </div>
@@ -188,7 +189,7 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
                     {vendedoresHist.map((v) => (
                       <div key={v.vendedor} className="flex items-center justify-between p-2.5 rounded-lg bg-card/50 border border-border/40 text-sm">
                         <div>
-                          <span className="font-medium">{v.vendedor}</span>
+                          <span className="font-medium">{toTitleCase(v.vendedor)}</span>
                           <span className="text-xs text-muted-foreground ml-2">
                             {v.tickets} tickets · últ. {fmtDate(v.ultima)}
                           </span>
@@ -226,7 +227,7 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
                               <tr key={`${t.ticket}-${i}`} className="border-b border-border/20">
                                 <td className="py-2">{fmtDate(t.fecha)}</td>
                                 <td className="py-2">{t.ticket}</td>
-                                <td className="py-2 text-muted-foreground">{t.vendedor || "—"}</td>
+                                <td className="py-2 text-muted-foreground">{toTitleCase(t.vendedor) || "—"}</td>
                                 <td className="py-2 text-right text-muted-foreground">{t.items}</td>
                                 <td className="py-2 text-right font-medium text-accent">{formatCurrency(t.monto)}</td>
                               </tr>

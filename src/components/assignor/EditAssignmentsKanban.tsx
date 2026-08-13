@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Save } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { toTitleCase } from "@/lib/format";
 
 interface Vendedor {
   id: string;
@@ -395,7 +396,7 @@ const EditAssignmentsKanban = ({
             <DroppableColumn
               key={vendedor.id}
               id={vendedor.id}
-              title={vendedor.nombre}
+              title={toTitleCase(vendedor.nombre)}
               count={assignments[vendedor.id]?.length || 0}
             />
           ))}

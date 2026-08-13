@@ -18,6 +18,7 @@ import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import ClientDetailCard from "./ClientDetailCard";
+import { toTitleCase } from "@/lib/format";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -540,7 +541,7 @@ const KanbanAssignment = ({
               <DroppableColumn
                 key={vendedor.id}
                 id={vendedor.id}
-                title={vendedor.nombre}
+                title={toTitleCase(vendedor.nombre)}
                 count={assignments[vendedor.id]?.length || 0}
               />
             ))}
