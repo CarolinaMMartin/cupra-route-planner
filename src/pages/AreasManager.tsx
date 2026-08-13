@@ -347,14 +347,16 @@ export default function AreasManager() {
       // Create the area
       const newArea = await createArea(newAreaForm);
       
-      // Assign selected places to the area
+      // Assign selected places to the area (creando el barrio si no existe)
       if (newAreaForm.selectedPlaces.length > 0) {
-        await Promise.all(
-          newAreaForm.selectedPlaces.map((placeId) =>
-            assignPlaceToArea(placeId, newArea.id)
-          )
-        );
+        for (const key of newAreaForm.selectedPlaces) {
+          const entry = catalogByKey.get(key);
+          if (!entry) continue;
+          const placeId = await ensurePlaceId(entry);
+          await assignPlaceToArea(placeId, newArea.id);
+        }
       }
+
       
       toast({
         title: "Éxito",
