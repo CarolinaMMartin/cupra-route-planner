@@ -37,8 +37,8 @@ import { Save, Search, ChevronDown, Info, ArrowLeft } from "lucide-react";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import {
 import { toTitleCase } from "@/lib/format";
+import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
