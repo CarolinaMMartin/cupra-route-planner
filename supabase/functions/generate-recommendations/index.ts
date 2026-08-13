@@ -26,6 +26,65 @@ const MAX_EXPANSION_KM = 2.0;
 const EXPANSION_STEPS_KM = [3.0, 5.0]; // Progressive expansion if 2km isn't enough
 // Último recurso: nunca proponer visitas más lejos que esto del hotspot del vendedor.
 const ZONE_FALLBACK_MAX_KM = 8.0;
+// Clientes propios: antes de meter prospectos, se puede ir hasta acá dentro de la cartera.
+const PORTFOLIO_FALLBACK_MAX_KM = 25.0;
+// Un prospecto NUNCA puede estar más lejos que esto del hotspot del vendedor.
+const MAX_PROSPECT_DISTANCE_KM = 12.0;
+// Días mínimos entre dos recomendaciones del mismo negocio (regla dura, se relaja sólo si no se llega a 8).
+const RECOMMENDATION_COOLDOWN_DAYS = 15;
+
+interface RevisitInfo { dueAt: number; source: string; }
+
+/**
+ * Interpreta el feedback del vendedor para saber cuándo pidió volver.
+ * Soporta "volver en 2 semanas", "revisitar en 10 días", "la semana que viene",
+ * "el mes que viene", "volver mañana", etc.
+ */
+function parseRevisitDays(text: string | null | undefined): number | null {
+  if (!text) return null;
+  const t = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const wantsReturn = /(volver|revisit|re visitar|regresar|pasar de nuevo|volvemos|contactar)/.test(t);
+  if (!wantsReturn && !/(en \d+\s*(dia|semana|mes))/.test(t)) return null;
+
+  const num = t.match(/(\d+)\s*(dias?|semanas?|meses?|mes)/);
+  if (num) {
+    const value = parseInt(num[1], 10);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    if (num[2].startsWith("dia")) return value;
+    if (num[2].startsWith("semana")) return value * 7;
+    return value * 30;
+  }
+  if (/(una semana|la semana que viene|proxima semana|semana proxima)/.test(t)) return 7;
+  if (/(quincena|15 dias)/.test(t)) return 15;
+  if (/(un mes|el mes que viene|proximo mes|mes proximo)/.test(t)) return 30;
+  if (/(manana)/.test(t)) return 1;
+  return null;
+}
+
+/** Mapa negocio -> fecha mínima de próxima visita según el feedback más reciente. */
+function buildRevisitMap(feedbacksMap: Map<string, any[]>): Map<string, RevisitInfo> {
+  const map = new Map<string, RevisitInfo>();
+  for (const [id, feedbacks] of feedbacksMap) {
+    for (const fb of feedbacks) {
+      const days = parseRevisitDays(fb.feedback) ?? parseRevisitDays(fb.motivo_no_visita);
+      if (days === null) continue;
+      const base = fb.created_at ? new Date(fb.created_at).getTime() : Date.now();
+      const dueAt = base + days * 24 * 60 * 60 * 1000;
+      const prev = map.get(id);
+      if (!prev || dueAt > prev.dueAt) {
+        map.set(id, { dueAt, source: `${fb.feedback || fb.motivo_no_visita} (+${days}d)` });
+      }
+      break; // feedbacks vienen ordenados por fecha desc: vale el más reciente
+    }
+  }
+  return map;
+}
+
+interface ScoreOptions {
+  cooldownDays?: number;
+  revisitMap?: Map<string, RevisitInfo>;
+}
+
 
 // ---- Identity dedup (evita recomendar el mismo negocio 2 veces) ----
 function normalizeIdentityText(value: string | null | undefined): string {
