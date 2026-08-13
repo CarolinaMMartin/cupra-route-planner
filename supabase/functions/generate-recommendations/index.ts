@@ -2180,8 +2180,11 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       if (cob.clientes_propios_en_zona <= 1) {
         partes.push(
           `En ${zonaTexto}, ${vendedor.nombre} tiene ${cob.clientes_propios_en_zona === 0 ? "cero clientes propios" : "un solo cliente propio"}. `
-          + `Se completó la ruta con ${cob.obtenido.prospectos} lugares nuevos de la zona para que el día rinda.`,
+          + (cob.obtenido.prospectos > 0
+            ? `Se completó la ruta con ${cob.obtenido.prospectos} lugares nuevos de la zona para que el día rinda.`
+            : `No hay lugares nuevos disponibles cerca para completar la ruta.`),
         );
+
       } else if (cob.obtenido.cartera_activa < CUPO_CARTERA_ACTIVA || cob.obtenido.reactivacion < CUPO_REACTIVACION) {
         partes.push(
           `Ruta de ${vendedor.nombre}: ${cob.obtenido.cartera_activa} de cartera activa y ${cob.obtenido.reactivacion} de reactivación `
