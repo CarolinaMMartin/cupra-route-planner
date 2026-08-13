@@ -544,7 +544,14 @@ function scoreClients(
       revisitBonus = 30; // ya está vencido el pedido de volver → prioridad
     }
 
-    const score_total = score_geo * 0.50 + score_vendedor * 0.25 + score_comercial * 0.15 + score_rotacion * 0.10 + overlapPenalty + revisitBonus;
+    // PRIORIDAD COMERCIAL: valor histórico × urgencia contra la cadencia propia
+    // × margen realizado × cercanía. Es lo que hace que una cuenta de $10M
+    // vencida al doble de su ritmo pese más que una de $850k.
+    const prioridad = prioridadVisita(c, distancia_km, options.precioCajaCanal ?? 0);
+    const score_prioridad = prioridadEscala100(prioridad);
+
+    const score_total = score_prioridad * 0.40 + score_geo * 0.25 + score_vendedor * 0.15
+      + score_comercial * 0.10 + score_rotacion * 0.10 + overlapPenalty + revisitBonus;
 
     candidates.push({
       client_id: c.client_id,
