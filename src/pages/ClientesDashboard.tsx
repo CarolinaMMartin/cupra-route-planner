@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ZonaKPIs from "@/components/clientes/ZonaKPIs";
+import ClienteDetalleDialog from "@/components/clientes/ClienteDetalleDialog";
 
 interface BarrioVentas {
   barrio: string;
@@ -61,6 +62,8 @@ const ClientesDashboard = () => {
   const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedCanal, setSelectedCanal] = useState<string>("all");
+  const [selectedCliente, setSelectedCliente] = useState<any | null>(null);
+  const [detalleOpen, setDetalleOpen] = useState(false);
 
   useEffect(() => {
     checkAuthAndFetchData();
@@ -916,6 +919,13 @@ const ClientesDashboard = () => {
 
           </TabsContent>
         </Tabs>
+
+        <ClienteDetalleDialog
+          cliente={selectedCliente}
+          open={detalleOpen}
+          onOpenChange={setDetalleOpen}
+          formatCurrency={formatCurrency}
+        />
       </div>
     </div>
     </TooltipProvider>
