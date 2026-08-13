@@ -264,11 +264,27 @@ const ClientesDashboard = () => {
    */
   const normalizeRS = (rs: string) => rs.trim().toUpperCase().replace(/\s+/g, ' ');
 
+  // Ventas restringidas a los clientes que pasan los filtros activos
+  const filteredVentas = useMemo(() => {
+    if (!hasActiveFilters) return ventasRaw;
+    const idSet = new Set<string>();
+    const rsSet = new Set<string>();
+    for (const c of filteredData) {
+      if (c.client_id) idSet.add(String(c.client_id));
+      if (c.razon_social) rsSet.add(normalizeRS(c.razon_social));
+      if (c.fantasia) rsSet.add(normalizeRS(c.fantasia));
+    }
+    return ventasRaw.filter(v =>
+      (v.client_id && idSet.has(String(v.client_id))) ||
+      (v.razon_social && rsSet.has(normalizeRS(v.razon_social)))
+    );
+  }, [ventasRaw, filteredData, hasActiveFilters]);
+
   const kpis = useMemo(() => {
-    const totalVentas = ventasRaw.reduce((sum, v) => sum + Number(v.facturacion_ars || 0), 0);
+    const totalVentas = filteredVentas.reduce((sum, v) => sum + Number(v.facturacion_ars || 0), 0);
     const ticketsSet = new Set<string>();
     const clientesSet = new Set<string>();
-    for (const v of ventasRaw) {
+    for (const v of filteredVentas) {
       if (v.ticket) ticketsSet.add(v.ticket);
       // Fix 4: Count clients by normalized razon_social, not client_id
       if (v.razon_social) clientesSet.add(normalizeRS(v.razon_social));
@@ -277,7 +293,8 @@ const ClientesDashboard = () => {
     const totalClientes = clientesSet.size;
     const ticketPromedio = totalTickets > 0 ? totalVentas / totalTickets : 0;
     return { totalVentas, totalClientes, totalOrdenes: totalTickets, ticketPromedio };
-  }, [ventasRaw]);
+  }, [filteredVentas]);
+
 
   // TAREA 13: Indicador de calidad de datos
   const dataQuality = useMemo(() => {
