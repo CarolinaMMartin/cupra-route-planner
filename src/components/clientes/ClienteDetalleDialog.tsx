@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Loader2, MapPin, Phone, Mail, Users, ShoppingCart } from "lucide-react";
 
 interface Props {
