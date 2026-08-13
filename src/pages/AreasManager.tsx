@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import cupraLogo from "@/assets/cupra-logo-new.png";
 import AppNav from "@/components/AppNav";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,7 +34,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Loader2, Trash2, Pencil, Save, Search, X } from "lucide-react";
+import { Plus, MapPin, Loader2, Trash2, Pencil, Save, Search, X, SlidersHorizontal, ChevronUp, ChevronDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Types
