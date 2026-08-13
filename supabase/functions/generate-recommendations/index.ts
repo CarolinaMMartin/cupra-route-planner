@@ -2063,10 +2063,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
       recomendaciones: enrichedRecommendations,
       resumen: {
         total_recomendaciones: enrichedRecommendations.length,
-        descripcion: auditoriaResumen
-          ? `${aiRecommendations.resumen_analisis}\n\nAuditoría de coherencia: ${auditoriaResumen}`
-          : aiRecommendations.resumen_analisis,
-        auditoria_coherencia: auditoriaResumen || null,
+        descripcion: aiRecommendations.resumen_analisis,
         distribucion_por_vendedor: distribucion,
         zonas_priorizadas: Array.from(zonas).slice(0, 5),
         request_id,
