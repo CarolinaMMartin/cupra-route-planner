@@ -547,9 +547,25 @@ export default function AreasManager() {
     value: p.id,
   }));
 
-  const filteredAreas = areas.filter((area) =>
-    area.nombre.toLowerCase().includes(searchFilter.toLowerCase())
-  );
+  const provinciaOptions = Array.from(
+    new Set(allPlaces.map((p) => p.provincia_principal).filter(Boolean) as string[])
+  ).sort();
+  const comunaOptions = Array.from(
+    new Set(allPlaces.map((p) => p.comuna).filter(Boolean) as string[])
+  ).sort();
+
+  const activeFiltersCount =
+    (provinciaFilter !== "todas" ? 1 : 0) +
+    (comunaFilter !== "todas" ? 1 : 0) +
+    (vendedorFilter !== "todos" ? 1 : 0);
+
+  const filteredAreas = areas.filter((area) => {
+    if (!area.nombre.toLowerCase().includes(searchFilter.toLowerCase())) return false;
+    if (provinciaFilter !== "todas" && !area.places.some((p) => p.provincia_principal === provinciaFilter)) return false;
+    if (comunaFilter !== "todas" && !area.places.some((p) => p.comuna === comunaFilter)) return false;
+    if (vendedorFilter !== "todos" && !area.vendedores.includes(vendedorFilter)) return false;
+    return true;
+  });
 
   const filteredPlaces = allPlaces.filter((place) => {
     const query = placeSearchFilter.toLowerCase();
