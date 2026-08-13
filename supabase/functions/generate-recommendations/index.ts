@@ -355,21 +355,33 @@ function calculateCentroid(points: AnchorPoint[]): AnchorPoint | null {
   };
 }
 
-// Find the densest cluster: the point with the most neighbors within clusterRadius
+// Find the densest cluster: the point with the most neighbors within clusterRadius.
+// Tie-break por COMPACIDAD (suma de distancias a los vecinos más cercanos), para que
+// un cliente aislado a cientos de km nunca se convierta en el núcleo de la ruta.
 function findDensestHotspot(points: AnchorPoint[], clusterRadius: number = 2.0): AnchorPoint | null {
   if (points.length === 0) return null;
-  if (points.length <= 3) return calculateCentroid(points);
+  if (points.length <= 2) return calculateCentroid(points);
 
+  const K = Math.min(4, points.length - 1);
   let bestPoint: AnchorPoint | null = null;
-  let bestCount = 0;
+  let bestCount = -1;
+  let bestCompactness = Number.POSITIVE_INFINITY;
   let bestNeighbors: AnchorPoint[] = [];
 
   for (const p of points) {
-    const neighbors = points.filter(q =>
+    const distances = points
+      .filter((q) => q !== p)
+      .map((q) => calcularDistanciaKm(p.lat, p.lng, q.lat, q.lng))
+      .sort((a, b) => a - b);
+    const compactness = distances.slice(0, K).reduce((s, d) => s + d, 0);
+    const neighbors = points.filter((q) =>
       calcularDistanciaKm(p.lat, p.lng, q.lat, q.lng) <= clusterRadius
     );
-    if (neighbors.length > bestCount) {
+    const isBetter = neighbors.length > bestCount ||
+      (neighbors.length === bestCount && compactness < bestCompactness);
+    if (isBetter) {
       bestCount = neighbors.length;
+      bestCompactness = compactness;
       bestPoint = p;
       bestNeighbors = neighbors;
     }
@@ -378,6 +390,7 @@ function findDensestHotspot(points: AnchorPoint[], clusterRadius: number = 2.0):
   // Return centroid of the densest cluster (smoother than a single point)
   return bestNeighbors.length > 0 ? calculateCentroid(bestNeighbors) : bestPoint;
 }
+
 
 function buildSellerNameMap(vendedoresData: any[]): Map<string, string> {
   const map = new Map<string, string>();
