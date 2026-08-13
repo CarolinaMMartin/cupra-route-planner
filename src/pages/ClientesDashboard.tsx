@@ -373,16 +373,17 @@ const ClientesDashboard = () => {
   // TAREA 4: Top vendedores desde ventas_cupra (fuente transaccional)
   const topVendedores = useMemo(() => {
     if (!hasActiveFilters) return ventasVendedorData.slice(0, 10);
-    const map = new Map<string, { ventas: number; tickets: Set<string> }>();
+    const map = new Map<string, { nombre: string; ventas: number; tickets: Set<string> }>();
     for (const v of filteredVentas) {
       if (!v.vendedor) continue;
-      if (!map.has(v.vendedor)) map.set(v.vendedor, { ventas: 0, tickets: new Set() });
-      const e = map.get(v.vendedor)!;
+      const key = vendorKey(v.vendedor);
+      if (!map.has(key)) map.set(key, { nombre: v.vendedor, ventas: 0, tickets: new Set() });
+      const e = map.get(key)!;
       e.ventas += Number(v.facturacion_ars || 0);
       if (v.ticket) e.tickets.add(v.ticket);
     }
-    return Array.from(map.entries())
-      .map(([vendedor, d]) => ({ vendedor, ventas: d.ventas, tickets: d.tickets.size }))
+    return Array.from(map.values())
+      .map((d) => ({ vendedor: d.nombre, ventas: d.ventas, tickets: d.tickets.size }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
   }, [ventasVendedorData, filteredVentas, hasActiveFilters]);
