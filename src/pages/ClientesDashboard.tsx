@@ -636,8 +636,9 @@ const ClientesDashboard = () => {
                 Limpiar Filtros
               </Button>
               <Badge variant="secondary" className="ml-auto">
-                {filteredData.length} clientes filtrados
+                {filteredData.length} de {clientesData.length} clientes
               </Badge>
+
             </div>
           </CardContent>
         </Card>
