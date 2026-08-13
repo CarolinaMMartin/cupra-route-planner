@@ -1584,15 +1584,20 @@ Deno.serve(async (req) => {
         : (c.dias_desde_ultima_compra === null || c.dias_desde_ultima_compra === undefined
           ? "sin fecha de última compra"
           : `${c.dias_desde_ultima_compra} días sin comprar`);
+      // Ticket promedio facturado de CUPRA (bruto, sin restar notas de crédito).
       const ticket = !c.es_prospecto && c.ticket_promedio
-        ? `, ticket promedio $${Math.round(Number(c.ticket_promedio)).toLocaleString("es-AR")}`
+        ? `, ticket promedio facturado CUPRA $${Math.round(Number(c.ticket_promedio)).toLocaleString("es-AR")}`
         : "";
+      const devolucion = c.alerta_nc
+        ? `, DEVOLUCIÓN del ${Math.round(c.alerta_nc.ratio * 100)}% de lo facturado${c.alerta_nc.fecha ? ` el ${c.alerta_nc.fecha}` : ""}`
+        : "";
+      const prioridad = !c.es_prospecto ? `, prioridad comercial ${c.prioridad_comercial}/100` : "";
       const rubro = c.tipo_negocio ? `, ${c.tipo_negocio}` : "";
-      const reputacion = c.es_prospecto && c.rating ? `, reputación ${c.rating}` : "";
+      const reputacion = c.es_prospecto && c.total_ratings ? `, ${c.total_ratings} reseñas` : "";
       const feedback = c.feedbacks_recientes.length > 0
         ? ` | comentario del vendedor: ${c.feedbacks_recientes.map(f => f.feedback).join("; ")}`
         : "";
-      return `${i + 1}. [${c.client_id}] ${c.razon_social} | ${bloque} | barrio ${c.barrio || "s/d"} | a ${cuadras(c.distancia_km)} cuadras del arranque de la ruta | ${compra}${ticket}${rubro}${reputacion}${feedback}`;
+      return `${i + 1}. [${c.client_id}] ${c.razon_social} | ${bloque} | barrio ${normalizeBarrio(c.barrio) || "s/d"} | a ${cuadras(c.distancia_km)} cuadras del arranque de la ruta | ${compra}${ticket}${devolucion}${prioridad}${rubro}${reputacion}${feedback}`;
     };
 
     const vendorSections = vendedoresData.map(v => {
