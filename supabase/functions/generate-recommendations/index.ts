@@ -22,19 +22,46 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 // La ruta del día tiene que ser CAMINABLE: todas las visitas cerca unas de otras.
-const HARD_RADIUS_KM = 1.2;
-const MAX_EXPANSION_KM = 1.8;
-const EXPANSION_STEPS_KM = [2.2, 3.0]; // Expansión progresiva sólo si no se llega a la cuota
-// Último recurso: nunca proponer visitas más lejos que esto del hotspot del vendedor.
-const ZONE_FALLBACK_MAX_KM = 4.0;
-// Clientes propios: antes de meter prospectos, se puede ir hasta acá dentro de la cartera.
-const PORTFOLIO_FALLBACK_MAX_KM = 5.0;
-// Un prospecto NUNCA puede estar más lejos que esto del hotspot del vendedor.
+// Radio operativo único alrededor del núcleo del vendedor.
+const HARD_RADIUS_KM = 2.5;
+// Única ampliación permitida cuando el radio operativo no alcanza.
+const MAX_EXPANSION_KM = 3.5;
+const EXPANSION_STEPS_KM: number[] = []; // Sin cascada: compacidad manda sobre cantidad
+// Último recurso: nunca proponer visitas más lejos que esto del núcleo del vendedor.
+const ZONE_FALLBACK_MAX_KM = 3.5;
+// Clientes propios: la cartera lejana NO entra sólo por ser cartera.
+const PORTFOLIO_FALLBACK_MAX_KM = 3.5;
+// Un prospecto NUNCA puede estar más lejos que esto del núcleo del vendedor.
 const MAX_PROSPECT_DISTANCE_KM = 2.5;
 // Diámetro máximo tolerado entre dos visitas del mismo vendedor en el día (caminable).
-const MAX_ROUTE_SPREAD_KM = 6.0;
+const MAX_ROUTE_SPREAD_KM = 3.0;
 // Días mínimos entre dos recomendaciones del mismo negocio (regla dura, se relaja sólo si no se llega a 8).
 const RECOMMENDATION_COOLDOWN_DAYS = 15;
+
+// Composición objetivo del día: 4 cartera activa + 2 reactivación + 2 prospectos.
+const CUPO_CARTERA_ACTIVA = 4;
+const CUPO_REACTIVACION = 2;
+const CUPO_PROSPECTOS = 2;
+
+// Limpia jerga interna y coordenadas de los textos que ve el asignador.
+function limpiarJustificacion(texto: string | null | undefined, fallback: string): string {
+  let out = String(texto ?? "").trim();
+  if (!out) return fallback;
+  out = out
+    .replace(/-?\d{1,3}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/g, "la zona")
+    .replace(/\b(hotspot|cluster|centroide|score_[a-z_]*|score\s*(final|total|geo|geográfico)?\s*[:=]?\s*\d+(\.\d+)?)\b/gi, "")
+    .replace(/\bdist(ancia)?\s*[:=]?\s*\d+(\.\d+)?\s*km\b/gi, "")
+    .replace(/\blat(itud)?\s*[:=]?\s*-?\d+(\.\d+)?/gi, "")
+    .replace(/\blong(itud)?\s*[:=]?\s*-?\d+(\.\d+)?/gi, "")
+    .replace(/^\s*Auto\s*:\s*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s*[-–,;]\s*(?=[.,;]|$)/g, "")
+    .trim();
+  out = out.replace(/^[\s\-–,;.]+/, "").trim();
+  if (out.length < 12) return fallback;
+  return out.length > 320 ? `${out.slice(0, 317)}...` : out;
+}
+
 
 interface RevisitInfo { dueAt: number; source: string; }
 
