@@ -10,16 +10,7 @@ const corsHeaders = {
 // HELPER FUNCTIONS
 // ============================================================
 
-function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
+import { type AnchorPoint, calcularDistanciaKm, calculateCentroid, findDensestHotspot } from "./geo-hotspot.ts";
 
 // La ruta del día tiene que ser CAMINABLE: todas las visitas cerca unas de otras.
 // Radio operativo único alrededor del núcleo del vendedor.
@@ -159,7 +150,6 @@ function dedupeByIdentity(
   return Array.from(best.values()).sort((a, b) => b.score_total - a.score_total);
 }
 
-interface AnchorPoint { lat: number; lng: number; }
 
 
 const CABA_VIEWPORT = {
@@ -345,38 +335,6 @@ function isWithinRadius(
   if (!center) return true;
   if (lat === null || lng === null) return false;
   return calcularDistanciaKm(center.lat, center.lng, lat, lng) <= maxDistanceKm;
-}
-
-function calculateCentroid(points: AnchorPoint[]): AnchorPoint | null {
-  if (points.length === 0) return null;
-  return {
-    lat: points.reduce((s, p) => s + p.lat, 0) / points.length,
-    lng: points.reduce((s, p) => s + p.lng, 0) / points.length,
-  };
-}
-
-// Find the densest cluster: the point with the most neighbors within clusterRadius
-function findDensestHotspot(points: AnchorPoint[], clusterRadius: number = 2.0): AnchorPoint | null {
-  if (points.length === 0) return null;
-  if (points.length <= 3) return calculateCentroid(points);
-
-  let bestPoint: AnchorPoint | null = null;
-  let bestCount = 0;
-  let bestNeighbors: AnchorPoint[] = [];
-
-  for (const p of points) {
-    const neighbors = points.filter(q =>
-      calcularDistanciaKm(p.lat, p.lng, q.lat, q.lng) <= clusterRadius
-    );
-    if (neighbors.length > bestCount) {
-      bestCount = neighbors.length;
-      bestPoint = p;
-      bestNeighbors = neighbors;
-    }
-  }
-
-  // Return centroid of the densest cluster (smoother than a single point)
-  return bestNeighbors.length > 0 ? calculateCentroid(bestNeighbors) : bestPoint;
 }
 
 function buildSellerNameMap(vendedoresData: any[]): Map<string, string> {
@@ -2167,8 +2125,11 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       if (cob.clientes_propios_en_zona <= 1) {
         partes.push(
           `En ${zonaTexto}, ${vendedor.nombre} tiene ${cob.clientes_propios_en_zona === 0 ? "cero clientes propios" : "un solo cliente propio"}. `
-          + `Se completó la ruta con ${cob.obtenido.prospectos} lugares nuevos de la zona para que el día rinda.`,
+          + (cob.obtenido.prospectos > 0
+            ? `Se completó la ruta con ${cob.obtenido.prospectos} lugares nuevos de la zona para que el día rinda.`
+            : `No hay lugares nuevos disponibles cerca para completar la ruta.`),
         );
+
       } else if (cob.obtenido.cartera_activa < CUPO_CARTERA_ACTIVA || cob.obtenido.reactivacion < CUPO_REACTIVACION) {
         partes.push(
           `Ruta de ${vendedor.nombre}: ${cob.obtenido.cartera_activa} de cartera activa y ${cob.obtenido.reactivacion} de reactivación `
