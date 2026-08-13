@@ -1475,7 +1475,6 @@ Deno.serve(async (req) => {
                 console.error(`No se pudieron guardar los prospectos descubiertos: ${liveUpsertError.message}`);
               } else {
                 extraProspectosLoaded.push(...newProspects);
-        newProspects.forEach((p: any) => liveDiscoveredIds.add(p.place_id));
                 newProspects.forEach((p: any) => liveDiscoveredIds.add(p.place_id));
                 const liveScored = scoreProspects(
                   newProspects, feedbacksMapProspectos,
