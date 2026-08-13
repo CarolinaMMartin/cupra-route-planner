@@ -636,8 +636,9 @@ const ClientesDashboard = () => {
                 Limpiar Filtros
               </Button>
               <Badge variant="secondary" className="ml-auto">
-                {filteredData.length} clientes filtrados
+                {filteredData.length} de {clientesData.length} clientes
               </Badge>
+
             </div>
           </CardContent>
         </Card>
@@ -738,16 +739,17 @@ const ClientesDashboard = () => {
                     No hay clientes que coincidan con la búsqueda.
                   </p>
                 ) : (
-                  <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
-                    <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-background z-10">
-                        <tr className="text-xs uppercase text-muted-foreground border-b border-border/40">
-                          <th className="text-left py-2 font-medium">Cliente</th>
-                          <th className="text-left py-2 font-medium">Zona</th>
-                          <th className="text-left py-2 font-medium">Vendedor</th>
-                          <th className="text-right py-2 font-medium">Tickets</th>
-                          <th className="text-right py-2 font-medium">Últ. compra</th>
-                          <th className="text-right py-2 font-medium">Facturación</th>
+                  <div className="rounded-lg border border-border/40 overflow-hidden">
+                    <div className="max-h-[560px] overflow-y-auto overflow-x-auto scroll-visible">
+                    <table className="w-full text-sm table-fixed min-w-[840px]">
+                      <thead className="sticky top-0 z-10 bg-secondary/95 backdrop-blur supports-[backdrop-filter]:bg-secondary/80">
+                        <tr className="text-[11px] uppercase tracking-wider text-muted-foreground border-b border-border/60">
+                          <th className="text-left py-3 px-4 font-semibold w-[30%]">Cliente</th>
+                          <th className="text-left py-3 px-4 font-semibold w-[22%]">Zona</th>
+                          <th className="text-left py-3 px-4 font-semibold w-[16%]">Vendedor</th>
+                          <th className="text-center py-3 px-4 font-semibold w-[8%]">Tickets</th>
+                          <th className="text-center py-3 px-4 font-semibold w-[12%]">Últ. compra</th>
+                          <th className="text-right py-3 px-4 font-semibold w-[12%]">Facturación</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -757,33 +759,35 @@ const ClientesDashboard = () => {
                             onClick={() => { setSelectedCliente(cliente); setDetalleOpen(true); }}
                             className="border-b border-border/20 cursor-pointer hover:bg-card/60 transition-colors"
                           >
-                            <td className="py-2 pr-3">
-                              <span className="font-medium">{cliente.razon_social || cliente.fantasia || 'Sin nombre'}</span>
+                            <td className="py-2.5 px-4">
+                              <span className="font-medium block truncate">{cliente.razon_social || cliente.fantasia || 'Sin nombre'}</span>
                               {cliente.cuit_dni && (
                                 <span className="block text-xs text-muted-foreground">{cliente.cuit_dni}</span>
                               )}
                             </td>
-                            <td className="py-2 pr-3 text-muted-foreground">
+                            <td className="py-2.5 px-4 text-muted-foreground truncate">
                               {[cliente.barrio_principal, cliente.ciudad_principal].filter(Boolean).join(' · ') || '—'}
                             </td>
-                            <td className="py-2 pr-3 text-muted-foreground">
+                            <td className="py-2.5 px-4 text-muted-foreground truncate">
                               {cliente.vendedor_actual || cliente.vendedor_principal || '—'}
                             </td>
-                            <td className="py-2 text-right text-muted-foreground">{tickets || 0}</td>
-                            <td className="py-2 text-right text-muted-foreground">
+                            <td className="py-2.5 px-4 text-center text-muted-foreground">{tickets || 0}</td>
+                            <td className="py-2.5 px-4 text-center text-muted-foreground">
                               {cliente.ultima_compra ? new Date(`${cliente.ultima_compra}T12:00:00`).toLocaleDateString('es-AR') : '—'}
                             </td>
-                            <td className="py-2 text-right font-semibold text-accent">{formatCurrency(ventas)}</td>
+                            <td className="py-2.5 px-4 text-right font-semibold text-accent whitespace-nowrap">{formatCurrency(ventas)}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                    </div>
                     {clientesResumen.length > 300 && (
-                      <p className="text-xs text-muted-foreground pt-3">
+                      <p className="text-xs text-muted-foreground p-3 border-t border-border/40">
                         Mostrando los primeros 300 de {clientesResumen.length}. Refiná la búsqueda para ver más.
                       </p>
                     )}
                   </div>
+
                 )}
               </CardContent>
             </Card>
