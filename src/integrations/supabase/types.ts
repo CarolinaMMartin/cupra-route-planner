@@ -1354,6 +1354,7 @@ export type Database = {
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
       is_assignor_like: { Args: { _user_id: string }; Returns: boolean }
       sync_places_catalog: { Args: never; Returns: number }
+      titlecase_nombre: { Args: { _texto: string }; Returns: string }
       unaccent: { Args: { "": string }; Returns: string }
       vendedor_key: { Args: { _nombre: string }; Returns: string }
     }
