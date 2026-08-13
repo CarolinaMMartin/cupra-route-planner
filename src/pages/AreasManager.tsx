@@ -559,6 +559,97 @@ export default function AreasManager() {
     }
   }
 
+  /** Devuelve el id de places para un barrio del catálogo, creándolo si no existe. */
+  async function ensurePlaceId(entry: CatalogEntry): Promise<string> {
+    if (entry.placeId) return entry.placeId;
+
+    const { data: existing } = await supabase
+      .from("places")
+      .select("id")
+      .eq("barrio_principal", entry.barrio)
+      .eq("provincia_principal", entry.provincia)
+      .maybeSingle();
+
+    if (existing?.id) {
+      setAllPlaces((prev) =>
+        prev.some((p) => p.id === existing.id)
+          ? prev
+          : [
+              ...prev,
+              {
+                id: existing.id,
+                barrio_principal: entry.barrio,
+                comuna: entry.comuna,
+                provincia_principal: entry.provincia,
+              },
+            ],
+      );
+      return existing.id;
+    }
+
+    const { data: created, error } = await supabase
+      .from("places")
+      .insert({
+        barrio_principal: entry.barrio,
+        comuna: entry.comuna,
+        provincia_principal: entry.provincia,
+      })
+      .select("id, barrio_principal, comuna, provincia_principal")
+      .single();
+
+    if (error) throw error;
+    setAllPlaces((prev) => [...prev, created as Place]);
+    return created.id;
+  }
+
+  async function handleAddCatalogToArea(key: string, areaId: string) {
+    const entry = catalogByKey.get(key);
+    if (!entry) return;
+    try {
+      const placeId = await ensurePlaceId(entry);
+      await assignPlaceToArea(placeId, areaId);
+      setAreas((prev) =>
+        prev.map((area) =>
+          area.id === areaId && !area.places.some((p) => p.id === placeId)
+            ? {
+                ...area,
+                places: [
+                  ...area.places,
+                  {
+                    id: placeId,
+                    barrio_principal: entry.barrio,
+                    comuna: entry.comuna,
+                    provincia_principal: entry.provincia,
+                  },
+                ],
+              }
+            : area,
+        ),
+      );
+      toast({ title: `${entry.barrio} agregado a la zona` });
+    } catch (error) {
+      console.error("Error adding place:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo agregar el barrio",
+        variant: "destructive",
+      });
+    }
+  }
+
+  const assignedKeys = (area: Area) =>
+    new Set(
+      area.places
+        .filter((p) => p.barrio_principal)
+        .map((p) =>
+          catalogKey(
+            p.provincia_principal || "Ciudad Autónoma de Buenos Aires",
+            p.barrio_principal as string,
+          ),
+        ),
+    );
+
+
   const vendedorOptions = profiles.map((p) => ({
     label: p.nombre,
     value: p.id,
