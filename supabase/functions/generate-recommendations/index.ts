@@ -1178,13 +1178,13 @@ Deno.serve(async (req) => {
       let clientPool = scoreClients(
         myValidClients, placesMap, feedbacksMapClientes,
         vendedor.user_id, sellerNameMap,
-        vendorHotspot, HARD_RADIUS_KM, otherHotspots,
+        vendorHotspot, HARD_RADIUS_KM, otherHotspots, scoreOpts,
       );
 
       // === POOL 2: Prospects within HARD_RADIUS_KM of hotspot ===
       let prospectPool = scoreProspects(
         prospectos, feedbacksMapProspectos,
-        vendorHotspot, HARD_RADIUS_KM, otherHotspots,
+        vendorHotspot, HARD_RADIUS_KM, otherHotspots, scoreOptsP,
       );
 
       console.log(`📊 ${vendedor.nombre}: ${clientPool.length} clientes + ${prospectPool.length} prospectos en radio ${HARD_RADIUS_KM}km`);
@@ -1200,7 +1200,7 @@ Deno.serve(async (req) => {
         const extraClientPool = scoreClients(
           myValidClients, placesMap, feedbacksMapClientes,
           vendedor.user_id, sellerNameMap,
-          vendorHotspot, expandRadius, otherHotspots,
+          vendorHotspot, expandRadius, otherHotspots, scoreOpts,
         ).filter(c => !existingClientIds.has(c.client_id));
 
         if (extraClientPool.length > 0) {
@@ -1216,7 +1216,7 @@ Deno.serve(async (req) => {
         const remainingZoneClients = scoreClients(
           myValidClients, placesMap, feedbacksMapClientes,
           vendedor.user_id, sellerNameMap,
-          vendorHotspot, ZONE_FALLBACK_MAX_KM, otherHotspots,
+          vendorHotspot, ZONE_FALLBACK_MAX_KM, otherHotspots, scoreOpts,
         )
           .filter(c => !existingClientIds.has(c.client_id))
           .sort((a, b) => a.distancia_km - b.distancia_km)
@@ -1226,6 +1226,29 @@ Deno.serve(async (req) => {
           console.log(`🆕 ${vendedor.nombre}: +${remainingZoneClients.length} clientes del resto de la zona (≤${ZONE_FALLBACK_MAX_KM}km)`);
         }
       }
+
+      // === RESCATE DE CARTERA: antes de sumar prospectos, se agotan los clientes
+      // propios de toda la cartera (hasta 25km) y recién ahí se relaja el cooldown. ===
+      const rescatarClientes = (radius: number, opts: ScoreOptions, label: string) => {
+        if (clientPool.length >= 8) return;
+        const existingClientIds = new Set(clientPool.map(c => c.client_id));
+        const rescued = scoreClients(
+          [...myValidClients, ...portfolioClients.filter((c: any) => isClientAffiliated(c, vendedor.user_id, sellerNameMap))],
+          placesMap, feedbacksMapClientes,
+          vendedor.user_id, sellerNameMap,
+          vendorHotspot, radius, otherHotspots, opts,
+        )
+          .filter(c => !existingClientIds.has(c.client_id))
+          .sort((a, b) => a.distancia_km - b.distancia_km)
+          .slice(0, Math.max(0, 8 - clientPool.length));
+        if (rescued.length > 0) {
+          clientPool = [...clientPool, ...rescued];
+          console.log(`♻️ ${vendedor.nombre}: +${rescued.length} clientes rescatados (${label})`);
+        }
+      };
+      rescatarClientes(PORTFOLIO_FALLBACK_MAX_KM, scoreOpts, `cartera ≤${PORTFOLIO_FALLBACK_MAX_KM}km`);
+      rescatarClientes(PORTFOLIO_FALLBACK_MAX_KM, scoreOptsRelaxed, "cartera sin cooldown");
+
 
       // === PROSPECT EXPANSION: only for the slots clients could not cover ===
       let currentTotal = clientPool.length + prospectPool.length;
