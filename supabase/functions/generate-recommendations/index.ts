@@ -837,11 +837,9 @@ function validateAndFill(
         result[idx] = makeRec(recovery, vendedorId);
         pickedIds.add(recovery.client_id);
       }
-
-      }
     }
-
   }
+
 
   if (result.length < 8) {
     console.warn(`⚠️ ${vendedorId.slice(0, 8)}: Solo ${result.length}/8 recs posibles. Pools agotados (${clientPool.length}C + ${prospectPool.length}P disponibles).`);
