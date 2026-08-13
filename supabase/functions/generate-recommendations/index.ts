@@ -21,15 +21,18 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
   return R * c;
 }
 
-const HARD_RADIUS_KM = 1.5;
-const MAX_EXPANSION_KM = 2.0;
-const EXPANSION_STEPS_KM = [3.0, 5.0]; // Progressive expansion if 2km isn't enough
+// La ruta del día tiene que ser CAMINABLE: todas las visitas cerca unas de otras.
+const HARD_RADIUS_KM = 1.2;
+const MAX_EXPANSION_KM = 1.8;
+const EXPANSION_STEPS_KM = [2.2, 3.0]; // Expansión progresiva sólo si no se llega a la cuota
 // Último recurso: nunca proponer visitas más lejos que esto del hotspot del vendedor.
-const ZONE_FALLBACK_MAX_KM = 8.0;
+const ZONE_FALLBACK_MAX_KM = 4.0;
 // Clientes propios: antes de meter prospectos, se puede ir hasta acá dentro de la cartera.
-const PORTFOLIO_FALLBACK_MAX_KM = 25.0;
+const PORTFOLIO_FALLBACK_MAX_KM = 5.0;
 // Un prospecto NUNCA puede estar más lejos que esto del hotspot del vendedor.
-const MAX_PROSPECT_DISTANCE_KM = 12.0;
+const MAX_PROSPECT_DISTANCE_KM = 2.5;
+// Diámetro máximo tolerado entre dos visitas del mismo vendedor en el día (caminable).
+const MAX_ROUTE_SPREAD_KM = 6.0;
 // Días mínimos entre dos recomendaciones del mismo negocio (regla dura, se relaja sólo si no se llega a 8).
 const RECOMMENDATION_COOLDOWN_DAYS = 15;
 
