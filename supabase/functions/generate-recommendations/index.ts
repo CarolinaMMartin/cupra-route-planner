@@ -640,7 +640,8 @@ function scoreProspects(
       if (minDistOther + 1 < distancia_km) continue;
     }
 
-    const score_comercial = Math.min(100, (p.rating || 3) * 20);
+    // Potencial = volumen de reseñas (proxy de tamaño), no la nota del consumidor final.
+    const score_comercial = potencialProspecto(p);
 
     let score_rotacion = 100;
     if (p.last_recommendation_at) {
