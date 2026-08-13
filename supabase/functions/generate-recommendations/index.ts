@@ -1794,6 +1794,31 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
         }
       });
       console.log(`✅ ${vendedor.nombre}: ${vendorRecs.length} recs (${dist.clients}C/${dist.prospects}P, ${dist.recovery} recovery)`);
+
+      // === COBERTURA: pedido vs conseguido, para explicárselo al asignador ===
+      let obtCartera = 0, obtReactivacion = 0, obtProspectos = 0, obtMapsLive = 0;
+      let radioFinal = 0;
+      vendorRecs.forEach((r: any) => {
+        const c = allCands.get(r.client_id);
+        if (!c) return;
+        radioFinal = Math.max(radioFinal, c.distancia_km || 0);
+        if (c.es_prospecto) {
+          obtProspectos++;
+          if (liveDiscoveredIds.has(c.client_id)) obtMapsLive++;
+        } else if (c.estado_comercial === "ACTIVO") obtCartera++;
+        else obtReactivacion++;
+      });
+      coberturaPorVendedor.set(vendedor.user_id, {
+        vendedor: vendedor.nombre,
+        total: vendorRecs.length,
+        objetivo: { cartera_activa: CUPO_CARTERA_ACTIVA, reactivacion: CUPO_REACTIVACION, prospectos: CUPO_PROSPECTOS },
+        obtenido: { cartera_activa: obtCartera, reactivacion: obtReactivacion, prospectos: obtProspectos },
+        prospectos_de_base: obtProspectos - obtMapsLive,
+        prospectos_de_maps: obtMapsLive,
+        radio_final_km: Number(radioFinal.toFixed(1)),
+        clientes_propios_en_zona: (vendorClientPools.get(vendedor.user_id) || []).length,
+      });
+
     }
 
     // ============================================================
