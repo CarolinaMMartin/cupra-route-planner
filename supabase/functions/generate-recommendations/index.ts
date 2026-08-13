@@ -2016,7 +2016,10 @@ Sólo podés proponer INTERCAMBIOS (swaps) entre dos visitas de vendedores disti
       recomendaciones: enrichedRecommendations,
       resumen: {
         total_recomendaciones: enrichedRecommendations.length,
-        descripcion: aiRecommendations.resumen_analisis,
+        descripcion: auditoriaResumen
+          ? `${aiRecommendations.resumen_analisis}\n\nAuditoría de coherencia: ${auditoriaResumen}`
+          : aiRecommendations.resumen_analisis,
+        auditoria_coherencia: auditoriaResumen || null,
         distribucion_por_vendedor: distribucion,
         zonas_priorizadas: Array.from(zonas).slice(0, 5),
         request_id,
