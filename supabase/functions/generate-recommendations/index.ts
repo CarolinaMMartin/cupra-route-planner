@@ -1695,6 +1695,136 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
     }
 
     // ============================================================
+    // 12b. AUDITORÍA DE COHERENCIA DE LA DISTRIBUCIÓN COMPLETA
+    // Primero un chequeo determinístico (territorio) y después una
+    // segunda pasada de IA con un modelo fuerte sobre el reparto total.
+    // ============================================================
+    let auditoriaResumen = "";
+    try {
+      const candidateOf = (vendedorId: string, id: string): ScoredCandidate | undefined =>
+        (vendorClientPools.get(vendedorId) || []).find(c => c.client_id === id)
+        || (vendorProspectPools.get(vendedorId) || []).find(c => c.client_id === id);
+
+      const distToHotspot = (vendedorId: string, cand: ScoredCandidate | undefined): number => {
+        const h = vendorHotspots.get(vendedorId);
+        if (!h || !cand?.lat || !cand?.long) return Number.POSITIVE_INFINITY;
+        return calcularDistanciaKm(h.lat, h.lng, Number(cand.lat), Number(cand.long));
+      };
+
+      const trySwap = (recA: any, recB: any): boolean => {
+        if (recA.vendedor_id === recB.vendedor_id) return false;
+        const candA = candidateOf(recA.vendedor_id, recA.client_id);
+        const candB = candidateOf(recB.vendedor_id, recB.client_id);
+        if (!candA || !candB) return false;
+        // Ambos tienen que ser candidatos válidos para el otro vendedor.
+        if (!candidateOf(recB.vendedor_id, recA.client_id) || !candidateOf(recA.vendedor_id, recB.client_id)) return false;
+        const actual = distToHotspot(recA.vendedor_id, candA) + distToHotspot(recB.vendedor_id, candB);
+        const propuesto = distToHotspot(recB.vendedor_id, candA) + distToHotspot(recA.vendedor_id, candB);
+        if (!Number.isFinite(actual) || !Number.isFinite(propuesto)) return false;
+        if (propuesto + 1 >= actual) return false; // sólo si mejora al menos 1km
+        const tmp = recA.vendedor_id;
+        recA.vendedor_id = recB.vendedor_id;
+        recB.vendedor_id = tmp;
+        return true;
+      };
+
+      // --- Pasada determinística: corrige visitas que caen en territorio ajeno ---
+      let swaps = 0;
+      for (const recA of validatedRecs) {
+        const candA = candidateOf(recA.vendedor_id, recA.client_id);
+        if (!candA) continue;
+        const dActual = distToHotspot(recA.vendedor_id, candA);
+        for (const recB of validatedRecs) {
+          if (recB === recA || recB.vendedor_id === recA.vendedor_id) continue;
+          if (distToHotspot(recB.vendedor_id, candA) + 1 >= dActual) continue;
+          if (trySwap(recA, recB)) { swaps++; break; }
+        }
+      }
+      if (swaps > 0) console.log(`🧭 Auditoría territorial: ${swaps} intercambios entre vendedores`);
+
+      // --- Segunda pasada de IA sobre la distribución total ---
+      if (vendedoresData.length > 1) {
+        const resumenDistribucion = vendedoresData.map(v => {
+          const recs = validatedRecs.filter((r: any) => r.vendedor_id === v.user_id);
+          const h = vendorHotspots.get(v.user_id);
+          const lineas = recs.map((r: any) => {
+            const c = candidateOf(v.user_id, r.client_id);
+            return `- [${r.client_id}] ${c?.razon_social || r.client_id} | ${c?.es_prospecto ? "PROSPECTO" : "CLIENTE"} | barrio:${c?.barrio || "?"} | dist_hotspot:${distToHotspot(v.user_id, c).toFixed(1)}km`;
+          }).join("\n");
+          return `### ${v.nombre} (${v.user_id}) — hotspot ${h ? `${h.lat.toFixed(4)},${h.lng.toFixed(4)}` : "N/A"}\n${lineas}`;
+        }).join("\n\n");
+
+        const auditResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-pro",
+            messages: [
+              {
+                role: "system",
+                content: `Sos el auditor comercial de CUPRA. Revisás el reparto COMPLETO de visitas del día entre vendedores.
+Criterios:
+1. Coherencia territorial: cada visita debe pertenecer a la zona natural del vendedor (menor distancia a su hotspot).
+2. Balance cliente/prospecto: los clientes de cartera nunca deben quedar afuera para meter prospectos.
+3. Densidad de ruta: las 8 visitas de un vendedor deben ser recorribles en el día.
+Sólo podés proponer INTERCAMBIOS (swaps) entre dos visitas de vendedores distintos. No inventes IDs.`,
+              },
+              { role: "user", content: `${resumenDistribucion}\n\nDevolvé los intercambios necesarios y un resumen breve de la coherencia global.` },
+            ],
+            tools: [{
+              type: "function",
+              function: {
+                name: "auditar_distribucion",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    intercambios: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          client_id_a: { type: "string" },
+                          client_id_b: { type: "string" },
+                          motivo: { type: "string" },
+                        },
+                        required: ["client_id_a", "client_id_b", "motivo"],
+                      },
+                    },
+                    resumen: { type: "string" },
+                  },
+                  required: ["intercambios", "resumen"],
+                },
+              },
+            }],
+            tool_choice: { type: "function", function: { name: "auditar_distribucion" } },
+          }),
+        });
+
+        if (auditResponse.ok) {
+          const auditData = await auditResponse.json();
+          const auditArgs = auditData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+          if (auditArgs) {
+            const parsed = JSON.parse(auditArgs);
+            auditoriaResumen = parsed.resumen || "";
+            let aplicados = 0;
+            for (const swap of parsed.intercambios || []) {
+              const recA = validatedRecs.find((r: any) => r.client_id === swap.client_id_a);
+              const recB = validatedRecs.find((r: any) => r.client_id === swap.client_id_b);
+              if (recA && recB && trySwap(recA, recB)) aplicados++;
+            }
+            console.log(`🧠 Auditoría IA: ${aplicados}/${(parsed.intercambios || []).length} intercambios aplicados. ${auditoriaResumen}`);
+          }
+        } else {
+          console.warn(`Auditoría IA no disponible: ${auditResponse.status}`);
+        }
+      }
+    } catch (auditError) {
+      console.error("Auditoría de coherencia falló (se conserva la distribución original):", auditError);
+    }
+
+
+
+    // ============================================================
     // 13. ENRICH & SAVE
     // ============================================================
     const request_id = crypto.randomUUID();
