@@ -454,6 +454,12 @@ interface ScoredCandidate {
   feedbacks_recientes: any[];
   tipo_negocio?: string | null;
   rating?: number | null;
+  total_ratings?: number | null;
+  // Prioridad comercial (valor × urgencia contra cadencia propia × margen × cercanía)
+  prioridad_comercial: number;
+  cadencia_dias?: number | null;
+  alerta_nc?: { ratio: number; fecha: string | null } | null;
+  posible_cliente_existente?: { cliente: string; vendedor: string | null; dias: number | null } | null;
 }
 
 // ============================================================
