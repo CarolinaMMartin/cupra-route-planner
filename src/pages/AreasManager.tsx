@@ -850,15 +850,16 @@ export default function AreasManager() {
                         />
                         <div className="flex-1 text-left">
                           <p className="font-semibold">{area.nombre}</p>
-                          {area.descripcion && (
-                            <p className="text-sm text-muted-foreground">
-                              {area.descripcion}
-                            </p>
-                          )}
+                          <p className="text-xs text-muted-foreground">
+                            {area.vendedores.length > 0
+                              ? area.vendedores.map(vendedorNombre).join(", ")
+                              : "Sin vendedores asignados"}
+                          </p>
                         </div>
                         <Badge variant="secondary">
-                          {area.places.length} barrios
+                          {area.places.length} {area.places.length === 1 ? "barrio" : "barrios"}
                         </Badge>
+
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
