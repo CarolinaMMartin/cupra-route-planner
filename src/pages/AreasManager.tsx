@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import cupraLogo from "@/assets/cupra-logo-new.png";
 import AppNav from "@/components/AppNav";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,7 +34,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, MapPin, Loader2, Trash2, Pencil, Save, Search, X } from "lucide-react";
+import { Plus, MapPin, Loader2, Trash2, Pencil, Save, Search, X, SlidersHorizontal, ChevronUp, ChevronDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 // Types
@@ -238,6 +238,10 @@ export default function AreasManager() {
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
   const [placeSearchFilter, setPlaceSearchFilter] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [provinciaFilter, setProvinciaFilter] = useState("todas");
+  const [comunaFilter, setComunaFilter] = useState("todas");
+  const [vendedorFilter, setVendedorFilter] = useState("todos");
   const [areaToDelete, setAreaToDelete] = useState<string | null>(null);
   const [editingArea, setEditingArea] = useState<Area | null>(null);
   const [editForm, setEditForm] = useState({ nombre: "", descripcion: "" });
@@ -543,9 +547,25 @@ export default function AreasManager() {
     value: p.id,
   }));
 
-  const filteredAreas = areas.filter((area) =>
-    area.nombre.toLowerCase().includes(searchFilter.toLowerCase())
-  );
+  const provinciaOptions = Array.from(
+    new Set(allPlaces.map((p) => p.provincia_principal).filter(Boolean) as string[])
+  ).sort();
+  const comunaOptions = Array.from(
+    new Set(allPlaces.map((p) => p.comuna).filter(Boolean) as string[])
+  ).sort();
+
+  const activeFiltersCount =
+    (provinciaFilter !== "todas" ? 1 : 0) +
+    (comunaFilter !== "todas" ? 1 : 0) +
+    (vendedorFilter !== "todos" ? 1 : 0);
+
+  const filteredAreas = areas.filter((area) => {
+    if (!area.nombre.toLowerCase().includes(searchFilter.toLowerCase())) return false;
+    if (provinciaFilter !== "todas" && !area.places.some((p) => p.provincia_principal === provinciaFilter)) return false;
+    if (comunaFilter !== "todas" && !area.places.some((p) => p.comuna === comunaFilter)) return false;
+    if (vendedorFilter !== "todos" && !area.vendedores.includes(vendedorFilter)) return false;
+    return true;
+  });
 
   const filteredPlaces = allPlaces.filter((place) => {
     const query = placeSearchFilter.toLowerCase();
@@ -572,31 +592,92 @@ export default function AreasManager() {
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-12 w-auto" />
-              <div>
-                <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Gestión de Áreas</h1>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Organiza barrios por área
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => navigate("/")}
-            >
-              Volver al Inicio
-            </Button>
+          <div>
+            <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Gestión de Áreas</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Organiza barrios por área
+            </p>
           </div>
 
-          {/* Search */}
-          <Input
-            placeholder="Buscar áreas..."
-            value={searchFilter}
-            onChange={(e) => setSearchFilter(e.target.value)}
-            className="max-w-md"
-          />
+          {/* Search + filtros colapsables */}
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                placeholder="Buscar áreas..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                className="max-w-md"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowFilters((v) => !v)}
+              >
+                <SlidersHorizontal className="h-4 w-4 mr-2" />
+                Filtros
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary" className="ml-2">{activeFiltersCount}</Badge>
+                )}
+                {showFilters ? <ChevronUp className="h-4 w-4 ml-2" /> : <ChevronDown className="h-4 w-4 ml-2" />}
+              </Button>
+              {activeFiltersCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setProvinciaFilter("todas");
+                    setComunaFilter("todas");
+                    setVendedorFilter("todos");
+                  }}
+                >
+                  <X className="h-4 w-4 mr-1" /> Limpiar
+                </Button>
+              )}
+            </div>
+
+            {showFilters && (
+              <Card>
+                <CardContent className="grid gap-3 pt-4 sm:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Provincia</Label>
+                    <Select value={provinciaFilter} onValueChange={setProvinciaFilter}>
+                      <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todas">Todas</SelectItem>
+                        {provinciaOptions.map((p) => (
+                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Comuna</Label>
+                    <Select value={comunaFilter} onValueChange={setComunaFilter}>
+                      <SelectTrigger><SelectValue placeholder="Todas" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todas">Todas</SelectItem>
+                        {comunaOptions.map((c) => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Vendedor</Label>
+                    <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
+                      <SelectTrigger><SelectValue placeholder="Todos" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos</SelectItem>
+                        {profiles.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.nombre}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </div>
 
         {/* Areas List */}

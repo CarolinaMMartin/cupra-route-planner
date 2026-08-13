@@ -21,15 +21,18 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
   return R * c;
 }
 
-const HARD_RADIUS_KM = 1.5;
-const MAX_EXPANSION_KM = 2.0;
-const EXPANSION_STEPS_KM = [3.0, 5.0]; // Progressive expansion if 2km isn't enough
+// La ruta del día tiene que ser CAMINABLE: todas las visitas cerca unas de otras.
+const HARD_RADIUS_KM = 1.2;
+const MAX_EXPANSION_KM = 1.8;
+const EXPANSION_STEPS_KM = [2.2, 3.0]; // Expansión progresiva sólo si no se llega a la cuota
 // Último recurso: nunca proponer visitas más lejos que esto del hotspot del vendedor.
-const ZONE_FALLBACK_MAX_KM = 8.0;
+const ZONE_FALLBACK_MAX_KM = 4.0;
 // Clientes propios: antes de meter prospectos, se puede ir hasta acá dentro de la cartera.
-const PORTFOLIO_FALLBACK_MAX_KM = 25.0;
+const PORTFOLIO_FALLBACK_MAX_KM = 5.0;
 // Un prospecto NUNCA puede estar más lejos que esto del hotspot del vendedor.
-const MAX_PROSPECT_DISTANCE_KM = 12.0;
+const MAX_PROSPECT_DISTANCE_KM = 2.5;
+// Diámetro máximo tolerado entre dos visitas del mismo vendedor en el día (caminable).
+const MAX_ROUTE_SPREAD_KM = 6.0;
 // Días mínimos entre dos recomendaciones del mismo negocio (regla dura, se relaja sólo si no se llega a 8).
 const RECOMMENDATION_COOLDOWN_DAYS = 15;
 
@@ -1745,6 +1748,30 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
       }
       if (swaps > 0) console.log(`🧭 Auditoría territorial: ${swaps} intercambios entre vendedores`);
 
+      // --- Chequeo de compacidad: la ruta del día tiene que ser caminable ---
+      const rutasDispersas: string[] = [];
+      for (const v of vendedoresData) {
+        const puntos = validatedRecs
+          .filter((r: any) => r.vendedor_id === v.user_id)
+          .map((r: any) => candidateOf(v.user_id, r.client_id))
+          .filter((c): c is ScoredCandidate => !!c?.lat && !!c?.long);
+        let spread = 0;
+        for (let i = 0; i < puntos.length; i++) {
+          for (let j = i + 1; j < puntos.length; j++) {
+            spread = Math.max(spread, calcularDistanciaKm(
+              Number(puntos[i].lat), Number(puntos[i].long),
+              Number(puntos[j].lat), Number(puntos[j].long),
+            ));
+          }
+        }
+        if (spread > MAX_ROUTE_SPREAD_KM) {
+          rutasDispersas.push(`${v.nombre} (${spread.toFixed(1)}km entre extremos)`);
+        }
+      }
+      if (rutasDispersas.length > 0) {
+        console.warn(`⚠️ Rutas poco compactas: ${rutasDispersas.join("; ")}`);
+      }
+
       // --- Segunda pasada de IA sobre la distribución total ---
       if (vendedoresData.length > 1) {
         const resumenDistribucion = vendedoresData.map(v => {
@@ -1769,10 +1796,10 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
 Criterios:
 1. Coherencia territorial: cada visita debe pertenecer a la zona natural del vendedor (menor distancia a su hotspot).
 2. Balance cliente/prospecto: los clientes de cartera nunca deben quedar afuera para meter prospectos.
-3. Densidad de ruta: las 8 visitas de un vendedor deben ser recorribles en el día.
+3. Densidad de ruta: las 8 visitas de un vendedor deben ser CAMINABLES entre sí (idealmente todas dentro de un radio de ~2km; nunca más de ${MAX_ROUTE_SPREAD_KM}km entre los dos extremos).
 Sólo podés proponer INTERCAMBIOS (swaps) entre dos visitas de vendedores distintos. No inventes IDs.`,
               },
-              { role: "user", content: `${resumenDistribucion}\n\nDevolvé los intercambios necesarios y un resumen breve de la coherencia global.` },
+              { role: "user", content: `${resumenDistribucion}${rutasDispersas.length ? `\n\nRUTAS POCO COMPACTAS A CORREGIR: ${rutasDispersas.join("; ")}` : ""}\n\nDevolvé los intercambios necesarios y un resumen breve de la coherencia global.` },
             ],
             tools: [{
               type: "function",
