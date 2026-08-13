@@ -246,6 +246,15 @@ const ClientesDashboard = () => {
     });
   }, [clientesData, selectedProvincia, selectedCiudad, selectedBarrio, selectedVendedor, selectedCanal, searchTerm]);
 
+  const hasActiveFilters =
+    selectedProvincia !== "all" ||
+    selectedCiudad !== "all" ||
+    selectedBarrio !== "all" ||
+    selectedVendedor !== "all" ||
+    selectedCanal !== "all" ||
+    searchTerm.trim() !== "";
+
+
   /**
    * KPIs calculados 100% desde ventas_cupra (transaccional).
    * • totalVentas: SUM(facturacion_ars). Columna Excel: "Precio Total Final".
