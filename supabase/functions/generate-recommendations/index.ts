@@ -617,6 +617,13 @@ function scoreProspects(
     // HARD radius filter (nunca por encima del tope absoluto de prospectos)
     if (!isWithinRadius(lat, long, hotspot, effectiveRadius)) continue;
 
+    // Un prospecto que puede ser un cliente activo de la casa NUNCA se ofrece
+    // como visita en frío: se avisa aparte para que lo verifiquen.
+    if (options.posiblesClientes?.has(p.place_id)) continue;
+
+    // CALIDAD: sin reseñas suficientes o con rubro incoherente no es comprador mayorista.
+    if (!esProspectoComercialmenteValido(p)) continue;
+
     let distancia_km = 999;
     let score_geo = 0;
     if (lat && long) {
