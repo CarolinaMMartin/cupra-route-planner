@@ -892,22 +892,20 @@ export default function AreasManager() {
           </CardContent>
         </Card>
 
-        {/* Create New Area Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Crear Nueva Área</CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* Crear nueva área */}
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Nueva zona</DialogTitle>
+            </DialogHeader>
             <form onSubmit={handleCreateArea} className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <Label htmlFor="nombre">Nombre del Área *</Label>
+                  <Label htmlFor="nombre">Nombre *</Label>
                   <Input
                     id="nombre"
                     value={newAreaForm.nombre}
-                    onChange={(e) =>
-                      setNewAreaForm({ ...newAreaForm, nombre: e.target.value })
-                    }
+                    onChange={(e) => setNewAreaForm({ ...newAreaForm, nombre: e.target.value })}
                     placeholder="Ej: Zona Norte"
                     required
                   />
@@ -919,16 +917,12 @@ export default function AreasManager() {
                       id="color"
                       type="color"
                       value={newAreaForm.color}
-                      onChange={(e) =>
-                        setNewAreaForm({ ...newAreaForm, color: e.target.value })
-                      }
-                      className="w-20 h-10"
+                      onChange={(e) => setNewAreaForm({ ...newAreaForm, color: e.target.value })}
+                      className="w-16 h-10 p-1"
                     />
                     <Input
                       value={newAreaForm.color}
-                      onChange={(e) =>
-                        setNewAreaForm({ ...newAreaForm, color: e.target.value })
-                      }
+                      onChange={(e) => setNewAreaForm({ ...newAreaForm, color: e.target.value })}
                       className="flex-1"
                     />
                   </div>
@@ -939,143 +933,40 @@ export default function AreasManager() {
                 <Textarea
                   id="descripcion"
                   value={newAreaForm.descripcion}
-                  onChange={(e) =>
-                    setNewAreaForm({
-                      ...newAreaForm,
-                      descripcion: e.target.value,
-                    })
-                  }
-                  placeholder="Descripción del área"
-                  rows={3}
+                  onChange={(e) => setNewAreaForm({ ...newAreaForm, descripcion: e.target.value })}
+                  placeholder="Referencias, avenidas límite, etc."
+                  rows={2}
                 />
               </div>
-              
-              {/* Barrios Selection */}
               <div>
-                <Label htmlFor="barrios">Barrios</Label>
+                <Label>Barrios</Label>
                 <MultiSelect
-                  options={placeOptions}
+                  options={catalogOptions}
                   selected={newAreaForm.selectedPlaces}
                   onChange={(selected) =>
                     setNewAreaForm({ ...newAreaForm, selectedPlaces: selected })
                   }
-                  placeholder="Seleccionar barrios"
+                  placeholder="Buscar barrios..."
                   className="w-full"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {newAreaForm.selectedPlaces.length} barrio(s) seleccionados
+                </p>
               </div>
-
-              <Button type="submit" className="w-full">
-                <Plus className="mr-2 h-4 w-4" />
-                Crear Área
-              </Button>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear zona
+                </Button>
+              </div>
             </form>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
 
-        {/* Quick Add Places to Existing Areas */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Agregar Barrios a Áreas Existentes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar barrios, comunas o provincias..."
-                  value={placeSearchFilter}
-                  onChange={(e) => setPlaceSearchFilter(e.target.value)}
-                  className="pl-9 pr-9"
-                />
-                {placeSearchFilter && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setPlaceSearchFilter("")}
-                    className="absolute right-1 top-1 h-8 w-8 p-0"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              {placeSearchFilter && (
-                <ScrollArea className="h-[200px] border rounded-lg p-2">
-                  <div className="space-y-2">
-                    {filteredPlaces.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No se encontraron barrios
-                      </p>
-                    ) : (
-                      filteredPlaces.map((place) => (
-                        <div
-                          key={place.id}
-                          className="flex items-center justify-between p-2 hover:bg-muted rounded"
-                        >
-                          <div className="flex items-start gap-2 flex-1 min-w-0">
-                            <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              {place.barrio_principal && (
-                                <p className="font-medium text-sm truncate">
-                                  {place.barrio_principal}
-                                </p>
-                              )}
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {place.comuna && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {place.comuna}
-                                  </Badge>
-                                )}
-                                {place.provincia_principal && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {place.provincia_principal}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="outline" size="sm">
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>
-                                  Agregar a Área
-                                </DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-2">
-                                {areas.map((area) => (
-                                  <Button
-                                    key={area.id}
-                                    variant="outline"
-                                    className="w-full justify-start"
-                                    onClick={() =>
-                                      handleAddPlaceToArea(place.id, area.id)
-                                    }
-                                  >
-                                    <div
-                                      className="w-3 h-3 rounded-full mr-2"
-                                      style={{
-                                        backgroundColor: area.color || "#3b82f6",
-                                      }}
-                                    />
-                                    {area.nombre}
-                                  </Button>
-                                ))}
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </ScrollArea>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+
 
         {/* Edit Area Dialog */}
         <Dialog open={!!editingArea} onOpenChange={(open) => !open && setEditingArea(null)}>
