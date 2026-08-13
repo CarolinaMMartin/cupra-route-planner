@@ -816,76 +816,47 @@ export default function AreasManager() {
                           <Label className="text-sm font-medium mb-2 block">
                             Barrios Asignados ({area.places.length})
                           </Label>
-                          <div className="border rounded-lg p-4 bg-muted/20 space-y-2 max-h-[300px] overflow-y-auto">
+                          <MultiSelect
+                            options={catalogOptions.filter(
+                              (o) => !assignedKeys(area).has(o.value),
+                            )}
+                            selected={[]}
+                            onChange={(selected) => {
+                              selected.forEach((key) => handleAddCatalogToArea(key, area.id));
+                            }}
+                            placeholder="Buscar y agregar barrios..."
+                          />
+                          <div className="mt-3 flex flex-wrap gap-2">
                             {area.places.length === 0 ? (
-                              <p className="text-sm text-muted-foreground text-center py-4">
-                                No hay barrios asignados
+                              <p className="text-sm text-muted-foreground py-2">
+                                Todavía no hay barrios en esta zona. Buscalos arriba y agregalos.
                               </p>
                             ) : (
                               area.places.map((place) => (
-                                <div
+                                <Badge
                                   key={place.id}
-                                  className="flex items-start justify-between gap-2 p-3 bg-card rounded-lg border"
+                                  variant="secondary"
+                                  className="pl-2 pr-1 py-1 gap-1 text-xs font-medium"
                                 >
-                                  <div className="flex items-start gap-2 flex-1 min-w-0">
-                                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                      {place.barrio_principal && (
-                                        <p className="font-medium text-sm truncate">
-                                          {place.barrio_principal}
-                                        </p>
-                                      )}
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                        {place.comuna && (
-                                          <Badge variant="secondary" className="text-xs">
-                                            {place.comuna}
-                                          </Badge>
-                                        )}
-                                        {place.provincia_principal && (
-                                          <Badge variant="outline" className="text-xs">
-                                            {place.provincia_principal}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleRemovePlaceFromArea(place.id, area.id)
-                                    }
-                                    className="flex-shrink-0"
+                                  <MapPin className="h-3 w-3 text-primary" />
+                                  <span>{place.barrio_principal || "Sin nombre"}</span>
+                                  {place.comuna && (
+                                    <span className="text-muted-foreground">· {place.comuna}</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    aria-label={`Quitar ${place.barrio_principal || "barrio"}`}
+                                    onClick={() => handleRemovePlaceFromArea(place.id, area.id)}
+                                    className="ml-1 rounded p-0.5 hover:bg-destructive/20"
                                   >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </Badge>
                               ))
                             )}
                           </div>
-
-                          {/* Agregar Nuevos Barrios */}
-                          <div className="mt-4 pt-4 border-t">
-                            <Label className="text-sm font-medium mb-2 block">
-                              Agregar Barrios
-                            </Label>
-                            <MultiSelect
-                              options={allPlaces
-                                .filter((p) => !area.places.some((ap) => ap.id === p.id))
-                                .map((p) => ({
-                                  label: `${p.barrio_principal || "Sin nombre"}${p.comuna ? ` - ${p.comuna}` : ""}${p.provincia_principal ? ` (${p.provincia_principal})` : ""}`,
-                                  value: p.id,
-                                }))}
-                              selected={[]}
-                              onChange={(selected) => {
-                                selected.forEach((placeId) => {
-                                  handleAddPlaceToArea(placeId, area.id);
-                                });
-                              }}
-                              placeholder="Buscar y agregar barrios..."
-                            />
-                          </div>
                         </div>
+
 
                         {/* Comentarios */}
                         <div>
