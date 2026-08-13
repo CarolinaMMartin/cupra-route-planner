@@ -2032,6 +2032,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       }
 
       const esProspecto = !clienteCompleto;
+      rec.justificacion = limpiarJustificacion(rec.justificacion, candidateInfo ? justificacionComercial(candidateInfo) : 'Visita sugerida por cercanía y potencial comercial en la zona.');
       const place = !esProspecto ? placesMap.get(rec.client_id) : null;
       const estado_comercial = candidateInfo?.estado_comercial || (esProspecto ? 'POTENCIAL' : classifyEstado(clienteCompleto?.dias_desde_ultima_compra));
 
@@ -2047,7 +2048,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: { ...rec.factores, tipo_negocio: prospectoCompleto.tipo_principal, rating: prospectoCompleto.rating, website: prospectoCompleto.website },
+          factores_ia: { ...rec.factores, tipo_negocio: prospectoCompleto.tipo_principal, rating: prospectoCompleto.rating, website: prospectoCompleto.website, origen: liveDiscoveredIds.has(prospectoCompleto.place_id) ? 'maps_live' : 'base', cobertura: coberturaPorVendedor.get(vendedorId) || null },
           justificacion: rec.justificacion,
           es_prospecto: true,
           estado_comercial,
@@ -2079,7 +2080,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating },
+          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating, origen: liveDiscoveredIds.has(candidateInfo.client_id) ? 'maps_live' : 'base', cobertura: coberturaPorVendedor.get(vendedorId) || null },
           justificacion: rec.justificacion,
           es_prospecto: true,
           estado_comercial: candidateInfo.estado_comercial,
@@ -2111,7 +2112,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: rec.factores,
+          factores_ia: { ...rec.factores, origen: 'cartera', cobertura: coberturaPorVendedor.get(vendedorId) || null },
           justificacion: rec.justificacion,
           es_prospecto: false,
           estado_comercial,
