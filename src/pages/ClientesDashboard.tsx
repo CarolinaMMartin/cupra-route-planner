@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ZonaKPIs from "@/components/clientes/ZonaKPIs";
+import ClienteDetalleDialog from "@/components/clientes/ClienteDetalleDialog";
 
 interface BarrioVentas {
   barrio: string;
@@ -61,6 +62,8 @@ const ClientesDashboard = () => {
   const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedCanal, setSelectedCanal] = useState<string>("all");
+  const [selectedCliente, setSelectedCliente] = useState<any | null>(null);
+  const [detalleOpen, setDetalleOpen] = useState(false);
 
   useEffect(() => {
     checkAuthAndFetchData();
@@ -246,6 +249,15 @@ const ClientesDashboard = () => {
     });
   }, [clientesData, selectedProvincia, selectedCiudad, selectedBarrio, selectedVendedor, selectedCanal, searchTerm]);
 
+  const hasActiveFilters =
+    selectedProvincia !== "all" ||
+    selectedCiudad !== "all" ||
+    selectedBarrio !== "all" ||
+    selectedVendedor !== "all" ||
+    selectedCanal !== "all" ||
+    searchTerm.trim() !== "";
+
+
   /**
    * KPIs calculados 100% desde ventas_cupra (transaccional).
    * • totalVentas: SUM(facturacion_ars). Columna Excel: "Precio Total Final".
@@ -255,11 +267,27 @@ const ClientesDashboard = () => {
    */
   const normalizeRS = (rs: string) => rs.trim().toUpperCase().replace(/\s+/g, ' ');
 
+  // Ventas restringidas a los clientes que pasan los filtros activos
+  const filteredVentas = useMemo(() => {
+    if (!hasActiveFilters) return ventasRaw;
+    const idSet = new Set<string>();
+    const rsSet = new Set<string>();
+    for (const c of filteredData) {
+      if (c.client_id) idSet.add(String(c.client_id));
+      if (c.razon_social) rsSet.add(normalizeRS(c.razon_social));
+      if (c.fantasia) rsSet.add(normalizeRS(c.fantasia));
+    }
+    return ventasRaw.filter(v =>
+      (v.client_id && idSet.has(String(v.client_id))) ||
+      (v.razon_social && rsSet.has(normalizeRS(v.razon_social)))
+    );
+  }, [ventasRaw, filteredData, hasActiveFilters]);
+
   const kpis = useMemo(() => {
-    const totalVentas = ventasRaw.reduce((sum, v) => sum + Number(v.facturacion_ars || 0), 0);
+    const totalVentas = filteredVentas.reduce((sum, v) => sum + Number(v.facturacion_ars || 0), 0);
     const ticketsSet = new Set<string>();
     const clientesSet = new Set<string>();
-    for (const v of ventasRaw) {
+    for (const v of filteredVentas) {
       if (v.ticket) ticketsSet.add(v.ticket);
       // Fix 4: Count clients by normalized razon_social, not client_id
       if (v.razon_social) clientesSet.add(normalizeRS(v.razon_social));
@@ -268,7 +296,8 @@ const ClientesDashboard = () => {
     const totalClientes = clientesSet.size;
     const ticketPromedio = totalTickets > 0 ? totalVentas / totalTickets : 0;
     return { totalVentas, totalClientes, totalOrdenes: totalTickets, ticketPromedio };
-  }, [ventasRaw]);
+  }, [filteredVentas]);
+
 
   // TAREA 13: Indicador de calidad de datos
   const dataQuality = useMemo(() => {
@@ -293,7 +322,7 @@ const ClientesDashboard = () => {
   const topCiudades = useMemo(() => {
     const ciudadMap = new Map<string, { display: string; ventas: number }>();
     let sinCiudadVentas = 0;
-    for (const v of ventasRaw) {
+    for (const v of filteredVentas) {
       const monto = Number(v.facturacion_ars || 0);
       const ciudad = v.ciudad;
       if (ciudad) {
@@ -314,12 +343,12 @@ const ClientesDashboard = () => {
       result.sort((a, b) => b.ventas - a.ventas);
     }
     return result.slice(0, 11);
-  }, [ventasRaw]);
+  }, [filteredVentas]);
 
   // Top Clientes desde ventas_cupra
   const topClientes = useMemo(() => {
     const clienteMap = new Map<string, { razon_social: string; monto_total: number; tickets: Set<string> }>();
-    for (const v of ventasRaw) {
+    for (const v of filteredVentas) {
       const rs = v.razon_social || 'Sin nombre';
       if (!clienteMap.has(rs)) clienteMap.set(rs, { razon_social: rs, monto_total: 0, tickets: new Set() });
       const entry = clienteMap.get(rs)!;
@@ -330,12 +359,55 @@ const ClientesDashboard = () => {
       .map(c => ({ razon_social: c.razon_social, monto_total: c.monto_total, ordenes: c.tickets.size }))
       .sort((a, b) => b.monto_total - a.monto_total)
       .slice(0, 10);
-  }, [ventasRaw]);
+  }, [filteredVentas]);
 
   // TAREA 4: Top vendedores desde ventas_cupra (fuente transaccional)
   const topVendedores = useMemo(() => {
-    return ventasVendedorData.slice(0, 10);
-  }, [ventasVendedorData]);
+    if (!hasActiveFilters) return ventasVendedorData.slice(0, 10);
+    const map = new Map<string, { ventas: number; tickets: Set<string> }>();
+    for (const v of filteredVentas) {
+      if (!v.vendedor) continue;
+      if (!map.has(v.vendedor)) map.set(v.vendedor, { ventas: 0, tickets: new Set() });
+      const e = map.get(v.vendedor)!;
+      e.ventas += Number(v.facturacion_ars || 0);
+      if (v.ticket) e.tickets.add(v.ticket);
+    }
+    return Array.from(map.entries())
+      .map(([vendedor, d]) => ({ vendedor, ventas: d.ventas, tickets: d.tickets.size }))
+      .sort((a, b) => b.ventas - a.ventas)
+      .slice(0, 10);
+  }, [ventasVendedorData, filteredVentas, hasActiveFilters]);
+
+  // Resumen por cliente (para la pestaña de listado + ficha)
+  const clientesResumen = useMemo(() => {
+    const byId = new Map<string, { ventas: number; tickets: Set<string> }>();
+    const byRs = new Map<string, { ventas: number; tickets: Set<string> }>();
+    for (const v of ventasRaw) {
+      const monto = Number(v.facturacion_ars || 0);
+      if (v.client_id) {
+        const k = String(v.client_id);
+        if (!byId.has(k)) byId.set(k, { ventas: 0, tickets: new Set() });
+        const e = byId.get(k)!; e.ventas += monto; if (v.ticket) e.tickets.add(v.ticket);
+      }
+      if (v.razon_social) {
+        const k = normalizeRS(v.razon_social);
+        if (!byRs.has(k)) byRs.set(k, { ventas: 0, tickets: new Set() });
+        const e = byRs.get(k)!; e.ventas += monto; if (v.ticket) e.tickets.add(v.ticket);
+      }
+    }
+    return filteredData
+      .map(c => {
+        const stats = (c.client_id && byId.get(String(c.client_id)))
+          || (c.razon_social && byRs.get(normalizeRS(c.razon_social)))
+          || null;
+        return {
+          cliente: c,
+          ventas: stats?.ventas ?? Number(c.monto_total_historico || 0),
+          tickets: stats?.tickets.size ?? Number(c.cantidad_ordenes || 0),
+        };
+      })
+      .sort((a, b) => b.ventas - a.ventas);
+  }, [filteredData, ventasRaw]);
 
   const handleClearFilters = () => {
     setSelectedProvincia("all");
@@ -641,16 +713,86 @@ const ClientesDashboard = () => {
           </Card>
         </div>
 
-        {/* Tabs: Rankings / KPIs por Zona */}
-        <Tabs defaultValue="rankings" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+        {/* Tabs: Clientes / Rankings / KPIs por Zona */}
+        <Tabs defaultValue="clientes" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="clientes">Clientes</TabsTrigger>
             <TabsTrigger value="rankings">Top Rankings</TabsTrigger>
             <TabsTrigger value="zonas">KPIs por Zona</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="zonas">
-            <ZonaKPIs clientesData={filteredData} ventasData={ventasRaw} formatCurrency={formatCurrency} />
+          <TabsContent value="clientes">
+            <Card className="matte-card">
+              <CardHeader className="pb-4">
+                <CardTitle className="section-title flex items-center gap-2">
+                  <Users className="h-4 w-4 text-foreground/40" />
+                  Clientes ({clientesResumen.length})
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    Clic en un cliente para ver su ficha completa
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {clientesResumen.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    No hay clientes que coincidan con la búsqueda.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-background z-10">
+                        <tr className="text-xs uppercase text-muted-foreground border-b border-border/40">
+                          <th className="text-left py-2 font-medium">Cliente</th>
+                          <th className="text-left py-2 font-medium">Zona</th>
+                          <th className="text-left py-2 font-medium">Vendedor</th>
+                          <th className="text-right py-2 font-medium">Tickets</th>
+                          <th className="text-right py-2 font-medium">Últ. compra</th>
+                          <th className="text-right py-2 font-medium">Facturación</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {clientesResumen.slice(0, 300).map(({ cliente, ventas, tickets }) => (
+                          <tr
+                            key={cliente.client_id || cliente.id}
+                            onClick={() => { setSelectedCliente(cliente); setDetalleOpen(true); }}
+                            className="border-b border-border/20 cursor-pointer hover:bg-card/60 transition-colors"
+                          >
+                            <td className="py-2 pr-3">
+                              <span className="font-medium">{cliente.razon_social || cliente.fantasia || 'Sin nombre'}</span>
+                              {cliente.cuit_dni && (
+                                <span className="block text-xs text-muted-foreground">{cliente.cuit_dni}</span>
+                              )}
+                            </td>
+                            <td className="py-2 pr-3 text-muted-foreground">
+                              {[cliente.barrio_principal, cliente.ciudad_principal].filter(Boolean).join(' · ') || '—'}
+                            </td>
+                            <td className="py-2 pr-3 text-muted-foreground">
+                              {cliente.vendedor_actual || cliente.vendedor_principal || '—'}
+                            </td>
+                            <td className="py-2 text-right text-muted-foreground">{tickets || 0}</td>
+                            <td className="py-2 text-right text-muted-foreground">
+                              {cliente.ultima_compra ? new Date(`${cliente.ultima_compra}T12:00:00`).toLocaleDateString('es-AR') : '—'}
+                            </td>
+                            <td className="py-2 text-right font-semibold text-accent">{formatCurrency(ventas)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {clientesResumen.length > 300 && (
+                      <p className="text-xs text-muted-foreground pt-3">
+                        Mostrando los primeros 300 de {clientesResumen.length}. Refiná la búsqueda para ver más.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
+
+          <TabsContent value="zonas">
+            <ZonaKPIs clientesData={filteredData} ventasData={filteredVentas} formatCurrency={formatCurrency} />
+          </TabsContent>
+
 
           <TabsContent value="rankings">
 
@@ -777,6 +919,13 @@ const ClientesDashboard = () => {
 
           </TabsContent>
         </Tabs>
+
+        <ClienteDetalleDialog
+          cliente={selectedCliente}
+          open={detalleOpen}
+          onOpenChange={setDetalleOpen}
+          formatCurrency={formatCurrency}
+        />
       </div>
     </div>
     </TooltipProvider>
