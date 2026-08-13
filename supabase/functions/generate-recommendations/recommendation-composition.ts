@@ -10,11 +10,16 @@ interface CompositionInput<T extends CompositionCandidate> {
   prospects: T[];
   unavailableIds?: ReadonlySet<string>;
   limit?: number;
+  cupos?: { cartera: number; reactivacion: number; prospectos: number };
 }
 
+const DEFAULT_CUPOS = { cartera: 4, reactivacion: 2, prospectos: 2 };
+
 /**
- * Owns the non-negotiable route composition. Model preferences only affect
- * ordering inside each group; they can never move a prospect ahead of a client.
+ * Owns the non-negotiable route composition: 4 cartera activa + 2 reactivación
+ * + 2 prospectos. Model preferences only affect ordering inside each block.
+ * Substitution chain when a block cannot be filled:
+ *   falta cartera → reactivación → prospectos (y viceversa para reactivación).
  */
 export function composeRecommendationIds<T extends CompositionCandidate>({
   preferredIds,
@@ -22,6 +27,7 @@ export function composeRecommendationIds<T extends CompositionCandidate>({
   prospects,
   unavailableIds = new Set<string>(),
   limit = 8,
+  cupos = DEFAULT_CUPOS,
 }: CompositionInput<T>): string[] {
   const candidatesById = new Map<string, T>();
   [...clients, ...prospects].forEach((candidate) =>
@@ -43,33 +49,49 @@ export function composeRecommendationIds<T extends CompositionCandidate>({
   const preferredCandidates = preferredIds
     .map((candidateId) => candidatesById.get(candidateId))
     .filter((candidate): candidate is T => Boolean(candidate));
-  const isActiveClient = (candidate: T) => (
-    !candidate.es_prospecto &&
-    (candidate.estado_comercial === "ACTIVO" ||
-      candidate.estado_comercial === "INACTIVO")
-  );
 
-  // Internal clients are exhausted by commercial group before any prospect.
-  preferredCandidates.filter(isActiveClient).forEach((candidate) =>
-    append(candidate.client_id)
-  );
-  clients.filter(isActiveClient).forEach((candidate) =>
-    append(candidate.client_id)
-  );
-  preferredCandidates
-    .filter((candidate) =>
-      !candidate.es_prospecto && !isActiveClient(candidate)
-    )
-    .forEach((candidate) => append(candidate.client_id));
-  clients
-    .filter((candidate) => !isActiveClient(candidate))
-    .forEach((candidate) => append(candidate.client_id));
+  const isCarteraActiva = (candidate: T) =>
+    !candidate.es_prospecto && candidate.estado_comercial === "ACTIVO";
+  const isReactivacion = (candidate: T) =>
+    !candidate.es_prospecto && candidate.estado_comercial !== "ACTIVO";
 
-  // Only the remaining slots may be filled with prospects.
-  preferredCandidates.filter((candidate) => candidate.es_prospecto).forEach((
-    candidate,
-  ) => append(candidate.client_id));
-  prospects.forEach((candidate) => append(candidate.client_id));
+  // Orden dentro de cada bloque: primero lo que prefirió el modelo, después el pool.
+  const orderedBlock = (predicate: (candidate: T) => boolean): string[] => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    const push = (candidate: T) => {
+      if (seen.has(candidate.client_id)) return;
+      seen.add(candidate.client_id);
+      ids.push(candidate.client_id);
+    };
+    preferredCandidates.filter(predicate).forEach(push);
+    [...clients, ...prospects].filter(predicate).forEach(push);
+    return ids;
+  };
+
+  const bloqueCartera = orderedBlock(isCarteraActiva);
+  const bloqueReactivacion = orderedBlock(isReactivacion);
+  const bloqueProspectos = orderedBlock((candidate) => candidate.es_prospecto);
+
+  const take = (ids: string[], cantidad: number) => {
+    let tomados = 0;
+    for (const id of ids) {
+      if (tomados >= cantidad) break;
+      const before = result.length;
+      append(id);
+      if (result.length > before) tomados++;
+    }
+  };
+
+  // 1) Cupos objetivo.
+  take(bloqueCartera, cupos.cartera);
+  take(bloqueReactivacion, cupos.reactivacion);
+  take(bloqueProspectos, cupos.prospectos);
+
+  // 2) Cadena de sustitución: clientes propios primero, prospectos al final.
+  take(bloqueCartera, limit);
+  take(bloqueReactivacion, limit);
+  take(bloqueProspectos, limit);
 
   return result;
 }
