@@ -542,17 +542,49 @@ export default function AreasManager() {
     value: p.id,
   }));
 
-  const placeOptions = allPlaces.map((p) => ({
-    label: `${p.barrio_principal || "Sin nombre"} - ${p.comuna || ""} (${p.provincia_principal || ""})`.trim(),
-    value: p.id,
+  // Catálogo completo de barrios: los que ya existen en la base + el listado
+  // territorial oficial (para poder armar zonas aunque todavía no haya clientes).
+  const catalog: CatalogEntry[] = (() => {
+    const map = new Map<string, CatalogEntry>();
+    allPlaces.forEach((p) => {
+      if (!p.barrio_principal) return;
+      const provincia = p.provincia_principal || "Ciudad Autónoma de Buenos Aires";
+      map.set(catalogKey(provincia, p.barrio_principal), {
+        key: catalogKey(provincia, p.barrio_principal),
+        barrio: p.barrio_principal,
+        comuna: p.comuna,
+        provincia,
+        placeId: p.id,
+      });
+    });
+    Object.entries(GEO_BA).forEach(([provincia, comunas]) => {
+      Object.entries(comunas).forEach(([comuna, barrios]) => {
+        barrios.forEach((barrio) => {
+          const key = catalogKey(provincia, barrio);
+          const existing = map.get(key);
+          if (existing) {
+            if (!existing.comuna) existing.comuna = comuna;
+            return;
+          }
+          map.set(key, { key, barrio, comuna, provincia, placeId: null });
+        });
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => a.barrio.localeCompare(b.barrio, "es"));
+  })();
+
+  const catalogByKey = new Map(catalog.map((c) => [c.key, c]));
+
+  const catalogOptions = catalog.map((c) => ({
+    label: `${c.barrio}${c.comuna ? ` · ${c.comuna}` : ""} (${c.provincia})`,
+    value: c.key,
   }));
 
-  const provinciaOptions = Array.from(
-    new Set(allPlaces.map((p) => p.provincia_principal).filter(Boolean) as string[])
-  ).sort();
+  const provinciaOptions = Array.from(new Set(catalog.map((c) => c.provincia))).sort();
   const comunaOptions = Array.from(
-    new Set(allPlaces.map((p) => p.comuna).filter(Boolean) as string[])
+    new Set(catalog.filter((c) => c.comuna).map((c) => c.comuna as string))
   ).sort();
+
 
   const activeFiltersCount =
     (provinciaFilter !== "todas" ? 1 : 0) +
