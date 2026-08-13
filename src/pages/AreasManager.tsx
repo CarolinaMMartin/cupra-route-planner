@@ -37,6 +37,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, MapPin, Loader2, Trash2, Pencil, Save, Search, X, SlidersHorizontal, ChevronUp, ChevronDown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { GEO_BA } from "@/data/geoBuenosAires";
+
 
 // Types
 interface Place {
@@ -61,6 +63,26 @@ interface Profile {
   nombre: string;
   email: string;
 }
+
+interface CatalogEntry {
+  key: string;
+  barrio: string;
+  comuna: string | null;
+  provincia: string;
+  placeId: string | null;
+}
+
+const normalizeGeo = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const catalogKey = (provincia: string, barrio: string) =>
+  `${normalizeGeo(provincia)}||${normalizeGeo(barrio)}`;
+
+
 
 
 // Supabase helpers
@@ -325,14 +347,16 @@ export default function AreasManager() {
       // Create the area
       const newArea = await createArea(newAreaForm);
       
-      // Assign selected places to the area
+      // Assign selected places to the area (creando el barrio si no existe)
       if (newAreaForm.selectedPlaces.length > 0) {
-        await Promise.all(
-          newAreaForm.selectedPlaces.map((placeId) =>
-            assignPlaceToArea(placeId, newArea.id)
-          )
-        );
+        for (const key of newAreaForm.selectedPlaces) {
+          const entry = catalogByKey.get(key);
+          if (!entry) continue;
+          const placeId = await ensurePlaceId(entry);
+          await assignPlaceToArea(placeId, newArea.id);
+        }
       }
+
       
       toast({
         title: "Éxito",
@@ -537,22 +561,145 @@ export default function AreasManager() {
     }
   }
 
+  /** Devuelve el id de places para un barrio del catálogo, creándolo si no existe. */
+  async function ensurePlaceId(entry: CatalogEntry): Promise<string> {
+    if (entry.placeId) return entry.placeId;
+
+    const { data: existing } = await supabase
+      .from("places")
+      .select("id")
+      .eq("barrio_principal", entry.barrio)
+      .eq("provincia_principal", entry.provincia)
+      .maybeSingle();
+
+    if (existing?.id) {
+      setAllPlaces((prev) =>
+        prev.some((p) => p.id === existing.id)
+          ? prev
+          : [
+              ...prev,
+              {
+                id: existing.id,
+                barrio_principal: entry.barrio,
+                comuna: entry.comuna,
+                provincia_principal: entry.provincia,
+              },
+            ],
+      );
+      return existing.id;
+    }
+
+    const { data: created, error } = await supabase
+      .from("places")
+      .insert({
+        barrio_principal: entry.barrio,
+        comuna: entry.comuna,
+        provincia_principal: entry.provincia,
+      })
+      .select("id, barrio_principal, comuna, provincia_principal")
+      .single();
+
+    if (error) throw error;
+    setAllPlaces((prev) => [...prev, created as Place]);
+    return created.id;
+  }
+
+  async function handleAddCatalogToArea(key: string, areaId: string) {
+    const entry = catalogByKey.get(key);
+    if (!entry) return;
+    try {
+      const placeId = await ensurePlaceId(entry);
+      await assignPlaceToArea(placeId, areaId);
+      setAreas((prev) =>
+        prev.map((area) =>
+          area.id === areaId && !area.places.some((p) => p.id === placeId)
+            ? {
+                ...area,
+                places: [
+                  ...area.places,
+                  {
+                    id: placeId,
+                    barrio_principal: entry.barrio,
+                    comuna: entry.comuna,
+                    provincia_principal: entry.provincia,
+                  },
+                ],
+              }
+            : area,
+        ),
+      );
+      toast({ title: `${entry.barrio} agregado a la zona` });
+    } catch (error) {
+      console.error("Error adding place:", error);
+      toast({
+        title: "Error",
+        description: "No se pudo agregar el barrio",
+        variant: "destructive",
+      });
+    }
+  }
+
+  const assignedKeys = (area: Area) =>
+    new Set(
+      area.places
+        .filter((p) => p.barrio_principal)
+        .map((p) =>
+          catalogKey(
+            p.provincia_principal || "Ciudad Autónoma de Buenos Aires",
+            p.barrio_principal as string,
+          ),
+        ),
+    );
+
+
   const vendedorOptions = profiles.map((p) => ({
     label: p.nombre,
     value: p.id,
   }));
 
-  const placeOptions = allPlaces.map((p) => ({
-    label: `${p.barrio_principal || "Sin nombre"} - ${p.comuna || ""} (${p.provincia_principal || ""})`.trim(),
-    value: p.id,
+  // Catálogo completo de barrios: los que ya existen en la base + el listado
+  // territorial oficial (para poder armar zonas aunque todavía no haya clientes).
+  const catalog: CatalogEntry[] = (() => {
+    const map = new Map<string, CatalogEntry>();
+    allPlaces.forEach((p) => {
+      if (!p.barrio_principal) return;
+      const provincia = p.provincia_principal || "Ciudad Autónoma de Buenos Aires";
+      map.set(catalogKey(provincia, p.barrio_principal), {
+        key: catalogKey(provincia, p.barrio_principal),
+        barrio: p.barrio_principal,
+        comuna: p.comuna,
+        provincia,
+        placeId: p.id,
+      });
+    });
+    Object.entries(GEO_BA).forEach(([provincia, comunas]) => {
+      Object.entries(comunas).forEach(([comuna, barrios]) => {
+        barrios.forEach((barrio) => {
+          const key = catalogKey(provincia, barrio);
+          const existing = map.get(key);
+          if (existing) {
+            if (!existing.comuna) existing.comuna = comuna;
+            return;
+          }
+          map.set(key, { key, barrio, comuna, provincia, placeId: null });
+        });
+      });
+    });
+    return Array.from(map.values()).sort((a, b) => a.barrio.localeCompare(b.barrio, "es"));
+  })();
+
+  const catalogByKey = new Map(catalog.map((c) => [c.key, c]));
+
+  const catalogOptions = catalog.map((c) => ({
+    label: `${c.barrio}${c.comuna ? ` · ${c.comuna}` : ""} (${c.provincia})`,
+    value: c.key,
   }));
 
-  const provinciaOptions = Array.from(
-    new Set(allPlaces.map((p) => p.provincia_principal).filter(Boolean) as string[])
-  ).sort();
+  const provinciaOptions = Array.from(new Set(catalog.map((c) => c.provincia))).sort();
   const comunaOptions = Array.from(
-    new Set(allPlaces.map((p) => p.comuna).filter(Boolean) as string[])
+    new Set(catalog.filter((c) => c.comuna).map((c) => c.comuna as string))
   ).sort();
+
 
   const activeFiltersCount =
     (provinciaFilter !== "todas" ? 1 : 0) +
@@ -567,14 +714,8 @@ export default function AreasManager() {
     return true;
   });
 
-  const filteredPlaces = allPlaces.filter((place) => {
-    const query = placeSearchFilter.toLowerCase();
-    return (
-      place.barrio_principal?.toLowerCase().includes(query) ||
-      place.comuna?.toLowerCase().includes(query) ||
-      place.provincia_principal?.toLowerCase().includes(query)
-    );
-  });
+  const vendedorNombre = (id: string) => profiles.find((p) => p.id === id)?.nombre || "—";
+
 
   if (loading) {
     return (
@@ -592,12 +733,19 @@ export default function AreasManager() {
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Gestión de Áreas</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Organiza barrios por área
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Gestión de Áreas</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Organiza barrios y vendedores por zona
+              </p>
+            </div>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nueva zona
+            </Button>
           </div>
+
 
           {/* Search + filtros colapsables */}
           <div className="flex flex-col gap-3">
@@ -702,15 +850,16 @@ export default function AreasManager() {
                         />
                         <div className="flex-1 text-left">
                           <p className="font-semibold">{area.nombre}</p>
-                          {area.descripcion && (
-                            <p className="text-sm text-muted-foreground">
-                              {area.descripcion}
-                            </p>
-                          )}
+                          <p className="text-xs text-muted-foreground">
+                            {area.vendedores.length > 0
+                              ? area.vendedores.map(vendedorNombre).join(", ")
+                              : "Sin vendedores asignados"}
+                          </p>
                         </div>
                         <Badge variant="secondary">
-                          {area.places.length} barrios
+                          {area.places.length} {area.places.length === 1 ? "barrio" : "barrios"}
                         </Badge>
+
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
@@ -762,76 +911,47 @@ export default function AreasManager() {
                           <Label className="text-sm font-medium mb-2 block">
                             Barrios Asignados ({area.places.length})
                           </Label>
-                          <div className="border rounded-lg p-4 bg-muted/20 space-y-2 max-h-[300px] overflow-y-auto">
+                          <MultiSelect
+                            options={catalogOptions.filter(
+                              (o) => !assignedKeys(area).has(o.value),
+                            )}
+                            selected={[]}
+                            onChange={(selected) => {
+                              selected.forEach((key) => handleAddCatalogToArea(key, area.id));
+                            }}
+                            placeholder="Buscar y agregar barrios..."
+                          />
+                          <div className="mt-3 flex flex-wrap gap-2">
                             {area.places.length === 0 ? (
-                              <p className="text-sm text-muted-foreground text-center py-4">
-                                No hay barrios asignados
+                              <p className="text-sm text-muted-foreground py-2">
+                                Todavía no hay barrios en esta zona. Buscalos arriba y agregalos.
                               </p>
                             ) : (
                               area.places.map((place) => (
-                                <div
+                                <Badge
                                   key={place.id}
-                                  className="flex items-start justify-between gap-2 p-3 bg-card rounded-lg border"
+                                  variant="secondary"
+                                  className="pl-2 pr-1 py-1 gap-1 text-xs font-medium"
                                 >
-                                  <div className="flex items-start gap-2 flex-1 min-w-0">
-                                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                      {place.barrio_principal && (
-                                        <p className="font-medium text-sm truncate">
-                                          {place.barrio_principal}
-                                        </p>
-                                      )}
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                        {place.comuna && (
-                                          <Badge variant="secondary" className="text-xs">
-                                            {place.comuna}
-                                          </Badge>
-                                        )}
-                                        {place.provincia_principal && (
-                                          <Badge variant="outline" className="text-xs">
-                                            {place.provincia_principal}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                      handleRemovePlaceFromArea(place.id, area.id)
-                                    }
-                                    className="flex-shrink-0"
+                                  <MapPin className="h-3 w-3 text-primary" />
+                                  <span>{place.barrio_principal || "Sin nombre"}</span>
+                                  {place.comuna && (
+                                    <span className="text-muted-foreground">· {place.comuna}</span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    aria-label={`Quitar ${place.barrio_principal || "barrio"}`}
+                                    onClick={() => handleRemovePlaceFromArea(place.id, area.id)}
+                                    className="ml-1 rounded p-0.5 hover:bg-destructive/20"
                                   >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </Badge>
                               ))
                             )}
                           </div>
-
-                          {/* Agregar Nuevos Barrios */}
-                          <div className="mt-4 pt-4 border-t">
-                            <Label className="text-sm font-medium mb-2 block">
-                              Agregar Barrios
-                            </Label>
-                            <MultiSelect
-                              options={allPlaces
-                                .filter((p) => !area.places.some((ap) => ap.id === p.id))
-                                .map((p) => ({
-                                  label: `${p.barrio_principal || "Sin nombre"}${p.comuna ? ` - ${p.comuna}` : ""}${p.provincia_principal ? ` (${p.provincia_principal})` : ""}`,
-                                  value: p.id,
-                                }))}
-                              selected={[]}
-                              onChange={(selected) => {
-                                selected.forEach((placeId) => {
-                                  handleAddPlaceToArea(placeId, area.id);
-                                });
-                              }}
-                              placeholder="Buscar y agregar barrios..."
-                            />
-                          </div>
                         </div>
+
 
                         {/* Comentarios */}
                         <div>
@@ -867,22 +987,20 @@ export default function AreasManager() {
           </CardContent>
         </Card>
 
-        {/* Create New Area Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Crear Nueva Área</CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* Crear nueva área */}
+        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Nueva zona</DialogTitle>
+            </DialogHeader>
             <form onSubmit={handleCreateArea} className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <Label htmlFor="nombre">Nombre del Área *</Label>
+                  <Label htmlFor="nombre">Nombre *</Label>
                   <Input
                     id="nombre"
                     value={newAreaForm.nombre}
-                    onChange={(e) =>
-                      setNewAreaForm({ ...newAreaForm, nombre: e.target.value })
-                    }
+                    onChange={(e) => setNewAreaForm({ ...newAreaForm, nombre: e.target.value })}
                     placeholder="Ej: Zona Norte"
                     required
                   />
@@ -894,16 +1012,12 @@ export default function AreasManager() {
                       id="color"
                       type="color"
                       value={newAreaForm.color}
-                      onChange={(e) =>
-                        setNewAreaForm({ ...newAreaForm, color: e.target.value })
-                      }
-                      className="w-20 h-10"
+                      onChange={(e) => setNewAreaForm({ ...newAreaForm, color: e.target.value })}
+                      className="w-16 h-10 p-1"
                     />
                     <Input
                       value={newAreaForm.color}
-                      onChange={(e) =>
-                        setNewAreaForm({ ...newAreaForm, color: e.target.value })
-                      }
+                      onChange={(e) => setNewAreaForm({ ...newAreaForm, color: e.target.value })}
                       className="flex-1"
                     />
                   </div>
@@ -914,143 +1028,40 @@ export default function AreasManager() {
                 <Textarea
                   id="descripcion"
                   value={newAreaForm.descripcion}
-                  onChange={(e) =>
-                    setNewAreaForm({
-                      ...newAreaForm,
-                      descripcion: e.target.value,
-                    })
-                  }
-                  placeholder="Descripción del área"
-                  rows={3}
+                  onChange={(e) => setNewAreaForm({ ...newAreaForm, descripcion: e.target.value })}
+                  placeholder="Referencias, avenidas límite, etc."
+                  rows={2}
                 />
               </div>
-              
-              {/* Barrios Selection */}
               <div>
-                <Label htmlFor="barrios">Barrios</Label>
+                <Label>Barrios</Label>
                 <MultiSelect
-                  options={placeOptions}
+                  options={catalogOptions}
                   selected={newAreaForm.selectedPlaces}
                   onChange={(selected) =>
                     setNewAreaForm({ ...newAreaForm, selectedPlaces: selected })
                   }
-                  placeholder="Seleccionar barrios"
+                  placeholder="Buscar barrios..."
                   className="w-full"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {newAreaForm.selectedPlaces.length} barrio(s) seleccionados
+                </p>
               </div>
-
-              <Button type="submit" className="w-full">
-                <Plus className="mr-2 h-4 w-4" />
-                Crear Área
-              </Button>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Crear zona
+                </Button>
+              </div>
             </form>
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
 
-        {/* Quick Add Places to Existing Areas */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Agregar Barrios a Áreas Existentes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar barrios, comunas o provincias..."
-                  value={placeSearchFilter}
-                  onChange={(e) => setPlaceSearchFilter(e.target.value)}
-                  className="pl-9 pr-9"
-                />
-                {placeSearchFilter && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setPlaceSearchFilter("")}
-                    className="absolute right-1 top-1 h-8 w-8 p-0"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-              {placeSearchFilter && (
-                <ScrollArea className="h-[200px] border rounded-lg p-2">
-                  <div className="space-y-2">
-                    {filteredPlaces.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No se encontraron barrios
-                      </p>
-                    ) : (
-                      filteredPlaces.map((place) => (
-                        <div
-                          key={place.id}
-                          className="flex items-center justify-between p-2 hover:bg-muted rounded"
-                        >
-                          <div className="flex items-start gap-2 flex-1 min-w-0">
-                            <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              {place.barrio_principal && (
-                                <p className="font-medium text-sm truncate">
-                                  {place.barrio_principal}
-                                </p>
-                              )}
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                {place.comuna && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    {place.comuna}
-                                  </Badge>
-                                )}
-                                {place.provincia_principal && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {place.provincia_principal}
-                                  </Badge>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button variant="outline" size="sm">
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>
-                                  Agregar a Área
-                                </DialogTitle>
-                              </DialogHeader>
-                              <div className="space-y-2">
-                                {areas.map((area) => (
-                                  <Button
-                                    key={area.id}
-                                    variant="outline"
-                                    className="w-full justify-start"
-                                    onClick={() =>
-                                      handleAddPlaceToArea(place.id, area.id)
-                                    }
-                                  >
-                                    <div
-                                      className="w-3 h-3 rounded-full mr-2"
-                                      style={{
-                                        backgroundColor: area.color || "#3b82f6",
-                                      }}
-                                    />
-                                    {area.nombre}
-                                  </Button>
-                                ))}
-                              </div>
-                            </DialogContent>
-                          </Dialog>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </ScrollArea>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+
 
         {/* Edit Area Dialog */}
         <Dialog open={!!editingArea} onOpenChange={(open) => !open && setEditingArea(null)}>
