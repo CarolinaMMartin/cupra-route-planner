@@ -1231,11 +1231,11 @@ Deno.serve(async (req) => {
     // Feedback del vendedor → fecha mínima de próxima visita ("volver en X días/semanas").
     const revisitMapClientes = buildRevisitMap(feedbacksMapClientes);
     const revisitMapProspectos = buildRevisitMap(feedbacksMapProspectos);
-    const scoreOpts: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapClientes };
-    const scoreOptsP: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapProspectos };
+    const scoreOpts: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapClientes, precioCajaCanal };
+    const scoreOptsP: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapProspectos, precioCajaCanal, posiblesClientes: posiblesClientesExistentes };
     // Versión relajada del cooldown: sólo se usa como último recurso para llegar a 8.
-    const scoreOptsRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapClientes };
-    const scoreOptsPRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapProspectos };
+    const scoreOptsRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapClientes, precioCajaCanal };
+    const scoreOptsPRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapProspectos, precioCajaCanal, posiblesClientes: posiblesClientesExistentes };
     console.log(`🗣️ Feedback con pedido de revisita: ${revisitMapClientes.size} clientes / ${revisitMapProspectos.size} prospectos`);
 
 
