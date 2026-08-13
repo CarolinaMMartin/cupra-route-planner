@@ -238,6 +238,10 @@ export default function AreasManager() {
   const [loading, setLoading] = useState(true);
   const [searchFilter, setSearchFilter] = useState("");
   const [placeSearchFilter, setPlaceSearchFilter] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [provinciaFilter, setProvinciaFilter] = useState("todas");
+  const [comunaFilter, setComunaFilter] = useState("todas");
+  const [vendedorFilter, setVendedorFilter] = useState("todos");
   const [areaToDelete, setAreaToDelete] = useState<string | null>(null);
   const [editingArea, setEditingArea] = useState<Area | null>(null);
   const [editForm, setEditForm] = useState({ nombre: "", descripcion: "" });
