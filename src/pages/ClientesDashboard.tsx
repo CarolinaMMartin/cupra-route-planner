@@ -763,7 +763,7 @@ const ClientesDashboard = () => {
                             className="border-b border-border/20 cursor-pointer hover:bg-card/60 transition-colors"
                           >
                             <td className="py-2.5 px-4">
-                              <span className="font-medium block truncate">{cliente.razon_social || cliente.fantasia || 'Sin nombre'}</span>
+                              <span className="font-medium block truncate">{toTitleCase(cliente.razon_social || cliente.fantasia) || 'Sin nombre'}</span>
                               {cliente.cuit_dni && (
                                 <span className="block text-xs text-muted-foreground">{cliente.cuit_dni}</span>
                               )}
@@ -772,7 +772,7 @@ const ClientesDashboard = () => {
                               {[cliente.barrio_principal, cliente.ciudad_principal].filter(Boolean).join(' · ') || '—'}
                             </td>
                             <td className="py-2.5 px-4 text-muted-foreground truncate">
-                              {cliente.vendedor_actual || cliente.vendedor_principal || '—'}
+                              {toTitleCase(cliente.vendedor_actual || cliente.vendedor_principal) || '—'}
                             </td>
                             <td className="py-2.5 px-4 text-center text-muted-foreground">{tickets || 0}</td>
                             <td className="py-2.5 px-4 text-center text-muted-foreground">
@@ -907,7 +907,7 @@ const ClientesDashboard = () => {
                       </Badge>
                       <div className="min-w-0">
                         <span className="text-sm font-medium text-foreground truncate block">
-                          {vendedor.vendedor}
+                          {toTitleCase(vendedor.vendedor)}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {vendedor.tickets} tickets
