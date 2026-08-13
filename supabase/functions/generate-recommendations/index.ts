@@ -1796,10 +1796,10 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
 Criterios:
 1. Coherencia territorial: cada visita debe pertenecer a la zona natural del vendedor (menor distancia a su hotspot).
 2. Balance cliente/prospecto: los clientes de cartera nunca deben quedar afuera para meter prospectos.
-3. Densidad de ruta: las 8 visitas de un vendedor deben ser recorribles en el día.
+3. Densidad de ruta: las 8 visitas de un vendedor deben ser CAMINABLES entre sí (idealmente todas dentro de un radio de ~2km; nunca más de ${MAX_ROUTE_SPREAD_KM}km entre los dos extremos).
 Sólo podés proponer INTERCAMBIOS (swaps) entre dos visitas de vendedores distintos. No inventes IDs.`,
               },
-              { role: "user", content: `${resumenDistribucion}\n\nDevolvé los intercambios necesarios y un resumen breve de la coherencia global.` },
+              { role: "user", content: `${resumenDistribucion}${rutasDispersas.length ? `\n\nRUTAS POCO COMPACTAS A CORREGIR: ${rutasDispersas.join("; ")}` : ""}\n\nDevolvé los intercambios necesarios y un resumen breve de la coherencia global.` },
             ],
             tools: [{
               type: "function",
