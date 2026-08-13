@@ -704,6 +704,8 @@ function scoreProspects(
       })),
       tipo_negocio: p.tipo_principal,
       rating: p.rating,
+      total_ratings: p.total_ratings ?? null,
+      prioridad_comercial: Math.round(score_comercial * 0.4),
     });
   }
 
