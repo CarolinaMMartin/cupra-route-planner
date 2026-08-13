@@ -861,17 +861,24 @@ function justificacionComercial(c: ScoredCandidate): string {
   const cerca = `Queda a unas ${cuadras} cuadras del resto de la ruta`;
   if (c.es_prospecto) {
     const rubro = c.tipo_negocio ? `${c.tipo_negocio}` : "Local del rubro";
-    const rep = c.rating ? ` con buena reputación (${c.rating})` : "";
+    const rep = c.total_ratings ? ` con ${c.total_ratings} reseñas` : "";
     return `${rubro} de ${c.barrio || "la zona"}${rep} que todavía no nos compra. ${cerca}: sirve para sumar cobertura nueva sin estirar el día.`;
   }
   const dias = c.dias_desde_ultima_compra;
+  // Aviso de devolución: nunca se manda a visitar "a ciegas" un cliente que devolvió mercadería.
+  const nc = c.alerta_nc
+    ? ` ATENCIÓN: devolvió el ${Math.round(c.alerta_nc.ratio * 100)}% de lo facturado${c.alerta_nc.fecha ? ` (última nota de crédito ${c.alerta_nc.fecha})` : ""}; revisar el motivo antes de ofrecer.`
+    : "";
+  const ritmo = c.cadencia_dias && dias != null && dias > c.cadencia_dias
+    ? ` Compra cada ${Math.round(c.cadencia_dias)} días, así que ya está atrasado.`
+    : "";
   if (c.estado_comercial === "ACTIVO") {
-    return `Cliente activo de ${c.barrio || "la zona"}${dias != null ? `, compró hace ${dias} días` : ""}. ${cerca}: visita de mantenimiento para sostener el ritmo de compra.`;
+    return `Cliente activo de ${c.barrio || "la zona"}${dias != null ? `, compró hace ${dias} días` : ""}.${ritmo} ${cerca}: visita de mantenimiento para sostener el ritmo de compra.${nc}`;
   }
   if (c.estado_comercial === "INACTIVO") {
-    return `Bajó el ritmo${dias != null ? `: hace ${dias} días que no compra` : ""}. ${cerca}: conviene pasar antes de que se enfríe del todo.`;
+    return `Bajó el ritmo${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: conviene pasar antes de que se enfríe del todo.${nc}`;
   }
-  return `Cliente a recuperar${dias != null ? `: hace ${dias} días que no compra` : ""}. ${cerca}: vale la visita de reconquista.`;
+  return `Cliente a recuperar${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: vale la visita de reconquista.${nc}`;
 }
 
 function makeRec(c: ScoredCandidate, vendedorId: string, justificacion?: string): any {
