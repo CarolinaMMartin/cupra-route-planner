@@ -1700,6 +1700,8 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           return [];
         }
         extraProspectosLoaded.push(...newProspects);
+        newProspects.forEach((p: any) => liveDiscoveredIds.add(p.place_id));
+
 
         const scored = scoreProspects(
           newProspects, feedbacksMapProspectos,
