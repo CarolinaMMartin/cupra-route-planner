@@ -402,19 +402,28 @@ function classifyEstado(diasDesdeUltimaCompra: number | null): 'ACTIVO' | 'INACT
 
 // ============================================================
 // VENDOR AFFILIATION CHECK (strict)
+// Regla de negocio: manda SIEMPRE el último que vendió en ese lugar
+// (vendedor_actual). El histórico sólo se usa si no hay último vendedor
+// identificable, para no quitarle la clientela a quien generó el vínculo.
 // ============================================================
 
 function isClientAffiliated(cliente: any, vendedorUserId: string, sellerNameMap: Map<string, string>): boolean {
+  // 1) Último vendedor con venta registrada: dueño exclusivo del cliente
   const actualUUID = resolveSellerUUID(cliente.vendedor_actual, sellerNameMap);
-  if (actualUUID === vendedorUserId) return true;
+  if (actualUUID) return actualUUID === vendedorUserId;
+
+  // 2) Sin último vendedor resoluble → vendedor histórico dominante
   const principalUUID = resolveSellerUUID(cliente.vendedor_principal, sellerNameMap);
-  if (principalUUID === vendedorUserId) return true;
+  if (principalUUID) return principalUUID === vendedorUserId;
+
+  // 3) Último recurso: cualquier vendedor del historial
   const todosVendedores = cliente.todos_vendedores || [];
   for (const v of todosVendedores) {
     if (resolveSellerUUID(v, sellerNameMap) === vendedorUserId) return true;
   }
   return false;
 }
+
 
 // ============================================================
 // SCORED CANDIDATE TYPE
