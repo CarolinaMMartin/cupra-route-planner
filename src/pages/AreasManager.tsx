@@ -37,6 +37,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, MapPin, Loader2, Trash2, Pencil, Save, Search, X, SlidersHorizontal, ChevronUp, ChevronDown } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { GEO_BA } from "@/data/geoBuenosAires";
+
 
 // Types
 interface Place {
