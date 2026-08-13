@@ -495,11 +495,26 @@ Deno.serve(async (req) => {
     }
 
     // ── FASE 5: Actualizar existentes (solo campos del maestro) ──
+    // El vendedor de cartera del maestro NO pisa al último que vendió:
+    // si el cliente ya tiene ventas registradas, manda vendedor_actual de ventas.
+    const conVentas = new Set<string>();
+    {
+      const { data: ventasIds } = await supabase
+        .from('ventas_cupra')
+        .select('client_id')
+        .not('client_id', 'is', null)
+        .not('vendedor', 'is', null)
+        .limit(200000);
+      for (const v of ventasIds || []) if (v.client_id) conVentas.add(String(v.client_id));
+    }
+
     const existentes = clientes.filter((c) => existingSet.has(String(c.client_id)));
     for (const c of existentes) {
       const updateData = buildCommonFields(c);
+      if (conVentas.has(String(c.client_id))) delete updateData.vendedor_actual;
       if (Object.keys(updateData).length === 0) continue;
       updateData.updated_at = new Date().toISOString();
+
       const { error } = await supabase.from('clientes').update(updateData).eq('client_id', String(c.client_id));
       if (error) {
         results.clientes_errores++;
