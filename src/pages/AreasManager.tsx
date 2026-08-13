@@ -733,12 +733,19 @@ export default function AreasManager() {
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Gestión de Áreas</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Organiza barrios por área
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Gestión de Áreas</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                Organiza barrios y vendedores por zona
+              </p>
+            </div>
+            <Button onClick={() => setIsCreateDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Nueva zona
+            </Button>
           </div>
+
 
           {/* Search + filtros colapsables */}
           <div className="flex flex-col gap-3">
