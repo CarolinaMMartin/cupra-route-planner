@@ -26,6 +26,65 @@ const MAX_EXPANSION_KM = 2.0;
 const EXPANSION_STEPS_KM = [3.0, 5.0]; // Progressive expansion if 2km isn't enough
 // Último recurso: nunca proponer visitas más lejos que esto del hotspot del vendedor.
 const ZONE_FALLBACK_MAX_KM = 8.0;
+// Clientes propios: antes de meter prospectos, se puede ir hasta acá dentro de la cartera.
+const PORTFOLIO_FALLBACK_MAX_KM = 25.0;
+// Un prospecto NUNCA puede estar más lejos que esto del hotspot del vendedor.
+const MAX_PROSPECT_DISTANCE_KM = 12.0;
+// Días mínimos entre dos recomendaciones del mismo negocio (regla dura, se relaja sólo si no se llega a 8).
+const RECOMMENDATION_COOLDOWN_DAYS = 15;
+
+interface RevisitInfo { dueAt: number; source: string; }
+
+/**
+ * Interpreta el feedback del vendedor para saber cuándo pidió volver.
+ * Soporta "volver en 2 semanas", "revisitar en 10 días", "la semana que viene",
+ * "el mes que viene", "volver mañana", etc.
+ */
+function parseRevisitDays(text: string | null | undefined): number | null {
+  if (!text) return null;
+  const t = text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const wantsReturn = /(volver|revisit|re visitar|regresar|pasar de nuevo|volvemos|contactar)/.test(t);
+  if (!wantsReturn && !/(en \d+\s*(dia|semana|mes))/.test(t)) return null;
+
+  const num = t.match(/(\d+)\s*(dias?|semanas?|meses?|mes)/);
+  if (num) {
+    const value = parseInt(num[1], 10);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    if (num[2].startsWith("dia")) return value;
+    if (num[2].startsWith("semana")) return value * 7;
+    return value * 30;
+  }
+  if (/(una semana|la semana que viene|proxima semana|semana proxima)/.test(t)) return 7;
+  if (/(quincena|15 dias)/.test(t)) return 15;
+  if (/(un mes|el mes que viene|proximo mes|mes proximo)/.test(t)) return 30;
+  if (/(manana)/.test(t)) return 1;
+  return null;
+}
+
+/** Mapa negocio -> fecha mínima de próxima visita según el feedback más reciente. */
+function buildRevisitMap(feedbacksMap: Map<string, any[]>): Map<string, RevisitInfo> {
+  const map = new Map<string, RevisitInfo>();
+  for (const [id, feedbacks] of feedbacksMap) {
+    for (const fb of feedbacks) {
+      const days = parseRevisitDays(fb.feedback) ?? parseRevisitDays(fb.motivo_no_visita);
+      if (days === null) continue;
+      const base = fb.created_at ? new Date(fb.created_at).getTime() : Date.now();
+      const dueAt = base + days * 24 * 60 * 60 * 1000;
+      const prev = map.get(id);
+      if (!prev || dueAt > prev.dueAt) {
+        map.set(id, { dueAt, source: `${fb.feedback || fb.motivo_no_visita} (+${days}d)` });
+      }
+      break; // feedbacks vienen ordenados por fecha desc: vale el más reciente
+    }
+  }
+  return map;
+}
+
+interface ScoreOptions {
+  cooldownDays?: number;
+  revisitMap?: Map<string, RevisitInfo>;
+}
+
 
 // ---- Identity dedup (evita recomendar el mismo negocio 2 veces) ----
 function normalizeIdentityText(value: string | null | undefined): string {
@@ -401,8 +460,11 @@ function scoreClients(
   hotspot: AnchorPoint,
   radiusKm: number,
   otherAnchors: AnchorPoint[],
+  options: ScoreOptions = {},
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
+  const cooldownDays = options.cooldownDays ?? 0;
+  const revisitMap = options.revisitMap;
 
   for (const c of clientes) {
     const place = placesMap.get(c.client_id);
@@ -432,6 +494,8 @@ function scoreClients(
     let score_rotacion = 100;
     if (c.last_recommendation_at) {
       const daysSinceRec = (Date.now() - new Date(c.last_recommendation_at).getTime()) / (1000 * 60 * 60 * 24);
+      // COOLDOWN DURO: no repetir el mismo negocio antes de N días.
+      if (cooldownDays > 0 && daysSinceRec < cooldownDays) continue;
       score_rotacion = Math.min(100, daysSinceRec * 5);
     }
 
@@ -452,7 +516,15 @@ function scoreClients(
     );
     if (hasNegativeFeedback) continue;
 
-    const score_total = score_geo * 0.50 + score_vendedor * 0.25 + score_comercial * 0.15 + score_rotacion * 0.10 + overlapPenalty;
+    // FEEDBACK DEL VENDEDOR: si pidió volver más adelante, no se recomienda antes de esa fecha.
+    const revisit = revisitMap?.get(c.client_id);
+    let revisitBonus = 0;
+    if (revisit) {
+      if (revisit.dueAt > Date.now()) continue;
+      revisitBonus = 30; // ya está vencido el pedido de volver → prioridad
+    }
+
+    const score_total = score_geo * 0.50 + score_vendedor * 0.25 + score_comercial * 0.15 + score_rotacion * 0.10 + overlapPenalty + revisitBonus;
 
     candidates.push({
       client_id: c.client_id,
@@ -501,27 +573,34 @@ function scoreProspects(
   hotspot: AnchorPoint,
   radiusKm: number,
   otherAnchors: AnchorPoint[],
+  options: ScoreOptions = {},
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
+  const cooldownDays = options.cooldownDays ?? 0;
+  const revisitMap = options.revisitMap;
+  const effectiveRadius = Math.min(radiusKm, MAX_PROSPECT_DISTANCE_KM);
 
   for (const p of prospectos) {
     const lat = p.latitud ? Number(p.latitud) : null;
     const long = p.longitud ? Number(p.longitud) : null;
 
-    // HARD radius filter
-    if (!isWithinRadius(lat, long, hotspot, radiusKm)) continue;
+    // HARD radius filter (nunca por encima del tope absoluto de prospectos)
+    if (!isWithinRadius(lat, long, hotspot, effectiveRadius)) continue;
 
     let distancia_km = 999;
     let score_geo = 0;
     if (lat && long) {
       distancia_km = calcularDistanciaKm(hotspot.lat, hotspot.lng, lat, long);
-      score_geo = Math.max(0, 100 - (distancia_km / radiusKm) * 100);
+      score_geo = Math.max(0, 100 - (distancia_km / effectiveRadius) * 100);
     }
 
     let overlapPenalty = 0;
     if (lat && long && otherAnchors.length > 0) {
       const minDistOther = Math.min(...otherAnchors.map(a => calcularDistanciaKm(a.lat, a.lng, lat, long)));
       if (minDistOther < 0.3) overlapPenalty = -100;
+      // COHERENCIA TERRITORIAL: si el prospecto pertenece claramente a la zona
+      // de otro vendedor (>1km más cerca de su hotspot), no se ofrece acá.
+      if (minDistOther + 1 < distancia_km) continue;
     }
 
     const score_comercial = Math.min(100, (p.rating || 3) * 20);
@@ -529,8 +608,10 @@ function scoreProspects(
     let score_rotacion = 100;
     if (p.last_recommendation_at) {
       const daysSinceRec = (Date.now() - new Date(p.last_recommendation_at).getTime()) / (1000 * 60 * 60 * 24);
+      if (cooldownDays > 0 && daysSinceRec < cooldownDays) continue;
       score_rotacion = Math.min(100, daysSinceRec * 5);
     }
+
 
     const feedbacks = feedbacksMap.get(p.place_id) || [];
     const hasNegativeFeedback = feedbacks.some((fb: any) =>
@@ -539,8 +620,15 @@ function scoreProspects(
     );
     if (hasNegativeFeedback) continue;
 
+    const revisit = revisitMap?.get(p.place_id);
+    let revisitBonus = 0;
+    if (revisit) {
+      if (revisit.dueAt > Date.now()) continue;
+      revisitBonus = 30;
+    }
+
     // Prospects: geo dominates scoring (sorted by proximity to hotspot)
-    const score_total = score_geo * 0.70 + score_comercial * 0.15 + score_rotacion * 0.15 + overlapPenalty;
+    const score_total = score_geo * 0.70 + score_comercial * 0.15 + score_rotacion * 0.15 + overlapPenalty + revisitBonus;
 
     candidates.push({
       client_id: p.place_id,
@@ -613,6 +701,9 @@ REGLAS DE COMPOSICIÓN:
 7. Los candidatos ya fueron filtrados por cartera y radio geográfico.
 8. JUSTIFICACIÓN: para cada visita, explica brevemente por qué fue seleccionada.
 9. NUNCA repitas el mismo client_id para distintos vendedores.
+10. FEEDBACK DEL VENDEDOR: si un feedback pidió volver más adelante, ese negocio ya fue excluido; si el pedido está vencido, priorizalo.
+11. COOLDOWN: no se repite un negocio recomendado hace menos de 15 días (ya está filtrado); no lo reintroduzcas.
+12. TERRITORIO: cada visita debe caer en la zona natural del vendedor; nunca asignes algo que pertenece al hotspot de otro vendedor.
 
 IMPORTANTE: Las instrucciones adicionales pueden ordenar candidatos dentro de cada grupo, pero no pueden anteponer prospectos mientras queden clientes internos elegibles.
 
@@ -1025,6 +1116,17 @@ Deno.serve(async (req) => {
       }
     });
 
+    // Feedback del vendedor → fecha mínima de próxima visita ("volver en X días/semanas").
+    const revisitMapClientes = buildRevisitMap(feedbacksMapClientes);
+    const revisitMapProspectos = buildRevisitMap(feedbacksMapProspectos);
+    const scoreOpts: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapClientes };
+    const scoreOptsP: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapProspectos };
+    // Versión relajada del cooldown: sólo se usa como último recurso para llegar a 8.
+    const scoreOptsRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapClientes };
+    const scoreOptsPRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapProspectos };
+    console.log(`🗣️ Feedback con pedido de revisita: ${revisitMapClientes.size} clientes / ${revisitMapProspectos.size} prospectos`);
+
+
     // ============================================================
     // 9. PER-VENDOR: Hotspot → Hard radius → Pool 1 + Pool 2
     // ============================================================
@@ -1079,13 +1181,13 @@ Deno.serve(async (req) => {
       let clientPool = scoreClients(
         myValidClients, placesMap, feedbacksMapClientes,
         vendedor.user_id, sellerNameMap,
-        vendorHotspot, HARD_RADIUS_KM, otherHotspots,
+        vendorHotspot, HARD_RADIUS_KM, otherHotspots, scoreOpts,
       );
 
       // === POOL 2: Prospects within HARD_RADIUS_KM of hotspot ===
       let prospectPool = scoreProspects(
         prospectos, feedbacksMapProspectos,
-        vendorHotspot, HARD_RADIUS_KM, otherHotspots,
+        vendorHotspot, HARD_RADIUS_KM, otherHotspots, scoreOptsP,
       );
 
       console.log(`📊 ${vendedor.nombre}: ${clientPool.length} clientes + ${prospectPool.length} prospectos en radio ${HARD_RADIUS_KM}km`);
@@ -1101,7 +1203,7 @@ Deno.serve(async (req) => {
         const extraClientPool = scoreClients(
           myValidClients, placesMap, feedbacksMapClientes,
           vendedor.user_id, sellerNameMap,
-          vendorHotspot, expandRadius, otherHotspots,
+          vendorHotspot, expandRadius, otherHotspots, scoreOpts,
         ).filter(c => !existingClientIds.has(c.client_id));
 
         if (extraClientPool.length > 0) {
@@ -1117,7 +1219,7 @@ Deno.serve(async (req) => {
         const remainingZoneClients = scoreClients(
           myValidClients, placesMap, feedbacksMapClientes,
           vendedor.user_id, sellerNameMap,
-          vendorHotspot, ZONE_FALLBACK_MAX_KM, otherHotspots,
+          vendorHotspot, ZONE_FALLBACK_MAX_KM, otherHotspots, scoreOpts,
         )
           .filter(c => !existingClientIds.has(c.client_id))
           .sort((a, b) => a.distancia_km - b.distancia_km)
@@ -1127,6 +1229,29 @@ Deno.serve(async (req) => {
           console.log(`🆕 ${vendedor.nombre}: +${remainingZoneClients.length} clientes del resto de la zona (≤${ZONE_FALLBACK_MAX_KM}km)`);
         }
       }
+
+      // === RESCATE DE CARTERA: antes de sumar prospectos, se agotan los clientes
+      // propios de toda la cartera (hasta 25km) y recién ahí se relaja el cooldown. ===
+      const rescatarClientes = (radius: number, opts: ScoreOptions, label: string) => {
+        if (clientPool.length >= 8) return;
+        const existingClientIds = new Set(clientPool.map(c => c.client_id));
+        const rescued = scoreClients(
+          [...myValidClients, ...portfolioClients.filter((c: any) => isClientAffiliated(c, vendedor.user_id, sellerNameMap))],
+          placesMap, feedbacksMapClientes,
+          vendedor.user_id, sellerNameMap,
+          vendorHotspot, radius, otherHotspots, opts,
+        )
+          .filter(c => !existingClientIds.has(c.client_id))
+          .sort((a, b) => a.distancia_km - b.distancia_km)
+          .slice(0, Math.max(0, 8 - clientPool.length));
+        if (rescued.length > 0) {
+          clientPool = [...clientPool, ...rescued];
+          console.log(`♻️ ${vendedor.nombre}: +${rescued.length} clientes rescatados (${label})`);
+        }
+      };
+      rescatarClientes(PORTFOLIO_FALLBACK_MAX_KM, scoreOpts, `cartera ≤${PORTFOLIO_FALLBACK_MAX_KM}km`);
+      rescatarClientes(PORTFOLIO_FALLBACK_MAX_KM, scoreOptsRelaxed, "cartera sin cooldown");
+
 
       // === PROSPECT EXPANSION: only for the slots clients could not cover ===
       let currentTotal = clientPool.length + prospectPool.length;
@@ -1160,7 +1285,7 @@ Deno.serve(async (req) => {
 
         const extraScored = scoreProspects(
           extraFiltered, feedbacksMapProspectos,
-          vendorHotspot, expandRadius, otherHotspots,
+          vendorHotspot, expandRadius, otherHotspots, scoreOptsP,
         ).filter(c => !existingIds.has(c.client_id));
 
         prospectPool = [...prospectPool, ...extraScored];
@@ -1217,6 +1342,7 @@ Deno.serve(async (req) => {
           vendorHotspot,
           fallbackRadius,
           otherHotspots,
+          scoreOptsP,
         )
           .filter(c => !existingIds.has(c.client_id))
           .sort((a, b) => a.distancia_km - b.distancia_km)
@@ -1277,7 +1403,7 @@ Deno.serve(async (req) => {
                 extraProspectosLoaded.push(...newProspects);
                 const liveScored = scoreProspects(
                   newProspects, feedbacksMapProspectos,
-                  vendorHotspot, 100, otherHotspots,
+                  vendorHotspot, MAX_PROSPECT_DISTANCE_KM, otherHotspots, scoreOptsPRelaxed,
                 ).filter(c => !existingIds.has(c.client_id));
                 prospectPool = [...prospectPool, ...liveScored];
                 currentTotal = clientPool.length + prospectPool.length;
@@ -1480,7 +1606,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
 
         const scored = scoreProspects(
           newProspects, feedbacksMapProspectos,
-          hotspot, 100, otherHotspots,
+          hotspot, MAX_PROSPECT_DISTANCE_KM, otherHotspots, scoreOptsPRelaxed,
         ).filter(c => !takenIds.has(c.client_id));
         console.log(`🔎 Top-up Google: +${scored.length} prospectos para completar cuota.`);
         return scored;
@@ -1570,6 +1696,136 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
       });
       console.log(`✅ ${vendedor.nombre}: ${vendorRecs.length} recs (${dist.clients}C/${dist.prospects}P, ${dist.recovery} recovery)`);
     }
+
+    // ============================================================
+    // 12b. AUDITORÍA DE COHERENCIA DE LA DISTRIBUCIÓN COMPLETA
+    // Primero un chequeo determinístico (territorio) y después una
+    // segunda pasada de IA con un modelo fuerte sobre el reparto total.
+    // ============================================================
+    let auditoriaResumen = "";
+    try {
+      const candidateOf = (vendedorId: string, id: string): ScoredCandidate | undefined =>
+        (vendorClientPools.get(vendedorId) || []).find(c => c.client_id === id)
+        || (vendorProspectPools.get(vendedorId) || []).find(c => c.client_id === id);
+
+      const distToHotspot = (vendedorId: string, cand: ScoredCandidate | undefined): number => {
+        const h = vendorHotspots.get(vendedorId);
+        if (!h || !cand?.lat || !cand?.long) return Number.POSITIVE_INFINITY;
+        return calcularDistanciaKm(h.lat, h.lng, Number(cand.lat), Number(cand.long));
+      };
+
+      const trySwap = (recA: any, recB: any): boolean => {
+        if (recA.vendedor_id === recB.vendedor_id) return false;
+        const candA = candidateOf(recA.vendedor_id, recA.client_id);
+        const candB = candidateOf(recB.vendedor_id, recB.client_id);
+        if (!candA || !candB) return false;
+        // Ambos tienen que ser candidatos válidos para el otro vendedor.
+        if (!candidateOf(recB.vendedor_id, recA.client_id) || !candidateOf(recA.vendedor_id, recB.client_id)) return false;
+        const actual = distToHotspot(recA.vendedor_id, candA) + distToHotspot(recB.vendedor_id, candB);
+        const propuesto = distToHotspot(recB.vendedor_id, candA) + distToHotspot(recA.vendedor_id, candB);
+        if (!Number.isFinite(actual) || !Number.isFinite(propuesto)) return false;
+        if (propuesto + 1 >= actual) return false; // sólo si mejora al menos 1km
+        const tmp = recA.vendedor_id;
+        recA.vendedor_id = recB.vendedor_id;
+        recB.vendedor_id = tmp;
+        return true;
+      };
+
+      // --- Pasada determinística: corrige visitas que caen en territorio ajeno ---
+      let swaps = 0;
+      for (const recA of validatedRecs) {
+        const candA = candidateOf(recA.vendedor_id, recA.client_id);
+        if (!candA) continue;
+        const dActual = distToHotspot(recA.vendedor_id, candA);
+        for (const recB of validatedRecs) {
+          if (recB === recA || recB.vendedor_id === recA.vendedor_id) continue;
+          if (distToHotspot(recB.vendedor_id, candA) + 1 >= dActual) continue;
+          if (trySwap(recA, recB)) { swaps++; break; }
+        }
+      }
+      if (swaps > 0) console.log(`🧭 Auditoría territorial: ${swaps} intercambios entre vendedores`);
+
+      // --- Segunda pasada de IA sobre la distribución total ---
+      if (vendedoresData.length > 1) {
+        const resumenDistribucion = vendedoresData.map(v => {
+          const recs = validatedRecs.filter((r: any) => r.vendedor_id === v.user_id);
+          const h = vendorHotspots.get(v.user_id);
+          const lineas = recs.map((r: any) => {
+            const c = candidateOf(v.user_id, r.client_id);
+            return `- [${r.client_id}] ${c?.razon_social || r.client_id} | ${c?.es_prospecto ? "PROSPECTO" : "CLIENTE"} | barrio:${c?.barrio || "?"} | dist_hotspot:${distToHotspot(v.user_id, c).toFixed(1)}km`;
+          }).join("\n");
+          return `### ${v.nombre} (${v.user_id}) — hotspot ${h ? `${h.lat.toFixed(4)},${h.lng.toFixed(4)}` : "N/A"}\n${lineas}`;
+        }).join("\n\n");
+
+        const auditResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-pro",
+            messages: [
+              {
+                role: "system",
+                content: `Sos el auditor comercial de CUPRA. Revisás el reparto COMPLETO de visitas del día entre vendedores.
+Criterios:
+1. Coherencia territorial: cada visita debe pertenecer a la zona natural del vendedor (menor distancia a su hotspot).
+2. Balance cliente/prospecto: los clientes de cartera nunca deben quedar afuera para meter prospectos.
+3. Densidad de ruta: las 8 visitas de un vendedor deben ser recorribles en el día.
+Sólo podés proponer INTERCAMBIOS (swaps) entre dos visitas de vendedores distintos. No inventes IDs.`,
+              },
+              { role: "user", content: `${resumenDistribucion}\n\nDevolvé los intercambios necesarios y un resumen breve de la coherencia global.` },
+            ],
+            tools: [{
+              type: "function",
+              function: {
+                name: "auditar_distribucion",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    intercambios: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          client_id_a: { type: "string" },
+                          client_id_b: { type: "string" },
+                          motivo: { type: "string" },
+                        },
+                        required: ["client_id_a", "client_id_b", "motivo"],
+                      },
+                    },
+                    resumen: { type: "string" },
+                  },
+                  required: ["intercambios", "resumen"],
+                },
+              },
+            }],
+            tool_choice: { type: "function", function: { name: "auditar_distribucion" } },
+          }),
+        });
+
+        if (auditResponse.ok) {
+          const auditData = await auditResponse.json();
+          const auditArgs = auditData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+          if (auditArgs) {
+            const parsed = JSON.parse(auditArgs);
+            auditoriaResumen = parsed.resumen || "";
+            let aplicados = 0;
+            for (const swap of parsed.intercambios || []) {
+              const recA = validatedRecs.find((r: any) => r.client_id === swap.client_id_a);
+              const recB = validatedRecs.find((r: any) => r.client_id === swap.client_id_b);
+              if (recA && recB && trySwap(recA, recB)) aplicados++;
+            }
+            console.log(`🧠 Auditoría IA: ${aplicados}/${(parsed.intercambios || []).length} intercambios aplicados. ${auditoriaResumen}`);
+          }
+        } else {
+          console.warn(`Auditoría IA no disponible: ${auditResponse.status}`);
+        }
+      }
+    } catch (auditError) {
+      console.error("Auditoría de coherencia falló (se conserva la distribución original):", auditError);
+    }
+
+
 
     // ============================================================
     // 13. ENRICH & SAVE
@@ -1763,7 +2019,10 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
       recomendaciones: enrichedRecommendations,
       resumen: {
         total_recomendaciones: enrichedRecommendations.length,
-        descripcion: aiRecommendations.resumen_analisis,
+        descripcion: auditoriaResumen
+          ? `${aiRecommendations.resumen_analisis}\n\nAuditoría de coherencia: ${auditoriaResumen}`
+          : aiRecommendations.resumen_analisis,
+        auditoria_coherencia: auditoriaResumen || null,
         distribucion_por_vendedor: distribucion,
         zonas_priorizadas: Array.from(zonas).slice(0, 5),
         request_id,
