@@ -290,11 +290,14 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
             const mapsUrl = placeData.googleMapsLink || '#';
             
             const infoWindowContent = `
-              <div style="padding: 8px; min-width: 200px; color: black;">
-                <strong style="font-size: 14px;">
-                  ${assignment.cliente?.razon_social || 'Cliente sin nombre'}
-                </strong>
-                <p style="font-size: 13px; margin: 4px 0; color: #666;">
+              <div style="padding: 8px; min-width: 200px; color: #111827;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                  <strong style="font-size: 14px; color: #111827;">
+                    ${assignment.cliente?.razon_social || 'Cliente sin nombre'}
+                  </strong>
+                  <span style="background-color: #0F766E; color: #ffffff; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;">CARTERA</span>
+                </div>
+                <p style="font-size: 13px; margin: 4px 0; color: #4B5563;">
                   <strong>Vendedor:</strong> ${assignment.vendedor.nombre}
                 </p>
                 <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" 
@@ -367,14 +370,14 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
           const mapsUrl = getGoogleMapsUrlFromCoords(lat, lng);
 
           const infoWindowContent = `
-            <div style="padding: 8px; min-width: 200px; color: black;">
+            <div style="padding: 8px; min-width: 200px; color: #111827;">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <strong style="font-size: 14px;">
+                <strong style="font-size: 14px; color: #111827;">
                   ${assignment.prospecto?.nombre || 'Prospecto sin nombre'}
                 </strong>
-                <span style="background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">NUEVO</span>
+                <span style="background-color: #8B5CF6; color: #ffffff; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;">PROSPECTO</span>
               </div>
-              <p style="font-size: 13px; margin: 4px 0; color: #666;">
+              <p style="font-size: 13px; margin: 4px 0; color: #4B5563;">
                 <strong>Vendedor:</strong> ${assignment.vendedor.nombre}
               </p>
               <a href="${mapsUrl}" target="_blank" rel="noopener noreferrer" 
@@ -437,14 +440,14 @@ const AssignorTodayAssignmentsMap = ({ assignments, vendedorFilter }: AssignorTo
           bounds.extend(place.geometry.location);
 
           const infoWindowContent = `
-            <div style="padding: 8px; min-width: 200px; color: black;">
+            <div style="padding: 8px; min-width: 200px; color: #111827;">
               <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <strong style="font-size: 14px;">
+                <strong style="font-size: 14px; color: #111827;">
                   ${assignment.prospecto?.nombre || 'Prospecto sin nombre'}
                 </strong>
-                <span style="background-color: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;">NUEVO</span>
+                <span style="background-color: #8B5CF6; color: #ffffff; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;">PROSPECTO</span>
               </div>
-              <p style="font-size: 13px; margin: 4px 0; color: #666;">
+              <p style="font-size: 13px; margin: 4px 0; color: #4B5563;">
                 <strong>Vendedor:</strong> ${assignment.vendedor.nombre}
               </p>
               <a href="${getGoogleMapsUrl(assignment.prospecto_place_id!)}" target="_blank" rel="noopener noreferrer" 

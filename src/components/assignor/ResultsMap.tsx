@@ -25,6 +25,7 @@ interface ClientLocation {
   direccion: string;
   vendedor?: string;
   estado_cliente?: string;
+  es_prospecto?: boolean;
   hasOverlap?: boolean;
 }
 
@@ -114,6 +115,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                 lng: lng,
                 direccion: sucursal.direccion || sucursal.direccion_principal || "",
                 vendedor,
+                es_prospecto: !!sucursal.es_prospecto,
                 estado_cliente,
               };
             } else {
@@ -143,6 +145,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     lng: lng,
                     direccion: sucursal.direccion || sucursal.direccion_principal || "",
                     vendedor,
+                    es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente,
                   };
                 }
@@ -168,6 +171,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     lng: place.geometry.location.lng(),
                     direccion: place.formatted_address || sucursal.direccion || "",
                     vendedor,
+                    es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente,
                   });
                 } else {
@@ -192,6 +196,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     lng: place.geometry.location.lng(),
                     direccion: place.formatted_address || sucursal.direccion_principal || sucursal.direccion || "",
                     vendedor,
+                    es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
                   });
                 } else {
@@ -225,6 +230,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     lng: loc.lng(),
                     direccion: res[0].formatted_address,
                     vendedor,
+                    es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
                   });
                 } else {
@@ -304,15 +310,20 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
           icon: createColoredMarkerIcon(vendorColor),
         });
 
+        const tipoLabel = location.es_prospecto ? 'Prospecto nuevo' : 'Cliente de cartera';
+        const tipoBg = location.es_prospecto ? '#8B5CF6' : '#0F766E';
         const infoWindow = new google.maps.InfoWindow({
           content: `
-            <div style="padding: 8px;">
-              <h3 style="margin: 0 0 4px 0; font-weight: 600;">${location.name}</h3>
-              <p style="margin: 0; font-size: 12px; color: #666;">${location.direccion}</p>
-              ${location.vendedor ? `<p style="margin: 4px 0 0 0; font-size: 12px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${vendorColor};margin-right:4px;vertical-align:middle;"></span>${location.vendedor}</p>` : ''}
+            <div style="padding: 8px; max-width: 260px; color: #111827; font-family: system-ui, sans-serif;">
+              <h3 style="margin: 0 0 6px 0; font-weight: 600; font-size: 14px; color: #111827;">${location.name}</h3>
+              <span style="display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #ffffff; background: ${tipoBg};">${tipoLabel}</span>
+              ${location.estado_cliente ? `<span style="display:inline-block; margin-left:4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; color: #111827; background: #E5E7EB;">${location.estado_cliente}</span>` : ''}
+              <p style="margin: 6px 0 0 0; font-size: 12px; color: #4B5563;">${location.direccion}</p>
+              ${location.vendedor ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #111827;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${vendorColor};margin-right:6px;vertical-align:middle;"></span>${location.vendedor}</p>` : ''}
             </div>
           `,
         });
+
 
         marker.addListener("click", () => {
           infoWindow.open(map, marker!);

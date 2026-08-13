@@ -143,6 +143,11 @@ const VendedorAssignmentsMap = ({ assignments }: VendedorAssignmentsMapProps) =>
                   </h3>
                    <div style="margin-bottom: 8px;">
                     <span style="display: inline-block; padding: 2px 8px; background: ${
+                      esProspecto ? '#8B5CF6' : '#0F766E'
+                    }; color: white; border-radius: 999px; font-size: 11px; font-weight: 600; margin-right: 4px;">
+                      ${esProspecto ? 'PROSPECTO' : 'CARTERA'}
+                    </span>
+                    <span style="display: inline-block; padding: 2px 8px; background: ${
                       getStateColor(estado)
                     }; color: white; border-radius: 4px; font-size: 12px;">
                       ${estado}
