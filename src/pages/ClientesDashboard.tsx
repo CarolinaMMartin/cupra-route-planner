@@ -219,9 +219,11 @@ const ClientesDashboard = () => {
     clientesData.forEach(cliente => {
       const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
       if (vendedor) uniqueVendedores.add(vendedor);
+      (cliente.todos_vendedores || []).forEach(v => { if (v) uniqueVendedores.add(v); });
     });
     return Array.from(uniqueVendedores).sort();
   }, [clientesData]);
+
 
   const canales = useMemo(() => {
     const uniqueCanales = new Set<string>();
