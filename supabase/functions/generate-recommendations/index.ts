@@ -1878,6 +1878,11 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
         prospectos_de_maps: obtMapsLive,
         radio_final_km: Number(radioFinal.toFixed(1)),
         clientes_propios_en_zona: (vendorClientPools.get(vendedor.user_id) || []).length,
+        cuentas_prioritarias_fuera_de_zona: cuentasFueraDeRuta.map((r) => ({
+          nombre: r.nombre,
+          barrio: r.barrio,
+          dias_sin_comprar: r.dias,
+        })),
       });
 
     }
@@ -2220,7 +2225,8 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
     if (enrichedRecommendations.length === 0) {
       throw new Error("No se encontraron candidatos disponibles para ningún vendedor con los filtros seleccionados.");
     }
-    const zonaTexto = [...barriosFinales, ...comunasFinales].filter(Boolean).join(", ") || "la zona seleccionada";
+    // Normalización: "VILLA URQUIZA" y "Villa Urquiza" son la misma zona.
+    const zonaTexto = dedupeBarrios([...barriosFinales, ...comunasFinales]).join(", ") || "la zona seleccionada";
     const avisosCobertura: string[] = [];
     for (const vendedor of vendedoresData) {
       const cob = coberturaPorVendedor.get(vendedor.user_id);
@@ -2244,6 +2250,12 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       if (cob.prospectos_de_maps > 0) {
         partes.push(`Se buscaron lugares nuevos en el mapa: ${cob.prospectos_de_maps} se incorporaron a la ruta de ${vendedor.nombre}.`);
       }
+      if (cob.cuentas_prioritarias_fuera_de_zona?.length > 0) {
+        const lista = cob.cuentas_prioritarias_fuera_de_zona
+          .map((c: any) => `${c.nombre}${c.dias ? ` (${c.dias} días sin comprar)` : ""}${c.barrio ? ` en ${c.barrio}` : ""}`)
+          .join(", ");
+        partes.push(`Fuera de esta zona quedaron cuentas importantes de ${vendedor.nombre}: ${lista}. Conviene armarles una ruta propia.`);
+      }
       if (cob.total < 8) {
         partes.push(`Sólo se pudieron armar ${cob.total} de 8 visitas para ${vendedor.nombre} con los filtros elegidos. Probá ampliar la zona.`);
       }
@@ -2251,6 +2263,14 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       if (propios === 0 && cob.total > 0) {
         console.log(`ℹ️ ${vendedor.nombre}: ruta 100% de prospección.`);
       }
+    }
+    if (posiblesClientesExistentes.size > 0) {
+      const muestras = Array.from(posiblesClientesExistentes.values()).slice(0, 3)
+        .map((v) => `${v.cliente}${v.vendedor ? ` (atiende ${v.vendedor})` : ""}`)
+        .join(", ");
+      avisosCobertura.push(
+        `Se apartaron ${posiblesClientesExistentes.size} lugares que podrían ser clientes ya activos de la casa: ${muestras}. Verificar antes de visitarlos como nuevos.`,
+      );
     }
     const cuotaIncompleta = avisosCobertura.length > 0
       ? avisosCobertura.join(" ")
