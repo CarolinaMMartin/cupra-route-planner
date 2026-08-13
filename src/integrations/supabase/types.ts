@@ -376,6 +376,7 @@ export type Database = {
       clientes: {
         Row: {
           barrio_principal: string | null
+          cadencia_dias: number | null
           canal: string | null
           cantidad_ordenes: number | null
           categoria_recencia: string | null
@@ -390,11 +391,14 @@ export type Database = {
           etiquetas: string[] | null
           excluir_recomendaciones: boolean | null
           fantasia: string | null
+          fecha_ultima_nc: string | null
           id: string
           last_recommendation_at: string | null
+          monto_notas_credito: number | null
           monto_total_historico: number | null
           motivo_exclusion: string | null
           participacion_mercado: number | null
+          precio_promedio_caja: number | null
           primera_compra: string | null
           productos_comprados: string[] | null
           provincia_principal: string | null
@@ -417,6 +421,7 @@ export type Database = {
         }
         Insert: {
           barrio_principal?: string | null
+          cadencia_dias?: number | null
           canal?: string | null
           cantidad_ordenes?: number | null
           categoria_recencia?: string | null
@@ -431,11 +436,14 @@ export type Database = {
           etiquetas?: string[] | null
           excluir_recomendaciones?: boolean | null
           fantasia?: string | null
+          fecha_ultima_nc?: string | null
           id?: string
           last_recommendation_at?: string | null
+          monto_notas_credito?: number | null
           monto_total_historico?: number | null
           motivo_exclusion?: string | null
           participacion_mercado?: number | null
+          precio_promedio_caja?: number | null
           primera_compra?: string | null
           productos_comprados?: string[] | null
           provincia_principal?: string | null
@@ -458,6 +466,7 @@ export type Database = {
         }
         Update: {
           barrio_principal?: string | null
+          cadencia_dias?: number | null
           canal?: string | null
           cantidad_ordenes?: number | null
           categoria_recencia?: string | null
@@ -472,11 +481,14 @@ export type Database = {
           etiquetas?: string[] | null
           excluir_recomendaciones?: boolean | null
           fantasia?: string | null
+          fecha_ultima_nc?: string | null
           id?: string
           last_recommendation_at?: string | null
+          monto_notas_credito?: number | null
           monto_total_historico?: number | null
           motivo_exclusion?: string | null
           participacion_mercado?: number | null
+          precio_promedio_caja?: number | null
           primera_compra?: string | null
           productos_comprados?: string[] | null
           provincia_principal?: string | null
