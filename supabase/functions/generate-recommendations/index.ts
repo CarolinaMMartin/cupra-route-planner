@@ -1255,6 +1255,7 @@ Deno.serve(async (req) => {
     const extraProspectosLoaded: any[] = [];
     const liveDiscoveredIds = new Set<string>();
     const coberturaPorVendedor = new Map<string, any>();
+    const cuentasFueraPorVendedor = new Map<string, { nombre: string; barrio: string | null; dias: number | null }[]>();
 
     for (const vendedor of vendedoresData) {
       // === Filter vendor's own clients ===
@@ -1299,15 +1300,19 @@ Deno.serve(async (req) => {
         || zoneCenterFallback;
 
       // Cuentas de alta prioridad que quedaron fuera del núcleo elegido: se avisan.
-      const cuentasFueraDeRuta = rankingCartera
+      const hotspotRef = vendorHotspot;
+      const cuentasFueraDeRuta = !hotspotRef ? [] : rankingCartera
         .filter((r) => r.prioridad > 0)
         .slice(0, 3)
         .filter((r) => {
           const match = myValidClients.find((c) => (c.fantasia || c.razon_social) === r.nombre);
           const place = match ? placesMap.get(match.client_id) : null;
           if (!place?.lat || !place?.long) return false;
-          return calcularDistanciaKm(vendorHotspot.lat, vendorHotspot.lng, Number(place.lat), Number(place.long)) > HARD_RADIUS_KM;
+          return calcularDistanciaKm(hotspotRef.lat, hotspotRef.lng, Number(place.lat), Number(place.long)) > HARD_RADIUS_KM;
         });
+      cuentasFueraPorVendedor.set(vendedor.user_id, cuentasFueraDeRuta.map((r) => ({
+        nombre: r.nombre, barrio: r.barrio, dias: r.dias,
+      })));
 
       if (!vendorHotspot) {
         console.log(`⚠️ ${vendedor.nombre}: Sin hotspot ni fallback. Saltando.`);
@@ -1890,7 +1895,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
         prospectos_de_maps: obtMapsLive,
         radio_final_km: Number(radioFinal.toFixed(1)),
         clientes_propios_en_zona: (vendorClientPools.get(vendedor.user_id) || []).length,
-        cuentas_prioritarias_fuera_de_zona: cuentasFueraDeRuta.map((r) => ({
+        cuentas_prioritarias_fuera_de_zona: (cuentasFueraPorVendedor.get(vendedor.user_id) || []).map((r) => ({
           nombre: r.nombre,
           barrio: r.barrio,
           dias_sin_comprar: r.dias,
