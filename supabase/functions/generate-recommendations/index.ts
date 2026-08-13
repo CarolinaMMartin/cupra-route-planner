@@ -1258,22 +1258,49 @@ Deno.serve(async (req) => {
 
       console.log(`👤 ${vendedor.nombre}: ${myValidClients.length} clientes propios en zona`);
 
-      // === HOTSPOT: Centroid of THIS vendor's clients with coords ===
+      // === RANKING PRIMERO, ZONA DESPUÉS ===
+      // Se rankean TODAS las cuentas del vendedor por prioridad comercial
+      // (valor × urgencia contra su cadencia × margen) y recién entonces se
+      // elige el núcleo de la ruta que concentra más valor recuperable,
+      // exigiendo un mínimo de cuentas propias antes que rellenar con prospectos.
       const vendorCoords: AnchorPoint[] = [];
+      const vendorPoints: { lat: number; lng: number; prioridad: number }[] = [];
+      const rankingCartera: { nombre: string; barrio: string | null; prioridad: number; dias: number | null }[] = [];
       for (const c of myValidClients) {
         const place = placesMap.get(c.client_id);
+        const prioridad = prioridadBase(c, precioCajaCanal);
+        rankingCartera.push({
+          nombre: c.fantasia || c.razon_social || 'Sin nombre',
+          barrio: normalizeBarrio(place?.barrio_principal || c.barrio_principal) || null,
+          prioridad,
+          dias: c.dias_desde_ultima_compra ?? null,
+        });
         if (place?.lat && place?.long) {
           const lat = Number(place.lat);
           const lng = Number(place.long);
           if (lat >= -60 && lat <= -20 && lng >= -80 && lng <= -40) {
             vendorCoords.push({ lat, lng });
+            vendorPoints.push({ lat, lng, prioridad });
           }
         }
       }
+      rankingCartera.sort((a, b) => b.prioridad - a.prioridad);
 
-      // Hotspot = densest cluster of vendor's own clients
-      // FALLBACK: if vendor has no clients, use zone center (clients or prospects)
-      const vendorHotspot = findDensestHotspot(vendorCoords, 2.0) || zoneCenterFallback;
+      const mejorCluster = pickBestCluster(vendorPoints, HARD_RADIUS_KM, 4);
+      const vendorHotspot = mejorCluster?.anchor
+        || findDensestHotspot(vendorCoords, 2.0)
+        || zoneCenterFallback;
+
+      // Cuentas de alta prioridad que quedaron fuera del núcleo elegido: se avisan.
+      const cuentasFueraDeRuta = rankingCartera
+        .filter((r) => r.prioridad > 0)
+        .slice(0, 3)
+        .filter((r) => {
+          const match = myValidClients.find((c) => (c.fantasia || c.razon_social) === r.nombre);
+          const place = match ? placesMap.get(match.client_id) : null;
+          if (!place?.lat || !place?.long) return false;
+          return calcularDistanciaKm(vendorHotspot.lat, vendorHotspot.lng, Number(place.lat), Number(place.long)) > HARD_RADIUS_KM;
+        });
 
       if (!vendorHotspot) {
         console.log(`⚠️ ${vendedor.nombre}: Sin hotspot ni fallback. Saltando.`);
