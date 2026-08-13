@@ -123,8 +123,9 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-3">
-          <div className="space-y-5">
+        <div className="flex-1 min-h-0 overflow-y-auto scroll-visible pr-3">
+          <div className="space-y-5 pb-2">
+
             {/* Datos de contacto y ubicación */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
               <div className="flex items-start gap-2 text-muted-foreground">
