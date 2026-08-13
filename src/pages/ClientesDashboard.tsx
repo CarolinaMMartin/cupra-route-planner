@@ -216,13 +216,13 @@ const ClientesDashboard = () => {
   }, [clientesData, selectedProvincia, selectedCiudad]);
 
   const vendedores = useMemo(() => {
-    const uniqueVendedores = new Set<string>();
+    const todos: string[] = [];
     clientesData.forEach(cliente => {
       const vendedor = cliente.vendedor_actual || cliente.vendedor_principal;
-      if (vendedor) uniqueVendedores.add(vendedor);
-      (cliente.todos_vendedores || []).forEach(v => { if (v) uniqueVendedores.add(v); });
+      if (vendedor) todos.push(vendedor);
+      (cliente.todos_vendedores || []).forEach(v => { if (v) todos.push(v); });
     });
-    return Array.from(uniqueVendedores).sort();
+    return dedupeVendors(todos).sort((a, b) => a.localeCompare(b, 'es'));
   }, [clientesData]);
 
 
