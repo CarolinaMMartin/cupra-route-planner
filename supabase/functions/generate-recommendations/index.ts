@@ -1044,26 +1044,63 @@ Deno.serve(async (req) => {
     if (prospectosError) throw prospectosError;
     let prospectos = (prospectosData || []).filter(p => !prospectosAsignadosHoy.has(p.place_id));
 
-    // ---- 6b. Semantic dedup: exclude prospects that match existing clients ----
-    const clientNamesAndCoords: { name: string; lat: number; lng: number }[] = [];
-    for (const c of allClientesEnZona) {
+    // ---- 6b. GATE prospecto ↔ cartera ----
+    // Google Places no devuelve CUIT: el cruce se hace por nombre de fantasía
+    // normalizado + radio. <200m es el mismo negocio; 200-800m (o mismo barrio)
+    // queda marcado como "posible cliente existente — verificar" y nunca sale
+    // como prospecto frío.
+    const clientNamesAndCoords: ClienteRef[] = [];
+    const barrioPorCliente = new Map<ClienteRef, string | null>();
+    for (const c of [...allClientesEnZona, ...portfolioClients]) {
       const place = placesMap.get(c.client_id);
       if (place?.lat && place?.long) {
-        clientNamesAndCoords.push({ name: c.razon_social || c.fantasia || '', lat: Number(place.lat), lng: Number(place.long) });
+        const ref: ClienteRef = {
+          name: c.fantasia || c.razon_social || '',
+          lat: Number(place.lat),
+          lng: Number(place.long),
+          vendedor: c.vendedor_actual || c.vendedor_principal || null,
+          diasDesdeUltimaCompra: c.dias_desde_ultima_compra ?? null,
+        };
+        clientNamesAndCoords.push(ref);
+        barrioPorCliente.set(ref, place.barrio_principal || c.barrio_principal || null);
+        if (c.razon_social && c.fantasia && c.razon_social !== c.fantasia) {
+          const alias: ClienteRef = { ...ref, name: c.razon_social };
+          clientNamesAndCoords.push(alias);
+          barrioPorCliente.set(alias, barrioPorCliente.get(ref) || null);
+        }
       }
     }
+    const barrioDeCliente = (cliente: ClienteRef) => barrioPorCliente.get(cliente) || null;
 
-    prospectos = prospectos.filter(p => {
+    // place_id -> cliente existente que hay que verificar antes de tocar timbre.
+    const posiblesClientesExistentes = new Map<string, { cliente: string; vendedor: string | null; dias: number | null }>();
+    const registrarGate = (p: any): boolean => {
       if (p.client_id) return false;
-      if (!p.latitud || !p.longitud) return true;
-      const pLat = Number(p.latitud);
-      const pLng = Number(p.longitud);
-      for (const c of clientNamesAndCoords) {
-        const dist = calcularDistanciaKm(c.lat, c.lng, pLat, pLng);
-        if (dist < 0.1 && nameTokenOverlap(p.nombre, c.name) >= 0.4) return false;
+      const gate = evaluarProspectoContraCartera(p, clientNamesAndCoords, barrioDeCliente);
+      if (gate.estado === "duplicado") return false;
+      if (gate.estado === "posible_cliente") {
+        posiblesClientesExistentes.set(p.place_id, {
+          cliente: gate.cliente.name,
+          vendedor: gate.cliente.vendedor ?? null,
+          dias: gate.cliente.diasDesdeUltimaCompra ?? null,
+        });
+        return false;
       }
       return true;
-    });
+    };
+
+    prospectos = prospectos.filter(registrarGate);
+    if (posiblesClientesExistentes.size > 0) {
+      console.log(`🛑 ${posiblesClientesExistentes.size} prospectos apartados por posible coincidencia con cartera.`);
+    }
+
+    // Precio promedio por caja del canal: base del margen realizado.
+    const preciosCaja = [...allClientesEnZona, ...portfolioClients]
+      .map((c) => Number(c.precio_promedio_caja))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    const precioCajaCanal = preciosCaja.length > 0
+      ? preciosCaja.reduce((a, b) => a + b, 0) / preciosCaja.length
+      : 0;
 
     // If the internal portfolio cannot cover 8 visits per seller, discover
     // enough new prospects now and persist them in the operational repository.
