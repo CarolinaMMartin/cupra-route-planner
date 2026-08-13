@@ -1748,6 +1748,30 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
       }
       if (swaps > 0) console.log(`🧭 Auditoría territorial: ${swaps} intercambios entre vendedores`);
 
+      // --- Chequeo de compacidad: la ruta del día tiene que ser caminable ---
+      const rutasDispersas: string[] = [];
+      for (const v of vendedoresData) {
+        const puntos = validatedRecs
+          .filter((r: any) => r.vendedor_id === v.user_id)
+          .map((r: any) => candidateOf(v.user_id, r.client_id))
+          .filter((c): c is ScoredCandidate => !!c?.lat && !!c?.long);
+        let spread = 0;
+        for (let i = 0; i < puntos.length; i++) {
+          for (let j = i + 1; j < puntos.length; j++) {
+            spread = Math.max(spread, calcularDistanciaKm(
+              Number(puntos[i].lat), Number(puntos[i].long),
+              Number(puntos[j].lat), Number(puntos[j].long),
+            ));
+          }
+        }
+        if (spread > MAX_ROUTE_SPREAD_KM) {
+          rutasDispersas.push(`${v.nombre} (${spread.toFixed(1)}km entre extremos)`);
+        }
+      }
+      if (rutasDispersas.length > 0) {
+        console.warn(`⚠️ Rutas poco compactas: ${rutasDispersas.join("; ")}`);
+      }
+
       // --- Segunda pasada de IA sobre la distribución total ---
       if (vendedoresData.length > 1) {
         const resumenDistribucion = vendedoresData.map(v => {
