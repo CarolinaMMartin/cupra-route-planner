@@ -598,12 +598,13 @@ const ClientesDashboard = () => {
                   <SelectTrigger className="bg-muted/50 border-border/60">
                     <SelectValue placeholder="Todos" />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover z-50">
+                  <SelectContent className="bg-popover z-50 max-h-72 overflow-y-auto scroll-visible">
                     <SelectItem value="all">Todos</SelectItem>
                     {vendedores.map(v => (
-                      <SelectItem key={v} value={v}>{v}</SelectItem>
+                      <SelectItem key={v} value={v}>{toTitleCase(v)}</SelectItem>
                     ))}
                   </SelectContent>
+
                 </Select>
               </div>
 
