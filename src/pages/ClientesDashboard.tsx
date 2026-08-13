@@ -710,16 +710,86 @@ const ClientesDashboard = () => {
           </Card>
         </div>
 
-        {/* Tabs: Rankings / KPIs por Zona */}
-        <Tabs defaultValue="rankings" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+        {/* Tabs: Clientes / Rankings / KPIs por Zona */}
+        <Tabs defaultValue="clientes" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-6">
+            <TabsTrigger value="clientes">Clientes</TabsTrigger>
             <TabsTrigger value="rankings">Top Rankings</TabsTrigger>
             <TabsTrigger value="zonas">KPIs por Zona</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="zonas">
-            <ZonaKPIs clientesData={filteredData} ventasData={ventasRaw} formatCurrency={formatCurrency} />
+          <TabsContent value="clientes">
+            <Card className="matte-card">
+              <CardHeader className="pb-4">
+                <CardTitle className="section-title flex items-center gap-2">
+                  <Users className="h-4 w-4 text-foreground/40" />
+                  Clientes ({clientesResumen.length})
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    Clic en un cliente para ver su ficha completa
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {clientesResumen.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    No hay clientes que coincidan con la búsqueda.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto max-h-[560px] overflow-y-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-background z-10">
+                        <tr className="text-xs uppercase text-muted-foreground border-b border-border/40">
+                          <th className="text-left py-2 font-medium">Cliente</th>
+                          <th className="text-left py-2 font-medium">Zona</th>
+                          <th className="text-left py-2 font-medium">Vendedor</th>
+                          <th className="text-right py-2 font-medium">Tickets</th>
+                          <th className="text-right py-2 font-medium">Últ. compra</th>
+                          <th className="text-right py-2 font-medium">Facturación</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {clientesResumen.slice(0, 300).map(({ cliente, ventas, tickets }) => (
+                          <tr
+                            key={cliente.client_id || cliente.id}
+                            onClick={() => { setSelectedCliente(cliente); setDetalleOpen(true); }}
+                            className="border-b border-border/20 cursor-pointer hover:bg-card/60 transition-colors"
+                          >
+                            <td className="py-2 pr-3">
+                              <span className="font-medium">{cliente.razon_social || cliente.fantasia || 'Sin nombre'}</span>
+                              {cliente.cuit_dni && (
+                                <span className="block text-xs text-muted-foreground">{cliente.cuit_dni}</span>
+                              )}
+                            </td>
+                            <td className="py-2 pr-3 text-muted-foreground">
+                              {[cliente.barrio_principal, cliente.ciudad_principal].filter(Boolean).join(' · ') || '—'}
+                            </td>
+                            <td className="py-2 pr-3 text-muted-foreground">
+                              {cliente.vendedor_actual || cliente.vendedor_principal || '—'}
+                            </td>
+                            <td className="py-2 text-right text-muted-foreground">{tickets || 0}</td>
+                            <td className="py-2 text-right text-muted-foreground">
+                              {cliente.ultima_compra ? new Date(`${cliente.ultima_compra}T12:00:00`).toLocaleDateString('es-AR') : '—'}
+                            </td>
+                            <td className="py-2 text-right font-semibold text-accent">{formatCurrency(ventas)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {clientesResumen.length > 300 && (
+                      <p className="text-xs text-muted-foreground pt-3">
+                        Mostrando los primeros 300 de {clientesResumen.length}. Refiná la búsqueda para ver más.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
+
+          <TabsContent value="zonas">
+            <ZonaKPIs clientesData={filteredData} ventasData={filteredVentas} formatCurrency={formatCurrency} />
+          </TabsContent>
+
 
           <TabsContent value="rankings">
 
