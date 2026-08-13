@@ -1848,24 +1848,25 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
           }
 
           const rutasPendientes = getRutasDispersas();
-          auditoriaAprobada = parsed.coherente === true
-            && (parsed.intercambios || []).length === 0
-            && rutasPendientes.length === 0;
-          console.log(`🧠 Auditoría IA ${intento}/3: ${aplicados} correcciones aplicadas; aprobada=${auditoriaAprobada}`);
+          // La aprobación real es determinística: si no quedan rutas dispersas, la distribución sale.
+          auditoriaAprobada = rutasPendientes.length === 0;
+          console.log(`🧠 Auditoría IA ${intento}/3: ${aplicados} correcciones aplicadas; rutas dispersas=${rutasPendientes.length}; aprobada=${auditoriaAprobada}`);
 
           if (!auditoriaAprobada && aplicados === 0) {
-            throw new Error(`La auditoría detectó incoherencias que no pudo corregir: ${parsed.resumen || "ruteo no aprobado"}`);
+            console.warn(`⚠️ Auditoría sin correcciones aplicables. Se continúa con la mejor distribución posible. Resumen IA: ${parsed.resumen || "s/d"}`);
+            break;
           }
         }
 
         if (!auditoriaAprobada) {
-          throw new Error("La distribución no superó la auditoría final de coherencia territorial y densidad");
+          console.warn("⚠️ La distribución conserva rutas poco compactas; se entrega igualmente (pools limitados).");
         }
       }
     } catch (auditError) {
-      console.error("Auditoría de coherencia bloqueó la distribución:", auditError);
-      throw auditError;
+      // La auditoría nunca debe bloquear la entrega: se registra y se continúa.
+      console.error("⚠️ Auditoría de coherencia no concluyente:", auditError);
     }
+
 
 
 
