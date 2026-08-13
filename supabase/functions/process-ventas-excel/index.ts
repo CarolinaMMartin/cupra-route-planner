@@ -1014,8 +1014,10 @@ Deno.serve(async (req) => {
         updateData[campo] = (c as any)[campo];
       }
       const prev = maestroPorCliente.get(String(c.client_id));
-      // No pisar el vendedor oficial de cartera con el de la última venta
-      if (prev?.vendedor_actual) delete updateData.vendedor_actual;
+      // Regla de negocio: manda el ÚLTIMO que vendió. Sólo se conserva el
+      // vendedor del maestro cuando las ventas no permiten determinarlo.
+      if (!updateData.vendedor_actual && prev?.vendedor_actual) delete updateData.vendedor_actual;
+
       // No borrar etiquetas/categorías del maestro con un array vacío
       if (!updateData.etiquetas || updateData.etiquetas.length === 0) {
         if (prev?.etiquetas && prev.etiquetas.length > 0) delete updateData.etiquetas;
