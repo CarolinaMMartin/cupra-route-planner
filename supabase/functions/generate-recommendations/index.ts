@@ -1465,26 +1465,46 @@ Deno.serve(async (req) => {
     }
 
     // ============================================================
-    // 10. BUILD PROMPT
+    // 10. BUILD PROMPT — atributos de negocio, sin coordenadas ni scores
     // ============================================================
-    const formatCandidate = (c: ScoredCandidate, i: number) =>
-      `${i + 1}. [${c.client_id}] ${c.razon_social} | estado:${c.estado_comercial} | score:${c.score_total} | dist:${c.distancia_km}km | barrio:${c.barrio || '?'} | días_sin_compra:${c.dias_desde_ultima_compra ?? 'N/A'} | ticket:$${c.ticket_promedio ?? 0}${c.tipo_negocio ? ` | tipo:${c.tipo_negocio}` : ''}${c.feedbacks_recientes.length > 0 ? ` | feedbacks: ${c.feedbacks_recientes.map(f => f.feedback).join('; ')}` : ''}`;
+    const cuadras = (km: number) => Math.max(1, Math.round((km * 1000) / 100));
+    const formatCandidate = (c: ScoredCandidate, i: number) => {
+      const bloque = c.es_prospecto
+        ? "PROSPECTO"
+        : (c.estado_comercial === "ACTIVO" ? "CARTERA ACTIVA" : "REACTIVACIÓN");
+      const compra = c.es_prospecto
+        ? "sin historia de compra"
+        : (c.dias_desde_ultima_compra === null || c.dias_desde_ultima_compra === undefined
+          ? "sin fecha de última compra"
+          : `${c.dias_desde_ultima_compra} días sin comprar`);
+      const ticket = !c.es_prospecto && c.ticket_promedio
+        ? `, ticket promedio $${Math.round(Number(c.ticket_promedio)).toLocaleString("es-AR")}`
+        : "";
+      const rubro = c.tipo_negocio ? `, ${c.tipo_negocio}` : "";
+      const reputacion = c.es_prospecto && c.rating ? `, reputación ${c.rating}` : "";
+      const feedback = c.feedbacks_recientes.length > 0
+        ? ` | comentario del vendedor: ${c.feedbacks_recientes.map(f => f.feedback).join("; ")}`
+        : "";
+      return `${i + 1}. [${c.client_id}] ${c.razon_social} | ${bloque} | barrio ${c.barrio || "s/d"} | a ${cuadras(c.distancia_km)} cuadras del arranque de la ruta | ${compra}${ticket}${rubro}${reputacion}${feedback}`;
+    };
 
     const vendorSections = vendedoresData.map(v => {
       const clients = vendorClientPools.get(v.user_id) || [];
       const prospects = vendorProspectPools.get(v.user_id) || [];
-      const hotspot = vendorHotspots.get(v.user_id);
+      const activos = clients.filter(c => c.estado_comercial === "ACTIVO");
+      const reactivables = clients.filter(c => c.estado_comercial !== "ACTIVO");
 
       return `
 ### VENDEDOR: ${v.nombre} (ID: ${v.user_id})
-Hotspot: ${hotspot ? `${hotspot.lat.toFixed(4)}, ${hotspot.lng.toFixed(4)}` : 'N/A'} | Radio: ${HARD_RADIUS_KM}km
-Elegí 8 visitas. PRIORIDAD: clientes existentes primero, prospectos solo para completar.
-Si hay clientes con >90 días sin compra, incluí al menos 1 para recuperación.
+Objetivo del día: ${CUPO_CARTERA_ACTIVA} de cartera activa + ${CUPO_REACTIVACION} de reactivación + ${CUPO_PROSPECTOS} prospectos = 8 visitas caminables.
 
-CLIENTES DE LA CARTERA (${clients.length} — priorizá estos):
-${clients.length > 0 ? clients.map(formatCandidate).join('\n') : '(sin clientes en zona)'}
+CARTERA ACTIVA (${activos.length}):
+${activos.length > 0 ? activos.map(formatCandidate).join('\n') : '(sin clientes activos en la zona)'}
 
-PROSPECTOS DISPONIBLES (${prospects.length} — solo para completar):
+REACTIVACIÓN — dormidos o perdidos (${reactivables.length}):
+${reactivables.length > 0 ? reactivables.map(formatCandidate).join('\n') : '(sin clientes para reactivar en la zona)'}
+
+PROSPECTOS CERCANOS (${prospects.length}):
 ${prospects.length > 0 ? prospects.slice(0, 15).map(formatCandidate).join('\n') : '(sin prospectos disponibles)'}`;
     }).join('\n\n');
 
@@ -1494,12 +1514,14 @@ ${prospects.length > 0 ? prospects.slice(0, 15).map(formatCandidate).join('\n') 
 ═══════════════════════════════════════════════════════════
 ⚡ INSTRUCCIONES ADICIONALES DEL CLIENTE:
 ${instrucciones_adicionales}
-Aplicá estas instrucciones sin alterar la regla obligatoria: clientes internos primero y prospectos sólo para completar hasta 8.
+Aplicá estas instrucciones sin alterar la composición objetivo (4 cartera activa + 2 reactivación + 2 prospectos).
 ═══════════════════════════════════════════════════════════
 ` : ''}${vendorSections}
 
 TOTAL ESPERADO: ${vendedoresData.length * 8} recomendaciones (8 por vendedor).
-Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${hasCustomInstructions ? `\nRECORDÁ: aplicá las instrucciones dentro de cada grupo, manteniendo clientes internos antes que prospectos.` : ' Priorizá clientes sobre prospectos.'}`;
+Cada client_id UNA SOLA VEZ en toda la respuesta.
+La justificación es para un asignador comercial: explicá en una o dos frases POR QUÉ conviene visitar ese lugar hoy (relación con el cliente, tiempo sin comprar, potencial, cercanía con el resto de la ruta). PROHIBIDO usar coordenadas, "hotspot", "score", números de distancia en km o cualquier jerga interna del sistema.${hasCustomInstructions ? `\nRECORDÁ: aplicá las instrucciones respetando la composición objetivo.` : ''}`;
+
 
     console.log(`📏 Prompt: ${prompt.length} chars`);
 
