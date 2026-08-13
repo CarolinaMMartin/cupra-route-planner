@@ -30,6 +30,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ZonaKPIs from "@/components/clientes/ZonaKPIs";
 import ClienteDetalleDialog from "@/components/clientes/ClienteDetalleDialog";
+import { toTitleCase } from "@/lib/format";
+
 
 interface BarrioVentas {
   barrio: string;
