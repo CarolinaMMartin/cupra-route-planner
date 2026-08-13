@@ -319,7 +319,7 @@ const ClientesDashboard = () => {
   const topCiudades = useMemo(() => {
     const ciudadMap = new Map<string, { display: string; ventas: number }>();
     let sinCiudadVentas = 0;
-    for (const v of ventasRaw) {
+    for (const v of filteredVentas) {
       const monto = Number(v.facturacion_ars || 0);
       const ciudad = v.ciudad;
       if (ciudad) {
@@ -340,12 +340,12 @@ const ClientesDashboard = () => {
       result.sort((a, b) => b.ventas - a.ventas);
     }
     return result.slice(0, 11);
-  }, [ventasRaw]);
+  }, [filteredVentas]);
 
   // Top Clientes desde ventas_cupra
   const topClientes = useMemo(() => {
     const clienteMap = new Map<string, { razon_social: string; monto_total: number; tickets: Set<string> }>();
-    for (const v of ventasRaw) {
+    for (const v of filteredVentas) {
       const rs = v.razon_social || 'Sin nombre';
       if (!clienteMap.has(rs)) clienteMap.set(rs, { razon_social: rs, monto_total: 0, tickets: new Set() });
       const entry = clienteMap.get(rs)!;
@@ -356,12 +356,55 @@ const ClientesDashboard = () => {
       .map(c => ({ razon_social: c.razon_social, monto_total: c.monto_total, ordenes: c.tickets.size }))
       .sort((a, b) => b.monto_total - a.monto_total)
       .slice(0, 10);
-  }, [ventasRaw]);
+  }, [filteredVentas]);
 
   // TAREA 4: Top vendedores desde ventas_cupra (fuente transaccional)
   const topVendedores = useMemo(() => {
-    return ventasVendedorData.slice(0, 10);
-  }, [ventasVendedorData]);
+    if (!hasActiveFilters) return ventasVendedorData.slice(0, 10);
+    const map = new Map<string, { ventas: number; tickets: Set<string> }>();
+    for (const v of filteredVentas) {
+      if (!v.vendedor) continue;
+      if (!map.has(v.vendedor)) map.set(v.vendedor, { ventas: 0, tickets: new Set() });
+      const e = map.get(v.vendedor)!;
+      e.ventas += Number(v.facturacion_ars || 0);
+      if (v.ticket) e.tickets.add(v.ticket);
+    }
+    return Array.from(map.entries())
+      .map(([vendedor, d]) => ({ vendedor, ventas: d.ventas, tickets: d.tickets.size }))
+      .sort((a, b) => b.ventas - a.ventas)
+      .slice(0, 10);
+  }, [ventasVendedorData, filteredVentas, hasActiveFilters]);
+
+  // Resumen por cliente (para la pestaña de listado + ficha)
+  const clientesResumen = useMemo(() => {
+    const byId = new Map<string, { ventas: number; tickets: Set<string> }>();
+    const byRs = new Map<string, { ventas: number; tickets: Set<string> }>();
+    for (const v of ventasRaw) {
+      const monto = Number(v.facturacion_ars || 0);
+      if (v.client_id) {
+        const k = String(v.client_id);
+        if (!byId.has(k)) byId.set(k, { ventas: 0, tickets: new Set() });
+        const e = byId.get(k)!; e.ventas += monto; if (v.ticket) e.tickets.add(v.ticket);
+      }
+      if (v.razon_social) {
+        const k = normalizeRS(v.razon_social);
+        if (!byRs.has(k)) byRs.set(k, { ventas: 0, tickets: new Set() });
+        const e = byRs.get(k)!; e.ventas += monto; if (v.ticket) e.tickets.add(v.ticket);
+      }
+    }
+    return filteredData
+      .map(c => {
+        const stats = (c.client_id && byId.get(String(c.client_id)))
+          || (c.razon_social && byRs.get(normalizeRS(c.razon_social)))
+          || null;
+        return {
+          cliente: c,
+          ventas: stats?.ventas ?? Number(c.monto_total_historico || 0),
+          tickets: stats?.tickets.size ?? Number(c.cantidad_ordenes || 0),
+        };
+      })
+      .sort((a, b) => b.ventas - a.ventas);
+  }, [filteredData, ventasRaw]);
 
   const handleClearFilters = () => {
     setSelectedProvincia("all");
