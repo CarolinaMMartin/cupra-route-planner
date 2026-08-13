@@ -134,18 +134,19 @@ const ClientesDashboard = () => {
 
     // Top Vendedores: GROUP BY vendedor, SUM(facturacion_ars)
     if (allVentas.length > 0) {
-      const vendedorMap = new Map<string, { ventas: number; tickets: Set<string> }>();
+      const vendedorMap = new Map<string, { nombre: string; ventas: number; tickets: Set<string> }>();
       for (const v of allVentas) {
         if (!v.vendedor) continue;
-        if (!vendedorMap.has(v.vendedor)) {
-          vendedorMap.set(v.vendedor, { ventas: 0, tickets: new Set() });
+        const key = vendorKey(v.vendedor);
+        if (!vendedorMap.has(key)) {
+          vendedorMap.set(key, { nombre: v.vendedor, ventas: 0, tickets: new Set() });
         }
-        const entry = vendedorMap.get(v.vendedor)!;
+        const entry = vendedorMap.get(key)!;
         entry.ventas += Number(v.facturacion_ars || 0);
         if (v.ticket) entry.tickets.add(v.ticket);
       }
-      const vendedorArr = Array.from(vendedorMap.entries())
-        .map(([vendedor, data]) => ({ vendedor, ventas: data.ventas, tickets: data.tickets.size }))
+      const vendedorArr = Array.from(vendedorMap.values())
+        .map((data) => ({ vendedor: data.nombre, ventas: data.ventas, tickets: data.tickets.size }))
         .sort((a, b) => b.ventas - a.ventas);
       setVentasVendedorData(vendedorArr);
     }
