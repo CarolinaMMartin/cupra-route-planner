@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Wine, GraduationCap, Calendar, Sparkles, Users } from "lucide-react";
+import { toTitleCase } from "@/lib/format";
 
 const TIPOS_ACTIVACION = [
   { value: 'degustacion', label: 'Degustación', icon: Wine },
@@ -144,7 +145,7 @@ const ActividadesResumen = ({ vendedorIdFilter }: ActividadesResumenProps) => {
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2">
                       <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-sm font-medium">{v.nombre}</span>
+                      <span className="text-sm font-medium">{toTitleCase(v.nombre)}</span>
                     </div>
                     <span className={`text-sm font-bold ${cumple ? 'text-emerald-500' : 'text-foreground'}`}>
                       {v.activaciones.length}/{META_MENSUAL}

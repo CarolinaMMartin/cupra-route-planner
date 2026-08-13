@@ -23,6 +23,7 @@ import {
 import { Sucursal } from "@/types/sales";
 import ExcludeClientButton from "./ExcludeClientButton";
 import { getGoogleMapsUrl } from "@/lib/utils";
+import { toTitleCase } from "@/lib/format";
 
 interface ClientDetailCardProps {
   cliente: Sucursal;
@@ -85,7 +86,7 @@ const ClientDetailCard = ({
               {cliente.vendedor_actual && cliente.vendedor_principal && 
                cliente.vendedor_actual.toUpperCase() !== cliente.vendedor_principal.toUpperCase() && (
                 <p className="text-orange-500 text-[10px]">
-                  Anterior: {cliente.vendedor_principal}
+                  Anterior: {toTitleCase(cliente.vendedor_principal)}
                 </p>
               )}
             </div>
@@ -445,7 +446,7 @@ const ClientDetailCard = ({
                          cliente.vendedor_actual.toUpperCase() !== cliente.vendedor_principal.toUpperCase() && (
                           <div className="mt-1 flex items-center gap-1">
                             <AlertCircle className="w-3 h-3 text-orange-500" />
-                            <span className="text-orange-500">Anterior: {cliente.vendedor_principal}</span>
+                            <span className="text-orange-500">Anterior: {toTitleCase(cliente.vendedor_principal)}</span>
                           </div>
                         )}
                       </div>

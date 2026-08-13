@@ -38,6 +38,7 @@ import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
+import { toTitleCase } from "@/lib/format";
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -458,7 +459,7 @@ const TableAssignment = ({
             <SelectItem value="all">Todos los vendedores</SelectItem>
             <SelectItem value="unassigned">Sin asignar</SelectItem>
             {vendedores.map((v) => (
-              <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
+              <SelectItem key={v.id} value={v.id}>{toTitleCase(v.nombre)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -485,7 +486,7 @@ const TableAssignment = ({
             </div>
             {vendedores.map((v) => (
               <DropdownMenuItem key={v.id} onClick={() => assignSelectedTo(v.id)}>
-                {v.nombre}
+                {toTitleCase(v.nombre)}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -597,7 +598,7 @@ const TableAssignment = ({
                         <SelectContent>
                           <SelectItem value="none">Sin asignar</SelectItem>
                           {vendedores.map((v) => (
-                            <SelectItem key={v.id} value={v.id}>{v.nombre}</SelectItem>
+                            <SelectItem key={v.id} value={v.id}>{toTitleCase(v.nombre)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>

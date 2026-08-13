@@ -14,6 +14,7 @@ import { ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2,
 import { Checkbox } from "@/components/ui/checkbox";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import * as XLSX from "xlsx";
+import { toTitleCase } from "@/lib/format";
 
 type Step = "upload" | "preview" | "processing" | "done";
 type FileKind = "ventas" | "maestro";
@@ -611,7 +612,7 @@ const CargaDatos = () => {
                   <div className="space-y-1.5">
                     {maestroVendedores.map((v) => (
                       <div key={v.vendedor} className="flex justify-between text-sm">
-                        <span className="text-foreground/80">{v.vendedor}</span>
+                        <span className="text-foreground/80">{toTitleCase(v.vendedor)}</span>
                         <span className="text-muted-foreground">{v.clientes.toLocaleString()} clientes</span>
                       </div>
                     ))}
@@ -803,7 +804,7 @@ const CargaDatos = () => {
                           <tbody className="divide-y divide-border/20">
                             {reconciliacion.vendedor_breakdown.map((vb, i) => (
                               <tr key={i} className="hover:bg-muted/10">
-                                <td className="px-3 py-1.5 text-foreground">{vb.vendedor}</td>
+                                <td className="px-3 py-1.5 text-foreground">{toTitleCase(vb.vendedor)}</td>
                                 <td className="px-3 py-1.5 text-right text-foreground/70">{vb.registros.toLocaleString()}</td>
                                 <td className="px-3 py-1.5 text-right font-medium text-foreground">{formatCurrency(vb.monto)}</td>
                               </tr>

@@ -23,6 +23,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { toTitleCase } from "@/lib/format";
 
 interface AppNavProps {
   /** Perfil ya cargado por la página (evita una consulta extra). */
@@ -168,7 +169,7 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
                 {profile && (
                   <>
                     <div className="px-3 py-2">
-                      <p className="text-sm font-medium">{profile.nombre}</p>
+                      <p className="text-sm font-medium">{toTitleCase(profile.nombre)}</p>
                       <p className="text-xs text-muted-foreground capitalize">{profile.rol}</p>
                     </div>
                     <DropdownMenuSeparator />
