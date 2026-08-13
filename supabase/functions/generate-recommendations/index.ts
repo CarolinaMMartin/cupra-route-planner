@@ -620,8 +620,15 @@ function scoreProspects(
     );
     if (hasNegativeFeedback) continue;
 
+    const revisit = revisitMap?.get(p.place_id);
+    let revisitBonus = 0;
+    if (revisit) {
+      if (revisit.dueAt > Date.now()) continue;
+      revisitBonus = 30;
+    }
+
     // Prospects: geo dominates scoring (sorted by proximity to hotspot)
-    const score_total = score_geo * 0.70 + score_comercial * 0.15 + score_rotacion * 0.15 + overlapPenalty;
+    const score_total = score_geo * 0.70 + score_comercial * 0.15 + score_rotacion * 0.15 + overlapPenalty + revisitBonus;
 
     candidates.push({
       client_id: p.place_id,
