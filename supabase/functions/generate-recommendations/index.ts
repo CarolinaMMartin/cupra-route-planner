@@ -11,6 +11,19 @@ const corsHeaders = {
 // ============================================================
 
 import { type AnchorPoint, calcularDistanciaKm, calculateCentroid, findDensestHotspot } from "./geo-hotspot.ts";
+import {
+  alertaNotaCredito,
+  type ClienteRef,
+  dedupeBarrios,
+  esProspectoComercialmenteValido,
+  evaluarProspectoContraCartera,
+  normalizeBarrio,
+  pickBestCluster,
+  potencialProspecto,
+  prioridadBase,
+  prioridadEscala100,
+  prioridadVisita,
+} from "./portfolio-ranking.ts";
 
 // La ruta del día tiene que ser CAMINABLE: todas las visitas cerca unas de otras.
 // Radio operativo único alrededor del núcleo del vendedor.
@@ -104,6 +117,10 @@ function buildRevisitMap(feedbacksMap: Map<string, any[]>): Map<string, RevisitI
 interface ScoreOptions {
   cooldownDays?: number;
   revisitMap?: Map<string, RevisitInfo>;
+  /** Precio promedio por caja del canal, para calcular el margen realizado. */
+  precioCajaCanal?: number;
+  /** Prospectos marcados como "posible cliente existente" (nombre + radio corto). */
+  posiblesClientes?: Map<string, { cliente: string; vendedor: string | null; dias: number | null }>;
 }
 
 
@@ -288,6 +305,13 @@ async function discoverProspectsFromGoogle(
           if (!placeId || !nombre || !Number.isFinite(latitud) || !Number.isFinite(longitud)) continue;
           if (place.businessStatus === "CLOSED_PERMANENTLY" || seenIds.has(placeId)) continue;
           if (existingClientNames.has(normalizeName(nombre))) continue;
+          // Calidad: mínimo de reseñas y rubro coherente con el canal mayorista.
+          if (!esProspectoComercialmenteValido({
+            rating: place.rating ?? null,
+            total_ratings: place.userRatingCount ?? null,
+            tipo_principal: place.primaryType ?? null,
+            tipos: place.types ?? [],
+          })) continue;
 
           const barrio = getAddressComponent(place, "neighborhood", "sublocality_level_1", "sublocality");
           const comunaCandidate = getAddressComponent(place, "administrative_area_level_2");
@@ -441,6 +465,12 @@ interface ScoredCandidate {
   feedbacks_recientes: any[];
   tipo_negocio?: string | null;
   rating?: number | null;
+  total_ratings?: number | null;
+  // Prioridad comercial (valor × urgencia contra cadencia propia × margen × cercanía)
+  prioridad_comercial: number;
+  cadencia_dias?: number | null;
+  alerta_nc?: { ratio: number; fecha: string | null } | null;
+  posible_cliente_existente?: { cliente: string; vendedor: string | null; dias: number | null } | null;
 }
 
 // ============================================================
@@ -521,7 +551,14 @@ function scoreClients(
       revisitBonus = 30; // ya está vencido el pedido de volver → prioridad
     }
 
-    const score_total = score_geo * 0.50 + score_vendedor * 0.25 + score_comercial * 0.15 + score_rotacion * 0.10 + overlapPenalty + revisitBonus;
+    // PRIORIDAD COMERCIAL: valor histórico × urgencia contra la cadencia propia
+    // × margen realizado × cercanía. Es lo que hace que una cuenta de $10M
+    // vencida al doble de su ritmo pese más que una de $850k.
+    const prioridad = prioridadVisita(c, distancia_km, options.precioCajaCanal ?? 0);
+    const score_prioridad = prioridadEscala100(prioridad);
+
+    const score_total = score_prioridad * 0.40 + score_geo * 0.25 + score_vendedor * 0.15
+      + score_comercial * 0.10 + score_rotacion * 0.10 + overlapPenalty + revisitBonus;
 
     candidates.push({
       client_id: c.client_id,
@@ -557,6 +594,9 @@ function scoreClients(
         tipo: fb.tipo_interaccion,
         fecha: fb.created_at?.split('T')[0],
       })),
+      prioridad_comercial: score_prioridad,
+      cadencia_dias: c.cadencia_dias ?? null,
+      alerta_nc: alertaNotaCredito(c),
     });
   }
 
@@ -584,6 +624,13 @@ function scoreProspects(
     // HARD radius filter (nunca por encima del tope absoluto de prospectos)
     if (!isWithinRadius(lat, long, hotspot, effectiveRadius)) continue;
 
+    // Un prospecto que puede ser un cliente activo de la casa NUNCA se ofrece
+    // como visita en frío: se avisa aparte para que lo verifiquen.
+    if (options.posiblesClientes?.has(p.place_id)) continue;
+
+    // CALIDAD: sin reseñas suficientes o con rubro incoherente no es comprador mayorista.
+    if (!esProspectoComercialmenteValido(p)) continue;
+
     let distancia_km = 999;
     let score_geo = 0;
     if (lat && long) {
@@ -600,7 +647,8 @@ function scoreProspects(
       if (minDistOther + 1 < distancia_km) continue;
     }
 
-    const score_comercial = Math.min(100, (p.rating || 3) * 20);
+    // Potencial = volumen de reseñas (proxy de tamaño), no la nota del consumidor final.
+    const score_comercial = potencialProspecto(p);
 
     let score_rotacion = 100;
     if (p.last_recommendation_at) {
@@ -663,6 +711,8 @@ function scoreProspects(
       })),
       tipo_negocio: p.tipo_principal,
       rating: p.rating,
+      total_ratings: p.total_ratings ?? null,
+      prioridad_comercial: Math.round(score_comercial * 0.4),
     });
   }
 
@@ -811,17 +861,24 @@ function justificacionComercial(c: ScoredCandidate): string {
   const cerca = `Queda a unas ${cuadras} cuadras del resto de la ruta`;
   if (c.es_prospecto) {
     const rubro = c.tipo_negocio ? `${c.tipo_negocio}` : "Local del rubro";
-    const rep = c.rating ? ` con buena reputación (${c.rating})` : "";
+    const rep = c.total_ratings ? ` con ${c.total_ratings} reseñas` : "";
     return `${rubro} de ${c.barrio || "la zona"}${rep} que todavía no nos compra. ${cerca}: sirve para sumar cobertura nueva sin estirar el día.`;
   }
   const dias = c.dias_desde_ultima_compra;
+  // Aviso de devolución: nunca se manda a visitar "a ciegas" un cliente que devolvió mercadería.
+  const nc = c.alerta_nc
+    ? ` ATENCIÓN: devolvió el ${Math.round(c.alerta_nc.ratio * 100)}% de lo facturado${c.alerta_nc.fecha ? ` (última nota de crédito ${c.alerta_nc.fecha})` : ""}; revisar el motivo antes de ofrecer.`
+    : "";
+  const ritmo = c.cadencia_dias && dias != null && dias > c.cadencia_dias
+    ? ` Compra cada ${Math.round(c.cadencia_dias)} días, así que ya está atrasado.`
+    : "";
   if (c.estado_comercial === "ACTIVO") {
-    return `Cliente activo de ${c.barrio || "la zona"}${dias != null ? `, compró hace ${dias} días` : ""}. ${cerca}: visita de mantenimiento para sostener el ritmo de compra.`;
+    return `Cliente activo de ${c.barrio || "la zona"}${dias != null ? `, compró hace ${dias} días` : ""}.${ritmo} ${cerca}: visita de mantenimiento para sostener el ritmo de compra.${nc}`;
   }
   if (c.estado_comercial === "INACTIVO") {
-    return `Bajó el ritmo${dias != null ? `: hace ${dias} días que no compra` : ""}. ${cerca}: conviene pasar antes de que se enfríe del todo.`;
+    return `Bajó el ritmo${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: conviene pasar antes de que se enfríe del todo.${nc}`;
   }
-  return `Cliente a recuperar${dias != null ? `: hace ${dias} días que no compra` : ""}. ${cerca}: vale la visita de reconquista.`;
+  return `Cliente a recuperar${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: vale la visita de reconquista.${nc}`;
 }
 
 function makeRec(c: ScoredCandidate, vendedorId: string, justificacion?: string): any {
@@ -1001,26 +1058,63 @@ Deno.serve(async (req) => {
     if (prospectosError) throw prospectosError;
     let prospectos = (prospectosData || []).filter(p => !prospectosAsignadosHoy.has(p.place_id));
 
-    // ---- 6b. Semantic dedup: exclude prospects that match existing clients ----
-    const clientNamesAndCoords: { name: string; lat: number; lng: number }[] = [];
-    for (const c of allClientesEnZona) {
+    // ---- 6b. GATE prospecto ↔ cartera ----
+    // Google Places no devuelve CUIT: el cruce se hace por nombre de fantasía
+    // normalizado + radio. <200m es el mismo negocio; 200-800m (o mismo barrio)
+    // queda marcado como "posible cliente existente — verificar" y nunca sale
+    // como prospecto frío.
+    const clientNamesAndCoords: ClienteRef[] = [];
+    const barrioPorCliente = new Map<ClienteRef, string | null>();
+    for (const c of [...allClientesEnZona, ...portfolioClients]) {
       const place = placesMap.get(c.client_id);
       if (place?.lat && place?.long) {
-        clientNamesAndCoords.push({ name: c.razon_social || c.fantasia || '', lat: Number(place.lat), lng: Number(place.long) });
+        const ref: ClienteRef = {
+          name: c.fantasia || c.razon_social || '',
+          lat: Number(place.lat),
+          lng: Number(place.long),
+          vendedor: c.vendedor_actual || c.vendedor_principal || null,
+          diasDesdeUltimaCompra: c.dias_desde_ultima_compra ?? null,
+        };
+        clientNamesAndCoords.push(ref);
+        barrioPorCliente.set(ref, place.barrio_principal || c.barrio_principal || null);
+        if (c.razon_social && c.fantasia && c.razon_social !== c.fantasia) {
+          const alias: ClienteRef = { ...ref, name: c.razon_social };
+          clientNamesAndCoords.push(alias);
+          barrioPorCliente.set(alias, barrioPorCliente.get(ref) || null);
+        }
       }
     }
+    const barrioDeCliente = (cliente: ClienteRef) => barrioPorCliente.get(cliente) || null;
 
-    prospectos = prospectos.filter(p => {
+    // place_id -> cliente existente que hay que verificar antes de tocar timbre.
+    const posiblesClientesExistentes = new Map<string, { cliente: string; vendedor: string | null; dias: number | null }>();
+    const registrarGate = (p: any): boolean => {
       if (p.client_id) return false;
-      if (!p.latitud || !p.longitud) return true;
-      const pLat = Number(p.latitud);
-      const pLng = Number(p.longitud);
-      for (const c of clientNamesAndCoords) {
-        const dist = calcularDistanciaKm(c.lat, c.lng, pLat, pLng);
-        if (dist < 0.1 && nameTokenOverlap(p.nombre, c.name) >= 0.4) return false;
+      const gate = evaluarProspectoContraCartera(p, clientNamesAndCoords, barrioDeCliente);
+      if (gate.estado === "duplicado") return false;
+      if (gate.estado === "posible_cliente") {
+        posiblesClientesExistentes.set(p.place_id, {
+          cliente: gate.cliente.name,
+          vendedor: gate.cliente.vendedor ?? null,
+          dias: gate.cliente.diasDesdeUltimaCompra ?? null,
+        });
+        return false;
       }
       return true;
-    });
+    };
+
+    prospectos = prospectos.filter(registrarGate);
+    if (posiblesClientesExistentes.size > 0) {
+      console.log(`🛑 ${posiblesClientesExistentes.size} prospectos apartados por posible coincidencia con cartera.`);
+    }
+
+    // Precio promedio por caja del canal: base del margen realizado.
+    const preciosCaja = [...allClientesEnZona, ...portfolioClients]
+      .map((c) => Number(c.precio_promedio_caja))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    const precioCajaCanal = preciosCaja.length > 0
+      ? preciosCaja.reduce((a, b) => a + b, 0) / preciosCaja.length
+      : 0;
 
     // If the internal portfolio cannot cover 8 visits per seller, discover
     // enough new prospects now and persist them in the operational repository.
@@ -1083,10 +1177,7 @@ Deno.serve(async (req) => {
         excludedPlaceIds,
         existingClientNames,
       );
-      const newProspects = discovered.filter((prospecto) => !clientNamesAndCoords.some((cliente) => (
-        calcularDistanciaKm(cliente.lat, cliente.lng, prospecto.latitud, prospecto.longitud) < 0.1
-        && nameTokenOverlap(prospecto.nombre, cliente.name) >= 0.4
-      )));
+      const newProspects = discovered.filter(registrarGate);
 
       if (newProspects.length > 0) {
         const { error: discoveryUpsertError } = await supabaseClient
@@ -1147,11 +1238,11 @@ Deno.serve(async (req) => {
     // Feedback del vendedor → fecha mínima de próxima visita ("volver en X días/semanas").
     const revisitMapClientes = buildRevisitMap(feedbacksMapClientes);
     const revisitMapProspectos = buildRevisitMap(feedbacksMapProspectos);
-    const scoreOpts: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapClientes };
-    const scoreOptsP: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapProspectos };
+    const scoreOpts: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapClientes, precioCajaCanal };
+    const scoreOptsP: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapProspectos, precioCajaCanal, posiblesClientes: posiblesClientesExistentes };
     // Versión relajada del cooldown: sólo se usa como último recurso para llegar a 8.
-    const scoreOptsRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapClientes };
-    const scoreOptsPRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapProspectos };
+    const scoreOptsRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapClientes, precioCajaCanal };
+    const scoreOptsPRelaxed: ScoreOptions = { cooldownDays: 0, revisitMap: revisitMapProspectos, precioCajaCanal, posiblesClientes: posiblesClientesExistentes };
     console.log(`🗣️ Feedback con pedido de revisita: ${revisitMapClientes.size} clientes / ${revisitMapProspectos.size} prospectos`);
 
 
@@ -1164,6 +1255,7 @@ Deno.serve(async (req) => {
     const extraProspectosLoaded: any[] = [];
     const liveDiscoveredIds = new Set<string>();
     const coberturaPorVendedor = new Map<string, any>();
+    const cuentasFueraPorVendedor = new Map<string, { nombre: string; barrio: string | null; dias: number | null }[]>();
 
     for (const vendedor of vendedoresData) {
       // === Filter vendor's own clients ===
@@ -1174,22 +1266,53 @@ Deno.serve(async (req) => {
 
       console.log(`👤 ${vendedor.nombre}: ${myValidClients.length} clientes propios en zona`);
 
-      // === HOTSPOT: Centroid of THIS vendor's clients with coords ===
+      // === RANKING PRIMERO, ZONA DESPUÉS ===
+      // Se rankean TODAS las cuentas del vendedor por prioridad comercial
+      // (valor × urgencia contra su cadencia × margen) y recién entonces se
+      // elige el núcleo de la ruta que concentra más valor recuperable,
+      // exigiendo un mínimo de cuentas propias antes que rellenar con prospectos.
       const vendorCoords: AnchorPoint[] = [];
+      const vendorPoints: { lat: number; lng: number; prioridad: number }[] = [];
+      const rankingCartera: { nombre: string; barrio: string | null; prioridad: number; dias: number | null }[] = [];
       for (const c of myValidClients) {
         const place = placesMap.get(c.client_id);
+        const prioridad = prioridadBase(c, precioCajaCanal);
+        rankingCartera.push({
+          nombre: c.fantasia || c.razon_social || 'Sin nombre',
+          barrio: normalizeBarrio(place?.barrio_principal || c.barrio_principal) || null,
+          prioridad,
+          dias: c.dias_desde_ultima_compra ?? null,
+        });
         if (place?.lat && place?.long) {
           const lat = Number(place.lat);
           const lng = Number(place.long);
           if (lat >= -60 && lat <= -20 && lng >= -80 && lng <= -40) {
             vendorCoords.push({ lat, lng });
+            vendorPoints.push({ lat, lng, prioridad });
           }
         }
       }
+      rankingCartera.sort((a, b) => b.prioridad - a.prioridad);
 
-      // Hotspot = densest cluster of vendor's own clients
-      // FALLBACK: if vendor has no clients, use zone center (clients or prospects)
-      const vendorHotspot = findDensestHotspot(vendorCoords, 2.0) || zoneCenterFallback;
+      const mejorCluster = pickBestCluster(vendorPoints, HARD_RADIUS_KM, 4);
+      const vendorHotspot = mejorCluster?.anchor
+        || findDensestHotspot(vendorCoords, 2.0)
+        || zoneCenterFallback;
+
+      // Cuentas de alta prioridad que quedaron fuera del núcleo elegido: se avisan.
+      const hotspotRef = vendorHotspot;
+      const cuentasFueraDeRuta = !hotspotRef ? [] : rankingCartera
+        .filter((r) => r.prioridad > 0)
+        .slice(0, 3)
+        .filter((r) => {
+          const match = myValidClients.find((c) => (c.fantasia || c.razon_social) === r.nombre);
+          const place = match ? placesMap.get(match.client_id) : null;
+          if (!place?.lat || !place?.long) return false;
+          return calcularDistanciaKm(hotspotRef.lat, hotspotRef.lng, Number(place.lat), Number(place.long)) > HARD_RADIUS_KM;
+        });
+      cuentasFueraPorVendedor.set(vendedor.user_id, cuentasFueraDeRuta.map((r) => ({
+        nombre: r.nombre, barrio: r.barrio, dias: r.dias,
+      })));
 
       if (!vendorHotspot) {
         console.log(`⚠️ ${vendedor.nombre}: Sin hotspot ni fallback. Saltando.`);
@@ -1418,10 +1541,7 @@ Deno.serve(async (req) => {
               excludedPlaceIds,
               existingClientNames,
             );
-            const newProspects = discovered.filter((prospecto) => !clientNamesAndCoords.some((cliente) => (
-              calcularDistanciaKm(cliente.lat, cliente.lng, prospecto.latitud, prospecto.longitud) < 0.1
-              && nameTokenOverlap(prospecto.nombre, cliente.name) >= 0.4
-            )));
+            const newProspects = discovered.filter(registrarGate);
 
             if (newProspects.length > 0) {
               const { error: liveUpsertError } = await supabaseClient
@@ -1469,15 +1589,20 @@ Deno.serve(async (req) => {
         : (c.dias_desde_ultima_compra === null || c.dias_desde_ultima_compra === undefined
           ? "sin fecha de última compra"
           : `${c.dias_desde_ultima_compra} días sin comprar`);
+      // Ticket promedio facturado de CUPRA (bruto, sin restar notas de crédito).
       const ticket = !c.es_prospecto && c.ticket_promedio
-        ? `, ticket promedio $${Math.round(Number(c.ticket_promedio)).toLocaleString("es-AR")}`
+        ? `, ticket promedio facturado CUPRA $${Math.round(Number(c.ticket_promedio)).toLocaleString("es-AR")}`
         : "";
+      const devolucion = c.alerta_nc
+        ? `, DEVOLUCIÓN del ${Math.round(c.alerta_nc.ratio * 100)}% de lo facturado${c.alerta_nc.fecha ? ` el ${c.alerta_nc.fecha}` : ""}`
+        : "";
+      const prioridad = !c.es_prospecto ? `, prioridad comercial ${c.prioridad_comercial}/100` : "";
       const rubro = c.tipo_negocio ? `, ${c.tipo_negocio}` : "";
-      const reputacion = c.es_prospecto && c.rating ? `, reputación ${c.rating}` : "";
+      const reputacion = c.es_prospecto && c.total_ratings ? `, ${c.total_ratings} reseñas` : "";
       const feedback = c.feedbacks_recientes.length > 0
         ? ` | comentario del vendedor: ${c.feedbacks_recientes.map(f => f.feedback).join("; ")}`
         : "";
-      return `${i + 1}. [${c.client_id}] ${c.razon_social} | ${bloque} | barrio ${c.barrio || "s/d"} | a ${cuadras(c.distancia_km)} cuadras del arranque de la ruta | ${compra}${ticket}${rubro}${reputacion}${feedback}`;
+      return `${i + 1}. [${c.client_id}] ${c.razon_social} | ${bloque} | barrio ${normalizeBarrio(c.barrio) || "s/d"} | a ${cuadras(c.distancia_km)} cuadras del arranque de la ruta | ${compra}${ticket}${devolucion}${prioridad}${rubro}${reputacion}${feedback}`;
     };
 
     const vendorSections = vendedoresData.map(v => {
@@ -1642,10 +1767,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           excludedPlaceIds,
           existingClientNames,
         );
-        const newProspects = discovered.filter((prospecto) => !clientNamesAndCoords.some((cliente) => (
-          calcularDistanciaKm(cliente.lat, cliente.lng, prospecto.latitud, prospecto.longitud) < 0.1
-          && nameTokenOverlap(prospecto.nombre, cliente.name) >= 0.4
-        )));
+        const newProspects = discovered.filter(registrarGate);
         if (newProspects.length === 0) return [];
 
         const { error: upsertError } = await supabaseClient
@@ -1773,6 +1895,11 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
         prospectos_de_maps: obtMapsLive,
         radio_final_km: Number(radioFinal.toFixed(1)),
         clientes_propios_en_zona: (vendorClientPools.get(vendedor.user_id) || []).length,
+        cuentas_prioritarias_fuera_de_zona: (cuentasFueraPorVendedor.get(vendedor.user_id) || []).map((r) => ({
+          nombre: r.nombre,
+          barrio: r.barrio,
+          dias_sin_comprar: r.dias,
+        })),
       });
 
     }
@@ -2036,7 +2163,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating, origen: liveDiscoveredIds.has(candidateInfo.client_id) ? 'maps_live' : 'base', cobertura: coberturaPorVendedor.get(vendedorId) || null },
+          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating, origen: liveDiscoveredIds.has(candidateInfo.client_id) ? 'maps_live' : 'base', cobertura: coberturaPorVendedor.get(vendedorId) || null, alerta_nota_credito: (candidateInfo as any).alerta_nc || null, prioridad_comercial: (candidateInfo as any).prioridad_comercial ?? null },
           justificacion: rec.justificacion,
           es_prospecto: true,
           estado_comercial: candidateInfo.estado_comercial,
@@ -2068,7 +2195,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: { ...rec.factores, origen: 'cartera', cobertura: coberturaPorVendedor.get(vendedorId) || null },
+          factores_ia: { ...rec.factores, origen: 'cartera', cobertura: coberturaPorVendedor.get(vendedorId) || null, alerta_nota_credito: candidateInfo ? (candidateInfo as any).alerta_nc || null : null },
           justificacion: rec.justificacion,
           es_prospecto: false,
           estado_comercial,
@@ -2115,7 +2242,8 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
     if (enrichedRecommendations.length === 0) {
       throw new Error("No se encontraron candidatos disponibles para ningún vendedor con los filtros seleccionados.");
     }
-    const zonaTexto = [...barriosFinales, ...comunasFinales].filter(Boolean).join(", ") || "la zona seleccionada";
+    // Normalización: "VILLA URQUIZA" y "Villa Urquiza" son la misma zona.
+    const zonaTexto = dedupeBarrios([...barriosFinales, ...comunasFinales]).join(", ") || "la zona seleccionada";
     const avisosCobertura: string[] = [];
     for (const vendedor of vendedoresData) {
       const cob = coberturaPorVendedor.get(vendedor.user_id);
@@ -2139,6 +2267,12 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       if (cob.prospectos_de_maps > 0) {
         partes.push(`Se buscaron lugares nuevos en el mapa: ${cob.prospectos_de_maps} se incorporaron a la ruta de ${vendedor.nombre}.`);
       }
+      if (cob.cuentas_prioritarias_fuera_de_zona?.length > 0) {
+        const lista = cob.cuentas_prioritarias_fuera_de_zona
+          .map((c: any) => `${c.nombre}${c.dias ? ` (${c.dias} días sin comprar)` : ""}${c.barrio ? ` en ${c.barrio}` : ""}`)
+          .join(", ");
+        partes.push(`Fuera de esta zona quedaron cuentas importantes de ${vendedor.nombre}: ${lista}. Conviene armarles una ruta propia.`);
+      }
       if (cob.total < 8) {
         partes.push(`Sólo se pudieron armar ${cob.total} de 8 visitas para ${vendedor.nombre} con los filtros elegidos. Probá ampliar la zona.`);
       }
@@ -2146,6 +2280,14 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       if (propios === 0 && cob.total > 0) {
         console.log(`ℹ️ ${vendedor.nombre}: ruta 100% de prospección.`);
       }
+    }
+    if (posiblesClientesExistentes.size > 0) {
+      const muestras = Array.from(posiblesClientesExistentes.values()).slice(0, 3)
+        .map((v) => `${v.cliente}${v.vendedor ? ` (atiende ${v.vendedor})` : ""}`)
+        .join(", ");
+      avisosCobertura.push(
+        `Se apartaron ${posiblesClientesExistentes.size} lugares que podrían ser clientes ya activos de la casa: ${muestras}. Verificar antes de visitarlos como nuevos.`,
+      );
     }
     const cuotaIncompleta = avisosCobertura.length > 0
       ? avisosCobertura.join(" ")
