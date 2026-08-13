@@ -1206,6 +1206,8 @@ Deno.serve(async (req) => {
     const vendorProspectPools: Map<string, ScoredCandidate[]> = new Map();
     const vendorHotspots: Map<string, AnchorPoint> = new Map();
     const extraProspectosLoaded: any[] = [];
+    const liveDiscoveredIds = new Set<string>();
+    const coberturaPorVendedor = new Map<string, any>();
 
     for (const vendedor of vendedoresData) {
       // === Filter vendor's own clients ===
@@ -1473,6 +1475,8 @@ Deno.serve(async (req) => {
                 console.error(`No se pudieron guardar los prospectos descubiertos: ${liveUpsertError.message}`);
               } else {
                 extraProspectosLoaded.push(...newProspects);
+        newProspects.forEach((p: any) => liveDiscoveredIds.add(p.place_id));
+                newProspects.forEach((p: any) => liveDiscoveredIds.add(p.place_id));
                 const liveScored = scoreProspects(
                   newProspects, feedbacksMapProspectos,
                   vendorHotspot, MAX_PROSPECT_DISTANCE_KM, otherHotspots, scoreOptsPRelaxed,
