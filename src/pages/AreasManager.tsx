@@ -62,6 +62,26 @@ interface Profile {
   email: string;
 }
 
+interface CatalogEntry {
+  key: string;
+  barrio: string;
+  comuna: string | null;
+  provincia: string;
+  placeId: string | null;
+}
+
+const normalizeGeo = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const catalogKey = (provincia: string, barrio: string) =>
+  `${normalizeGeo(provincia)}||${normalizeGeo(barrio)}`;
+
+
+
 
 // Supabase helpers
 async function getCurrentProfileId() {
