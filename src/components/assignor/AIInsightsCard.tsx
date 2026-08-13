@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, MapPin, Users } from "lucide-react";
+import { TrendingUp, MapPin, Users, Info } from "lucide-react";
 
 interface AIInsightsProps {
   resumen: {
