@@ -573,27 +573,34 @@ function scoreProspects(
   hotspot: AnchorPoint,
   radiusKm: number,
   otherAnchors: AnchorPoint[],
+  options: ScoreOptions = {},
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
+  const cooldownDays = options.cooldownDays ?? 0;
+  const revisitMap = options.revisitMap;
+  const effectiveRadius = Math.min(radiusKm, MAX_PROSPECT_DISTANCE_KM);
 
   for (const p of prospectos) {
     const lat = p.latitud ? Number(p.latitud) : null;
     const long = p.longitud ? Number(p.longitud) : null;
 
-    // HARD radius filter
-    if (!isWithinRadius(lat, long, hotspot, radiusKm)) continue;
+    // HARD radius filter (nunca por encima del tope absoluto de prospectos)
+    if (!isWithinRadius(lat, long, hotspot, effectiveRadius)) continue;
 
     let distancia_km = 999;
     let score_geo = 0;
     if (lat && long) {
       distancia_km = calcularDistanciaKm(hotspot.lat, hotspot.lng, lat, long);
-      score_geo = Math.max(0, 100 - (distancia_km / radiusKm) * 100);
+      score_geo = Math.max(0, 100 - (distancia_km / effectiveRadius) * 100);
     }
 
     let overlapPenalty = 0;
     if (lat && long && otherAnchors.length > 0) {
       const minDistOther = Math.min(...otherAnchors.map(a => calcularDistanciaKm(a.lat, a.lng, lat, long)));
       if (minDistOther < 0.3) overlapPenalty = -100;
+      // COHERENCIA TERRITORIAL: si el prospecto pertenece claramente a la zona
+      // de otro vendedor (>1km más cerca de su hotspot), no se ofrece acá.
+      if (minDistOther + 1 < distancia_km) continue;
     }
 
     const score_comercial = Math.min(100, (p.rating || 3) * 20);
@@ -601,8 +608,10 @@ function scoreProspects(
     let score_rotacion = 100;
     if (p.last_recommendation_at) {
       const daysSinceRec = (Date.now() - new Date(p.last_recommendation_at).getTime()) / (1000 * 60 * 60 * 24);
+      if (cooldownDays > 0 && daysSinceRec < cooldownDays) continue;
       score_rotacion = Math.min(100, daysSinceRec * 5);
     }
+
 
     const feedbacks = feedbacksMap.get(p.place_id) || [];
     const hasNegativeFeedback = feedbacks.some((fb: any) =>
