@@ -25,6 +25,7 @@ interface ClientLocation {
   direccion: string;
   vendedor?: string;
   estado_cliente?: string;
+  es_prospecto?: boolean;
   hasOverlap?: boolean;
 }
 
@@ -114,6 +115,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                 lng: lng,
                 direccion: sucursal.direccion || sucursal.direccion_principal || "",
                 vendedor,
+                es_prospecto: !!sucursal.es_prospecto,
                 estado_cliente,
               };
             } else {
@@ -143,6 +145,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     lng: lng,
                     direccion: sucursal.direccion || sucursal.direccion_principal || "",
                     vendedor,
+                    es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente,
                   };
                 }
@@ -168,6 +171,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     lng: place.geometry.location.lng(),
                     direccion: place.formatted_address || sucursal.direccion || "",
                     vendedor,
+                    es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente,
                   });
                 } else {
@@ -192,6 +196,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     lng: place.geometry.location.lng(),
                     direccion: place.formatted_address || sucursal.direccion_principal || sucursal.direccion || "",
                     vendedor,
+                    es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
                   });
                 } else {
@@ -225,6 +230,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     lng: loc.lng(),
                     direccion: res[0].formatted_address,
                     vendedor,
+                    es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
                   });
                 } else {
