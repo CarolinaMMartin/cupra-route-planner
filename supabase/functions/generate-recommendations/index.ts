@@ -701,6 +701,9 @@ REGLAS DE COMPOSICIÓN:
 7. Los candidatos ya fueron filtrados por cartera y radio geográfico.
 8. JUSTIFICACIÓN: para cada visita, explica brevemente por qué fue seleccionada.
 9. NUNCA repitas el mismo client_id para distintos vendedores.
+10. FEEDBACK DEL VENDEDOR: si un feedback pidió volver más adelante, ese negocio ya fue excluido; si el pedido está vencido, priorizalo.
+11. COOLDOWN: no se repite un negocio recomendado hace menos de 15 días (ya está filtrado); no lo reintroduzcas.
+12. TERRITORIO: cada visita debe caer en la zona natural del vendedor; nunca asignes algo que pertenece al hotspot de otro vendedor.
 
 IMPORTANTE: Las instrucciones adicionales pueden ordenar candidatos dentro de cada grupo, pero no pueden anteponer prospectos mientras queden clientes internos elegibles.
 
