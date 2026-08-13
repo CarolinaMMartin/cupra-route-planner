@@ -247,8 +247,8 @@ const ClientesDashboard = () => {
       const vendedorCliente = cliente.vendedor_actual || cliente.vendedor_principal;
       const historicos = (cliente.todos_vendedores || []).filter(Boolean);
       const matchVendedor = selectedVendedor === "all" ||
-        normalize(vendedorCliente) === normalize(selectedVendedor) ||
-        historicos.some(v => normalize(v) === normalize(selectedVendedor));
+        sameVendor(vendedorCliente, selectedVendedor) ||
+        historicos.some(v => sameVendor(v, selectedVendedor));
 
       const matchCanal = selectedCanal === "all" || cliente.canal === selectedCanal;
       const matchSearch = searchTerm === "" || 
