@@ -17,15 +17,21 @@ const assertEquals = (actual: unknown, expected: unknown) => {
   }
 };
 
-Deno.test("uses eight internal clients and no prospects when the portfolio covers the quota", () => {
-  const clients = Array.from(
-    { length: 8 },
-    (_, index) => candidate(`c${index + 1}`, false),
-  );
-  const prospects = Array.from(
-    { length: 8 },
-    (_, index) => candidate(`p${index + 1}`, true),
-  );
+Deno.test("respeta la mezcla 4 cartera + 2 reactivación + 2 prospectos", () => {
+  const clients = [
+    ...Array.from({ length: 6 }, (_, i) => candidate(`a${i + 1}`, false, "ACTIVO")),
+    ...Array.from({ length: 3 }, (_, i) => candidate(`r${i + 1}`, false, "PERDIDO")),
+  ];
+  const prospects = Array.from({ length: 5 }, (_, i) => candidate(`p${i + 1}`, true));
+
+  const result = composeRecommendationIds({ preferredIds: [], clients, prospects });
+
+  assertEquals(result, ["a1", "a2", "a3", "a4", "r1", "r2", "p1", "p2"]);
+});
+
+Deno.test("si falta reactivación completa con cartera activa", () => {
+  const clients = Array.from({ length: 8 }, (_, i) => candidate(`a${i + 1}`, false, "ACTIVO"));
+  const prospects = Array.from({ length: 8 }, (_, i) => candidate(`p${i + 1}`, true));
 
   const result = composeRecommendationIds({
     preferredIds: prospects.map((item) => item.client_id),
@@ -33,67 +39,28 @@ Deno.test("uses eight internal clients and no prospects when the portfolio cover
     prospects,
   });
 
-  assertEquals(result, clients.map((item) => item.client_id));
+  assertEquals(result, ["a1", "a2", "a3", "a4", "p1", "p2", "a5", "a6"]);
 });
 
-Deno.test("fills only the exact client deficit with prospects", () => {
-  const clients = Array.from(
-    { length: 5 },
-    (_, index) => candidate(`c${index + 1}`, false),
-  );
-  const prospects = Array.from(
-    { length: 8 },
-    (_, index) => candidate(`p${index + 1}`, true),
-  );
-
-  const result = composeRecommendationIds({
-    preferredIds: [],
-    clients,
-    prospects,
-  });
-
-  assertEquals(result, ["c1", "c2", "c3", "c4", "c5", "p1", "p2", "p3"]);
-});
-
-Deno.test("does not cap lost internal clients before using prospects", () => {
+Deno.test("si falta cartera activa completa con reactivación", () => {
   const clients = [
-    ...Array.from(
-      { length: 3 },
-      (_, index) => candidate(`a${index + 1}`, false, "ACTIVO"),
-    ),
-    ...Array.from(
-      { length: 5 },
-      (_, index) => candidate(`l${index + 1}`, false, "PERDIDO"),
-    ),
+    candidate("a1", false, "ACTIVO"),
+    ...Array.from({ length: 6 }, (_, i) => candidate(`r${i + 1}`, false, "INACTIVO")),
   ];
-  const prospects = Array.from(
-    { length: 8 },
-    (_, index) => candidate(`p${index + 1}`, true),
-  );
+  const prospects = Array.from({ length: 4 }, (_, i) => candidate(`p${i + 1}`, true));
 
-  const result = composeRecommendationIds({
-    preferredIds: ["p1", "p2"],
-    clients,
-    prospects,
-  });
+  const result = composeRecommendationIds({ preferredIds: [], clients, prospects });
 
-  assertEquals(result, ["a1", "a2", "a3", "l1", "l2", "l3", "l4", "l5"]);
+  assertEquals(result, ["a1", "r1", "r2", "p1", "p2", "r3", "r4", "r5"]);
 });
 
-Deno.test("supports conquest mode with eight prospects", () => {
-  const prospects = Array.from(
-    { length: 8 },
-    (_, index) => candidate(`p${index + 1}`, true),
-  );
-  const result = composeRecommendationIds({
-    preferredIds: [],
-    clients: [],
-    prospects,
-  });
+Deno.test("modo conquista: ocho prospectos cuando no hay cartera", () => {
+  const prospects = Array.from({ length: 8 }, (_, i) => candidate(`p${i + 1}`, true));
+  const result = composeRecommendationIds({ preferredIds: [], clients: [], prospects });
   assertEquals(result, prospects.map((item) => item.client_id));
 });
 
-Deno.test("returns an incomplete result when inventory is insufficient so persistence can reject it", () => {
+Deno.test("devuelve un resultado incompleto cuando el inventario no alcanza", () => {
   const result = composeRecommendationIds({
     preferredIds: [],
     clients: [candidate("c1", false)],
@@ -102,7 +69,7 @@ Deno.test("returns an incomplete result when inventory is insufficient so persis
   assertEquals(result, ["c1", "p1"]);
 });
 
-Deno.test("respects global unavailability without violating client-first order", () => {
+Deno.test("respeta candidatos ya tomados por otro vendedor", () => {
   const clients = [
     candidate("c1", false),
     candidate("c2", false),
