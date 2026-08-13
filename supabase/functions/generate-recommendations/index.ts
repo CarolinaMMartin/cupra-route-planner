@@ -1748,33 +1748,35 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
       }
       if (swaps > 0) console.log(`🧭 Auditoría territorial: ${swaps} intercambios entre vendedores`);
 
-      // --- Chequeo de compacidad: la ruta del día tiene que ser caminable ---
-      const rutasDispersas: string[] = [];
-      for (const v of vendedoresData) {
-        const puntos = validatedRecs
-          .filter((r: any) => r.vendedor_id === v.user_id)
-          .map((r: any) => candidateOf(v.user_id, r.client_id))
-          .filter((c): c is ScoredCandidate => !!c?.lat && !!c?.long);
-        let spread = 0;
-        for (let i = 0; i < puntos.length; i++) {
-          for (let j = i + 1; j < puntos.length; j++) {
-            spread = Math.max(spread, calcularDistanciaKm(
-              Number(puntos[i].lat), Number(puntos[i].long),
-              Number(puntos[j].lat), Number(puntos[j].long),
-            ));
+      const getRutasDispersas = (): string[] => {
+        const rutas: string[] = [];
+        for (const v of vendedoresData) {
+          const puntos = validatedRecs
+            .filter((r: any) => r.vendedor_id === v.user_id)
+            .map((r: any) => candidateOf(v.user_id, r.client_id))
+            .filter((c): c is ScoredCandidate => !!c?.lat && !!c?.long);
+          let spread = 0;
+          for (let i = 0; i < puntos.length; i++) {
+            for (let j = i + 1; j < puntos.length; j++) {
+              spread = Math.max(spread, calcularDistanciaKm(
+                Number(puntos[i].lat), Number(puntos[i].long),
+                Number(puntos[j].lat), Number(puntos[j].long),
+              ));
+            }
           }
+          if (spread > MAX_ROUTE_SPREAD_KM) rutas.push(`${v.nombre} (${spread.toFixed(1)}km entre extremos)`);
         }
-        if (spread > MAX_ROUTE_SPREAD_KM) {
-          rutasDispersas.push(`${v.nombre} (${spread.toFixed(1)}km entre extremos)`);
-        }
-      }
-      if (rutasDispersas.length > 0) {
-        console.warn(`⚠️ Rutas poco compactas: ${rutasDispersas.join("; ")}`);
-      }
+        return rutas;
+      };
 
       // --- Segunda pasada de IA sobre la distribución total ---
+      // La auditoría es interna y bloqueante: corrige, vuelve a auditar y recién
+      // permite guardar cuando el modelo confirma que el reparto es coherente.
       if (vendedoresData.length > 1) {
-        const resumenDistribucion = vendedoresData.map(v => {
+        let auditoriaAprobada = false;
+        for (let intento = 1; intento <= 3 && !auditoriaAprobada; intento++) {
+          const rutasDispersas = getRutasDispersas();
+          const resumenDistribucion = vendedoresData.map(v => {
           const recs = validatedRecs.filter((r: any) => r.vendedor_id === v.user_id);
           const h = vendorHotspots.get(v.user_id);
           const lineas = recs.map((r: any) => {
@@ -1784,7 +1786,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
           return `### ${v.nombre} (${v.user_id}) — hotspot ${h ? `${h.lat.toFixed(4)},${h.lng.toFixed(4)}` : "N/A"}\n${lineas}`;
         }).join("\n\n");
 
-        const auditResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          const auditResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",
           headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1793,11 +1795,12 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
               {
                 role: "system",
                 content: `Sos el auditor comercial de CUPRA. Revisás el reparto COMPLETO de visitas del día entre vendedores.
-Criterios:
+ Criterios:
 1. Coherencia territorial: cada visita debe pertenecer a la zona natural del vendedor (menor distancia a su hotspot).
 2. Balance cliente/prospecto: los clientes de cartera nunca deben quedar afuera para meter prospectos.
 3. Densidad de ruta: las 8 visitas de un vendedor deben ser CAMINABLES entre sí (idealmente todas dentro de un radio de ~2km; nunca más de ${MAX_ROUTE_SPREAD_KM}km entre los dos extremos).
-Sólo podés proponer INTERCAMBIOS (swaps) entre dos visitas de vendedores distintos. No inventes IDs.`,
+ Sólo podés proponer INTERCAMBIOS (swaps) entre dos visitas de vendedores distintos. No inventes IDs.
+ Marcá coherente=true únicamente si el reparto actual ya puede salir al operador sin ninguna corrección pendiente.`,
               },
               { role: "user", content: `${resumenDistribucion}${rutasDispersas.length ? `\n\nRUTAS POCO COMPACTAS A CORREGIR: ${rutasDispersas.join("; ")}` : ""}\n\nDevolvé los intercambios necesarios y un resumen breve de la coherencia global.` },
             ],
@@ -1820,9 +1823,10 @@ Sólo podés proponer INTERCAMBIOS (swaps) entre dos visitas de vendedores disti
                         required: ["client_id_a", "client_id_b", "motivo"],
                       },
                     },
-                    resumen: { type: "string" },
+                     resumen: { type: "string" },
+                     coherente: { type: "boolean" },
                   },
-                  required: ["intercambios", "resumen"],
+                   required: ["intercambios", "resumen", "coherente"],
                 },
               },
             }],
@@ -1830,26 +1834,39 @@ Sólo podés proponer INTERCAMBIOS (swaps) entre dos visitas de vendedores disti
           }),
         });
 
-        if (auditResponse.ok) {
+          if (!auditResponse.ok) throw new Error(`Auditoría IA no disponible (${auditResponse.status})`);
+
           const auditData = await auditResponse.json();
           const auditArgs = auditData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
-          if (auditArgs) {
-            const parsed = JSON.parse(auditArgs);
-            auditoriaResumen = parsed.resumen || "";
-            let aplicados = 0;
-            for (const swap of parsed.intercambios || []) {
-              const recA = validatedRecs.find((r: any) => r.client_id === swap.client_id_a);
-              const recB = validatedRecs.find((r: any) => r.client_id === swap.client_id_b);
-              if (recA && recB && trySwap(recA, recB)) aplicados++;
-            }
-            console.log(`🧠 Auditoría IA: ${aplicados}/${(parsed.intercambios || []).length} intercambios aplicados. ${auditoriaResumen}`);
+          if (!auditArgs) throw new Error("La auditoría IA no devolvió una validación estructurada");
+
+          const parsed = JSON.parse(auditArgs);
+          let aplicados = 0;
+          for (const swap of parsed.intercambios || []) {
+            const recA = validatedRecs.find((r: any) => r.client_id === swap.client_id_a);
+            const recB = validatedRecs.find((r: any) => r.client_id === swap.client_id_b);
+            if (recA && recB && trySwap(recA, recB)) aplicados++;
           }
-        } else {
-          console.warn(`Auditoría IA no disponible: ${auditResponse.status}`);
+
+          const rutasPendientes = getRutasDispersas();
+          auditoriaAprobada = parsed.coherente === true
+            && (parsed.intercambios || []).length === 0
+            && rutasPendientes.length === 0;
+          console.log(`🧠 Auditoría IA ${intento}/3: ${aplicados} correcciones aplicadas; aprobada=${auditoriaAprobada}`);
+
+          if (!auditoriaAprobada && aplicados === 0) {
+            throw new Error(`La auditoría detectó incoherencias que no pudo corregir: ${parsed.resumen || "ruteo no aprobado"}`);
+          }
         }
+
+        if (!auditoriaAprobada) {
+          throw new Error("La distribución no superó la auditoría final de coherencia territorial y densidad");
+        }
+        auditoriaResumen = "Distribución validada: rutas compactas y territorialmente coherentes.";
       }
     } catch (auditError) {
-      console.error("Auditoría de coherencia falló (se conserva la distribución original):", auditError);
+      console.error("Auditoría de coherencia bloqueó la distribución:", auditError);
+      throw auditError;
     }
 
 
