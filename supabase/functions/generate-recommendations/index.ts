@@ -2215,11 +2215,13 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       recomendaciones: enrichedRecommendations,
       resumen: {
         total_recomendaciones: enrichedRecommendations.length,
-        descripcion: aiRecommendations.resumen_analisis,
+        descripcion: limpiarJustificacion(aiRecommendations.resumen_analisis, "Rutas armadas priorizando cartera cercana y completadas con prospectos de la misma zona."),
         distribucion_por_vendedor: distribucion,
         zonas_priorizadas: Array.from(zonas).slice(0, 5),
         request_id,
         advertencia: cuotaIncompleta,
+        avisos_cobertura: avisosCobertura,
+        cobertura: Array.from(coberturaPorVendedor.values()),
 
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });
