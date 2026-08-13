@@ -460,8 +460,11 @@ function scoreClients(
   hotspot: AnchorPoint,
   radiusKm: number,
   otherAnchors: AnchorPoint[],
+  options: ScoreOptions = {},
 ): ScoredCandidate[] {
   const candidates: ScoredCandidate[] = [];
+  const cooldownDays = options.cooldownDays ?? 0;
+  const revisitMap = options.revisitMap;
 
   for (const c of clientes) {
     const place = placesMap.get(c.client_id);
