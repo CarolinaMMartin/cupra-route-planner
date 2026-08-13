@@ -587,6 +587,9 @@ function scoreClients(
         tipo: fb.tipo_interaccion,
         fecha: fb.created_at?.split('T')[0],
       })),
+      prioridad_comercial: score_prioridad,
+      cadencia_dias: c.cadencia_dias ?? null,
+      alerta_nc: alertaNotaCredito(c),
     });
   }
 
