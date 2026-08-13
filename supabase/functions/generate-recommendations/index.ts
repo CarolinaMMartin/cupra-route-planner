@@ -22,19 +22,46 @@ function calcularDistanciaKm(lat1: number, lon1: number, lat2: number, lon2: num
 }
 
 // La ruta del día tiene que ser CAMINABLE: todas las visitas cerca unas de otras.
-const HARD_RADIUS_KM = 1.2;
-const MAX_EXPANSION_KM = 1.8;
-const EXPANSION_STEPS_KM = [2.2, 3.0]; // Expansión progresiva sólo si no se llega a la cuota
-// Último recurso: nunca proponer visitas más lejos que esto del hotspot del vendedor.
-const ZONE_FALLBACK_MAX_KM = 4.0;
-// Clientes propios: antes de meter prospectos, se puede ir hasta acá dentro de la cartera.
-const PORTFOLIO_FALLBACK_MAX_KM = 5.0;
-// Un prospecto NUNCA puede estar más lejos que esto del hotspot del vendedor.
+// Radio operativo único alrededor del núcleo del vendedor.
+const HARD_RADIUS_KM = 2.5;
+// Única ampliación permitida cuando el radio operativo no alcanza.
+const MAX_EXPANSION_KM = 3.5;
+const EXPANSION_STEPS_KM: number[] = []; // Sin cascada: compacidad manda sobre cantidad
+// Último recurso: nunca proponer visitas más lejos que esto del núcleo del vendedor.
+const ZONE_FALLBACK_MAX_KM = 3.5;
+// Clientes propios: la cartera lejana NO entra sólo por ser cartera.
+const PORTFOLIO_FALLBACK_MAX_KM = 3.5;
+// Un prospecto NUNCA puede estar más lejos que esto del núcleo del vendedor.
 const MAX_PROSPECT_DISTANCE_KM = 2.5;
 // Diámetro máximo tolerado entre dos visitas del mismo vendedor en el día (caminable).
-const MAX_ROUTE_SPREAD_KM = 6.0;
+const MAX_ROUTE_SPREAD_KM = 3.0;
 // Días mínimos entre dos recomendaciones del mismo negocio (regla dura, se relaja sólo si no se llega a 8).
 const RECOMMENDATION_COOLDOWN_DAYS = 15;
+
+// Composición objetivo del día: 4 cartera activa + 2 reactivación + 2 prospectos.
+const CUPO_CARTERA_ACTIVA = 4;
+const CUPO_REACTIVACION = 2;
+const CUPO_PROSPECTOS = 2;
+
+// Limpia jerga interna y coordenadas de los textos que ve el asignador.
+function limpiarJustificacion(texto: string | null | undefined, fallback: string): string {
+  let out = String(texto ?? "").trim();
+  if (!out) return fallback;
+  out = out
+    .replace(/-?\d{1,3}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}/g, "la zona")
+    .replace(/\b(hotspot|cluster|centroide|score_[a-z_]*|score\s*(final|total|geo|geográfico)?\s*[:=]?\s*\d+(\.\d+)?)\b/gi, "")
+    .replace(/\bdist(ancia)?\s*[:=]?\s*\d+(\.\d+)?\s*km\b/gi, "")
+    .replace(/\blat(itud)?\s*[:=]?\s*-?\d+(\.\d+)?/gi, "")
+    .replace(/\blong(itud)?\s*[:=]?\s*-?\d+(\.\d+)?/gi, "")
+    .replace(/^\s*Auto\s*:\s*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s*[-–,;]\s*(?=[.,;]|$)/g, "")
+    .trim();
+  out = out.replace(/^[\s\-–,;.]+/, "").trim();
+  if (out.length < 12) return fallback;
+  return out.length > 320 ? `${out.slice(0, 317)}...` : out;
+}
+
 
 interface RevisitInfo { dueAt: number; source: string; }
 
@@ -704,20 +731,22 @@ Usá estas instrucciones para ordenar candidatos dentro de cada grupo. Nunca ant
 ═══════════════════════════════════════════════════════════
 ` : ''}
 REGLAS DE COMPOSICIÓN:
-1. CUOTA OBLIGATORIA: Seleccioná EXACTAMENTE 8 visitas por vendedor.
-2. PRIORIDAD NO NEGOCIABLE: agota primero todos los clientes internos elegibles del vendedor.
-3. Si hay menos de 8 clientes internos elegibles, completa los lugares faltantes con PROSPECTOS.
-4. Nunca reemplaces un cliente interno elegible por un prospecto.
-5. Dentro de los clientes, prioriza ACTIVOS e INACTIVOS y luego oportunidades de recuperación.
-6. CONCENTRACIÓN GEOGRÁFICA: rutas densas, sin viajes largos innecesarios.
-7. Los candidatos ya fueron filtrados por cartera y radio geográfico.
-8. JUSTIFICACIÓN: para cada visita, explica brevemente por qué fue seleccionada.
-9. NUNCA repitas el mismo client_id para distintos vendedores.
-10. FEEDBACK DEL VENDEDOR: si un feedback pidió volver más adelante, ese negocio ya fue excluido; si el pedido está vencido, priorizalo.
-11. COOLDOWN: no se repite un negocio recomendado hace menos de 15 días (ya está filtrado); no lo reintroduzcas.
-12. TERRITORIO: cada visita debe caer en la zona natural del vendedor; nunca asignes algo que pertenece al hotspot de otro vendedor.
+1. CUOTA: EXACTAMENTE 8 visitas por vendedor.
+2. MEZCLA OBJETIVO: ${CUPO_CARTERA_ACTIVA} de CARTERA ACTIVA + ${CUPO_REACTIVACION} de REACTIVACIÓN (dormidos/perdidos) + ${CUPO_PROSPECTOS} PROSPECTOS.
+3. Si falta cartera activa, se completa con reactivación; si falta reactivación, con cartera activa; si no hay clientes propios, con prospectos.
+4. RUTA COMPACTA: la cercanía manda. Preferí un prospecto cercano antes que un cliente descolgado del resto de la ruta.
+5. Los candidatos ya vienen filtrados por cartera, cooldown y radio caminable: no inventes IDs.
+6. NUNCA repitas el mismo client_id para distintos vendedores.
+7. FEEDBACK DEL VENDEDOR: si un feedback pidió volver más adelante, ese negocio ya fue excluido; si el pedido está vencido, priorizalo.
+8. TERRITORIO: cada visita debe caer en la zona natural del vendedor.
 
-IMPORTANTE: Las instrucciones adicionales pueden ordenar candidatos dentro de cada grupo, pero no pueden anteponer prospectos mientras queden clientes internos elegibles.
+JUSTIFICACIÓN (lo lee un asignador comercial, no un técnico):
+- Una o dos frases en español rioplatense explicando por qué visitar ese lugar HOY.
+- Hablá de la relación con el cliente, tiempo sin comprar, potencial, rubro y cercanía con el resto de la ruta (en cuadras o minutos a pie).
+- PROHIBIDO: coordenadas, "hotspot", "score", "cluster", distancias en km, IDs o cualquier jerga interna.
+
+IMPORTANTE: Las instrucciones adicionales ordenan candidatos dentro de cada bloque, pero no cambian la mezcla objetivo ni la compacidad de la ruta.
+
 
 FORMATO: Usá la tool "generate_recommendations" con la estructura indicada.`;
   return base;
@@ -762,17 +791,27 @@ function validateAndFill(
     clients: clientPool,
     prospects: prospectPool,
     unavailableIds: globalPickedIds,
+    cupos: {
+      cartera: CUPO_CARTERA_ACTIVA,
+      reactivacion: CUPO_REACTIVACION,
+      prospectos: CUPO_PROSPECTOS,
+    },
   });
   const pickedIds = new Set(orderedIds);
   const isAvailable = (id: string) => !pickedIds.has(id) && !globalPickedIds.has(id);
   const result = orderedIds.map((candidateId) => {
     const aiRecommendation = aiRecommendationById.get(candidateId);
-    if (aiRecommendation) return aiRecommendation;
     const candidate = allCandidates.get(candidateId)!;
-    const recoveryReason = candidate.estado_comercial === 'PERDIDO'
-      ? `Recuperación: ${candidate.razon_social} (${candidate.dias_desde_ultima_compra} días sin compra)`
-      : undefined;
-    return makeRec(candidate, vendedorId, recoveryReason);
+    if (aiRecommendation) {
+      return {
+        ...aiRecommendation,
+        justificacion: limpiarJustificacion(
+          aiRecommendation.justificacion,
+          justificacionComercial(candidate),
+        ),
+      };
+    }
+    return makeRec(candidate, vendedorId);
   });
 
   const selectedClientCount = orderedIds.filter((candidateId) => !allCandidates.get(candidateId)?.es_prospecto).length;
@@ -795,12 +834,12 @@ function validateAndFill(
         const swapIdx = result.findIndex(r => allCandidates.get(r.client_id)?.es_prospecto);
         const idx = swapIdx >= 0 ? swapIdx : result.length - 1;
         pickedIds.delete(result[idx].client_id);
-        result[idx] = makeRec(recovery, vendedorId, `Recuperación estratégica: ${recovery.razon_social} (${recovery.dias_desde_ultima_compra} días sin compra)`);
+        result[idx] = makeRec(recovery, vendedorId);
         pickedIds.add(recovery.client_id);
       }
     }
-
   }
+
 
   if (result.length < 8) {
     console.warn(`⚠️ ${vendedorId.slice(0, 8)}: Solo ${result.length}/8 recs posibles. Pools agotados (${clientPool.length}C + ${prospectPool.length}P disponibles).`);
@@ -809,12 +848,30 @@ function validateAndFill(
   return result.slice(0, 8);
 }
 
+function justificacionComercial(c: ScoredCandidate): string {
+  const cuadras = Math.max(1, Math.round((c.distancia_km * 1000) / 100));
+  const cerca = `Queda a unas ${cuadras} cuadras del resto de la ruta`;
+  if (c.es_prospecto) {
+    const rubro = c.tipo_negocio ? `${c.tipo_negocio}` : "Local del rubro";
+    const rep = c.rating ? ` con buena reputación (${c.rating})` : "";
+    return `${rubro} de ${c.barrio || "la zona"}${rep} que todavía no nos compra. ${cerca}: sirve para sumar cobertura nueva sin estirar el día.`;
+  }
+  const dias = c.dias_desde_ultima_compra;
+  if (c.estado_comercial === "ACTIVO") {
+    return `Cliente activo de ${c.barrio || "la zona"}${dias != null ? `, compró hace ${dias} días` : ""}. ${cerca}: visita de mantenimiento para sostener el ritmo de compra.`;
+  }
+  if (c.estado_comercial === "INACTIVO") {
+    return `Bajó el ritmo${dias != null ? `: hace ${dias} días que no compra` : ""}. ${cerca}: conviene pasar antes de que se enfríe del todo.`;
+  }
+  return `Cliente a recuperar${dias != null ? `: hace ${dias} días que no compra` : ""}. ${cerca}: vale la visita de reconquista.`;
+}
+
 function makeRec(c: ScoredCandidate, vendedorId: string, justificacion?: string): any {
   return {
     client_id: c.client_id,
     vendedor_id: vendedorId,
     prioridad: c.estado_comercial === 'ACTIVO' ? 'alta' : 'media',
-    justificacion: justificacion || `Auto: ${c.razon_social} (${c.estado_comercial}) - Score ${c.score_total}, dist ${c.distancia_km}km`,
+    justificacion: justificacion || justificacionComercial(c),
     score_final: c.score_total,
     factores: {
       score_comercial: c.score_comercial,
@@ -825,6 +882,7 @@ function makeRec(c: ScoredCandidate, vendedorId: string, justificacion?: string)
     },
   };
 }
+
 
 // ============================================================
 // MAIN HANDLER — v11-exact-eight
@@ -1146,6 +1204,8 @@ Deno.serve(async (req) => {
     const vendorProspectPools: Map<string, ScoredCandidate[]> = new Map();
     const vendorHotspots: Map<string, AnchorPoint> = new Map();
     const extraProspectosLoaded: any[] = [];
+    const liveDiscoveredIds = new Set<string>();
+    const coberturaPorVendedor = new Map<string, any>();
 
     for (const vendedor of vendedoresData) {
       // === Filter vendor's own clients ===
@@ -1413,6 +1473,7 @@ Deno.serve(async (req) => {
                 console.error(`No se pudieron guardar los prospectos descubiertos: ${liveUpsertError.message}`);
               } else {
                 extraProspectosLoaded.push(...newProspects);
+                newProspects.forEach((p: any) => liveDiscoveredIds.add(p.place_id));
                 const liveScored = scoreProspects(
                   newProspects, feedbacksMapProspectos,
                   vendorHotspot, MAX_PROSPECT_DISTANCE_KM, otherHotspots, scoreOptsPRelaxed,
@@ -1438,26 +1499,46 @@ Deno.serve(async (req) => {
     }
 
     // ============================================================
-    // 10. BUILD PROMPT
+    // 10. BUILD PROMPT — atributos de negocio, sin coordenadas ni scores
     // ============================================================
-    const formatCandidate = (c: ScoredCandidate, i: number) =>
-      `${i + 1}. [${c.client_id}] ${c.razon_social} | estado:${c.estado_comercial} | score:${c.score_total} | dist:${c.distancia_km}km | barrio:${c.barrio || '?'} | días_sin_compra:${c.dias_desde_ultima_compra ?? 'N/A'} | ticket:$${c.ticket_promedio ?? 0}${c.tipo_negocio ? ` | tipo:${c.tipo_negocio}` : ''}${c.feedbacks_recientes.length > 0 ? ` | feedbacks: ${c.feedbacks_recientes.map(f => f.feedback).join('; ')}` : ''}`;
+    const cuadras = (km: number) => Math.max(1, Math.round((km * 1000) / 100));
+    const formatCandidate = (c: ScoredCandidate, i: number) => {
+      const bloque = c.es_prospecto
+        ? "PROSPECTO"
+        : (c.estado_comercial === "ACTIVO" ? "CARTERA ACTIVA" : "REACTIVACIÓN");
+      const compra = c.es_prospecto
+        ? "sin historia de compra"
+        : (c.dias_desde_ultima_compra === null || c.dias_desde_ultima_compra === undefined
+          ? "sin fecha de última compra"
+          : `${c.dias_desde_ultima_compra} días sin comprar`);
+      const ticket = !c.es_prospecto && c.ticket_promedio
+        ? `, ticket promedio $${Math.round(Number(c.ticket_promedio)).toLocaleString("es-AR")}`
+        : "";
+      const rubro = c.tipo_negocio ? `, ${c.tipo_negocio}` : "";
+      const reputacion = c.es_prospecto && c.rating ? `, reputación ${c.rating}` : "";
+      const feedback = c.feedbacks_recientes.length > 0
+        ? ` | comentario del vendedor: ${c.feedbacks_recientes.map(f => f.feedback).join("; ")}`
+        : "";
+      return `${i + 1}. [${c.client_id}] ${c.razon_social} | ${bloque} | barrio ${c.barrio || "s/d"} | a ${cuadras(c.distancia_km)} cuadras del arranque de la ruta | ${compra}${ticket}${rubro}${reputacion}${feedback}`;
+    };
 
     const vendorSections = vendedoresData.map(v => {
       const clients = vendorClientPools.get(v.user_id) || [];
       const prospects = vendorProspectPools.get(v.user_id) || [];
-      const hotspot = vendorHotspots.get(v.user_id);
+      const activos = clients.filter(c => c.estado_comercial === "ACTIVO");
+      const reactivables = clients.filter(c => c.estado_comercial !== "ACTIVO");
 
       return `
 ### VENDEDOR: ${v.nombre} (ID: ${v.user_id})
-Hotspot: ${hotspot ? `${hotspot.lat.toFixed(4)}, ${hotspot.lng.toFixed(4)}` : 'N/A'} | Radio: ${HARD_RADIUS_KM}km
-Elegí 8 visitas. PRIORIDAD: clientes existentes primero, prospectos solo para completar.
-Si hay clientes con >90 días sin compra, incluí al menos 1 para recuperación.
+Objetivo del día: ${CUPO_CARTERA_ACTIVA} de cartera activa + ${CUPO_REACTIVACION} de reactivación + ${CUPO_PROSPECTOS} prospectos = 8 visitas caminables.
 
-CLIENTES DE LA CARTERA (${clients.length} — priorizá estos):
-${clients.length > 0 ? clients.map(formatCandidate).join('\n') : '(sin clientes en zona)'}
+CARTERA ACTIVA (${activos.length}):
+${activos.length > 0 ? activos.map(formatCandidate).join('\n') : '(sin clientes activos en la zona)'}
 
-PROSPECTOS DISPONIBLES (${prospects.length} — solo para completar):
+REACTIVACIÓN — dormidos o perdidos (${reactivables.length}):
+${reactivables.length > 0 ? reactivables.map(formatCandidate).join('\n') : '(sin clientes para reactivar en la zona)'}
+
+PROSPECTOS CERCANOS (${prospects.length}):
 ${prospects.length > 0 ? prospects.slice(0, 15).map(formatCandidate).join('\n') : '(sin prospectos disponibles)'}`;
     }).join('\n\n');
 
@@ -1467,12 +1548,14 @@ ${prospects.length > 0 ? prospects.slice(0, 15).map(formatCandidate).join('\n') 
 ═══════════════════════════════════════════════════════════
 ⚡ INSTRUCCIONES ADICIONALES DEL CLIENTE:
 ${instrucciones_adicionales}
-Aplicá estas instrucciones sin alterar la regla obligatoria: clientes internos primero y prospectos sólo para completar hasta 8.
+Aplicá estas instrucciones sin alterar la composición objetivo (4 cartera activa + 2 reactivación + 2 prospectos).
 ═══════════════════════════════════════════════════════════
 ` : ''}${vendorSections}
 
 TOTAL ESPERADO: ${vendedoresData.length * 8} recomendaciones (8 por vendedor).
-Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${hasCustomInstructions ? `\nRECORDÁ: aplicá las instrucciones dentro de cada grupo, manteniendo clientes internos antes que prospectos.` : ' Priorizá clientes sobre prospectos.'}`;
+Cada client_id UNA SOLA VEZ en toda la respuesta.
+La justificación es para un asignador comercial: explicá en una o dos frases POR QUÉ conviene visitar ese lugar hoy (relación con el cliente, tiempo sin comprar, potencial, cercanía con el resto de la ruta). PROHIBIDO usar coordenadas, "hotspot", "score", números de distancia en km o cualquier jerga interna del sistema.${hasCustomInstructions ? `\nRECORDÁ: aplicá las instrucciones respetando la composición objetivo.` : ''}`;
+
 
     console.log(`📏 Prompt: ${prompt.length} chars`);
 
@@ -1615,6 +1698,8 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
           return [];
         }
         extraProspectosLoaded.push(...newProspects);
+        newProspects.forEach((p: any) => liveDiscoveredIds.add(p.place_id));
+
 
         const scored = scoreProspects(
           newProspects, feedbacksMapProspectos,
@@ -1707,6 +1792,31 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         }
       });
       console.log(`✅ ${vendedor.nombre}: ${vendorRecs.length} recs (${dist.clients}C/${dist.prospects}P, ${dist.recovery} recovery)`);
+
+      // === COBERTURA: pedido vs conseguido, para explicárselo al asignador ===
+      let obtCartera = 0, obtReactivacion = 0, obtProspectos = 0, obtMapsLive = 0;
+      let radioFinal = 0;
+      vendorRecs.forEach((r: any) => {
+        const c = allCands.get(r.client_id);
+        if (!c) return;
+        radioFinal = Math.max(radioFinal, c.distancia_km || 0);
+        if (c.es_prospecto) {
+          obtProspectos++;
+          if (liveDiscoveredIds.has(c.client_id)) obtMapsLive++;
+        } else if (c.estado_comercial === "ACTIVO") obtCartera++;
+        else obtReactivacion++;
+      });
+      coberturaPorVendedor.set(vendedor.user_id, {
+        vendedor: vendedor.nombre,
+        total: vendorRecs.length,
+        objetivo: { cartera_activa: CUPO_CARTERA_ACTIVA, reactivacion: CUPO_REACTIVACION, prospectos: CUPO_PROSPECTOS },
+        obtenido: { cartera_activa: obtCartera, reactivacion: obtReactivacion, prospectos: obtProspectos },
+        prospectos_de_base: obtProspectos - obtMapsLive,
+        prospectos_de_maps: obtMapsLive,
+        radio_final_km: Number(radioFinal.toFixed(1)),
+        clientes_propios_en_zona: (vendorClientPools.get(vendedor.user_id) || []).length,
+      });
+
     }
 
     // ============================================================
@@ -1920,6 +2030,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
       }
 
       const esProspecto = !clienteCompleto;
+      rec.justificacion = limpiarJustificacion(rec.justificacion, candidateInfo ? justificacionComercial(candidateInfo) : 'Visita sugerida por cercanía y potencial comercial en la zona.');
       const place = !esProspecto ? placesMap.get(rec.client_id) : null;
       const estado_comercial = candidateInfo?.estado_comercial || (esProspecto ? 'POTENCIAL' : classifyEstado(clienteCompleto?.dias_desde_ultima_compra));
 
@@ -1935,7 +2046,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: { ...rec.factores, tipo_negocio: prospectoCompleto.tipo_principal, rating: prospectoCompleto.rating, website: prospectoCompleto.website },
+          factores_ia: { ...rec.factores, tipo_negocio: prospectoCompleto.tipo_principal, rating: prospectoCompleto.rating, website: prospectoCompleto.website, origen: liveDiscoveredIds.has(prospectoCompleto.place_id) ? 'maps_live' : 'base', cobertura: coberturaPorVendedor.get(vendedorId) || null },
           justificacion: rec.justificacion,
           es_prospecto: true,
           estado_comercial,
@@ -1967,7 +2078,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating },
+          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating, origen: liveDiscoveredIds.has(candidateInfo.client_id) ? 'maps_live' : 'base', cobertura: coberturaPorVendedor.get(vendedorId) || null },
           justificacion: rec.justificacion,
           es_prospecto: true,
           estado_comercial: candidateInfo.estado_comercial,
@@ -1999,7 +2110,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: rec.factores,
+          factores_ia: { ...rec.factores, origen: 'cartera', cobertura: coberturaPorVendedor.get(vendedorId) || null },
           justificacion: rec.justificacion,
           es_prospecto: false,
           estado_comercial,
@@ -2046,11 +2157,42 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
     if (enrichedRecommendations.length === 0) {
       throw new Error("No se encontraron candidatos disponibles para ningún vendedor con los filtros seleccionados.");
     }
-    const cuotaIncompleta = incompleteVendors.length > 0
-      ? `Cuota parcial: ${enrichedRecommendations.length}/${expectedRecommendationCount}. `
-        + `Sin completar 8: ${incompleteVendors.map((v) => `${v.nombre} (${enrichedCountByVendor.get(v.user_id) || 0})`).join(', ')}.`
-      : null;
+    const zonaTexto = [...barriosFinales, ...comunasFinales].filter(Boolean).join(", ") || "la zona seleccionada";
+    const avisosCobertura: string[] = [];
+    for (const vendedor of vendedoresData) {
+      const cob = coberturaPorVendedor.get(vendedor.user_id);
+      if (!cob) continue;
+      const propios = cob.obtenido.cartera_activa + cob.obtenido.reactivacion;
+      const partes: string[] = [];
+      if (cob.clientes_propios_en_zona <= 1) {
+        partes.push(
+          `En ${zonaTexto}, ${vendedor.nombre} tiene ${cob.clientes_propios_en_zona === 0 ? "cero clientes propios" : "un solo cliente propio"}. `
+          + `Se completó la ruta con ${cob.obtenido.prospectos} lugares nuevos de la zona para que el día rinda.`,
+        );
+      } else if (cob.obtenido.cartera_activa < CUPO_CARTERA_ACTIVA || cob.obtenido.reactivacion < CUPO_REACTIVACION) {
+        partes.push(
+          `Ruta de ${vendedor.nombre}: ${cob.obtenido.cartera_activa} de cartera activa y ${cob.obtenido.reactivacion} de reactivación `
+          + `(objetivo ${CUPO_CARTERA_ACTIVA} y ${CUPO_REACTIVACION}); se completó con ${cob.obtenido.prospectos} prospectos cercanos.`,
+        );
+      }
+      if (cob.prospectos_de_maps > 0) {
+        partes.push(`Se buscaron lugares nuevos en el mapa: ${cob.prospectos_de_maps} se incorporaron a la ruta de ${vendedor.nombre}.`);
+      }
+      if (cob.total < 8) {
+        partes.push(`Sólo se pudieron armar ${cob.total} de 8 visitas para ${vendedor.nombre} con los filtros elegidos. Probá ampliar la zona.`);
+      }
+      if (partes.length > 0) avisosCobertura.push(partes.join(" "));
+      if (propios === 0 && cob.total > 0) {
+        console.log(`ℹ️ ${vendedor.nombre}: ruta 100% de prospección.`);
+      }
+    }
+    const cuotaIncompleta = avisosCobertura.length > 0
+      ? avisosCobertura.join(" ")
+      : (incompleteVendors.length > 0
+        ? `Se armaron ${enrichedRecommendations.length} de ${expectedRecommendationCount} visitas con los filtros elegidos.`
+        : null);
     if (cuotaIncompleta) console.warn(`⚠️ ${cuotaIncompleta}`);
+
 
 
     // Save to DB
@@ -2071,11 +2213,13 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
       recomendaciones: enrichedRecommendations,
       resumen: {
         total_recomendaciones: enrichedRecommendations.length,
-        descripcion: aiRecommendations.resumen_analisis,
+        descripcion: limpiarJustificacion(aiRecommendations.resumen_analisis, "Rutas armadas priorizando cartera cercana y completadas con prospectos de la misma zona."),
         distribucion_por_vendedor: distribucion,
         zonas_priorizadas: Array.from(zonas).slice(0, 5),
         request_id,
         advertencia: cuotaIncompleta,
+        avisos_cobertura: avisosCobertura,
+        cobertura: Array.from(coberturaPorVendedor.values()),
 
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 });

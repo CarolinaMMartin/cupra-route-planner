@@ -1,6 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { TrendingUp, MapPin, Users } from "lucide-react";
+import { TrendingUp, MapPin, Users, Info } from "lucide-react";
 
 interface AIInsightsProps {
   resumen: {
@@ -8,6 +8,7 @@ interface AIInsightsProps {
     descripcion: string;
     distribucion_por_vendedor: Record<string, number>;
     zonas_priorizadas: string[];
+    avisos_cobertura?: string[];
   };
   vendedores: Array<{ id: string; nombre: string }>;
 }
@@ -16,6 +17,7 @@ const AIInsightsCard = ({ resumen, vendedores }: AIInsightsProps) => {
   const getVendedorNombre = (id: string) => {
     return vendedores.find(v => v.id === id)?.nombre || 'Desconocido';
   };
+  const avisos = resumen.avisos_cobertura || [];
 
   return (
     <Card className="bg-gradient-to-br from-primary/5 to-secondary/5 border-primary/20">
@@ -30,6 +32,22 @@ const AIInsightsCard = ({ resumen, vendedores }: AIInsightsProps) => {
             "{resumen.descripcion}"
           </p>
         </div>
+
+        {/* Avisos de cobertura */}
+        {avisos.length > 0 && (
+          <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 space-y-2">
+            <div className="flex items-center gap-2">
+              <Info className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium">Cobertura de la zona</span>
+            </div>
+            <ul className="space-y-1">
+              {avisos.map((aviso, i) => (
+                <li key={i} className="text-sm text-muted-foreground leading-relaxed">{aviso}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
 
         {/* Métricas clave */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
