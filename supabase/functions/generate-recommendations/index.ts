@@ -1282,7 +1282,7 @@ Deno.serve(async (req) => {
 
         const extraScored = scoreProspects(
           extraFiltered, feedbacksMapProspectos,
-          vendorHotspot, expandRadius, otherHotspots,
+          vendorHotspot, expandRadius, otherHotspots, scoreOptsP,
         ).filter(c => !existingIds.has(c.client_id));
 
         prospectPool = [...prospectPool, ...extraScored];
@@ -1339,6 +1339,7 @@ Deno.serve(async (req) => {
           vendorHotspot,
           fallbackRadius,
           otherHotspots,
+          scoreOptsP,
         )
           .filter(c => !existingIds.has(c.client_id))
           .sort((a, b) => a.distancia_km - b.distancia_km)
@@ -1399,7 +1400,7 @@ Deno.serve(async (req) => {
                 extraProspectosLoaded.push(...newProspects);
                 const liveScored = scoreProspects(
                   newProspects, feedbacksMapProspectos,
-                  vendorHotspot, 100, otherHotspots,
+                  vendorHotspot, MAX_PROSPECT_DISTANCE_KM, otherHotspots, scoreOptsPRelaxed,
                 ).filter(c => !existingIds.has(c.client_id));
                 prospectPool = [...prospectPool, ...liveScored];
                 currentTotal = clientPool.length + prospectPool.length;
@@ -1602,7 +1603,7 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
 
         const scored = scoreProspects(
           newProspects, feedbacksMapProspectos,
-          hotspot, 100, otherHotspots,
+          hotspot, MAX_PROSPECT_DISTANCE_KM, otherHotspots, scoreOptsPRelaxed,
         ).filter(c => !takenIds.has(c.client_id));
         console.log(`🔎 Top-up Google: +${scored.length} prospectos para completar cuota.`);
         return scored;
