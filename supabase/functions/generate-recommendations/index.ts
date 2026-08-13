@@ -791,17 +791,27 @@ function validateAndFill(
     clients: clientPool,
     prospects: prospectPool,
     unavailableIds: globalPickedIds,
+    cupos: {
+      cartera: CUPO_CARTERA_ACTIVA,
+      reactivacion: CUPO_REACTIVACION,
+      prospectos: CUPO_PROSPECTOS,
+    },
   });
   const pickedIds = new Set(orderedIds);
   const isAvailable = (id: string) => !pickedIds.has(id) && !globalPickedIds.has(id);
   const result = orderedIds.map((candidateId) => {
     const aiRecommendation = aiRecommendationById.get(candidateId);
-    if (aiRecommendation) return aiRecommendation;
     const candidate = allCandidates.get(candidateId)!;
-    const recoveryReason = candidate.estado_comercial === 'PERDIDO'
-      ? `Recuperación: ${candidate.razon_social} (${candidate.dias_desde_ultima_compra} días sin compra)`
-      : undefined;
-    return makeRec(candidate, vendedorId, recoveryReason);
+    if (aiRecommendation) {
+      return {
+        ...aiRecommendation,
+        justificacion: limpiarJustificacion(
+          aiRecommendation.justificacion,
+          justificacionComercial(candidate),
+        ),
+      };
+    }
+    return makeRec(candidate, vendedorId);
   });
 
   const selectedClientCount = orderedIds.filter((candidateId) => !allCandidates.get(candidateId)?.es_prospecto).length;
@@ -824,8 +834,10 @@ function validateAndFill(
         const swapIdx = result.findIndex(r => allCandidates.get(r.client_id)?.es_prospecto);
         const idx = swapIdx >= 0 ? swapIdx : result.length - 1;
         pickedIds.delete(result[idx].client_id);
-        result[idx] = makeRec(recovery, vendedorId, `Recuperación estratégica: ${recovery.razon_social} (${recovery.dias_desde_ultima_compra} días sin compra)`);
+        result[idx] = makeRec(recovery, vendedorId);
         pickedIds.add(recovery.client_id);
+      }
+
       }
     }
 
