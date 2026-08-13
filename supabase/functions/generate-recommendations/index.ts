@@ -1705,7 +1705,6 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
     // Primero un chequeo determinístico (territorio) y después una
     // segunda pasada de IA con un modelo fuerte sobre el reparto total.
     // ============================================================
-    let auditoriaResumen = "";
     try {
       const candidateOf = (vendedorId: string, id: string): ScoredCandidate | undefined =>
         (vendorClientPools.get(vendedorId) || []).find(c => c.client_id === id)
@@ -1862,7 +1861,6 @@ Cada client_id UNA SOLA VEZ en toda la respuesta. Concentración geográfica.${h
         if (!auditoriaAprobada) {
           throw new Error("La distribución no superó la auditoría final de coherencia territorial y densidad");
         }
-        auditoriaResumen = "Distribución validada: rutas compactas y territorialmente coherentes.";
       }
     } catch (auditError) {
       console.error("Auditoría de coherencia bloqueó la distribución:", auditError);
