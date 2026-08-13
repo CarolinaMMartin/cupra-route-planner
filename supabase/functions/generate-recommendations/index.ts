@@ -117,6 +117,10 @@ function buildRevisitMap(feedbacksMap: Map<string, any[]>): Map<string, RevisitI
 interface ScoreOptions {
   cooldownDays?: number;
   revisitMap?: Map<string, RevisitInfo>;
+  /** Precio promedio por caja del canal, para calcular el margen realizado. */
+  precioCajaCanal?: number;
+  /** Prospectos marcados como "posible cliente existente" (nombre + radio corto). */
+  posiblesClientes?: Map<string, { cliente: string; vendedor: string | null; dias: number | null }>;
 }
 
 
