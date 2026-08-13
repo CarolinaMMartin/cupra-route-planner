@@ -731,20 +731,22 @@ Usá estas instrucciones para ordenar candidatos dentro de cada grupo. Nunca ant
 ═══════════════════════════════════════════════════════════
 ` : ''}
 REGLAS DE COMPOSICIÓN:
-1. CUOTA OBLIGATORIA: Seleccioná EXACTAMENTE 8 visitas por vendedor.
-2. PRIORIDAD NO NEGOCIABLE: agota primero todos los clientes internos elegibles del vendedor.
-3. Si hay menos de 8 clientes internos elegibles, completa los lugares faltantes con PROSPECTOS.
-4. Nunca reemplaces un cliente interno elegible por un prospecto.
-5. Dentro de los clientes, prioriza ACTIVOS e INACTIVOS y luego oportunidades de recuperación.
-6. CONCENTRACIÓN GEOGRÁFICA: rutas densas, sin viajes largos innecesarios.
-7. Los candidatos ya fueron filtrados por cartera y radio geográfico.
-8. JUSTIFICACIÓN: para cada visita, explica brevemente por qué fue seleccionada.
-9. NUNCA repitas el mismo client_id para distintos vendedores.
-10. FEEDBACK DEL VENDEDOR: si un feedback pidió volver más adelante, ese negocio ya fue excluido; si el pedido está vencido, priorizalo.
-11. COOLDOWN: no se repite un negocio recomendado hace menos de 15 días (ya está filtrado); no lo reintroduzcas.
-12. TERRITORIO: cada visita debe caer en la zona natural del vendedor; nunca asignes algo que pertenece al hotspot de otro vendedor.
+1. CUOTA: EXACTAMENTE 8 visitas por vendedor.
+2. MEZCLA OBJETIVO: ${CUPO_CARTERA_ACTIVA} de CARTERA ACTIVA + ${CUPO_REACTIVACION} de REACTIVACIÓN (dormidos/perdidos) + ${CUPO_PROSPECTOS} PROSPECTOS.
+3. Si falta cartera activa, se completa con reactivación; si falta reactivación, con cartera activa; si no hay clientes propios, con prospectos.
+4. RUTA COMPACTA: la cercanía manda. Preferí un prospecto cercano antes que un cliente descolgado del resto de la ruta.
+5. Los candidatos ya vienen filtrados por cartera, cooldown y radio caminable: no inventes IDs.
+6. NUNCA repitas el mismo client_id para distintos vendedores.
+7. FEEDBACK DEL VENDEDOR: si un feedback pidió volver más adelante, ese negocio ya fue excluido; si el pedido está vencido, priorizalo.
+8. TERRITORIO: cada visita debe caer en la zona natural del vendedor.
 
-IMPORTANTE: Las instrucciones adicionales pueden ordenar candidatos dentro de cada grupo, pero no pueden anteponer prospectos mientras queden clientes internos elegibles.
+JUSTIFICACIÓN (lo lee un asignador comercial, no un técnico):
+- Una o dos frases en español rioplatense explicando por qué visitar ese lugar HOY.
+- Hablá de la relación con el cliente, tiempo sin comprar, potencial, rubro y cercanía con el resto de la ruta (en cuadras o minutos a pie).
+- PROHIBIDO: coordenadas, "hotspot", "score", "cluster", distancias en km, IDs o cualquier jerga interna.
+
+IMPORTANTE: Las instrucciones adicionales ordenan candidatos dentro de cada bloque, pero no cambian la mezcla objetivo ni la compacidad de la ruta.
+
 
 FORMATO: Usá la tool "generate_recommendations" con la estructura indicada.`;
   return base;
