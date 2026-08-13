@@ -124,4 +124,27 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     letter-spacing: 0.06em;
   }
+
+  /* Visible scrollbar on dark surfaces */
+  .scroll-visible {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--primary) / 0.45) hsl(var(--muted));
+  }
+  .scroll-visible::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .scroll-visible::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+    border-radius: 8px;
+  }
+  .scroll-visible::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.45);
+    border-radius: 8px;
+    border: 2px solid hsl(var(--muted));
+  }
+  .scroll-visible::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.7);
+  }
 }
+
