@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, UserCheck, Users, AlertCircle, Lightbulb, Clock, UserX, TrendingDown, Loader2 } from "lucide-react";
+import { Search, UserCheck, Users, AlertCircle, Lightbulb, Clock, UserX, TrendingDown, Loader2, SlidersHorizontal, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SearchableSelect } from "@/components/ui/searchable-select";
