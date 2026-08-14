@@ -23,6 +23,9 @@ import {
   prioridadBase,
   prioridadEscala100,
   prioridadVisita,
+  buildAreaFilter,
+  belongsToArea,
+  areaKey,
 } from "./portfolio-ranking.ts";
 
 // La ruta del día tiene que ser CAMINABLE: todas las visitas cerca unas de otras.
@@ -719,7 +722,10 @@ function scoreProspects(
     }
 
     // Potencial = volumen de reseñas (proxy de tamaño), no la nota del consumidor final.
-    const score_comercial = potencialProspecto(p);
+    // Bonus por teléfono: un prospecto contactable rinde más que uno a ciegas.
+    const tieneTelefono = Boolean(String(p.telefono || "").trim());
+    const score_comercial = Math.min(100, potencialProspecto(p) + (tieneTelefono ? 10 : 0));
+
 
     let score_rotacion = 100;
     if (p.last_recommendation_at) {
@@ -937,20 +943,22 @@ function justificacionComercial(c: ScoredCandidate): string {
     return `${rubro} de ${c.barrio || "la zona"}${rep} que todavía no nos compra. ${cerca}: sirve para sumar cobertura nueva sin estirar el día.`;
   }
   const dias = c.dias_desde_ultima_compra;
-  // Aviso de devolución: nunca se manda a visitar "a ciegas" un cliente que devolvió mercadería.
-  const nc = c.alerta_nc
-    ? ` ATENCIÓN: devolvió el ${Math.round(c.alerta_nc.ratio * 100)}% de lo facturado${c.alerta_nc.fecha ? ` (última nota de crédito ${c.alerta_nc.fecha})` : ""}; revisar el motivo antes de ofrecer.`
-    : "";
+  // OT4: con devolución significativa la visita es de SERVICIO/RECUPERO, nunca comercial.
+  if (c.alerta_nc) {
+    return `Visita de servicio y recupero: devolvió el ${Math.round(c.alerta_nc.ratio * 100)}% de lo facturado`
+      + `${c.alerta_nc.fecha ? ` (nota de crédito del ${c.alerta_nc.fecha})` : ""}. ${cerca}: hay que revisar el motivo de la `
+      + `devolución y el estado de cobranza antes de volver a ofrecer producto.`;
+  }
   const ritmo = c.cadencia_dias && dias != null && dias > c.cadencia_dias
     ? ` Compra cada ${Math.round(c.cadencia_dias)} días, así que ya está atrasado.`
     : "";
   if (c.estado_comercial === "ACTIVO") {
-    return `Cliente activo de ${c.barrio || "la zona"}${dias != null ? `, compró hace ${dias} días` : ""}.${ritmo} ${cerca}: visita de mantenimiento para sostener el ritmo de compra.${nc}`;
+    return `Cliente activo de ${c.barrio || "la zona"}${dias != null ? `, compró hace ${dias} días` : ""}.${ritmo} ${cerca}: visita de mantenimiento para sostener el ritmo de compra.`;
   }
   if (c.estado_comercial === "INACTIVO") {
-    return `Bajó el ritmo${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: conviene pasar antes de que se enfríe del todo.${nc}`;
+    return `Bajó el ritmo${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: conviene pasar antes de que se enfríe del todo.`;
   }
-  return `Cliente a recuperar${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: vale la visita de reconquista.${nc}`;
+  return `Cliente a recuperar${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: vale la visita de reconquista.`;
 }
 
 function makeRec(c: ScoredCandidate, vendedorId: string, justificacion?: string): any {
@@ -1018,19 +1026,35 @@ Deno.serve(async (req) => {
       }
     }
 
-    const requestedBarrioKeys = new Set(
-      barriosFinales.map((value: string) => normalizeBarrio(value).toUpperCase()).filter(Boolean),
-    );
-    const requestedComunaKeys = new Set(
-      comunasFinales.map((value: string) => String(value || "").trim().toUpperCase()).filter(Boolean),
-    );
+    // Errores operativos que el asignador tiene que ver (nunca ruta corta silenciosa).
+    const erroresCobertura: string[] = [];
+
+    // Una sola fuente de verdad para "¿está dentro del área?" (ver portfolio-ranking.ts).
+
+    // Compara sin acentos ("San Nicolás" == "San Nicolas") y usa la comuna sólo
+    // como respaldo cuando el registro no tiene barrio.
+    const areaFilter = buildAreaFilter(barriosFinales, comunasFinales);
     const belongsToSelectedArea = (place: { barrio?: string | null; comuna?: string | null }): boolean => {
-      if (!area_id) return true;
-      const barrioKey = normalizeBarrio(place.barrio).toUpperCase();
-      const comunaKey = String(place.comuna || "").trim().toUpperCase();
-      return (Boolean(barrioKey) && requestedBarrioKeys.has(barrioKey))
-        || (Boolean(comunaKey) && requestedComunaKeys.has(comunaKey));
+      if (!area_id && !areaFilter.activo) return true;
+      return belongsToArea(place, areaFilter);
     };
+
+    // Patrón ilike tolerante a acentos: "San Nicolás" -> "%San Nicol_s%".
+    const ilikeLoose = (value: string): string =>
+      String(value || "").trim().replace(/[%,()]/g, " ").replace(/[^\x20-\x7E]/g, "_");
+    const barrioLikeConditions = (column: string): string[] =>
+      (barriosFinales || [])
+        .map((b: string) => ilikeLoose(b))
+        .filter(Boolean)
+        .map((b: string) => `${column}.ilike.%${b}%`);
+    const comunaExactConditions = (column: string): string[] =>
+      (comunasFinales || [])
+        .map((c: string) => ilikeLoose(c))
+        .filter(Boolean)
+        .map((c: string) => `${column}.ilike.${c}`);
+
+
+
 
     // ---- 2. Load vendor profiles ----
     const { data: vendedoresData, error: vendedoresError } = await supabaseClient
@@ -1063,12 +1087,16 @@ Deno.serve(async (req) => {
     let placesQuery = supabaseClient.from("client_places").select("*").eq("is_primary", true);
     if (provincia && provincia !== "all") placesQuery = placesQuery.ilike("provincia_principal", `%${provincia}%`);
 
-    const geoConditions: string[] = [];
     // OJO: comuna con comodines ("%Comuna 1%") arrastra Comuna 10..15 (Palermo).
-    // Se compara exacto (case-insensitive) para no salirse del área elegida.
-    if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditions.push(`comuna.ilike.${String(c).trim()}`));
-    if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditions.push(`barrio_principal.ilike.%${b}%`));
+    // Se compara exacto (case-insensitive). Los barrios se buscan con patrón
+    // tolerante a acentos ("San Nicol_s") porque el catálogo y el geocoding
+    // no siempre coinciden en tildes.
+    const geoConditions: string[] = [
+      ...comunaExactConditions("comuna"),
+      ...barrioLikeConditions("barrio_principal"),
+    ];
     if (geoConditions.length > 0) placesQuery = placesQuery.or(geoConditions.join(","));
+
 
     const { data: clientPlacesRaw, error: placesError } = await placesQuery;
     if (placesError) throw placesError;
@@ -1125,6 +1153,33 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- 4c. Cuentas del área SIN ubicación utilizable ----
+    // Hoy desaparecen de cluster, ruta y avisos sin dejar rastro. Se cuentan
+    // por vendedor para que la cobertura lo diga explícitamente.
+    const sinUbicacionPorVendedor = new Map<string, { nombre: string; barrio: string | null }[]>();
+    {
+      const selectedVendorIds = vendedoresData.map((v: any) => v.user_id);
+      for (const c of portfolioClients) {
+        const place = placesMap.get(c.client_id);
+        const tieneCoords = place && Number.isFinite(Number(place.lat)) && Number.isFinite(Number(place.long));
+        if (tieneCoords) continue;
+        const declarado = c.barrio_principal || null;
+        // Sin barrio declarado tampoco sabemos si es del área: se reporta igual
+        // cuando el área está activa y el cliente no tiene dónde ubicarse.
+        const esDelArea = declarado
+          ? belongsToSelectedArea({ barrio: declarado, comuna: null })
+          : false;
+        if (!esDelArea) continue;
+        for (const vid of selectedVendorIds) {
+          if (!isClientAffiliated(c, vid, sellerNameMap)) continue;
+          const lista = sinUbicacionPorVendedor.get(vid) || [];
+          lista.push({ nombre: c.fantasia || c.razon_social || c.client_id, barrio: declarado });
+          sinUbicacionPorVendedor.set(vid, lista);
+        }
+      }
+    }
+
+
     // ---- 5. Exclude already assigned today ----
     const now = new Date();
     now.setHours(now.getUTCHours() - 3);
@@ -1149,14 +1204,19 @@ Deno.serve(async (req) => {
       .limit(200);
 
     if (provincia && provincia !== "all") prospectosQuery = prospectosQuery.ilike("provincia", `%${provincia}%`);
-    const geoConditionsP: string[] = [];
-    if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditionsP.push(`comuna.ilike.%${c}%`));
-    if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditionsP.push(`barrio.ilike.%${b}%`));
+    const geoConditionsP: string[] = [
+      ...comunaExactConditions("comuna"),
+      ...barrioLikeConditions("barrio"),
+    ];
     if (geoConditionsP.length > 0) prospectosQuery = prospectosQuery.or(geoConditionsP.join(","));
+
 
     const { data: prospectosData, error: prospectosError } = await prospectosQuery;
     if (prospectosError) throw prospectosError;
-    let prospectos = (prospectosData || []).filter(p => !prospectosAsignadosHoy.has(p.place_id));
+    let prospectos = (prospectosData || [])
+      .filter(p => !prospectosAsignadosHoy.has(p.place_id))
+      .filter((p: any) => belongsToSelectedArea({ barrio: p.barrio, comuna: p.comuna }));
+
 
     // ---- 6b. GATE prospecto ↔ cartera ----
     // Google Places no devuelve CUIT: el cruce se hace por nombre de fantasía
@@ -1247,8 +1307,11 @@ Deno.serve(async (req) => {
         || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY")
         || "";
       if (!googleApiKey) {
-        throw new Error(`Faltan ${missingProspects} prospectos para completar 8 y Google Maps no está configurado.`);
-      }
+        erroresCobertura.push(
+          `No se pudo buscar prospectos: falta configuración de Google Maps. Faltan ${missingProspects} lugares nuevos para completar las rutas.`,
+        );
+      } else {
+
 
       const excludedPlaceIds = new Set<string>([
         ...prospectos.map((prospecto) => prospecto.place_id),
@@ -1306,7 +1369,9 @@ Deno.serve(async (req) => {
         prospectos = [...prospectos, ...newProspects];
         console.log(`🔎 Google Maps agregó ${newProspects.length} prospectos al repositorio operativo.`);
       }
+      }
     }
+
 
     console.log(`🆕 Prospectos disponibles: ${prospectos.length}`);
 
@@ -1599,7 +1664,7 @@ Deno.serve(async (req) => {
           .lte("latitud", vendorHotspot.lat + deltaLat)
           .gte("longitud", vendorHotspot.lng - deltaLng)
           .lte("longitud", vendorHotspot.lng + deltaLng)
-          .order("rating", { ascending: false })
+          .order("total_ratings", { ascending: false, nullsFirst: false })
           .limit(50);
 
         const extraFiltered = (geoProspectos || []).filter(p =>
@@ -1632,16 +1697,17 @@ Deno.serve(async (req) => {
           .from("prospectos")
           .select("*")
           .eq("es_cliente_cupra", false)
-          .order("rating", { ascending: false })
+          .order("total_ratings", { ascending: false, nullsFirst: false })
           .limit(Math.max(needed * 8, 80));
 
         if (provincia && provincia !== "all") {
           fallbackQuery = fallbackQuery.ilike("provincia", `%${provincia}%`);
         }
 
-        const geoConditionsFallback: string[] = [];
-        if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditionsFallback.push(`comuna.ilike.%${c}%`));
-        if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditionsFallback.push(`barrio.ilike.%${b}%`));
+        const geoConditionsFallback: string[] = [
+          ...comunaExactConditions("comuna"),
+          ...barrioLikeConditions("barrio"),
+        ];
         if (geoConditionsFallback.length > 0) {
           fallbackQuery = fallbackQuery.or(geoConditionsFallback.join(","));
         }
@@ -1657,8 +1723,10 @@ Deno.serve(async (req) => {
         const fallbackFiltered = Array.from(fallbackById.values()).filter(p =>
           !prospectosAsignadosHoy.has(p.place_id) &&
           !existingIds.has(p.place_id) &&
-          !p.client_id
+          !p.client_id &&
+          belongsToSelectedArea({ barrio: p.barrio, comuna: p.comuna })
         );
+
 
         extraProspectosLoaded.push(...fallbackFiltered);
 
@@ -1690,6 +1758,9 @@ Deno.serve(async (req) => {
           || "";
         if (!googleApiKey) {
           console.warn(`⚠️ ${vendedor.nombre}: faltan ${8 - currentTotal} candidatos y Google Maps no está configurado.`);
+          erroresCobertura.push(
+            `No se pudo buscar prospectos para ${vendedor.nombre}: falta configuración de Google Maps (faltan ${8 - currentTotal} visitas).`,
+          );
         } else {
           const existingIds = new Set([...clientPool, ...prospectPool].map(c => c.client_id));
           const excludedPlaceIds = new Set<string>([
@@ -1780,7 +1851,10 @@ Deno.serve(async (req) => {
       const feedback = c.feedbacks_recientes.length > 0
         ? ` | comentario del vendedor: ${c.feedbacks_recientes.map(f => f.feedback).join("; ")}`
         : "";
-      return `${i + 1}. [${c.client_id}] ${c.razon_social} | ${bloque} | barrio ${normalizeBarrio(c.barrio) || "s/d"} | a ${cuadras(c.distancia_km)} cuadras del arranque de la ruta | ${compra}${ticket}${devolucion}${prioridad}${rubro}${reputacion}${feedback}`;
+      const tipoVisita = c.alerta_nc
+        ? " | TIPO DE VISITA: SERVICIO/RECUPERO (prohibido pitch de venta: la justificación debe pedir revisar el motivo de la devolución y el estado de cobranza)"
+        : "";
+      return `${i + 1}. [${c.client_id}] ${c.razon_social} | ${bloque} | barrio ${normalizeBarrio(c.barrio) || "s/d"} | a ${cuadras(c.distancia_km)} cuadras del arranque de la ruta | ${compra}${ticket}${devolucion}${prioridad}${rubro}${reputacion}${tipoVisita}${feedback}`;
     };
 
     const vendorSections = vendedoresData.map(v => {
@@ -1913,7 +1987,11 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       missing: number,
       takenIds: Set<string>,
     ): Promise<ScoredCandidate[]> => {
-      if (!googleApiKeyTopUp || missing <= 0) return [];
+      if (missing <= 0) return [];
+      if (!googleApiKeyTopUp) {
+        erroresCobertura.push("No se pudo buscar prospectos: falta configuración de Google Maps.");
+        return [];
+      }
       const hotspot = vendorHotspots.get(vendedorId) || zoneCenterFallback;
       if (!hotspot) return [];
 
@@ -2076,6 +2154,8 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
         prospectos_de_maps: obtMapsLive,
         radio_final_km: Number(radioFinal.toFixed(1)),
         clientes_propios_en_zona: (vendorClientPools.get(vendedor.user_id) || []).length,
+        cuentas_sin_ubicacion: (sinUbicacionPorVendedor.get(vendedor.user_id) || []).map((c) => c.nombre),
+
         cuentas_prioritarias_fuera_de_zona: (cuentasFueraPorVendedor.get(vendedor.user_id) || []).map((r) => ({
           nombre: r.nombre,
           barrio: r.barrio,
@@ -2344,7 +2424,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating, origen: liveDiscoveredIds.has(candidateInfo.client_id) ? 'maps_live' : 'base', cobertura: coberturaPorVendedor.get(vendedorId) || null, alerta_nota_credito: (candidateInfo as any).alerta_nc || null, prioridad_comercial: (candidateInfo as any).prioridad_comercial ?? null },
+          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating, origen: liveDiscoveredIds.has(candidateInfo.client_id) ? 'maps_live' : 'base', cobertura: coberturaPorVendedor.get(vendedorId) || null, alerta_nota_credito: (candidateInfo as any).alerta_nc || null, tipo_visita: (candidateInfo as any)?.alerta_nc ? 'servicio/recupero' : 'comercial', prioridad_comercial: (candidateInfo as any).prioridad_comercial ?? null },
           justificacion: rec.justificacion,
           es_prospecto: true,
           estado_comercial: candidateInfo.estado_comercial,
@@ -2376,7 +2456,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: { ...rec.factores, origen: 'cartera', cobertura: coberturaPorVendedor.get(vendedorId) || null, alerta_nota_credito: candidateInfo ? (candidateInfo as any).alerta_nc || null : null },
+          factores_ia: { ...rec.factores, origen: 'cartera', cobertura: coberturaPorVendedor.get(vendedorId) || null, alerta_nota_credito: candidateInfo ? (candidateInfo as any).alerta_nc || null : null, tipo_visita: (candidateInfo as any)?.alerta_nc ? 'servicio/recupero' : 'comercial' },
           justificacion: rec.justificacion,
           es_prospecto: false,
           estado_comercial,
@@ -2470,6 +2550,14 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       if (cob.total < 8) {
         partes.push(`Sólo se pudieron armar ${cob.total} de 8 visitas para ${vendedor.nombre} con los filtros elegidos. Probá ampliar la zona.`);
       }
+      if (cob.cuentas_sin_ubicacion?.length > 0) {
+        partes.push(
+          `${cob.cuentas_sin_ubicacion.length} cuenta${cob.cuentas_sin_ubicacion.length === 1 ? "" : "s"} de ${vendedor.nombre} en ${zonaTexto} `
+          + `no tiene dirección ubicable y quedó fuera del análisis: ${cob.cuentas_sin_ubicacion.slice(0, 5).join(", ")}. `
+          + `Corregí la dirección para que entren en la ruta.`,
+        );
+
+      }
       if (partes.length > 0) avisosCobertura.push(partes.join(" "));
       if (propios === 0 && cob.total > 0) {
         console.log(`ℹ️ ${vendedor.nombre}: ruta 100% de prospección.`);
@@ -2483,6 +2571,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
         `Se apartaron ${posiblesClientesExistentes.size} lugares que podrían ser clientes ya activos de la casa: ${muestras}. Verificar antes de visitarlos como nuevos.`,
       );
     }
+    for (const err of Array.from(new Set(erroresCobertura))) avisosCobertura.unshift(err);
     const cuotaIncompleta = avisosCobertura.length > 0
       ? avisosCobertura.join(" ")
       : (incompleteVendors.length > 0

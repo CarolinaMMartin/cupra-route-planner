@@ -407,6 +407,8 @@ export type Database = {
           fuente_monto: string
           id: string
           last_recommendation_at: string | null
+          monto_nc_concepto: number
+          monto_nc_producto: number
           monto_notas_credito: number | null
           monto_total_cupra: number | null
           monto_total_historico: number | null
@@ -455,6 +457,8 @@ export type Database = {
           fuente_monto?: string
           id?: string
           last_recommendation_at?: string | null
+          monto_nc_concepto?: number
+          monto_nc_producto?: number
           monto_notas_credito?: number | null
           monto_total_cupra?: number | null
           monto_total_historico?: number | null
@@ -503,6 +507,8 @@ export type Database = {
           fuente_monto?: string
           id?: string
           last_recommendation_at?: string | null
+          monto_nc_concepto?: number
+          monto_nc_producto?: number
           monto_notas_credito?: number | null
           monto_total_cupra?: number | null
           monto_total_historico?: number | null
@@ -1538,6 +1544,7 @@ export type Database = {
       is_active_assignor: { Args: { _user_id: string }; Returns: boolean }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
       is_assignor_like: { Args: { _user_id: string }; Returns: boolean }
+      recompute_client_metrics: { Args: never; Returns: number }
       sync_places_catalog: { Args: never; Returns: number }
       titlecase_nombre: { Args: { _texto: string }; Returns: string }
       unaccent: { Args: { "": string }; Returns: string }
