@@ -85,6 +85,8 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showMapAll, setShowMapAll] = useState(false);
   const [showMapVendedor, setShowMapVendedor] = useState<string | null>(null);
+  const [openVendors, setOpenVendors] = useState<Record<string, boolean>>({});
+
   const { toast } = useToast();
 
   useEffect(() => {
