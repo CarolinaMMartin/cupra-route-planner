@@ -278,6 +278,7 @@ export type Database = {
         Row: {
           barrio_principal: string | null
           client_id: string
+          codigo_postal: string | null
           comuna: string | null
           created_at: string | null
           direccion_principal: string | null
@@ -295,6 +296,7 @@ export type Database = {
         Insert: {
           barrio_principal?: string | null
           client_id: string
+          codigo_postal?: string | null
           comuna?: string | null
           created_at?: string | null
           direccion_principal?: string | null
@@ -312,6 +314,7 @@ export type Database = {
         Update: {
           barrio_principal?: string | null
           client_id?: string
+          codigo_postal?: string | null
           comuna?: string | null
           created_at?: string | null
           direccion_principal?: string | null
@@ -395,6 +398,7 @@ export type Database = {
           categoria_volumen: string | null
           ciudad_principal: string | null
           client_id: string
+          codigo_postal: string | null
           created_at: string | null
           cuit_dni: string | null
           dias_desde_ultima_compra: number | null
@@ -445,6 +449,7 @@ export type Database = {
           categoria_volumen?: string | null
           ciudad_principal?: string | null
           client_id: string
+          codigo_postal?: string | null
           created_at?: string | null
           cuit_dni?: string | null
           dias_desde_ultima_compra?: number | null
@@ -495,6 +500,7 @@ export type Database = {
           categoria_volumen?: string | null
           ciudad_principal?: string | null
           client_id?: string
+          codigo_postal?: string | null
           created_at?: string | null
           cuit_dni?: string | null
           dias_desde_ultima_compra?: number | null
@@ -1544,7 +1550,12 @@ export type Database = {
       is_active_assignor: { Args: { _user_id: string }; Returns: boolean }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
       is_assignor_like: { Args: { _user_id: string }; Returns: boolean }
+      rank_fuente_ubicacion: {
+        Args: { _fuente: string; _verificada: boolean }
+        Returns: number
+      }
       recompute_client_metrics: { Args: never; Returns: number }
+      reconciliar_places_primarios: { Args: never; Returns: number }
       sync_places_catalog: { Args: never; Returns: number }
       titlecase_nombre: { Args: { _texto: string }; Returns: string }
       unaccent: { Args: { "": string }; Returns: string }
