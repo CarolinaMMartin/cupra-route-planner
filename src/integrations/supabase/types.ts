@@ -1364,6 +1364,7 @@ export type Database = {
       }
       ventas_cupra: {
         Row: {
+          bonificacion: number | null
           cajas: number | null
           categorias: string | null
           celular: string | null
@@ -1385,12 +1386,14 @@ export type Database = {
           pais: string | null
           provincia: string | null
           razon_social: string | null
+          renglon: number
           telefono: string | null
           ticket: string | null
           tipo_comprobante: string
           vendedor: string | null
         }
         Insert: {
+          bonificacion?: number | null
           cajas?: number | null
           categorias?: string | null
           celular?: string | null
@@ -1412,12 +1415,14 @@ export type Database = {
           pais?: string | null
           provincia?: string | null
           razon_social?: string | null
+          renglon?: number
           telefono?: string | null
           ticket?: string | null
           tipo_comprobante?: string
           vendedor?: string | null
         }
         Update: {
+          bonificacion?: number | null
           cajas?: number | null
           categorias?: string | null
           celular?: string | null
@@ -1439,6 +1444,7 @@ export type Database = {
           pais?: string | null
           provincia?: string | null
           razon_social?: string | null
+          renglon?: number
           telefono?: string | null
           ticket?: string | null
           tipo_comprobante?: string
@@ -1457,6 +1463,7 @@ export type Database = {
       ventas_cupra_eliminadas: {
         Row: {
           batch_id: string | null
+          bonificacion: number | null
           cajas: number | null
           categorias: string | null
           celular: string | null
@@ -1479,6 +1486,7 @@ export type Database = {
           pais: string | null
           provincia: string | null
           razon_social: string | null
+          renglon: number | null
           telefono: string | null
           ticket: string | null
           tipo_comprobante: string | null
@@ -1487,6 +1495,7 @@ export type Database = {
         }
         Insert: {
           batch_id?: string | null
+          bonificacion?: number | null
           cajas?: number | null
           categorias?: string | null
           celular?: string | null
@@ -1509,6 +1518,7 @@ export type Database = {
           pais?: string | null
           provincia?: string | null
           razon_social?: string | null
+          renglon?: number | null
           telefono?: string | null
           ticket?: string | null
           tipo_comprobante?: string | null
@@ -1517,6 +1527,7 @@ export type Database = {
         }
         Update: {
           batch_id?: string | null
+          bonificacion?: number | null
           cajas?: number | null
           categorias?: string | null
           celular?: string | null
@@ -1539,6 +1550,7 @@ export type Database = {
           pais?: string | null
           provincia?: string | null
           razon_social?: string | null
+          renglon?: number | null
           telefono?: string | null
           ticket?: string | null
           tipo_comprobante?: string | null
@@ -1691,7 +1703,7 @@ export type Database = {
         Returns: number
       }
       rebase_ventas_cupra: {
-        Args: { p_batch_id: string; p_confirmacion: string; p_rows: Json }
+        Args: { p_batch_id?: string; p_confirmacion?: string; p_rows: Json }
         Returns: Json
       }
       recompute_client_metrics: { Args: never; Returns: number }

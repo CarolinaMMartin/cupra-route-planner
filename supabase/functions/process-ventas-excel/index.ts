@@ -301,24 +301,45 @@ const countNonEmptyValues = (obj: Record<string, any>): number => {
   return Object.values(obj).reduce((acc, value) => acc + (isEmpty(value) ? 0 : 1), 0);
 };
 
+// OT8-fix: la identidad de la línea NO incluye el importe. Incluye la bonificación,
+// porque un mismo ticket trae habitualmente dos renglones del mismo producto:
+// el pagado (bonif. parcial) y el regalado (bonif. 100%, importe $0).
 const buildVentaConflictKey = (venta: Record<string, any>): string | null => {
-  // Only ticket is strictly required for dedup
   const ticket = venta.ticket;
   if (isEmpty(ticket)) return null;
-  // Use COALESCE logic: treat nulls as empty string to avoid dedup bypass
   const parts = [
     String(ticket).trim().toUpperCase(),
     String(venta.letra ?? '').trim().toUpperCase(),
     String(venta.fecha_emision ?? '').trim(),
     String(venta.client_id ?? '').trim().toUpperCase(),
     String(venta.codigo_producto ?? '').trim().toUpperCase(),
-    String(venta.facturacion_ars ?? 0),
+    String(venta.tipo_comprobante ?? 'venta'),
+    venta.bonificacion === null || venta.bonificacion === undefined ? '-1' : String(venta.bonificacion),
   ];
   return parts.join('||');
 };
 
-const mergeVentaDuplicate = (current: Record<string, any>, incoming: Record<string, any>) => {
-  return countNonEmptyValues(incoming) >= countNonEmptyValues(current) ? incoming : current;
+// Último desempate determinístico: dos renglones que comparten hasta la bonificación
+// se numeran por (cantidad, importe). Nunca se fusionan silenciosamente.
+const asignarRenglones = (ventas: Record<string, any>[]) => {
+  const grupos = new Map<string, Record<string, any>[]>();
+  const sinClave: Record<string, any>[] = [];
+  for (const v of ventas) {
+    const key = buildVentaConflictKey(v);
+    if (!key) { v.renglon = 1; sinClave.push(v); continue; }
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key)!.push(v);
+  }
+  let colisiones = 0;
+  for (const grupo of grupos.values()) {
+    if (grupo.length > 1) colisiones += grupo.length - 1;
+    grupo
+      .sort((a, b) =>
+        (Number(a.cajas ?? 0) - Number(b.cajas ?? 0)) ||
+        (Number(a.facturacion_ars ?? 0) - Number(b.facturacion_ars ?? 0)))
+      .forEach((v, i) => { v.renglon = i + 1; });
+  }
+  return { total: ventas.length, colisiones, sinClave: sinClave.length };
 };
 
 // === Campo de facturación: nombres de columna en orden de prioridad ===
@@ -328,6 +349,14 @@ const FACTURACION_FIELD_NAMES = [
   'Facturación Ar$', 'Facturacion Ar$', 'Facturación Ars', 'Facturacion Ars',
   'facturacion_ars',
 ];
+
+// OT8-fix: la bonificación distingue el renglón pagado del renglón de regalo (100%).
+const BONIFICACION_FIELD_NAMES = [
+  'Bonificación', 'Bonificacion', 'bonificacion',
+  '% Bonificación', '% Bonificacion', '% Bonif', '% Bonif.',
+  'Bonif', 'Bonif.', 'Bonif %', 'Descuento %', '% Descuento',
+];
+
 
 // === MAIN ===
 Deno.serve(async (req) => {
@@ -446,23 +475,10 @@ Deno.serve(async (req) => {
     // Conciliación: toda fila que no llega a la base queda registrada con su motivo
     const filasDescartadas: { origen: 'venta' | 'nota_credito'; motivo: string; payload: Record<string, any> }[] = [];
 
-    // ── Fix 3: Deduplicación estricta — eliminar filas 100% idénticas ──
-    const rowHashes = new Set<string>();
-    let exactDuplicates = 0;
-    const rows = rawRows.filter(row => {
-      const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
-      if (rowHashes.has(hash)) {
-        exactDuplicates++;
-        filasDescartadas.push({ origen: 'venta', motivo: 'duplicada_exacta', payload: row });
-        return false;
-      }
-      rowHashes.add(hash);
-      return true;
-    });
-
-    if (exactDuplicates > 0) {
-      console.log(`🗑️ Fix 3: ${exactDuplicates} filas 100% idénticas eliminadas (${rawRows.length} → ${rows.length})`);
-    }
+    // OT8-fix: NO se descartan filas idénticas. Dos renglones iguales en el archivo
+    // son dos renglones reales en la base (se distinguen con el ordinal de renglón).
+    const rows = rawRows;
+    const exactDuplicates = 0;
 
     console.log(`📦 ETL ${ETL_VERSION} — Recibidas ${rawRows.length} filas, procesando ${rows.length} únicas`);
 
@@ -608,6 +624,7 @@ Deno.serve(async (req) => {
       const categorias = toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias']));
       const facturacion = parseNumericValue(getFieldValue(row, FACTURACION_FIELD_NAMES));
       if (facturacion === null || facturacion === undefined) facturacionNullCount++;
+      const bonificacion = parseNumericValue(getFieldValue(row, BONIFICACION_FIELD_NAMES));
 
       if (!client_id) {
         ventasSinClientId += 1;
@@ -616,10 +633,13 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // OT8-fix: el renglón de regalo factura $0 por definición y SIEMPRE se ingesta.
       ventasRaw.push({
         client_id,
         ticket, letra, fecha_emision: fecha_iso, cuit_dni, razon_social, fantasia,
-        cajas, codigo_producto, nombre: producto, marca, facturacion_ars: facturacion,
+        cajas, codigo_producto, nombre: producto, marca,
+        facturacion_ars: facturacion === null || facturacion === undefined ? 0 : facturacion,
+        bonificacion,
         vendedor, telefono, celular, correo, direccion, ciudad: ciudad_raw,
         provincia: provincia_raw, pais, categorias,
         tipo_comprobante: 'venta',
@@ -689,16 +709,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      const ncHashes = new Set<string>();
+      // OT8-fix: no se descartan NC idénticas; el ordinal de renglón las distingue.
       for (const row of rawNotasCredito) {
-        const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
-        if (ncHashes.has(hash)) {
-          notasCreditoDuplicadas++;
-          filasDescartadas.push({ origen: 'nota_credito', motivo: 'duplicada_exacta', payload: row });
-          continue;
-        }
-        ncHashes.add(hash);
-
         const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
         if (!razon_social) {
           notasCreditoSinMatch++;
@@ -715,7 +727,8 @@ Deno.serve(async (req) => {
         const importe = parseNumericValue(
           getFieldValue(row, ['Total Final', 'Precio Total Final', 'Importe No Gravado', 'Importe Neto'])
         );
-        if (importe === null || importe === undefined || importe === 0) {
+        // OT8-fix: importe 0 es válido (renglón bonificado al 100%). Solo se descarta si NO hay importe.
+        if (importe === null || importe === undefined) {
           notasCreditoSinImporte++;
           filasDescartadas.push({ origen: 'nota_credito', motivo: 'sin_importe', payload: row });
           continue;
@@ -735,7 +748,8 @@ Deno.serve(async (req) => {
           cuit_dni: base.cuit_dni,
           razon_social,
           fantasia: base.fantasia,
-          cajas: null,
+          cajas: parseNumericValue(getFieldValue(row, ['Cajas', 'cajas', 'Cantidad', 'cantidad'])),
+          bonificacion: parseNumericValue(getFieldValue(row, BONIFICACION_FIELD_NAMES)),
           codigo_producto: toStr(getFieldValue(row, ['Código', 'Codigo', 'Código Producto'])),
           nombre: toStr(getFieldValue(row, ['Nombre', 'nombre'])),
           marca: null,
@@ -766,34 +780,17 @@ Deno.serve(async (req) => {
     }
 
 
-    // ============ FASE 1b: Deduplicar ventas ANTES de agregar clientes ============
-    const ventasByConflictKey = new Map<string, any>();
-    const ventasSinClaveConflicto: any[] = [];
-    let ventasDuplicadas = 0;
-
-    for (const venta of ventasRaw) {
-      const conflictKey = buildVentaConflictKey(venta);
-      if (!conflictKey) {
-        ventasSinClaveConflicto.push(venta);
-        continue;
-      }
-      const existingVenta = ventasByConflictKey.get(conflictKey);
-      if (!existingVenta) {
-        ventasByConflictKey.set(conflictKey, venta);
-      } else {
-        ventasDuplicadas += 1;
-        ventasByConflictKey.set(conflictKey, mergeVentaDuplicate(existingVenta, venta));
-      }
-    }
-
-    const ventasDeduplicadas = [...ventasByConflictKey.values(), ...ventasSinClaveConflicto];
+    // ============ FASE 1b: Numerar renglones (OT8-fix, ya NO se fusiona nada) ============
+    const renglonStats = asignarRenglones(ventasRaw);
+    const ventasDuplicadas = renglonStats.colisiones;
+    const ventasDeduplicadas = ventasRaw;
 
     if (ventasDeduplicadas.length === 0) {
       throw new Error('El archivo no produjo ninguna venta válida. No se modificaron las ventas existentes.');
     }
 
     if (ventasDuplicadas > 0) {
-      console.log(`♻️ ${ventasDuplicadas} filas duplicadas consolidadas (${ventasRaw.length} → ${ventasDeduplicadas.length})`);
+      console.log(`🔢 ${ventasDuplicadas} renglones comparten clave natural: se numeran con ordinal determinístico (total ${ventasDeduplicadas.length})`);
     }
 
     // ── TAREA 2: Validación de unicidad de tickets cross-client ──
@@ -1252,6 +1249,11 @@ Deno.serve(async (req) => {
 
       filas_procesadas: ventasRaw.length,
       filas_deduplicadas: ventasDeduplicadas.length,
+      renglones_con_ordinal: renglonStats.colisiones,
+      filas_bonificadas_100: ventasDeduplicadas.filter(v => Number(v.bonificacion) === 100).length,
+      cajas_bonificadas_100: ventasDeduplicadas
+        .filter(v => Number(v.bonificacion) === 100)
+        .reduce((s, v) => s + (Number(v.cajas) || 0), 0),
       filas_venta_insertadas: ventasInsertadas,
       filas_nota_credito_insertadas: notasInsertadas,
       filas_descartadas_total: filasDescartadas.length,

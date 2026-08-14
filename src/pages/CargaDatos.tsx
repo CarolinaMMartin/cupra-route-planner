@@ -70,6 +70,9 @@ interface Reconciliacion {
   monto_notas_credito?: number;
   filas_procesadas: number;
   filas_deduplicadas: number;
+  renglones_con_ordinal?: number;
+  filas_bonificadas_100?: number;
+  cajas_bonificadas_100?: number;
   filas_venta_insertadas?: number;
   filas_nota_credito_insertadas?: number;
   filas_descartadas_total?: number;
@@ -912,6 +915,15 @@ const CargaDatos = () => {
                           <tr className="bg-muted/20">
                             <td className="px-3 py-1.5 font-medium text-foreground">Total de filas en la base</td>
                             <td className="px-3 py-1.5 text-right font-bold text-foreground">{reconciliacion.filas_deduplicadas.toLocaleString()}</td>
+                          </tr>
+                          <tr>
+                            <td className="px-3 py-1.5 text-foreground/80">Renglones bonificados al 100% (regalo)</td>
+                            <td className="px-3 py-1.5 text-right font-medium text-foreground">
+                              {(reconciliacion.filas_bonificadas_100 ?? 0).toLocaleString()}
+                              {reconciliacion.cajas_bonificadas_100
+                                ? ` (${reconciliacion.cajas_bonificadas_100.toLocaleString()} cajas)`
+                                : ''}
+                            </td>
                           </tr>
                           <tr>
                             <td className="px-3 py-1.5 text-foreground/80">Filas omitidas</td>
