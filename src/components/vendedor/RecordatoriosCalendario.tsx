@@ -42,6 +42,8 @@ const RecordatoriosCalendario = () => {
   const [nota, setNota] = useState("");
   const [agendando, setAgendando] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [fechaAgenda, setFechaAgenda] = useState<Date | undefined>(new Date());
+  const [horaAgenda, setHoraAgenda] = useState("09:00");
   const { toast } = useToast();
 
   const fetchRecordatorios = async () => {
