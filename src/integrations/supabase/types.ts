@@ -324,6 +324,7 @@ export type Database = {
           actualizar_etiqueta_wa: string | null
           client_id: string | null
           created_at: string
+          estado_cliente: string | null
           feedback: string
           id: string
           motivo_no_visita: string | null
@@ -336,6 +337,7 @@ export type Database = {
           actualizar_etiqueta_wa?: string | null
           client_id?: string | null
           created_at?: string
+          estado_cliente?: string | null
           feedback: string
           id?: string
           motivo_no_visita?: string | null
@@ -348,6 +350,7 @@ export type Database = {
           actualizar_etiqueta_wa?: string | null
           client_id?: string | null
           created_at?: string
+          estado_cliente?: string | null
           feedback?: string
           id?: string
           motivo_no_visita?: string | null
@@ -882,6 +885,7 @@ export type Database = {
           place_id: string
           provincia: string
           rating: number | null
+          resumen_google: string | null
           sirve_vinos: boolean | null
           telefono: string | null
           tipo_principal: string | null
@@ -910,6 +914,7 @@ export type Database = {
           place_id: string
           provincia: string
           rating?: number | null
+          resumen_google?: string | null
           sirve_vinos?: boolean | null
           telefono?: string | null
           tipo_principal?: string | null
@@ -938,6 +943,7 @@ export type Database = {
           place_id?: string
           provincia?: string
           rating?: number | null
+          resumen_google?: string | null
           sirve_vinos?: boolean | null
           telefono?: string | null
           tipo_principal?: string | null
@@ -1111,6 +1117,48 @@ export type Database = {
             referencedColumns: ["client_id"]
           },
         ]
+      }
+      recordatorios: {
+        Row: {
+          client_id: string | null
+          completado: boolean
+          created_at: string
+          fecha_recordatorio: string
+          id: string
+          nota: string | null
+          notificado: boolean
+          prospecto_place_id: string | null
+          titulo: string
+          updated_at: string
+          vendedor_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          completado?: boolean
+          created_at?: string
+          fecha_recordatorio: string
+          id?: string
+          nota?: string | null
+          notificado?: boolean
+          prospecto_place_id?: string | null
+          titulo: string
+          updated_at?: string
+          vendedor_id: string
+        }
+        Update: {
+          client_id?: string | null
+          completado?: boolean
+          created_at?: string
+          fecha_recordatorio?: string
+          id?: string
+          nota?: string | null
+          notificado?: boolean
+          prospecto_place_id?: string | null
+          titulo?: string
+          updated_at?: string
+          vendedor_id?: string
+        }
+        Relationships: []
       }
       sucursales: {
         Row: {
