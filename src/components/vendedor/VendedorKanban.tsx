@@ -1520,7 +1520,7 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
 
       {/* Dialog de feedback */}
       <Dialog open={showFeedbackDialog} onOpenChange={setShowFeedbackDialog}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Agregar Feedback de Visita</DialogTitle>
             <DialogDescription>
