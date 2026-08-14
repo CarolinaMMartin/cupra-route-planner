@@ -157,6 +157,18 @@ const RecordatoriosCalendario = () => {
         </p>
         {r.nota && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{r.nota}</p>}
       </div>
+      {!r.completado && (r.client_id || r.prospecto_place_id) && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          title="Sumar a mi ruta de hoy"
+          disabled={adding === r.id}
+          onClick={() => sumarARuta(r)}
+        >
+          <Route className="h-3.5 w-3.5 text-accent" />
+        </Button>
+      )}
       <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => toggleCompletado(r)}>
         <Check className={cn("h-3.5 w-3.5", r.completado ? "text-emerald-500" : "text-muted-foreground")} />
       </Button>
