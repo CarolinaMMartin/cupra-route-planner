@@ -943,7 +943,12 @@ function justificacionComercial(c: ScoredCandidate): string {
     return `${rubro} de ${c.barrio || "la zona"}${rep} que todavía no nos compra. ${cerca}: sirve para sumar cobertura nueva sin estirar el día.`;
   }
   const dias = c.dias_desde_ultima_compra;
-  // Aviso de devolución: nunca se manda a visitar "a ciegas" un cliente que devolvió mercadería.
+  // OT4: con devolución significativa la visita es de SERVICIO/RECUPERO, nunca comercial.
+  if (c.alerta_nc) {
+    return `Visita de servicio y recupero: devolvió el ${Math.round(c.alerta_nc.ratio * 100)}% de lo facturado`
+      + `${c.alerta_nc.fecha ? ` (nota de crédito del ${c.alerta_nc.fecha})` : ""}. ${cerca}: hay que revisar el motivo de la `
+      + `devolución y el estado de cobranza antes de volver a ofrecer producto.`;
+  }
   const nc = c.alerta_nc
     ? ` ATENCIÓN: devolvió el ${Math.round(c.alerta_nc.ratio * 100)}% de lo facturado${c.alerta_nc.fecha ? ` (última nota de crédito ${c.alerta_nc.fecha})` : ""}; revisar el motivo antes de ofrecer.`
     : "";
@@ -1849,7 +1854,10 @@ Deno.serve(async (req) => {
       const feedback = c.feedbacks_recientes.length > 0
         ? ` | comentario del vendedor: ${c.feedbacks_recientes.map(f => f.feedback).join("; ")}`
         : "";
-      return `${i + 1}. [${c.client_id}] ${c.razon_social} | ${bloque} | barrio ${normalizeBarrio(c.barrio) || "s/d"} | a ${cuadras(c.distancia_km)} cuadras del arranque de la ruta | ${compra}${ticket}${devolucion}${prioridad}${rubro}${reputacion}${feedback}`;
+      const tipoVisita = c.alerta_nc
+        ? " | TIPO DE VISITA: SERVICIO/RECUPERO (prohibido pitch de venta: la justificación debe pedir revisar el motivo de la devolución y el estado de cobranza)"
+        : "";
+      return `${i + 1}. [${c.client_id}] ${c.razon_social} | ${bloque} | barrio ${normalizeBarrio(c.barrio) || "s/d"} | a ${cuadras(c.distancia_km)} cuadras del arranque de la ruta | ${compra}${ticket}${devolucion}${prioridad}${rubro}${reputacion}${tipoVisita}${feedback}`;
     };
 
     const vendorSections = vendedoresData.map(v => {
@@ -2419,7 +2427,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating, origen: liveDiscoveredIds.has(candidateInfo.client_id) ? 'maps_live' : 'base', cobertura: coberturaPorVendedor.get(vendedorId) || null, alerta_nota_credito: (candidateInfo as any).alerta_nc || null, prioridad_comercial: (candidateInfo as any).prioridad_comercial ?? null },
+          factores_ia: { ...rec.factores, tipo_negocio: (candidateInfo as any).tipo_negocio, rating: (candidateInfo as any).rating, origen: liveDiscoveredIds.has(candidateInfo.client_id) ? 'maps_live' : 'base', cobertura: coberturaPorVendedor.get(vendedorId) || null, alerta_nota_credito: (candidateInfo as any).alerta_nc || null, tipo_visita: (candidateInfo as any)?.alerta_nc ? 'servicio/recupero' : 'comercial', prioridad_comercial: (candidateInfo as any).prioridad_comercial ?? null },
           justificacion: rec.justificacion,
           es_prospecto: true,
           estado_comercial: candidateInfo.estado_comercial,
@@ -2451,7 +2459,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           priority_score: Math.round(rec.score_final),
           score_geografico: Math.round(rec.factores?.score_proximidad || 0),
           ai_reasoning: rec.justificacion,
-          factores_ia: { ...rec.factores, origen: 'cartera', cobertura: coberturaPorVendedor.get(vendedorId) || null, alerta_nota_credito: candidateInfo ? (candidateInfo as any).alerta_nc || null : null },
+          factores_ia: { ...rec.factores, origen: 'cartera', cobertura: coberturaPorVendedor.get(vendedorId) || null, alerta_nota_credito: candidateInfo ? (candidateInfo as any).alerta_nc || null : null, tipo_visita: (candidateInfo as any)?.alerta_nc ? 'servicio/recupero' : 'comercial' },
           justificacion: rec.justificacion,
           es_prospecto: false,
           estado_comercial,
