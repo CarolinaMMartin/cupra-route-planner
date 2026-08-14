@@ -1117,6 +1117,22 @@ Deno.serve(async (req) => {
     console.log('🎉 Proceso completo:', results);
 
     // ── TAREA 10, 12: Metadata y descartados ──
+    // OT3: única fuente de verdad de cadencia, precio por caja y notas de crédito.
+    // Se recalcula al final de CADA importación, no en un backfill manual.
+    let metricasRecalculadas = 0;
+    try {
+      const { data: recomputed, error: recomputeError } = await supabase.rpc('recompute_client_metrics');
+      if (recomputeError) {
+        console.error('⚠️ No se pudieron recalcular las métricas de clientes:', recomputeError.message);
+        results.errores.push(`No se pudieron recalcular métricas de clientes: ${recomputeError.message}`);
+      } else {
+        metricasRecalculadas = Number(recomputed) || 0;
+        console.log(`📐 Métricas recalculadas para ${metricasRecalculadas} clientes.`);
+      }
+    } catch (err) {
+      console.error('⚠️ Error recalculando métricas:', err);
+    }
+
     const metadata = {
       fecha_carga: new Date().toISOString(),
       version_etl: ETL_VERSION,
@@ -1141,7 +1157,7 @@ Deno.serve(async (req) => {
     }
     vendedorBreakdown.sort((a, b) => b.monto - a.monto);
 
-    const ventasInsertadas = ventasDeduplicadas.filter(v => v.tipo_comprobante !== 'nota_credito').length;
+    const ventasInsertadas = ventasDeduplicadas.filter(v => !String(v.tipo_comprobante || '').startsWith('nota_credito')).length;
     const notasInsertadas = ventasDeduplicadas.length - ventasInsertadas;
     const motivosDescarte = filasDescartadas.reduce((acc, f) => {
       const key = `${f.origen}:${f.motivo}`;
@@ -1160,6 +1176,7 @@ Deno.serve(async (req) => {
       monto_notas_credito: Math.round(montoNotasCredito * 100) / 100,
       monto_nc_producto: Math.round(montoNCProducto * 100) / 100,
       monto_nc_concepto: Math.round(montoNCConcepto * 100) / 100,
+      metricas_recalculadas: metricasRecalculadas,
 
       filas_procesadas: ventasRaw.length,
       filas_deduplicadas: ventasDeduplicadas.length,
