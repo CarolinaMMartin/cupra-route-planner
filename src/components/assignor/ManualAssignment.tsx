@@ -101,6 +101,7 @@ const ManualAssignment = () => {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [filterCiudad, setFilterCiudad] = useState("all");
   const [filterProvincia, setFilterProvincia] = useState("all");
+  const [filterVendedor, setFilterVendedor] = useState("all");
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
@@ -114,7 +115,10 @@ const ManualAssignment = () => {
   const [sortKey, setSortKey] = useState<SortKey>("monto");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const activeFilterCount = (filterCiudad !== "all" ? 1 : 0) + (filterProvincia !== "all" ? 1 : 0);
+  const activeFilterCount =
+    (filterCiudad !== "all" ? 1 : 0) +
+    (filterProvincia !== "all" ? 1 : 0) +
+    (filterVendedor !== "all" ? 1 : 0);
 
   // ── Debounce search ──
   useEffect(() => {
