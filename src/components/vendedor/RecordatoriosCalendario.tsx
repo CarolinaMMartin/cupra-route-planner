@@ -61,6 +61,53 @@ const RecordatoriosCalendario = () => {
     setRecordatorios(prev => prev.map(x => (x.id === r.id ? { ...x, completado: !x.completado } : x)));
   };
 
+  const sumarARuta = async (r: Recordatorio) => {
+    if (!r.client_id && !r.prospecto_place_id) {
+      toast({ variant: "destructive", title: "Este recordatorio no tiene cliente asociado" });
+      return;
+    }
+    setAdding(r.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      let existing = supabase
+        .from("asignaciones_vendedores_clientes")
+        .select("id, estado")
+        .eq("vendedor_id", user.id)
+        .neq("estado", "Visitado");
+      existing = r.client_id
+        ? existing.eq("client_id", r.client_id)
+        : existing.eq("prospecto_place_id", r.prospecto_place_id!);
+
+      const { data: yaAsignado } = await existing.maybeSingle();
+      if (yaAsignado) {
+        toast({ title: "Ya está en tu ruta", description: "Lo vas a encontrar en el tablero Kanban." });
+        return;
+      }
+
+      const { error } = await supabase.from("asignaciones_vendedores_clientes").insert({
+        vendedor_id: user.id,
+        client_id: r.client_id,
+        prospecto_place_id: r.prospecto_place_id,
+        es_prospecto: !!r.prospecto_place_id,
+        estado: "Por visitar",
+        origen_asignacion: "auto",
+      });
+      if (error) throw error;
+
+      toast({
+        title: "Sumado a tu ruta de hoy",
+        description: "Ya podés registrar el feedback desde el tablero Kanban.",
+      });
+    } catch (error) {
+      console.error("Error sumando a la ruta:", error);
+      toast({ variant: "destructive", title: "No se pudo sumar a la ruta" });
+    } finally {
+      setAdding(null);
+    }
+  };
+
   const eliminar = async (id: string) => {
     const { error } = await supabase.from("recordatorios").delete().eq("id", id);
     if (error) {
