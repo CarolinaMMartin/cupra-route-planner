@@ -533,7 +533,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── FASE 6: Coordenadas → client_places (principal) ──
+    // ── FASE 6: Coordenadas del ERP → client_places (R7 / OT7) ──
+    // Prioridad de ubicación: corrección manual > coordenadas del ERP > geocoding.
+    // Se escriben sin marcar primario y al final `reconciliar_places_primarios()`
+    // deja exactamente un primario por cliente, eligiendo la fuente más confiable.
     const conCoords = clientes.filter((c) => c.lat !== null && c.long !== null);
     if (conCoords.length > 0) {
       const geoRows = conCoords.map((c) => {
@@ -543,10 +546,10 @@ Deno.serve(async (req) => {
           lat: c.lat as number,
           long: c.long as number,
           direccion_principal: c.direccion,
+          codigo_postal: c.codigo_postal,
           barrio_principal: geo.barrio || (c.ciudad ? c.ciudad.toUpperCase() : null),
           provincia_principal: normalizeProvincia(c.provincia) || geo.provincia,
           comuna: geo.comuna,
-          is_primary: true,
         };
       });
 
@@ -564,17 +567,6 @@ Deno.serve(async (req) => {
       }
 
       const geoRowsAplicables = geoRows.filter((g) => !verificadosSet.has(g.client_id));
-
-      // Bajamos el flag primario de los places previos de estos clientes
-      const idsAplicables = Array.from(new Set(geoRowsAplicables.map((g) => g.client_id)));
-      for (let i = 0; i < idsAplicables.length; i += 200) {
-        const batch = idsAplicables.slice(i, i + 200);
-        await supabase
-          .from('client_places')
-          .update({ is_primary: false })
-          .in('client_id', batch)
-          .eq('direccion_verificada', false);
-      }
 
       // Fila por fila: client_places tiene 2 constraints únicos
       // (client_id, lat, long) y (client_id, direccion_principal)
@@ -594,7 +586,7 @@ Deno.serve(async (req) => {
         const payload = { ...g, fuente_geocoding: 'excel' };
         const { error } = match
           ? await supabase.from('client_places').update(payload).eq('id', match.id)
-          : await supabase.from('client_places').insert(payload);
+          : await supabase.from('client_places').insert({ ...payload, is_primary: false });
 
         if (error) {
           console.error(`❌ Place ${g.client_id}:`, error.message);
@@ -603,9 +595,17 @@ Deno.serve(async (req) => {
           results.coordenadas_actualizadas++;
         }
       }
-
-
     }
+
+    // R7: un solo primario por cliente, con la fuente más confiable ganando
+    {
+      const { error: reconError } = await supabase.rpc('reconciliar_places_primarios');
+      if (reconError) {
+        console.error('⚠️ No se pudo reconciliar ubicaciones primarias:', reconError.message);
+        results.errores.push(`Ubicaciones primarias: ${reconError.message}`);
+      }
+    }
+
 
     // ── Resumen por vendedor ──
     const vendedorAgg = new Map<string, number>();
