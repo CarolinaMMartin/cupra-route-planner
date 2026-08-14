@@ -697,16 +697,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      const ncHashes = new Set<string>();
+      // OT8-fix: no se descartan NC idénticas; el ordinal de renglón las distingue.
       for (const row of rawNotasCredito) {
-        const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
-        if (ncHashes.has(hash)) {
-          notasCreditoDuplicadas++;
-          filasDescartadas.push({ origen: 'nota_credito', motivo: 'duplicada_exacta', payload: row });
-          continue;
-        }
-        ncHashes.add(hash);
-
         const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
         if (!razon_social) {
           notasCreditoSinMatch++;
