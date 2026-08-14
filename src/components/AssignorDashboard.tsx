@@ -116,6 +116,8 @@ const AssignorDashboard = () => {
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [isSavingAssignments, setIsSavingAssignments] = useState(false);
+  const [showConfirmAssign, setShowConfirmAssign] = useState(false);
+
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // El botón "Volver al inicio" vive en la barra superior fija (Index) y avisa por evento.
@@ -285,9 +287,21 @@ const AssignorDashboard = () => {
     }
   };
 
+  const handleRequestAssignmentConfirm = () => {
+    if (selectedSucursales.length === 0) return;
+    setShowConfirmAssign(true);
+  };
+
+  const handleGoToModify = () => {
+    setShowConfirmAssign(false);
+    setFlowStep("assignment");
+  };
+
   const handleContinueToAssignment = async () => {
+    setShowConfirmAssign(false);
     const selected = recommendations.filter((rec) => selectedSucursales.includes(rec.id));
     if (selected.length === 0) return;
+
 
     const missingVendor = selected.filter((rec) => !rec.vendedor_recomendado_id);
     if (missingVendor.length > 0) {
@@ -419,6 +433,18 @@ const AssignorDashboard = () => {
 
   const selectedRecommendations = filteredRecommendations.filter((r) => selectedSucursales.includes(r.id));
 
+  const resumenPorVendedor = useMemo(() => {
+    const map = new Map<string, number>();
+    selectedRecommendations.forEach((rec) => {
+      const nombre = rec.vendedor_actual || rec.vendedor_principal || "Sin vendedor";
+      map.set(nombre, (map.get(nombre) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [selectedRecommendations]);
+
+  const prospectosSeleccionados = selectedRecommendations.filter((r) => r.es_prospecto).length;
+
+
   return (
     <div className="space-y-10">
       {isLoading && (
@@ -440,6 +466,50 @@ const AssignorDashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={showConfirmAssign} onOpenChange={setShowConfirmAssign}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Confirmar estas asignaciones?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vas a asignar {selectedRecommendations.length} destino
+              {selectedRecommendations.length !== 1 ? "s" : ""}
+              {prospectosSeleccionados > 0
+                ? ` (${prospectosSeleccionados} prospecto${prospectosSeleccionados !== 1 ? "s" : ""} nuevo${prospectosSeleccionados !== 1 ? "s" : ""})`
+                : ""}
+              . Si querés cambiar el vendedor de destino o sacar clientes, pasá a la pantalla de modificación.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-1.5 max-h-52 overflow-y-auto">
+            {resumenPorVendedor.map(([nombre, cantidad]) => (
+              <div key={nombre} className="flex items-center justify-between text-sm">
+                <span className="truncate text-foreground">{nombre}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {cantidad} cliente{cantidad !== 1 ? "s" : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSavingAssignments}>Cancelar</AlertDialogCancel>
+            <Button variant="outline" onClick={handleGoToModify} disabled={isSavingAssignments}>
+              Modificar
+            </Button>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleContinueToAssignment();
+              }}
+              disabled={isSavingAssignments}
+            >
+              {isSavingAssignments ? "Guardando..." : "Confirmar y asignar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
 
       {flowStep === "recommendations" && (
         <div className="space-y-8">
@@ -567,9 +637,9 @@ const AssignorDashboard = () => {
 
             <CardContent className="pt-6">
               {viewMode === "list" ? (
-                <PreselectionStep recommendations={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleContinueToAssignment} isSaving={isSavingAssignments} />
+                <PreselectionStep recommendations={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleRequestAssignmentConfirm} isSaving={isSavingAssignments} />
               ) : (
-                <ResultsMap sucursales={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleContinueToAssignment} />
+                <ResultsMap sucursales={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleRequestAssignmentConfirm} />
               )}
             </CardContent>
           </Card>
