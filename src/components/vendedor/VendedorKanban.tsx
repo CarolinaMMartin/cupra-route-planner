@@ -1107,9 +1107,18 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
               variant={viewMode === 'map' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('map')}
-              className="rounded-l-none"
+              className="rounded-none"
             >
               <MapIcon className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'calendar' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('calendar')}
+              className="rounded-l-none"
+              title="Calendario de seguimientos"
+            >
+              <CalendarClock className="w-4 h-4" />
             </Button>
           </div>
           
