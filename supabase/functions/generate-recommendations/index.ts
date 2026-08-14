@@ -1021,7 +1021,11 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Errores operativos que el asignador tiene que ver (nunca ruta corta silenciosa).
+    const erroresCobertura: string[] = [];
+
     // Una sola fuente de verdad para "¿está dentro del área?" (ver portfolio-ranking.ts).
+
     // Compara sin acentos ("San Nicolás" == "San Nicolas") y usa la comuna sólo
     // como respaldo cuando el registro no tiene barrio.
     const areaFilter = buildAreaFilter(barriosFinales, comunasFinales);
