@@ -387,6 +387,7 @@ const CargaDatos = () => {
     setResults(null);
     setCalidad(null);
     setReconciliacion(null);
+    setConciliacionEntidades(null);
     setMetadata(null);
     setIntegridad(null);
     setNotasCredito([]);
