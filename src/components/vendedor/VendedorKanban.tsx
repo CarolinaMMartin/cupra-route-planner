@@ -669,7 +669,7 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
         visita_realizada: huboContacto,
         motivo_no_visita: !huboContacto ? motivoNoVisita : null,
         tipo_interaccion: huboContacto ? `${tipoCierre === 'online' ? '[Online] ' : ''}${tipoInteraccion}` : null,
-        actualizar_etiqueta_wa: actualizarEtiquetaWa || null,
+        estado_cliente: estadoCliente || null,
       };
 
       // Agregar el campo correcto según si es prospecto o cliente
