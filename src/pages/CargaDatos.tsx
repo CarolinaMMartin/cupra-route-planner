@@ -140,6 +140,12 @@ interface GeocodeResults {
   errors: number;
   skipped: number;
   error_details: string[];
+  reverse?: {
+    total: number;
+    resueltos: number;
+    errores: number;
+  };
+  pendientes_barrio?: number;
 }
 
 const CargaDatos = () => {
@@ -204,17 +210,16 @@ const CargaDatos = () => {
   }, [session, navigate]);
 
   const fetchPendingGeocount = useCallback(async () => {
-    const { data: allClients } = await supabase
+    const { count, error } = await supabase
       .from("clientes")
-      .select("client_id")
-      .not("direccion_principal", "is", null)
-      .not("ciudad_principal", "is", null);
-    const { data: existingPlaces } = await supabase
-      .from("client_places")
-      .select("client_id");
-    const placedIds = new Set((existingPlaces || []).map((p) => p.client_id));
-    const pending = (allClients || []).filter((c) => !placedIds.has(c.client_id));
-    setPendingGeocount(pending.length);
+      .select("client_id", { count: "exact", head: true })
+      .or("barrio_principal.is.null,barrio_principal.eq.");
+    if (error) {
+      console.error("No se pudo contar clientes sin barrio:", error);
+      setPendingGeocount(null);
+      return;
+    }
+    setPendingGeocount(count ?? 0);
   }, []);
 
   useEffect(() => {
@@ -436,10 +441,28 @@ const CargaDatos = () => {
       const { data, error } = await supabase.functions.invoke("geocode-clients");
       if (error) throw new Error(error.message || "Error al geocodificar");
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
-      setGeocodeResults(data.results);
+      const mergedResults: GeocodeResults = {
+        ...data.results,
+        reverse: data.reverse,
+        pendientes_barrio: data.pendientes_barrio,
+      };
+      setGeocodeResults(mergedResults);
+      if (typeof data.pendientes_barrio === "number") {
+        setPendingGeocount(data.pendientes_barrio);
+        if (calidad && typeof data.total_clientes === "number" && data.total_clientes > 0) {
+          const pctSinBarrio = Math.round((data.pendientes_barrio / data.total_clientes) * 100);
+          setCalidad({
+            ...calidad,
+            clientes_sin_barrio: data.pendientes_barrio,
+            pct_sin_barrio: pctSinBarrio,
+            alerta: pctSinBarrio > 10 || calidad.pct_sin_vendedor > 5,
+          });
+        }
+      }
+      const barriosResueltos = data.reverse?.resueltos ?? 0;
       toast({
-        title: "Geocodificación completada",
-        description: `${data.results.geocoded} de ${data.results.total} clientes geocodificados`,
+        title: data.pendientes_barrio === 0 ? "Ubicaciones completadas" : "Proceso de ubicación finalizado",
+        description: `${barriosResueltos} barrios completados · ${data.pendientes_barrio ?? 0} pendientes`,
       });
       fetchPendingGeocount();
     } catch (err: unknown) {
@@ -1112,10 +1135,10 @@ const CargaDatos = () => {
         {/* ── Section 2: Batch Geocoding ── */}
         <div className="pt-4 border-t border-border/30">
           <h2 className="text-xl font-sans text-foreground tracking-tight">
-            Geocodificación de Clientes
+            Calidad de ubicación de clientes
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Clientes con dirección pero sin coordenadas GPS. Necesarios para el motor de recomendaciones geográficas.
+            Un cliente solo está listo para recomendaciones geográficas cuando tiene barrio y coordenadas válidas.
           </p>
         </div>
 
@@ -1129,7 +1152,7 @@ const CargaDatos = () => {
             ) : pendingGeocount === 0 && !geocodeResults ? (
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle2 className="h-5 w-5" />
-                <span className="text-sm font-medium">Todos los clientes tienen coordenadas GPS</span>
+                <span className="text-sm font-medium">Todos los clientes tienen barrio asignado</span>
               </div>
             ) : (
               <div className="space-y-4">
@@ -1141,16 +1164,16 @@ const CargaDatos = () => {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-foreground">
-                          {pendingGeocount} cliente{pendingGeocount !== 1 ? "s" : ""} sin coordenadas
+                          {pendingGeocount} cliente{pendingGeocount !== 1 ? "s" : ""} sin barrio
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Se geocodificarán usando Google Maps API (~{Math.ceil(pendingGeocount * 0.2)}s estimado)
+                          Se resolverán primero por dirección completa y luego por coordenadas como respaldo.
                         </p>
                       </div>
                     </div>
                     <Button onClick={handleBatchGeocode} size="sm">
                       <MapPin className="h-3.5 w-3.5 mr-1.5" />
-                      Geocodificar
+                      Completar ubicaciones
                     </Button>
                   </div>
                 )}
@@ -1159,9 +1182,9 @@ const CargaDatos = () => {
                   <div className="text-center space-y-3 py-4">
                     <Loader2 className="h-8 w-8 mx-auto animate-spin text-primary" />
                     <div>
-                      <p className="text-sm font-medium text-foreground">Geocodificando clientes…</p>
+                      <p className="text-sm font-medium text-foreground">Completando barrios y ubicaciones…</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Consultando Google Maps API para {pendingGeocount} direcciones. Esto puede tomar ~{Math.ceil((pendingGeocount || 0) * 0.2)}s.
+                        Consultando Google Maps para {pendingGeocount} clientes. No se marcarán como completos si siguen sin barrio.
                       </p>
                     </div>
                   </div>
@@ -1171,20 +1194,20 @@ const CargaDatos = () => {
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 mb-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      <span className="text-sm font-medium text-foreground">Geocodificación completada</span>
+                      <span className="text-sm font-medium text-foreground">Verificación de ubicaciones completada</span>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div className="text-center p-2.5 rounded-lg bg-muted/30">
-                        <p className="text-xl font-bold text-foreground">{geocodeResults.total}</p>
-                        <p className="text-xs text-muted-foreground">Total pendientes</p>
+                        <p className="text-xl font-bold text-foreground">{geocodeResults.reverse?.total ?? geocodeResults.total}</p>
+                        <p className="text-xs text-muted-foreground">Sin barrio revisados</p>
                       </div>
                       <div className="text-center p-2.5 rounded-lg bg-green-500/10">
-                        <p className="text-xl font-bold text-green-600">{geocodeResults.geocoded}</p>
-                        <p className="text-xs text-muted-foreground">Geocodificados</p>
+                        <p className="text-xl font-bold text-green-600">{geocodeResults.reverse?.resueltos ?? 0}</p>
+                        <p className="text-xs text-muted-foreground">Barrios completados</p>
                       </div>
                       <div className="text-center p-2.5 rounded-lg bg-destructive/10">
-                        <p className="text-xl font-bold text-destructive">{geocodeResults.errors}</p>
-                        <p className="text-xs text-muted-foreground">Con error</p>
+                        <p className="text-xl font-bold text-destructive">{geocodeResults.pendientes_barrio ?? geocodeResults.reverse?.errores ?? 0}</p>
+                        <p className="text-xs text-muted-foreground">Aún sin barrio</p>
                       </div>
                       <div className="text-center p-2.5 rounded-lg bg-muted/30">
                         <p className="text-xl font-bold text-foreground">{geocodeResults.skipped}</p>

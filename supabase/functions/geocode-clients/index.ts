@@ -266,12 +266,12 @@ Deno.serve(async (req) => {
       await sleep(200); // Throttle: 5 req/sec
     }
 
-    // ===== Reverse geocoding: lugares con coordenadas pero sin barrio =====
+    // ===== Completar barrio: dirección completa primero, coordenadas como respaldo =====
     const reverse = { total: 0, resueltos: 0, errores: 0 };
     const { data: placesSinBarrio } = await supabase
       .from("client_places")
       .select("id, client_id, lat, long, barrio_principal")
-      .is("barrio_principal", null)
+      .or("barrio_principal.is.null,barrio_principal.eq.")
       .not("lat", "is", null)
       .limit(limit > 0 ? limit : 600);
 
@@ -279,15 +279,48 @@ Deno.serve(async (req) => {
 
     for (const place of placesSinBarrio || []) {
       try {
-        const data = await geocodeFetch(`latlng=${place.lat},${place.long}&language=es`);
+        const client = (allClients || []).find((candidate: any) => candidate.client_id === place.client_id);
+        const addressParts = client ? [
+          client.direccion_principal,
+          client.codigo_postal,
+          client.ciudad_principal,
+          client.provincia_principal,
+          "Argentina",
+        ].filter(Boolean) : [];
+        let data = addressParts.length > 1
+          ? await geocodeFetch(`address=${encodeURIComponent(addressParts.join(", "))}&language=es&region=ar`)
+          : null;
+        if (!data || data.status !== "OK" || !data.results?.length) {
+          data = await geocodeFetch(`latlng=${place.lat},${place.long}&language=es`);
+        }
         if (data.status !== "OK" || !data.results?.length) { reverse.errores++; await sleep(120); continue; }
 
-        const components = data.results[0].address_components || [];
-        const barrio =
+        let components = data.results[0].address_components || [];
+        let barrio =
           extractComponent(components, "sublocality_level_1") ||
           extractComponent(components, "sublocality") ||
           extractComponent(components, "neighborhood") ||
-          extractComponent(components, "locality");
+          extractComponent(components, "locality") ||
+          extractComponent(components, "postal_town") ||
+          extractComponent(components, "administrative_area_level_3");
+
+        // Una búsqueda por dirección puede devolver solo la calle. En ese caso,
+        // la consulta inversa por las coordenadas del ERP es obligatoria.
+        if (!barrio && addressParts.length > 1) {
+          const reverseData = await geocodeFetch(`latlng=${place.lat},${place.long}&language=es`);
+          if (reverseData.status === "OK" && reverseData.results?.length) {
+            data = reverseData;
+            components = reverseData.results[0].address_components || [];
+            barrio =
+              extractComponent(components, "sublocality_level_1") ||
+              extractComponent(components, "sublocality") ||
+              extractComponent(components, "neighborhood") ||
+              extractComponent(components, "locality") ||
+              extractComponent(components, "postal_town") ||
+              extractComponent(components, "administrative_area_level_3");
+          }
+        }
+
         const adminArea2 = extractComponent(components, "administrative_area_level_2");
         const provincia = normalizeProvince(extractComponent(components, "administrative_area_level_1"));
         const comuna = resolveComuna(barrio, adminArea2);
@@ -305,8 +338,7 @@ Deno.serve(async (req) => {
             barrio_principal: barrio,
             ...(provincia ? { provincia_principal: provincia } : {}),
           })
-          .eq("client_id", place.client_id)
-          .is("barrio_principal", null);
+          .eq("client_id", place.client_id);
 
         reverse.resueltos++;
       } catch {
@@ -318,8 +350,22 @@ Deno.serve(async (req) => {
     // R7: un solo primario por cliente, ganando manual > ERP > geocoding
     await supabase.rpc("reconciliar_places_primarios");
 
+    const { count: pendientesBarrio } = await supabase
+      .from("clientes")
+      .select("client_id", { count: "exact", head: true })
+      .or("barrio_principal.is.null,barrio_principal.eq.");
+    const { count: totalClientes } = await supabase
+      .from("clientes")
+      .select("client_id", { count: "exact", head: true });
+
     return new Response(
-      JSON.stringify({ success: true, results, reverse }),
+      JSON.stringify({
+        success: true,
+        results,
+        reverse,
+        pendientes_barrio: pendientesBarrio ?? 0,
+        total_clientes: totalClientes ?? 0,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
