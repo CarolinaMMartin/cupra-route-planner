@@ -516,50 +516,62 @@ const ManualAssignment = () => {
 
           {filtersOpen && (
             <div className="flex flex-col sm:flex-row gap-3 rounded-md border border-border/60 bg-muted/20 p-3">
-              <Select value={filterProvincia} onValueChange={setFilterProvincia}>
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <SelectValue placeholder="Provincia" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las provincias</SelectItem>
-                  {provincias.map(p => (
-                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filterCiudad} onValueChange={setFilterCiudad}>
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <SelectValue placeholder="Ciudad" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las ciudades</SelectItem>
-                  {ciudades.map(c => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={filterVendedor} onValueChange={setFilterVendedor}>
-                <SelectTrigger className="w-full sm:w-[220px]">
-                  <SelectValue placeholder="Vendedor actual" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los vendedores</SelectItem>
-                  <SelectItem value="__SIN_ASIGNAR__">Sin asignar</SelectItem>
-                  {vendedores.map(v => (
-                    <SelectItem key={v.user_id} value={v.nombre}>
-                      {toTitleCase(v.nombre)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="w-full sm:w-[220px] space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Provincia</label>
+                <SearchableSelect
+                  options={[
+                    { value: "all", label: "Todas las provincias" },
+                    ...provincias.map(p => ({ value: p, label: p })),
+                  ]}
+                  value={filterProvincia}
+                  onValueChange={setFilterProvincia}
+                  placeholder="Todas las provincias"
+                  searchPlaceholder="Escribí para buscar provincia..."
+                  emptyMessage="No se encontró esa provincia."
+                  className="h-9"
+                />
+              </div>
+              <div className="w-full sm:w-[220px] space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Ciudad</label>
+                <SearchableSelect
+                  options={[
+                    { value: "all", label: "Todas las ciudades" },
+                    ...ciudades.map(c => ({ value: c, label: c })),
+                  ]}
+                  value={filterCiudad}
+                  onValueChange={setFilterCiudad}
+                  placeholder="Todas las ciudades"
+                  searchPlaceholder="Escribí para buscar ciudad..."
+                  emptyMessage="No se encontró esa ciudad."
+                  className="h-9"
+                />
+              </div>
+              <div className="w-full sm:w-[240px] space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Vendedor actual</label>
+                <SearchableSelect
+                  options={[
+                    { value: "all", label: "Todos los vendedores" },
+                    { value: "__SIN_ASIGNAR__", label: "Sin asignar" },
+                    ...vendedores.map(v => ({ value: v.nombre, label: toTitleCase(v.nombre) })),
+                  ]}
+                  value={filterVendedor}
+                  onValueChange={setFilterVendedor}
+                  placeholder="Todos los vendedores"
+                  searchPlaceholder="Escribí para buscar vendedor..."
+                  emptyMessage="No se encontró ese vendedor."
+                  className="h-9"
+                />
+              </div>
               {activeFilterCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => { setFilterCiudad("all"); setFilterProvincia("all"); setFilterVendedor("all"); }}
-                >
-                  Limpiar filtros
-                </Button>
+                <div className="flex items-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setFilterCiudad("all"); setFilterProvincia("all"); setFilterVendedor("all"); }}
+                  >
+                    Limpiar filtros
+                  </Button>
+                </div>
               )}
             </div>
           )}
