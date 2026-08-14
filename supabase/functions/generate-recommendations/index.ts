@@ -1247,6 +1247,39 @@ Deno.serve(async (req) => {
       console.log(`🎯 Zone center fallback (${source}): ${zoneCenterFallback.lat.toFixed(4)}, ${zoneCenterFallback.lng.toFixed(4)}`);
     }
 
+    // ---- 7b. Territorio de conquista para vendedores nuevos (sin cartera) ----
+    // En vez de mandarlos al centro geométrico de la zona, se busca el núcleo con más
+    // valor "libre": clientes huérfanos (sin vendedor activo dueño) + prospectos,
+    // evitando pisar el hotspot de otro vendedor de la misma corrida.
+    const conquestPoints: { lat: number; lng: number; prioridad: number }[] = [];
+    for (const c of allClientesEnZona) {
+      const tieneDueno = vendedoresData.some((v: any) => isClientAffiliated(c, v.user_id, sellerNameMap));
+      if (tieneDueno) continue;
+      const place = placesMap.get(c.client_id);
+      const lat = Number(place?.lat);
+      const lng = Number(place?.long);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      if (lat < -60 || lat > -20 || lng < -80 || lng > -40) continue;
+      // Cliente sin dueño = oportunidad concreta; pesa más que un prospecto frío.
+      conquestPoints.push({ lat, lng, prioridad: 1 + prioridadBase(c, precioCajaCanal) });
+    }
+    for (const p of prospectZoneCoords) {
+      conquestPoints.push({ lat: p.lat, lng: p.lng, prioridad: 0.25 });
+    }
+
+    function pickConquestHotspot(taken: AnchorPoint[]): AnchorPoint | null {
+      if (conquestPoints.length === 0) return zoneCenterFallback;
+      const libres = conquestPoints.filter((p) =>
+        taken.every((t) => calcularDistanciaKm(t.lat, t.lng, p.lat, p.lng) > HARD_RADIUS_KM)
+      );
+      const base = libres.length >= 3 ? libres : conquestPoints;
+      const cluster = pickBestCluster(base, HARD_RADIUS_KM, 3);
+      return cluster?.anchor
+        || findDensestHotspot(base.map((p) => ({ lat: p.lat, lng: p.lng })), 2.5)
+        || zoneCenterFallback;
+    }
+
+
     if (allClientesEnZona.length === 0 && portfolioClients.length === 0 && prospectos.length === 0) {
       return new Response(JSON.stringify({
         recomendaciones: [], resumen: { total_recomendaciones: 0, descripcion: "No se encontraron candidatos en la zona.", distribucion_por_vendedor: {}, zonas_priorizadas: [] }
