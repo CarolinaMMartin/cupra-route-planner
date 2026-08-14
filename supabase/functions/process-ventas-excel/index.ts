@@ -715,7 +715,8 @@ Deno.serve(async (req) => {
         const importe = parseNumericValue(
           getFieldValue(row, ['Total Final', 'Precio Total Final', 'Importe No Gravado', 'Importe Neto'])
         );
-        if (importe === null || importe === undefined || importe === 0) {
+        // OT8-fix: importe 0 es válido (renglón bonificado al 100%). Solo se descarta si NO hay importe.
+        if (importe === null || importe === undefined) {
           notasCreditoSinImporte++;
           filasDescartadas.push({ origen: 'nota_credito', motivo: 'sin_importe', payload: row });
           continue;
