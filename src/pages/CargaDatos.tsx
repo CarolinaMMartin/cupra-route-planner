@@ -478,29 +478,6 @@ const CargaDatos = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                {fileKind === "ventas" && (
-                  <Alert className="mb-3">
-                    {comprobantes.length > 0 ? (
-                      <>
-                        <Info className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          Doble ingesta activa: <strong>"{comprobantesSheetName}"</strong> define la facturación total del
-                          cliente (todas las marcas) y <strong>"{sheetName}"</strong> aporta el mix CUPRA (cajas, SKUs y
-                          share).
-                        </AlertDescription>
-                      </>
-                    ) : (
-                      <>
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          No se encontró la hoja <strong>"Ventas por Comprobante"</strong>. La hoja de productos viene
-                          filtrada por proveedor CUPRA, así que los clientes multi-marca quedarán subvaluados. Pedí el
-                          export completo del ERP para tener la facturación real por cliente.
-                        </AlertDescription>
-                      </>
-                    )}
-                  </Alert>
-                )}
                 <div className="mb-3">
                   <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                     <Eye className="h-3 w-3" /> Columnas detectadas
