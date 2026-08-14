@@ -18,6 +18,13 @@ interface Recordatorio {
   prospecto_place_id: string | null;
 }
 
+interface Candidato {
+  id: string;
+  nombre: string;
+  detalle: string;
+  esProspecto: boolean;
+}
+
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
