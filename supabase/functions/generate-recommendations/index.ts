@@ -48,7 +48,7 @@ const CUPO_REACTIVACION = 2;
 const CUPO_PROSPECTOS = 2;
 
 // Limpia jerga interna y coordenadas de los textos que ve el asignador.
-function limpiarJustificacion(texto: string | null | undefined, fallback: string): string {
+function limpiarJustificacion(texto: string | null | undefined, fallback: string, maxLen = 320): string {
   let out = String(texto ?? "").trim();
   if (!out) return fallback;
   out = out
