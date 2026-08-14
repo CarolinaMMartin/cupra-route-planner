@@ -696,11 +696,21 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
       }
 
       // Guardar feedback
-      const { error: feedbackError } = await supabase
+      const { data: feedbackInsertado, error: feedbackError } = await supabase
         .from('cliente_feedbacks')
-        .insert(feedbackData);
+        .insert(feedbackData)
+        .select('id')
+        .maybeSingle();
 
       if (feedbackError) throw feedbackError;
+
+      // Interpretación estructurada del comentario (no bloqueante: si falla, el
+      // motor sigue usando el parser de texto de siempre).
+      if (feedbackInsertado?.id) {
+        supabase.functions
+          .invoke('extract-feedback', { body: { feedback_id: feedbackInsertado.id } })
+          .catch((err) => console.error('extract-feedback:', err));
+      }
       
       // Si es prospecto y se concretó una venta, marcarlo como cliente
       if (huboContacto && esProspecto && tipoInteraccion === "Venta Concretada") {

@@ -67,7 +67,19 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
               .select("user_id, nombre")
               .in("user_id", ids);
             const nombres = new Map((profs || []).map((p: any) => [p.user_id, p.nombre]));
-            list = list.map((f: any) => ({ ...f, vendedor_nombre: nombres.get(f.vendedor_id) || null }));
+
+            // Lectura estructurada del comentario (IA). Si no existe, la tarjeta queda igual.
+            const { data: exts } = await supabase
+              .from("feedback_extraccion")
+              .select("feedback_id, revisit_date, objecion, interes_producto, riesgo_cobranza, no_ofrecer, contacto_nombre, contacto_rol, resumen, confianza")
+              .in("feedback_id", list.map((f: any) => f.id));
+            const extMap = new Map((exts || []).map((e: any) => [e.feedback_id, e]));
+
+            list = list.map((f: any) => ({
+              ...f,
+              vendedor_nombre: nombres.get(f.vendedor_id) || null,
+              extraccion: extMap.get(f.id) || null,
+            }));
           }
           if (!cancelled) setFeedbacks(list);
         } else if (!cancelled) {
@@ -223,6 +235,29 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
                         <p className="whitespace-pre-wrap">{f.feedback}</p>
                         {!f.visita_realizada && f.motivo_no_visita && (
                           <p className="text-xs text-muted-foreground">Motivo: {f.motivo_no_visita}</p>
+                        )}
+                        {f.extraccion && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            {f.extraccion.revisit_date && (
+                              <Badge variant="secondary">
+                                Volver: {new Date(`${f.extraccion.revisit_date}T12:00:00Z`).toLocaleDateString("es-AR")}
+                              </Badge>
+                            )}
+                            {f.extraccion.objecion && <Badge variant="outline">Objeción: {f.extraccion.objecion}</Badge>}
+                            {(f.extraccion.interes_producto || []).map((p: string) => (
+                              <Badge key={p} variant="outline">Interés: {p}</Badge>
+                            ))}
+                            {f.extraccion.riesgo_cobranza && f.extraccion.riesgo_cobranza !== "ninguno" && (
+                              <Badge variant="destructive">Cobranza: {f.extraccion.riesgo_cobranza}</Badge>
+                            )}
+                            {f.extraccion.no_ofrecer && <Badge variant="destructive">No ofrecer aún</Badge>}
+                            {f.extraccion.contacto_nombre && (
+                              <Badge variant="outline">
+                                Contacto: {f.extraccion.contacto_nombre}
+                                {f.extraccion.contacto_rol ? ` (${f.extraccion.contacto_rol})` : ""}
+                              </Badge>
+                            )}
+                          </div>
                         )}
                       </div>
                     ))}

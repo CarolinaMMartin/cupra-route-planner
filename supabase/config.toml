@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.prospect-discovery]
 verify_jwt = false
+
+[functions.extract-feedback]
+verify_jwt = false

@@ -95,19 +95,52 @@ function parseRevisitDays(text: string | null | undefined): number | null {
   return null;
 }
 
-/** Mapa negocio -> fecha mínima de próxima visita según el feedback más reciente. */
-function buildRevisitMap(feedbacksMap: Map<string, any[]>): Map<string, RevisitInfo> {
+/** Extracción estructurada del feedback (IA), indexada por feedback_id. */
+export interface FeedbackExtraccion {
+  feedback_id: string;
+  revisit_date?: string | null;
+  resumen?: string | null;
+  confianza?: number | null;
+}
+
+/** Confianza mínima para dejar que la extracción de IA mande sobre el parser de texto. */
+const MIN_CONFIANZA_EXTRACCION = 0.5;
+
+/**
+ * Mapa negocio -> fecha mínima de próxima visita según el feedback más reciente.
+ * Primero se usa la fecha extraída por IA (si tiene confianza suficiente);
+ * si no existe, cae al parser de texto de siempre. Nunca queda peor que antes.
+ */
+function buildRevisitMap(
+  feedbacksMap: Map<string, any[]>,
+  extracciones?: Map<string, FeedbackExtraccion>,
+): Map<string, RevisitInfo> {
   const map = new Map<string, RevisitInfo>();
   for (const [id, feedbacks] of feedbacksMap) {
     for (const fb of feedbacks) {
-      const days = parseRevisitDays(fb.feedback) ?? parseRevisitDays(fb.motivo_no_visita);
-      if (days === null) continue;
       const base = fb.created_at ? new Date(fb.created_at).getTime() : Date.now();
-      const dueAt = base + days * 24 * 60 * 60 * 1000;
-      const prev = map.get(id);
-      if (!prev || dueAt > prev.dueAt) {
-        map.set(id, { dueAt, source: `${fb.feedback || fb.motivo_no_visita} (+${days}d)` });
+      let dueAt: number | null = null;
+      let source = "";
+
+      const ext = fb.id ? extracciones?.get(fb.id) : undefined;
+      const confianza = Number(ext?.confianza ?? 0);
+      if (ext?.revisit_date && confianza >= MIN_CONFIANZA_EXTRACCION) {
+        const parsed = new Date(`${ext.revisit_date}T12:00:00Z`).getTime();
+        if (Number.isFinite(parsed)) {
+          dueAt = parsed;
+          source = ext.resumen || `Revisita sugerida por el vendedor (${ext.revisit_date})`;
+        }
       }
+
+      if (dueAt === null) {
+        const days = parseRevisitDays(fb.feedback) ?? parseRevisitDays(fb.motivo_no_visita);
+        if (days === null) continue;
+        dueAt = base + days * 24 * 60 * 60 * 1000;
+        source = `${fb.feedback || fb.motivo_no_visita} (+${days}d)`;
+      }
+
+      const prev = map.get(id);
+      if (!prev || dueAt > prev.dueAt) map.set(id, { dueAt, source });
       break; // feedbacks vienen ordenados por fecha desc: vale el más reciente
     }
   }
@@ -1307,8 +1340,19 @@ Deno.serve(async (req) => {
     // ---- 8. Load feedbacks ----
     const { data: feedbacks } = await supabaseClient
       .from("cliente_feedbacks")
-      .select("client_id, prospecto_place_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, estado_cliente, created_at")
+      .select("id, client_id, prospecto_place_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, estado_cliente, created_at")
       .order("created_at", { ascending: false });
+
+    // Extracción estructurada por IA del feedback (opcional: si no existe, todo sigue igual).
+    const extraccionesMap = new Map<string, FeedbackExtraccion>();
+    try {
+      const { data: extracciones } = await supabaseClient
+        .from("feedback_extraccion")
+        .select("feedback_id, revisit_date, resumen, confianza");
+      extracciones?.forEach((e: any) => extraccionesMap.set(e.feedback_id, e));
+    } catch (e) {
+      console.warn("No se pudo leer feedback_extraccion, se usa el parser de texto:", e);
+    }
 
     const feedbacksMapClientes = new Map<string, any[]>();
     const feedbacksMapProspectos = new Map<string, any[]>();
@@ -1324,8 +1368,8 @@ Deno.serve(async (req) => {
     });
 
     // Feedback del vendedor → fecha mínima de próxima visita ("volver en X días/semanas").
-    const revisitMapClientes = buildRevisitMap(feedbacksMapClientes);
-    const revisitMapProspectos = buildRevisitMap(feedbacksMapProspectos);
+    const revisitMapClientes = buildRevisitMap(feedbacksMapClientes, extraccionesMap);
+    const revisitMapProspectos = buildRevisitMap(feedbacksMapProspectos, extraccionesMap);
     const scoreOpts: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapClientes, precioCajaCanal };
     const scoreOptsP: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapProspectos, precioCajaCanal, posiblesClientes: posiblesClientesExistentes };
     // Versión relajada del cooldown: sólo se usa como último recurso para llegar a 8.
