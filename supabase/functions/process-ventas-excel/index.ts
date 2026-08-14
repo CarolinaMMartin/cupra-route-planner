@@ -634,6 +634,8 @@ Deno.serve(async (req) => {
     let notasCreditoSinMatch = 0;
     let notasCreditoDuplicadas = 0;
     let notasCreditoSinImporte = 0;
+    let montoNCProducto = 0;
+    let montoNCConcepto = 0;
     let montoNotasCredito = 0;
 
     if (rawNotasCredito.length > 0) {
@@ -699,6 +701,11 @@ Deno.serve(async (req) => {
           continue;
         }
         const monto = -Math.abs(importe);
+        // OT3: la columna "Tipo" separa devolución de mercadería (dispara flag de recupero)
+        // de las notas por concepto (pronto pago, descuentos), que NO son un problema comercial.
+        const tipoNC = toStr(getFieldValue(row, ['Tipo', 'tipo', 'Tipo Comprobante', 'Concepto'])) || '';
+        const esConcepto = /concepto|pronto\s*pago|descuento|bonific|financier|interes|inter\u00e9s/i.test(tipoNC);
+        if (esConcepto) montoNCConcepto += Math.abs(importe); else montoNCProducto += Math.abs(importe);
 
         ventasRaw.push({
           client_id: base.client_id,
@@ -717,7 +724,7 @@ Deno.serve(async (req) => {
           telefono: base.telefono, celular: base.celular, correo: base.correo,
           direccion: base.direccion, ciudad: base.ciudad, provincia: base.provincia,
           pais: base.pais, categorias: base.categorias,
-          tipo_comprobante: 'nota_credito',
+          tipo_comprobante: esConcepto ? 'nota_credito_concepto' : 'nota_credito',
         });
         notasCreditoAplicadas++;
         montoNotasCredito += monto;
@@ -831,8 +838,10 @@ Deno.serve(async (req) => {
       if (categorias) {
         categorias.split(/[/|,;]/).forEach((cat: string) => { const t = cat.trim(); if (t) c.categorias_set.add(t); });
       }
-      c.monto_total += facturacion || 0;
-      const esNotaCredito = venta.tipo_comprobante === 'nota_credito';
+      // R4: el monto histórico es BRUTO. Las notas de crédito viven en columnas aparte
+      // (monto_nc_producto / monto_nc_concepto) y nunca se restan acá.
+      const esNotaCredito = String(venta.tipo_comprobante || '').startsWith('nota_credito');
+      if (!esNotaCredito) c.monto_total += facturacion || 0;
       if (!esNotaCredito) c.cantidad_lineas += 1;
 
       // TAREA 1: Contar comprobantes únicos (ticket + letra + fecha) via Set.
@@ -1149,6 +1158,8 @@ Deno.serve(async (req) => {
       notas_credito_duplicadas: notasCreditoDuplicadas,
       notas_credito_sin_importe: notasCreditoSinImporte,
       monto_notas_credito: Math.round(montoNotasCredito * 100) / 100,
+      monto_nc_producto: Math.round(montoNCProducto * 100) / 100,
+      monto_nc_concepto: Math.round(montoNCConcepto * 100) / 100,
 
       filas_procesadas: ventasRaw.length,
       filas_deduplicadas: ventasDeduplicadas.length,
