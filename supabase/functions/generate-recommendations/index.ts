@@ -1662,7 +1662,7 @@ Deno.serve(async (req) => {
           .lte("latitud", vendorHotspot.lat + deltaLat)
           .gte("longitud", vendorHotspot.lng - deltaLng)
           .lte("longitud", vendorHotspot.lng + deltaLng)
-          .order("rating", { ascending: false })
+          .order("total_ratings", { ascending: false, nullsFirst: false })
           .limit(50);
 
         const extraFiltered = (geoProspectos || []).filter(p =>
@@ -1695,7 +1695,7 @@ Deno.serve(async (req) => {
           .from("prospectos")
           .select("*")
           .eq("es_cliente_cupra", false)
-          .order("rating", { ascending: false })
+          .order("total_ratings", { ascending: false, nullsFirst: false })
           .limit(Math.max(needed * 8, 80));
 
         if (provincia && provincia !== "all") {
