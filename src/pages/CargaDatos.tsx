@@ -334,7 +334,8 @@ const CargaDatos = () => {
           rows,
           replaceExisting,
           notasCredito: notasCredito.length ? notasCredito : undefined,
-          fileMetadata,
+          comprobantes: comprobantes.length ? comprobantes : undefined,
+          fileMetadata: { ...fileMetadata, comprobantesSheetName: comprobantesSheetName || null },
         },
       });
       setProgress(90);
