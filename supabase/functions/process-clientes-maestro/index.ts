@@ -410,6 +410,7 @@ Deno.serve(async (req) => {
           razon_social: existing.razon_social || p.razon_social,
           fantasia: existing.fantasia || p.fantasia,
           direccion: existing.direccion || p.direccion,
+          codigo_postal: existing.codigo_postal || p.codigo_postal,
           ciudad: existing.ciudad || p.ciudad,
           provincia: existing.provincia || p.provincia,
           telefonos: Array.from(new Set([...existing.telefonos, ...p.telefonos])),
