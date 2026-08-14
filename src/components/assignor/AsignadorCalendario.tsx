@@ -347,9 +347,11 @@ const AsignadorCalendario = () => {
             onSelect={setSelectedDate}
             modifiers={{ evento: fechasConEvento, auto: fechasAuto }}
             modifiersClassNames={{
-              evento: "font-bold text-primary",
-              auto: "underline underline-offset-4",
+              evento:
+                "relative font-semibold after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-primary",
+              auto: "relative after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-accent",
             }}
+
             className={cn("p-0 pointer-events-auto")}
           />
           <p className="mt-3 text-[11px] text-muted-foreground">
