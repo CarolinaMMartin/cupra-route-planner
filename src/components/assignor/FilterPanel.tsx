@@ -108,7 +108,7 @@ const FilterPanel = ({
   const fetchVendedores = async () => {
     setIsLoadingVendedores(true);
     try {
-      const { data, error } = await supabase.from('profiles').select('id, user_id, nombre, email').eq('rol', 'vendedor').eq('activo', true);
+      const { data, error } = await supabase.from('profiles').select('id, user_id, nombre, email').in('rol', ['vendedor', 'administrador']).eq('activo', true);
       if (error) throw error;
       const mapped = (data || []).map(v => ({ id: v.user_id, profileId: v.id, nombre: toTitleCase(v.nombre), email: v.email }));
       setVendedores(mapped);
