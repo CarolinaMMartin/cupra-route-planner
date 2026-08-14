@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarClock, Check, Trash2, Clock } from "lucide-react";
+import { CalendarClock, Check, Trash2, Clock, Route } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Recordatorio {
