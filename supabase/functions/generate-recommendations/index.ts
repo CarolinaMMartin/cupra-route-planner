@@ -2279,7 +2279,17 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       (vendedor) => (enrichedCountByVendor.get(vendedor.user_id) || 0) !== 8,
     );
     if (enrichedRecommendations.length === 0) {
-      throw new Error("No se encontraron candidatos disponibles para ningún vendedor con los filtros seleccionados.");
+      // Sin candidatos no es un error del sistema: devolvemos vacío con explicación.
+      return new Response(JSON.stringify({
+        recomendaciones: [],
+        resumen: {
+          total_recomendaciones: 0,
+          descripcion: "No se encontraron candidatos disponibles para los vendedores y filtros seleccionados. "
+            + "Probá ampliar la zona, elegir un vendedor con cartera en el área o revisar los filtros geográficos.",
+          distribucion_por_vendedor: {},
+          zonas_priorizadas: [],
+        },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     // Normalización: "VILLA URQUIZA" y "Villa Urquiza" son la misma zona.
     const zonaTexto = dedupeBarrios([...barriosFinales, ...comunasFinales]).join(", ") || "la zona seleccionada";
