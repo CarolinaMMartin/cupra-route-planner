@@ -1101,8 +1101,7 @@ Deno.serve(async (req) => {
     // ── TAREA 11: Consistencia clientes ↔ ventas_cupra (post-carga check) ──
     // Solo reportamos las discrepancias, no corregimos aquí
     const discrepancias: string[] = [];
-    // Compare total processed vs what we just upserted
-    if (Math.abs(totalFacturacionProcesada - Array.from(resumenMonetario.values()).reduce((s2, r) => s2 + r.monto, 0)) > 1) {
+    if (Math.abs(totalFacturacionProcesada - totalGlobal) > 1) {
       discrepancias.push('Discrepancia interna en facturación total procesada');
     }
 
