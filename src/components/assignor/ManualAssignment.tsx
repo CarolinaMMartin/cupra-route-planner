@@ -392,12 +392,12 @@ const ManualAssignment = () => {
       // Reset
       setSelectedClients(new Set());
       // Refresh results
-      searchClientes(debouncedQuery, filterCiudad, filterProvincia, suggestionMode || undefined);
+      searchClientes(debouncedQuery, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined);
 
     } catch (err: any) {
       console.error("Assignment error:", err);
-      const msg = err.message?.includes("duplicate") 
-        ? "Algunos clientes ya están asignados a este vendedor" 
+      const msg = err.message?.includes("duplicate")
+        ? "Algunos clientes ya están asignados a este vendedor"
         : "Error al realizar la asignación";
       toast({ variant: "destructive", title: "Error", description: msg });
     } finally {
@@ -410,6 +410,7 @@ const ManualAssignment = () => {
     setSearchQuery("");
     setFilterCiudad("all");
     setFilterProvincia("all");
+    setFilterVendedor("all");
   };
 
   return (
