@@ -680,13 +680,34 @@ Deno.serve(async (req) => {
     let montoNotasCredito = 0;
 
     if (rawNotasCredito.length > 0) {
+      // Clave laxa: sin puntuación ni sufijos societarios, para conciliar
+      // variantes tipo "LA POSTA S.R.L." vs "LA POSTA SRL".
+      const looseKey = (v: any): string | null => {
+        const base = normalizeBusinessName(v);
+        if (!base) return null;
+        const k = base
+          .replace(/[^A-Z0-9 ]/g, ' ')
+          .replace(/\b(S\s?R\s?L|S\s?A\s?S|S\s?A|SOCIEDAD ANONIMA|SRL|SAS|SH|SC|CIA|Y CIA|LTDA)\b/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        return k || base;
+      };
+
       const rsToClient = new Map<string, any>();
-      for (const v of ventasRaw) {
-        const key = normalizeBusinessName(v.razon_social);
-        if (key && !rsToClient.has(key)) {
-          rsToClient.set(key, v);
+      const looseToClient = new Map<string, any>();
+      const cuitToClient = new Map<string, any>();
+      const addIdx = (nombres: any[], cuit: any, base: any) => {
+        for (const nombre of nombres) {
+          const key = normalizeBusinessName(nombre);
+          if (key && !rsToClient.has(key)) rsToClient.set(key, base);
+          const lk = looseKey(nombre);
+          if (lk && !looseToClient.has(lk)) looseToClient.set(lk, base);
         }
-      }
+        const c = normalizeCuit(cuit);
+        if (c && !cuitToClient.has(c)) cuitToClient.set(c, base);
+      };
+
+      for (const v of ventasRaw) addIdx([v.razon_social, v.fantasia], v.cuit_dni, v);
 
       for (const c of clientesPersistidos) {
         const base = {
@@ -704,26 +725,31 @@ Deno.serve(async (req) => {
           pais: 'Argentina',
           categorias: Array.isArray(c.etiquetas) ? c.etiquetas.join(', ') : null,
         };
-        for (const nombre of [c.razon_social, c.fantasia]) {
-          const key = normalizeBusinessName(nombre);
-          if (key && !rsToClient.has(key)) rsToClient.set(key, base);
-        }
+        addIdx([c.razon_social, c.fantasia], c.cuit_dni, base);
       }
 
       // OT8-fix: no se descartan NC idénticas; el ordinal de renglón las distingue.
       for (const row of rawNotasCredito) {
         const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
-        if (!razon_social) {
+        const cuitNC = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT', 'cuit_dni', 'Documento']));
+        const fantasiaNC = toStr(getFieldValue(row, ['Fantasia', 'Fantasía', 'fantasia', 'Nombre Fantasia']));
+        if (!razon_social && !cuitNC && !fantasiaNC) {
           notasCreditoSinMatch++;
           filasDescartadas.push({ origen: 'nota_credito', motivo: 'sin_razon_social', payload: row });
           continue;
         }
-        const base = rsToClient.get(normalizeBusinessName(razon_social) || '');
+        const base =
+          (cuitNC ? cuitToClient.get(cuitNC) : null) ||
+          rsToClient.get(normalizeBusinessName(razon_social) || '') ||
+          rsToClient.get(normalizeBusinessName(fantasiaNC) || '') ||
+          looseToClient.get(looseKey(razon_social) || '') ||
+          looseToClient.get(looseKey(fantasiaNC) || '');
         if (!base) {
           notasCreditoSinMatch++;
           filasDescartadas.push({ origen: 'nota_credito', motivo: 'cliente_no_conciliado', payload: row });
           continue;
         }
+
 
         const importe = parseNumericValue(
           getFieldValue(row, ['Total Final', 'Precio Total Final', 'Importe No Gravado', 'Importe Neto'])
@@ -772,13 +798,22 @@ Deno.serve(async (req) => {
       console.log(`⚠️ ${facturacionNullCount} filas con facturación null (columna: ${facturacionColumnResolved})`);
     }
 
-    if (replaceExisting && (ventasSinClientId > 0 || facturacionNullCount > 0 || notasCreditoSinMatch > 0)) {
+    // Guarda de integridad: las ventas sin cliente o sin facturación siguen siendo
+    // bloqueantes. Las NC sin conciliar solo bloquean si superan el 20% del total
+    // de NC del archivo (el resto se reporta como advertencia y queda en descartadas).
+    const ncTotal = notasCreditoAplicadas + notasCreditoSinMatch + notasCreditoSinImporte;
+    const ncSinMatchRatio = ncTotal > 0 ? notasCreditoSinMatch / ncTotal : 0;
+    if (replaceExisting && (ventasSinClientId > 0 || facturacionNullCount > 0 || ncSinMatchRatio > 0.2)) {
       throw new Error(
         `Carga completa rechazada por integridad: ${ventasSinClientId} filas sin cliente, ` +
-        `${facturacionNullCount} sin facturación y ${notasCreditoSinMatch} notas de crédito sin conciliar. ` +
-        'No se modificaron las ventas existentes.'
+        `${facturacionNullCount} sin facturación y ${notasCreditoSinMatch} de ${ncTotal} notas de crédito sin conciliar ` +
+        `(${Math.round(ncSinMatchRatio * 100)}%). No se modificaron las ventas existentes.`
       );
     }
+    if (notasCreditoSinMatch > 0) {
+      console.log(`⚠️ ${notasCreditoSinMatch}/${ncTotal} notas de crédito sin conciliar (${Math.round(ncSinMatchRatio * 100)}%) — se cargan las ventas igual`);
+    }
+
 
 
     // ============ FASE 1b: Numerar renglones (OT8-fix, ya NO se fusiona nada) ============
