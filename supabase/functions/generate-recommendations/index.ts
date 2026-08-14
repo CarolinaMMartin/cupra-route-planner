@@ -322,6 +322,8 @@ async function discoverProspectsFromGoogle(
           if (!placeId || !nombre || !Number.isFinite(latitud) || !Number.isFinite(longitud)) continue;
           if (place.businessStatus === "CLOSED_PERMANENTLY" || seenIds.has(placeId)) continue;
           if (existingClientNames.has(normalizeName(nombre))) continue;
+          // locationBias es una preferencia, no un límite: cortamos a mano lo que quede lejos del ancla.
+          if (hasAnchor && calcularDistanciaKm(anchor!.lat, anchor!.lng, latitud, longitud) > 8) continue;
           // Calidad: mínimo de reseñas y rubro coherente con el canal mayorista.
           if (!esProspectoComercialmenteValido({
             rating: place.rating ?? null,
@@ -332,17 +334,19 @@ async function discoverProspectsFromGoogle(
 
           const barrio = getAddressComponent(place, "neighborhood", "sublocality_level_1", "sublocality");
           const comunaCandidate = getAddressComponent(place, "administrative_area_level_2");
+          const localidad = getAddressComponent(place, "locality", "administrative_area_level_2");
+          const provinciaPlace = getAddressComponent(place, "administrative_area_level_1");
           const types = place.types || [];
 
           discovered.push({
             place_id: placeId,
             nombre,
             telefono: null,
-            direccion: place.formattedAddress || `${nombre}, Ciudad Autónoma de Buenos Aires`,
+            direccion: place.formattedAddress || `${nombre}, ${localidad || "Buenos Aires"}`,
             barrio,
             comuna: comunaCandidate?.toLowerCase().startsWith("comuna") ? comunaCandidate : null,
-            ciudad: "Ciudad Autónoma de Buenos Aires",
-            provincia: "Ciudad Autónoma de Buenos Aires",
+            ciudad: localidad || provinciaPlace || "Ciudad Autónoma de Buenos Aires",
+            provincia: provinciaPlace || "Ciudad Autónoma de Buenos Aires",
             latitud,
             longitud,
             rating: Number(place.rating || 0),
