@@ -42,6 +42,15 @@ interface ClientLocation {
   hasOverlap?: boolean;
 }
 
+interface SinUbicacionItem {
+  id: string;
+  nombre: string;
+  direccion: string;
+  client_id?: string;
+  es_prospecto: boolean;
+}
+
+
 // Carga centralizada del script de Google Maps
 const loadGoogleMapsScript = (apiKey: string) => loadGoogleMaps(apiKey);
 
