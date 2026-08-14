@@ -81,7 +81,30 @@ interface Reconciliacion {
   clientes_razon_social?: number;
   tickets_compartidos: number;
   vendedor_breakdown?: VendedorBreakdown[];
+  rango?: RangoCarga | null;
 }
+
+interface RangoCarga {
+  modo?: string;
+  fecha_desde?: string | null;
+  fecha_hasta?: string | null;
+  base_desde?: string | null;
+  base_hasta?: string | null;
+  base_filas?: number;
+  base_vacia?: boolean;
+  filas_rango_base?: number;
+  filas_a_eliminar?: number;
+  pct_eliminacion?: number;
+  clientes_archivo?: number;
+  clientes_match?: number;
+  pct_match_clientes?: number;
+  filas_insertadas?: number;
+  filas_actualizadas?: number;
+  filas_eliminadas?: number;
+  requiere_confirmacion?: boolean;
+  archivo_ajeno?: boolean;
+}
+
 
 
 interface ETLMetadata {
