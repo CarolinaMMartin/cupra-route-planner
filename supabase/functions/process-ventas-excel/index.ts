@@ -1239,6 +1239,32 @@ Deno.serve(async (req) => {
       console.error('⚠️ Error recalculando métricas:', err);
     }
 
+    // Regla permanente de calidad geográfica: después de cada carga, completar
+    // barrio por geocodificación inversa para las coordenadas recién importadas.
+    // La carga informa pendientes reales; tener GPS ya no equivale a estar listo.
+    try {
+      const geocodeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocode-clients`, {
+        method: 'POST',
+        headers: {
+          Authorization: req.headers.get('Authorization') || '',
+          apikey: Deno.env.get('SUPABASE_ANON_KEY') || '',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ limit: 600 }),
+      });
+      const geocodeResult = await geocodeResponse.json();
+      if (!geocodeResponse.ok) {
+        throw new Error(geocodeResult?.error || `HTTP ${geocodeResponse.status}`);
+      }
+      (results as any).ubicaciones = {
+        barrios_resueltos: Number(geocodeResult?.reverse?.resueltos || 0),
+        pendientes_barrio: Number(geocodeResult?.pendientes_barrio || 0),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      results.errores.push(`No se pudo completar el barrio desde las coordenadas: ${message}`);
+    }
+
     const metadata = {
       fecha_carga: new Date().toISOString(),
       version_etl: ETL_VERSION,
