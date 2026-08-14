@@ -614,7 +614,38 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
         )}
         </div>
       </div>
+
+      <Dialog open={!!correccion} onOpenChange={(open) => !open && setCorreccion(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Corregir dirección</DialogTitle>
+            <DialogDescription>
+              {correccion?.nombre}. La dirección corregida se verifica en el mapa y queda fija:
+              las próximas cargas de Excel no la sobrescriben.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="direccion-correccion">Dirección completa</Label>
+            <Input
+              id="direccion-correccion"
+              value={direccionEditada}
+              onChange={(e) => setDireccionEditada(e.target.value)}
+              placeholder="Av. Corrientes 1234, Balvanera, CABA"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCorreccion(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={guardarCorreccion} disabled={guardandoDireccion || !direccionEditada.trim()}>
+              {guardandoDireccion && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Verificar y guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 };
 
