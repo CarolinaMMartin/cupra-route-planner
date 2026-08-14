@@ -19,6 +19,8 @@ import ResultsMap from "./assignor/ResultsMap";
 import PreselectionStep from "./assignor/PreselectionStep";
 import TableAssignment from "@/components/assignor/TableAssignment";
 import TodayAssignments from "./assignor/TodayAssignments";
+import AsignadorCalendario from "./assignor/AsignadorCalendario";
+
 import AIInsightsCard from "./assignor/AIInsightsCard";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
 import EditAssignmentsTable from "./assignor/EditAssignmentsTable";
