@@ -315,6 +315,7 @@ const CargaDatos = () => {
         if (!data?.success) throw new Error(data?.error || "Error desconocido");
         setMaestroResults(data.results);
         setMaestroVendedores(data.vendedor_breakdown || []);
+        setConciliacionEntidades(data.conciliacion_entidades || null);
         setBatchId(data.batch_id || null);
         setProgress(100);
         setStep("done");
