@@ -115,6 +115,7 @@ const AssignorDashboard = () => {
   const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
+  const [isSavingAssignments, setIsSavingAssignments] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // El botón "Volver al inicio" vive en la barra superior fija (Index) y avisa por evento.
@@ -284,7 +285,98 @@ const AssignorDashboard = () => {
     }
   };
 
-  const handleContinueToAssignment = () => setFlowStep("assignment");
+  const handleContinueToAssignment = async () => {
+    const selected = recommendations.filter((rec) => selectedSucursales.includes(rec.id));
+    if (selected.length === 0) return;
+
+    const missingVendor = selected.filter((rec) => !rec.vendedor_recomendado_id);
+    if (missingVendor.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Falta vendedor recomendado",
+        description: "Volvé a generar la evaluación: hay resultados sin vendedor de destino.",
+      });
+      return;
+    }
+
+    setIsSavingAssignments(true);
+    try {
+      const clientIds = selected
+        .filter((rec) => !rec.es_prospecto && rec.client_id)
+        .map((rec) => rec.client_id as string);
+      const prospectIds = selected
+        .filter((rec) => rec.es_prospecto && rec.prospecto_place_id)
+        .map((rec) => rec.prospecto_place_id as string);
+
+      if (clientIds.length > 0) {
+        const { error } = await supabase
+          .from("asignaciones_vendedores_clientes")
+          .delete()
+          .in("client_id", clientIds);
+        if (error) throw error;
+      }
+      if (prospectIds.length > 0) {
+        const { error } = await supabase
+          .from("asignaciones_vendedores_clientes")
+          .delete()
+          .in("prospecto_place_id", prospectIds);
+        if (error) throw error;
+      }
+
+      const assignments = selected.flatMap((rec) => {
+        const vendedorId = rec.vendedor_recomendado_id;
+        if (!vendedorId) return [];
+        if (rec.es_prospecto && rec.prospecto_place_id) {
+          return [{
+            vendedor_id: vendedorId,
+            prospecto_place_id: rec.prospecto_place_id,
+            es_prospecto: true,
+            origen_asignacion: "asignador",
+          }];
+        }
+        if (rec.client_id) {
+          return [{
+            vendedor_id: vendedorId,
+            client_id: rec.client_id,
+            es_prospecto: false,
+            origen_asignacion: "asignador",
+          }];
+        }
+        return [];
+      });
+
+      if (assignments.length !== selected.length) {
+        throw new Error("Hay recomendaciones sin identificador de cliente o prospecto.");
+      }
+      const { error: insertError } = await supabase
+        .from("asignaciones_vendedores_clientes")
+        .insert(assignments);
+      if (insertError) throw insertError;
+
+      const timestamp = new Date().toISOString();
+      if (clientIds.length > 0) {
+        await supabase.from("clientes").update({ last_recommendation_at: timestamp }).in("client_id", clientIds);
+      }
+      if (prospectIds.length > 0) {
+        await supabase.from("prospectos").update({ last_recommendation_at: timestamp }).in("place_id", prospectIds);
+      }
+
+      toast({
+        title: "Asignaciones guardadas",
+        description: `${assignments.length} visitas quedaron asignadas al vendedor recomendado.`,
+      });
+      handleBackToRecommendations();
+    } catch (error) {
+      console.error("Error saving evaluated assignments:", error);
+      toast({
+        variant: "destructive",
+        title: "No se pudieron guardar",
+        description: "Las asignaciones no se completaron. Reintentá sin volver a generar.",
+      });
+    } finally {
+      setIsSavingAssignments(false);
+    }
+  };
   const handleBackToPreselection = () => setFlowStep("preselection");
   const handleBackToRecommendations = () => { setShowExitDialog(false); resetToInitial(); setSelectedCiudad("all"); setSelectedProvincia("all"); setSelectedVendedor("all"); setSelectedVendedoresIds([]); };
   // Guardar y salir: conserva las recomendaciones y la selección (persistidas) para retomarlas luego.
@@ -468,7 +560,7 @@ const AssignorDashboard = () => {
 
             <CardContent className="pt-6">
               {viewMode === "list" ? (
-                <PreselectionStep recommendations={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleContinueToAssignment} />
+                <PreselectionStep recommendations={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleContinueToAssignment} isSaving={isSavingAssignments} />
               ) : (
                 <ResultsMap sucursales={filteredRecommendations} selectedIds={selectedSucursales} onToggle={toggleSucursalStore} onToggleAll={toggleAllSucursalesStore} onContinue={handleContinueToAssignment} />
               )}

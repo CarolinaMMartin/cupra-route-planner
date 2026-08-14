@@ -1035,8 +1035,15 @@ Deno.serve(async (req) => {
 
     // ALL vendor profiles for name resolution
     const { data: allVendorProfiles } = await supabaseClient
-      .from("profiles").select("user_id, nombre").eq("rol", "vendedor").eq("activo", true);
-    const sellerNameMap = buildSellerNameMap(allVendorProfiles || vendedoresData);
+      .from("profiles").select("user_id, nombre").eq("activo", true);
+    // Administrador ⊇ asignador ⊇ vendedor: un perfil superior también puede
+    // tener cartera. Nunca debe caer en modo conquista por no tener rol literal
+    // "vendedor".
+    const profilesForOwnership = new Map<string, any>();
+    [...(allVendorProfiles || []), ...vendedoresData].forEach((profile: any) => {
+      if (profile?.user_id) profilesForOwnership.set(profile.user_id, profile);
+    });
+    const sellerNameMap = buildSellerNameMap([...profilesForOwnership.values()]);
 
     // ---- 3. Load client_places (geography) ----
     let placesQuery = supabaseClient.from("client_places").select("*").eq("is_primary", true);

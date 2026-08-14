@@ -1,7 +1,7 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight } from "lucide-react";
+import { Save } from "lucide-react";
 import { Sucursal } from "@/types/sales";
 import ClientDetailCard from "./ClientDetailCard";
 
@@ -11,6 +11,7 @@ interface PreselectionStepProps {
   onToggle: (id: string) => void;
   onToggleAll: () => void;
   onContinue: () => void;
+  isSaving?: boolean;
 }
 
 const PreselectionStep = ({ 
@@ -18,7 +19,8 @@ const PreselectionStep = ({
   selectedIds, 
   onToggle, 
   onToggleAll,
-  onContinue 
+  onContinue,
+  isSaving = false,
 }: PreselectionStepProps) => {
   const allSelected = recommendations.length > 0 && selectedIds.length === recommendations.length;
 
@@ -41,11 +43,11 @@ const PreselectionStep = ({
         
         <Button 
           onClick={onContinue} 
-          disabled={selectedIds.length === 0}
+          disabled={selectedIds.length === 0 || isSaving}
           className="gap-2"
         >
-          Continuar a la Asignación
-          <ArrowRight className="w-4 h-4" />
+          <Save className="w-4 h-4" />
+          {isSaving ? "Guardando..." : "Confirmar asignaciones"}
         </Button>
       </div>
 
