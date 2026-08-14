@@ -467,6 +467,50 @@ const AssignorDashboard = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={showConfirmAssign} onOpenChange={setShowConfirmAssign}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Confirmar estas asignaciones?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vas a asignar {selectedRecommendations.length} destino
+              {selectedRecommendations.length !== 1 ? "s" : ""}
+              {prospectosSeleccionados > 0
+                ? ` (${prospectosSeleccionados} prospecto${prospectosSeleccionados !== 1 ? "s" : ""} nuevo${prospectosSeleccionados !== 1 ? "s" : ""})`
+                : ""}
+              . Si querés cambiar el vendedor de destino o sacar clientes, pasá a la pantalla de modificación.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-1.5 max-h-52 overflow-y-auto">
+            {resumenPorVendedor.map(([nombre, cantidad]) => (
+              <div key={nombre} className="flex items-center justify-between text-sm">
+                <span className="truncate text-foreground">{nombre}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {cantidad} cliente{cantidad !== 1 ? "s" : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSavingAssignments}>Cancelar</AlertDialogCancel>
+            <Button variant="outline" onClick={handleGoToModify} disabled={isSavingAssignments}>
+              Modificar
+            </Button>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleContinueToAssignment();
+              }}
+              disabled={isSavingAssignments}
+            >
+              {isSavingAssignments ? "Guardando..." : "Confirmar y asignar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+
       {flowStep === "recommendations" && (
         <div className="space-y-8">
           <div>
