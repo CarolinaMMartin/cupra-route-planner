@@ -12,6 +12,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, X, Eye, MapPin, AlertTriangle, Info } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import * as XLSX from "xlsx";
 import { toTitleCase } from "@/lib/format";
