@@ -1340,8 +1340,19 @@ Deno.serve(async (req) => {
     // ---- 8. Load feedbacks ----
     const { data: feedbacks } = await supabaseClient
       .from("cliente_feedbacks")
-      .select("client_id, prospecto_place_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, estado_cliente, created_at")
+      .select("id, client_id, prospecto_place_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, estado_cliente, created_at")
       .order("created_at", { ascending: false });
+
+    // Extracción estructurada por IA del feedback (opcional: si no existe, todo sigue igual).
+    const extraccionesMap = new Map<string, FeedbackExtraccion>();
+    try {
+      const { data: extracciones } = await supabaseClient
+        .from("feedback_extraccion")
+        .select("feedback_id, revisit_date, resumen, confianza");
+      extracciones?.forEach((e: any) => extraccionesMap.set(e.feedback_id, e));
+    } catch (e) {
+      console.warn("No se pudo leer feedback_extraccion, se usa el parser de texto:", e);
+    }
 
     const feedbacksMapClientes = new Map<string, any[]>();
     const feedbacksMapProspectos = new Map<string, any[]>();
@@ -1357,8 +1368,8 @@ Deno.serve(async (req) => {
     });
 
     // Feedback del vendedor → fecha mínima de próxima visita ("volver en X días/semanas").
-    const revisitMapClientes = buildRevisitMap(feedbacksMapClientes);
-    const revisitMapProspectos = buildRevisitMap(feedbacksMapProspectos);
+    const revisitMapClientes = buildRevisitMap(feedbacksMapClientes, extraccionesMap);
+    const revisitMapProspectos = buildRevisitMap(feedbacksMapProspectos, extraccionesMap);
     const scoreOpts: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapClientes, precioCajaCanal };
     const scoreOptsP: ScoreOptions = { cooldownDays: RECOMMENDATION_COOLDOWN_DAYS, revisitMap: revisitMapProspectos, precioCajaCanal, posiblesClientes: posiblesClientesExistentes };
     // Versión relajada del cooldown: sólo se usa como último recurso para llegar a 8.
