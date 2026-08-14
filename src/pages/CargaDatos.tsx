@@ -796,7 +796,60 @@ const CargaDatos = () => {
             </Card>
 
             {/* TAREA 9: Reconciliación */}
+            {reconciliacion?.rango && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                    Período reemplazado
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    El archivo es la verdad solo para su propio rango de fechas. Fuera de ese rango no se tocó nada.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                    <div className="p-2.5 rounded-lg bg-muted/20">
+                      <p className="text-sm font-bold text-foreground">
+                        {reconciliacion.rango.fecha_desde} → {reconciliacion.rango.fecha_hasta}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Rango del archivo</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/20">
+                      <p className="text-sm font-bold text-foreground">
+                        {reconciliacion.rango.base_desde || "—"} → {reconciliacion.rango.base_hasta || "—"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Rango en la base (antes)</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/20">
+                      <p className="text-lg font-bold text-foreground">
+                        {(reconciliacion.rango.filas_insertadas ?? 0).toLocaleString()} / {(reconciliacion.rango.filas_actualizadas ?? 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Nuevas / actualizadas</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/20">
+                      <p className="text-lg font-bold text-amber-500">
+                        {(reconciliacion.rango.filas_eliminadas ?? 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Anuladas dentro del rango</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Clientes del archivo que coinciden con la base: {(reconciliacion.rango.clientes_match ?? 0).toLocaleString()} de{" "}
+                    {(reconciliacion.rango.clientes_archivo ?? 0).toLocaleString()} ({reconciliacion.rango.pct_match_clientes ?? 0}%)
+                  </p>
+                  {batchId && (
+                    <Button size="sm" variant="outline" onClick={handleRevertirCarga} disabled={revirtiendo}>
+                      {revirtiendo ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <X className="h-4 w-4 mr-1.5" />}
+                      Revertir esta carga
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {reconciliacion && (
+
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
