@@ -237,10 +237,8 @@ const CargaDatos = () => {
       .filter((s) => s.rows.length > 0 && !/nota/i.test(s.name))
       .map((s) => ({ ...s, tipo: classify(s.keys) }));
 
-    // Prioridad: hoja de ventas por producto > ventas > maestro > la más grande
-    const ventasProducto = candidatos.find((s) => s.tipo === "ventas" && /producto/i.test(s.name));
-    const comprobanteSheet = candidatos.find((s) => /comprobante/i.test(s.name) && s.rows.length > 0);
-    const ventas = ventasProducto || candidatos.find((s) => s.tipo === "ventas");
+    // Prioridad: hoja de ventas > maestro > la más grande
+    const ventas = candidatos.find((s) => s.tipo === "ventas");
     const maestro = candidatos.filter((s) => s.tipo === "maestro").sort((a, b) => b.rows.length - a.rows.length)[0];
     const elegido = ventas || maestro || candidatos.sort((a, b) => b.rows.length - a.rows.length)[0];
 
@@ -266,10 +264,6 @@ const CargaDatos = () => {
     setRows(elegido.rows);
     setColumns(Object.keys(elegido.rows[0]));
     setNotasCredito(tipo === "ventas" && ncSheet ? ncSheet.rows : []);
-    const usaComprobantes =
-      tipo === "ventas" && comprobanteSheet && comprobanteSheet.name !== elegido.name;
-    setComprobantes(usaComprobantes ? comprobanteSheet!.rows : []);
-    setComprobantesSheetName(usaComprobantes ? comprobanteSheet!.name : "");
     setStep("preview");
     } catch (error) {
       toast({
