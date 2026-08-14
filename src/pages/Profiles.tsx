@@ -4,7 +4,8 @@ import { isAssignorLike, canManageAssignors, ROLE_LABELS, type AppRole } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Wine, LogOut, User, ArrowLeft, Pencil, Filter, Trash2 } from "lucide-react";
+import { Wine, LogOut, User, ArrowLeft, Pencil, Filter, Trash2, UserPlus } from "lucide-react";
+import PermisosMatriz from "@/components/admin/PermisosMatriz";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import {
@@ -66,6 +67,15 @@ const Profiles = () => {
     rol: "vendedor",
     activo: true,
   });
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [createData, setCreateData] = useState<{
+    nombre: string;
+    email: string;
+    password: string;
+    rol: AppRole;
+    activo: boolean;
+  }>({ nombre: "", email: "", password: "", rol: "vendedor", activo: true });
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -245,6 +255,37 @@ const Profiles = () => {
     }
   };
 
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsCreating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-create-user", {
+        body: createData,
+      });
+      if (error) {
+        const detalle = await (error as any)?.context?.json?.().catch(() => null);
+        throw new Error(detalle?.error || error.message);
+      }
+      if ((data as any)?.error) throw new Error((data as any).error);
+
+      toast({
+        title: "Perfil creado",
+        description: `${createData.nombre} ya puede iniciar sesión con su email y contraseña.`,
+      });
+      setIsCreateOpen(false);
+      setCreateData({ nombre: "", email: "", password: "", rol: "vendedor", activo: true });
+      fetchProfiles();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo crear el perfil",
+        description: error instanceof Error ? error.message : "Error inesperado",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -325,7 +366,19 @@ const Profiles = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6 flex items-center justify-end">
+        {canManageAssignors(profile?.rol) && <PermisosMatriz />}
+
+        <div className="mb-6 flex items-center justify-between gap-3">
+          {canManageAssignors(profile?.rol) ? (
+            <Button className="wine-button gap-2" onClick={() => setIsCreateOpen(true)}>
+              <UserPlus className="w-4 h-4" />
+              Nuevo perfil
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Solo un administrador puede crear nuevos perfiles.
+            </p>
+          )}
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={filterRole} onValueChange={(value: any) => setFilterRole(value)}>
@@ -408,6 +461,81 @@ const Profiles = () => {
             </TableBody>
           </Table>
         </div>
+
+        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Nuevo perfil</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-nombre">Nombre y apellido</Label>
+                <Input
+                  id="new-nombre"
+                  value={createData.nombre}
+                  onChange={(e) => setCreateData({ ...createData, nombre: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-email">Email</Label>
+                <Input
+                  id="new-email"
+                  type="email"
+                  value={createData.email}
+                  onChange={(e) => setCreateData({ ...createData, email: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-password">Contraseña inicial</Label>
+                <Input
+                  id="new-password"
+                  type="text"
+                  value={createData.password}
+                  onChange={(e) => setCreateData({ ...createData, password: e.target.value })}
+                  minLength={8}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Mínimo 8 caracteres. Compartila con la persona: puede cambiarla desde "¿Olvidaste tu contraseña?".
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-rol">Rol</Label>
+                <Select
+                  value={createData.rol}
+                  onValueChange={(value) => setCreateData({ ...createData, rol: value as AppRole })}
+                >
+                  <SelectTrigger id="new-rol">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vendedor">Vendedor</SelectItem>
+                    <SelectItem value="asignador">Asignador</SelectItem>
+                    <SelectItem value="administrador">Administrador</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="new-activo">Activo</Label>
+                <Switch
+                  id="new-activo"
+                  checked={createData.activo}
+                  onCheckedChange={(checked) => setCreateData({ ...createData, activo: checked })}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" className="wine-button" disabled={isCreating}>
+                  {isCreating ? "Creando..." : "Crear perfil"}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogContent>

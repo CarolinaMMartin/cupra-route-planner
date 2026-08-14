@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import angelBlanco from "@/assets/angel-blanco.png";
@@ -17,7 +16,6 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [nombre, setNombre] = useState("");
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -93,34 +91,6 @@ const Auth = () => {
     }
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { nombre, rol: "vendedor" }, emailRedirectTo: `${window.location.origin}/` }
-      });
-      if (error) throw error;
-      if (data.session) await supabase.auth.signOut();
-      toast({
-        title: "Solicitud recibida",
-        description: "Revisá tu email si requiere confirmación. Un asignador debe habilitar la cuenta antes del primer ingreso.",
-      });
-      setEmail("");setPassword("");setNombre("");
-    } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error);
-      let msg = "Error al crear cuenta";
-      if (errorMessage.includes("already registered")) msg = "Este correo ya está registrado.";else
-      if (errorMessage.includes("Invalid email")) msg = "Email inválido.";else
-      if (errorMessage.includes("Password")) msg = "Contraseña: mínimo 6 caracteres.";else
-      if (errorMessage) msg = errorMessage;
-      toast({ variant: "destructive", title: "Error", description: msg });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   if (isRecoveryMode) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 bg-background relative">
@@ -172,13 +142,7 @@ const Auth = () => {
           </div>
         </CardHeader>
         <CardContent className="pb-8">
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
-              <TabsTrigger value="signup">Registrarse</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="login">
+          <div className="w-full">
               {showResetPassword ?
               <form onSubmit={handleResetPassword} className="space-y-5">
                   <p className="text-sm text-muted-foreground text-center mb-4">Ingresa tu email para restablecer tu contraseña.</p>
@@ -207,30 +171,12 @@ const Auth = () => {
                   <Button type="button" variant="link" className="w-full text-xs text-muted-foreground" onClick={() => setShowResetPassword(true)}>
                     ¿Olvidaste tu contraseña?
                   </Button>
+                  <p className="text-center text-xs text-muted-foreground pt-1">
+                    Acceso interno. Las cuentas las crea un administrador de Cupra.
+                  </p>
                 </form>
               }
-            </TabsContent>
-            
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-nombre" className="text-xs text-muted-foreground uppercase tracking-wider">Nombre</Label>
-                  <Input id="signup-nombre" type="text" placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required className="bg-secondary/50 border-border/30" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email" className="text-xs text-muted-foreground uppercase tracking-wider">Email</Label>
-                  <Input id="signup-email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary/50 border-border/30" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password" className="text-xs text-muted-foreground uppercase tracking-wider">Contraseña</Label>
-                  <Input id="signup-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="bg-secondary/50 border-border/30" />
-                </div>
-                <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                  {isLoading ? "Cargando..." : "Crear Cuenta"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+          </div>
           <div className="flex justify-center gap-3 mt-6 text-xs text-muted-foreground">
             <Link to="/privacidad" className="hover:text-foreground hover:underline">Privacidad</Link>
             <span aria-hidden="true">·</span>
