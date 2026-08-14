@@ -51,6 +51,28 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
           );
         }
         if (!cancelled) setVentas(rows);
+
+        if (cliente.client_id) {
+          const { data: fbs } = await supabase
+            .from("cliente_feedbacks")
+            .select("id, feedback, visita_realizada, motivo_no_visita, tipo_interaccion, created_at, vendedor_id")
+            .eq("client_id", cliente.client_id)
+            .order("created_at", { ascending: false })
+            .limit(50);
+          let list = fbs || [];
+          if (list.length > 0) {
+            const ids = Array.from(new Set(list.map((f: any) => f.vendedor_id).filter(Boolean)));
+            const { data: profs } = await supabase
+              .from("profiles")
+              .select("user_id, nombre")
+              .in("user_id", ids);
+            const nombres = new Map((profs || []).map((p: any) => [p.user_id, p.nombre]));
+            list = list.map((f: any) => ({ ...f, vendedor_nombre: nombres.get(f.vendedor_id) || null }));
+          }
+          if (!cancelled) setFeedbacks(list);
+        } else if (!cancelled) {
+          setFeedbacks([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
