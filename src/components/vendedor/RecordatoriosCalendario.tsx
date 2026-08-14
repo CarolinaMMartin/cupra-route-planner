@@ -379,6 +379,61 @@ const RecordatoriosCalendario = () => {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={dialogAbierto} onOpenChange={setDialogAbierto}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Agendar visita — {selectedDate?.toLocaleDateString("es-AR")}
+            </DialogTitle>
+            <DialogDescription>
+              Buscá un cliente o prospecto. Ese día te va a aparecer en "Por visitar".
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                autoFocus
+                value={busqueda}
+                onChange={e => buscar(e.target.value)}
+                placeholder="Nombre del cliente o prospecto…"
+                className="pl-9"
+              />
+            </div>
+
+            <Textarea
+              value={nota}
+              onChange={e => setNota(e.target.value)}
+              placeholder="Nota del seguimiento (opcional)"
+              rows={2}
+            />
+
+            <div className="space-y-2">
+              {buscando && <p className="text-sm text-muted-foreground">Buscando…</p>}
+              {!buscando && busqueda.trim().length >= 3 && resultados.length === 0 && (
+                <p className="text-sm text-muted-foreground">Sin resultados.</p>
+              )}
+              {resultados.map(c => (
+                <button
+                  key={`${c.esProspecto ? "p" : "c"}-${c.id}`}
+                  type="button"
+                  disabled={agendando === c.id}
+                  onClick={() => agendarVisita(c)}
+                  className="flex w-full items-center gap-2 rounded-md border border-border/60 bg-muted/20 p-3 text-left transition-colors hover:bg-muted/40 disabled:opacity-50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{c.nombre}</p>
+                    {c.detalle && <p className="truncate text-xs text-muted-foreground">{c.detalle}</p>}
+                  </div>
+                  {c.esProspecto && <Badge variant="secondary" className="shrink-0">Prospecto</Badge>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
