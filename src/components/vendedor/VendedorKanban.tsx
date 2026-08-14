@@ -1,4 +1,5 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import BriefingVisita from "@/components/shared/BriefingVisita";
 import { 
   DndContext, 
   DragEndEvent, 
