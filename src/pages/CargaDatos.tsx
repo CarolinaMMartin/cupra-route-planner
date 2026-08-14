@@ -710,20 +710,8 @@ const CargaDatos = () => {
                     </div>
                   </div>
                   <div className="mt-3 p-2.5 rounded-lg bg-accent/5 text-center">
-                    <p className="text-xs text-muted-foreground">
-                      {reconciliacion.fuente_monto === "comprobante"
-                        ? "Facturación total del período (todas las marcas)"
-                        : "Facturación total procesada (solo CUPRA)"}
-                    </p>
+                    <p className="text-xs text-muted-foreground">Facturación total procesada</p>
                     <p className="text-xl font-bold text-accent">{formatCurrency(reconciliacion.facturacion_total_procesada)}</p>
-                    {reconciliacion.fuente_monto === "comprobante" && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        CUPRA: {formatCurrency(reconciliacion.facturacion_cupra ?? 0)}
-                        {reconciliacion.share_cupra_global != null && ` · share ${reconciliacion.share_cupra_global}%`}
-                        {(reconciliacion.clientes_solo_comprobante ?? 0) > 0 &&
-                          ` · ${reconciliacion.clientes_solo_comprobante} clientes sin compra CUPRA en el período`}
-                      </p>
-                    )}
                   </div>
 
                   {/* Conciliación fila por fila: Excel vs base */}
