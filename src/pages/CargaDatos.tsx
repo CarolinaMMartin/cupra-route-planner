@@ -13,6 +13,16 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Loader2, X, Eye, MapPin, AlertTriangle, Info } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import * as XLSX from "xlsx";
 import { toTitleCase } from "@/lib/format";
@@ -627,42 +637,48 @@ const CargaDatos = () => {
               </div>
             </div>
 
-            {guardaCarga && (
-              <Alert variant="destructive" className="mt-4">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription className="space-y-3">
-                  <p className="font-medium">{guardaCarga.mensaje}</p>
-                  {guardaCarga.previa && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                      <div>
-                        <p className="text-muted-foreground">Período del archivo</p>
-                        <p className="font-semibold">{guardaCarga.previa.fecha_desde} → {guardaCarga.previa.fecha_hasta}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Período en la base</p>
-                        <p className="font-semibold">{guardaCarga.previa.base_desde || "—"} → {guardaCarga.previa.base_hasta || "—"}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Filas del período en la base</p>
-                        <p className="font-semibold">{(guardaCarga.previa.filas_rango_base ?? 0).toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Se eliminarían</p>
-                        <p className="font-semibold">
-                          {(guardaCarga.previa.filas_a_eliminar ?? 0).toLocaleString()} ({guardaCarga.previa.pct_eliminacion ?? 0}%)
-                        </p>
-                      </div>
+            <AlertDialog open={Boolean(guardaCarga)} onOpenChange={(open) => { if (!open) setGuardaCarga(null); }}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    Esta carga requiere tu aprobación
+                  </AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-4 text-left">
+                      <p>{guardaCarga?.mensaje}</p>
+                      {guardaCarga?.previa && (
+                        <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-3 text-xs">
+                          <div>
+                            <p className="text-muted-foreground">Período del archivo</p>
+                            <p className="font-semibold text-foreground">{guardaCarga.previa.fecha_desde} → {guardaCarga.previa.fecha_hasta}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Filas actuales del período</p>
+                            <p className="font-semibold text-foreground">{(guardaCarga.previa.filas_rango_base ?? 0).toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Filas que se eliminarán</p>
+                            <p className="font-semibold text-destructive">{(guardaCarga.previa.filas_a_eliminar ?? 0).toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Porcentaje</p>
+                            <p className="font-semibold text-destructive">{guardaCarga.previa.pct_eliminacion ?? 0}%</p>
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-xs text-muted-foreground">Si aprobás, se reemplaza únicamente este período. El resto del historial no se modifica.</p>
                     </div>
-                  )}
-                  <div className="flex gap-2 pt-1">
-                    <Button size="sm" variant="outline" onClick={() => setGuardaCarga(null)}>Cancelar</Button>
-                    <Button size="sm" onClick={() => handleProcess({ confirmarEliminaciones: true })}>
-                      Confirmar y reemplazar el período
-                    </Button>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setGuardaCarga(null)}>No, cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleProcess({ confirmarEliminaciones: true })}>
+                    Sí, aprobar y continuar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
           </div>
 

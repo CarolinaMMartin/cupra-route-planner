@@ -1372,7 +1372,9 @@ Deno.serve(async (req) => {
       if (auditError) console.error('No se pudo registrar el fallo del lote:', auditError.message);
     }
     const previa = (error as any)?.previa ?? null;
-    const requiereConfirmacion = Boolean(previa?.requiere_confirmacion) && !/otra empresa/i.test(message);
+    const requiereConfirmacion = (
+      Boolean(previa?.requiere_confirmacion) || /requiere confirmaci[oó]n expl[ií]cita/i.test(message)
+    ) && !/otra empresa/i.test(message);
     return new Response(JSON.stringify({
       success: false,
       error: message,
