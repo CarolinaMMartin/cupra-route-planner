@@ -236,6 +236,29 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
                         {!f.visita_realizada && f.motivo_no_visita && (
                           <p className="text-xs text-muted-foreground">Motivo: {f.motivo_no_visita}</p>
                         )}
+                        {f.extraccion && (
+                          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                            {f.extraccion.revisit_date && (
+                              <Badge variant="secondary">
+                                Volver: {new Date(`${f.extraccion.revisit_date}T12:00:00Z`).toLocaleDateString("es-AR")}
+                              </Badge>
+                            )}
+                            {f.extraccion.objecion && <Badge variant="outline">Objeción: {f.extraccion.objecion}</Badge>}
+                            {(f.extraccion.interes_producto || []).map((p: string) => (
+                              <Badge key={p} variant="outline">Interés: {p}</Badge>
+                            ))}
+                            {f.extraccion.riesgo_cobranza && f.extraccion.riesgo_cobranza !== "ninguno" && (
+                              <Badge variant="destructive">Cobranza: {f.extraccion.riesgo_cobranza}</Badge>
+                            )}
+                            {f.extraccion.no_ofrecer && <Badge variant="destructive">No ofrecer aún</Badge>}
+                            {f.extraccion.contacto_nombre && (
+                              <Badge variant="outline">
+                                Contacto: {f.extraccion.contacto_nombre}
+                                {f.extraccion.contacto_rol ? ` (${f.extraccion.contacto_rol})` : ""}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </CardContent>
