@@ -168,12 +168,11 @@ const ManualAssignment = () => {
     }
   }, [toast]);
 
-  // ── Trigger search on debounced query or filter change ──
+  // ── Carga inicial + búsqueda al cambiar query o filtros ──
   useEffect(() => {
-    if (debouncedQuery.trim() || filterCiudad !== "all" || filterProvincia !== "all" || suggestionMode) {
-      searchClientes(debouncedQuery, filterCiudad, filterProvincia, suggestionMode || undefined);
-    }
+    searchClientes(debouncedQuery, filterCiudad, filterProvincia, suggestionMode || undefined);
   }, [debouncedQuery, filterCiudad, filterProvincia, suggestionMode, searchClientes]);
+
 
   // ── Unique filter options ──
   const ciudades = useMemo(() => {
