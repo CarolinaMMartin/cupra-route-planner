@@ -595,6 +595,15 @@ const CargaDatos = () => {
                     </div>
                   ))}
                 </div>
+                {conciliacionEntidades && (
+                  <p className="text-sm text-center mt-4 text-foreground">
+                    {conciliacionEntidades.razones_sociales.toLocaleString()} razones sociales →{" "}
+                    {conciliacionEntidades.clientes_unicos.toLocaleString()} clientes
+                    {conciliacionEntidades.fusionados_por_identidad > 0
+                      ? ` (${conciliacionEntidades.fusionados_por_identidad} fusionados por identidad)`
+                      : " (sin fusiones)"}
+                  </p>
+                )}
                 {(maestroResults.clientes_errores > 0 || maestroResults.sin_resolver > 0) && (
                   <p className="text-xs text-muted-foreground mt-4 text-center">
                     {maestroResults.clientes_errores} errores · {maestroResults.sin_resolver} filas sin identificador resoluble
