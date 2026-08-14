@@ -532,16 +532,47 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
             })}
 
             {!loading && sinUbicacion.length > 0 && (
-              <div className="m-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+              <div className="m-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
                 <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                   <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                  {sinUbicacion.length} de {sucursales.length} sin ubicación en el mapa
+                  {sinUbicacion.length} de {sucursales.length} sin dirección válida
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {sinUbicacion.join(", ")}. Están incluidos en la ruta, pero no se pudo resolver su dirección.
+                <p className="text-xs text-muted-foreground">
+                  Están en la ruta por su historial comercial, pero no se pudo ubicar su dirección.
+                  Corregila una vez y queda guardada aunque se recargue el Excel.
                 </p>
+                <div className="space-y-1.5">
+                  {sinUbicacion.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-start justify-between gap-2 rounded border border-border/60 bg-background/60 p-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-foreground">{item.nombre}</p>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {item.direccion || "Sin dirección cargada"}
+                        </p>
+                      </div>
+                      {item.client_id && !item.es_prospecto && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 flex-shrink-0 gap-1 text-[11px]"
+                          onClick={() => {
+                            setCorreccion(item);
+                            setDireccionEditada(item.direccion || "");
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                          Corregir
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+
 
 
             {locations.length === 0 && !loading && (
