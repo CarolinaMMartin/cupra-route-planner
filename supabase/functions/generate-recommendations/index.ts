@@ -1018,19 +1018,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    const requestedBarrioKeys = new Set(
-      barriosFinales.map((value: string) => normalizeBarrio(value).toUpperCase()).filter(Boolean),
-    );
-    const requestedComunaKeys = new Set(
-      comunasFinales.map((value: string) => String(value || "").trim().toUpperCase()).filter(Boolean),
-    );
+    // Una sola fuente de verdad para "¿está dentro del área?" (ver portfolio-ranking.ts).
+    // Compara sin acentos ("San Nicolás" == "San Nicolas") y usa la comuna sólo
+    // como respaldo cuando el registro no tiene barrio.
+    const areaFilter = buildAreaFilter(barriosFinales, comunasFinales);
     const belongsToSelectedArea = (place: { barrio?: string | null; comuna?: string | null }): boolean => {
-      if (!area_id) return true;
-      const barrioKey = normalizeBarrio(place.barrio).toUpperCase();
-      const comunaKey = String(place.comuna || "").trim().toUpperCase();
-      return (Boolean(barrioKey) && requestedBarrioKeys.has(barrioKey))
-        || (Boolean(comunaKey) && requestedComunaKeys.has(comunaKey));
+      if (!area_id && !areaFilter.activo) return true;
+      return belongsToArea(place, areaFilter);
     };
+
 
     // ---- 2. Load vendor profiles ----
     const { data: vendedoresData, error: vendedoresError } = await supabaseClient
