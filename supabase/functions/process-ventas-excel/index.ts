@@ -1249,6 +1249,11 @@ Deno.serve(async (req) => {
 
       filas_procesadas: ventasRaw.length,
       filas_deduplicadas: ventasDeduplicadas.length,
+      renglones_con_ordinal: renglonStats.colisiones,
+      filas_bonificadas_100: ventasDeduplicadas.filter(v => Number(v.bonificacion) === 100).length,
+      cajas_bonificadas_100: ventasDeduplicadas
+        .filter(v => Number(v.bonificacion) === 100)
+        .reduce((s, v) => s + (Number(v.cajas) || 0), 0),
       filas_venta_insertadas: ventasInsertadas,
       filas_nota_credito_insertadas: notasInsertadas,
       filas_descartadas_total: filasDescartadas.length,
