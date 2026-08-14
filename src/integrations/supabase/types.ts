@@ -711,20 +711,29 @@ export type Database = {
           archivo_tamano: number | null
           archivo_ultima_modificacion: string | null
           calidad: Json | null
+          clientes_archivo: number | null
           completed_at: string | null
           created_at: string
           error_message: string | null
           estado: string
+          fecha_desde: string | null
+          fecha_hasta: string | null
           fila_encabezado: number | null
+          filas_actualizadas: number | null
+          filas_eliminadas: number | null
+          filas_insertadas: number | null
           filas_notas_credito: number
           filas_origen: number
           hoja: string | null
           id: string
+          modo_carga: string
           reconciliacion: Json | null
           reemplaza_existentes: boolean
           resultado: Json
+          revertido_at: string | null
           started_at: string
           tipo: string
+          total_bruto: number | null
           usuario_email: string | null
           usuario_id: string | null
           version_etl: string
@@ -735,20 +744,29 @@ export type Database = {
           archivo_tamano?: number | null
           archivo_ultima_modificacion?: string | null
           calidad?: Json | null
+          clientes_archivo?: number | null
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
           estado?: string
+          fecha_desde?: string | null
+          fecha_hasta?: string | null
           fila_encabezado?: number | null
+          filas_actualizadas?: number | null
+          filas_eliminadas?: number | null
+          filas_insertadas?: number | null
           filas_notas_credito?: number
           filas_origen?: number
           hoja?: string | null
           id?: string
+          modo_carga?: string
           reconciliacion?: Json | null
           reemplaza_existentes?: boolean
           resultado?: Json
+          revertido_at?: string | null
           started_at?: string
           tipo: string
+          total_bruto?: number | null
           usuario_email?: string | null
           usuario_id?: string | null
           version_etl: string
@@ -759,20 +777,29 @@ export type Database = {
           archivo_tamano?: number | null
           archivo_ultima_modificacion?: string | null
           calidad?: Json | null
+          clientes_archivo?: number | null
           completed_at?: string | null
           created_at?: string
           error_message?: string | null
           estado?: string
+          fecha_desde?: string | null
+          fecha_hasta?: string | null
           fila_encabezado?: number | null
+          filas_actualizadas?: number | null
+          filas_eliminadas?: number | null
+          filas_insertadas?: number | null
           filas_notas_credito?: number
           filas_origen?: number
           hoja?: string | null
           id?: string
+          modo_carga?: string
           reconciliacion?: Json | null
           reemplaza_existentes?: boolean
           resultado?: Json
+          revertido_at?: string | null
           started_at?: string
           tipo?: string
+          total_bruto?: number | null
           usuario_email?: string | null
           usuario_id?: string | null
           version_etl?: string
@@ -1351,6 +1378,7 @@ export type Database = {
           fantasia: string | null
           fecha_emision: string | null
           id: number
+          import_batch_id: string | null
           letra: string | null
           marca: string | null
           nombre: string | null
@@ -1377,6 +1405,7 @@ export type Database = {
           fantasia?: string | null
           fecha_emision?: string | null
           id?: number
+          import_batch_id?: string | null
           letra?: string | null
           marca?: string | null
           nombre?: string | null
@@ -1403,6 +1432,7 @@ export type Database = {
           fantasia?: string | null
           fecha_emision?: string | null
           id?: number
+          import_batch_id?: string | null
           letra?: string | null
           marca?: string | null
           nombre?: string | null
@@ -1421,6 +1451,107 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clientes"
             referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      ventas_cupra_eliminadas: {
+        Row: {
+          batch_id: string | null
+          cajas: number | null
+          categorias: string | null
+          celular: string | null
+          ciudad: string | null
+          client_id: string | null
+          codigo_producto: string | null
+          correo: string | null
+          cuit_dni: string | null
+          direccion: string | null
+          eliminada_at: string
+          facturacion_ars: number | null
+          fantasia: string | null
+          fecha_emision: string | null
+          id: number
+          import_batch_id: string | null
+          letra: string | null
+          marca: string | null
+          motivo: string
+          nombre: string | null
+          pais: string | null
+          provincia: string | null
+          razon_social: string | null
+          telefono: string | null
+          ticket: string | null
+          tipo_comprobante: string | null
+          vendedor: string | null
+          venta_id: number | null
+        }
+        Insert: {
+          batch_id?: string | null
+          cajas?: number | null
+          categorias?: string | null
+          celular?: string | null
+          ciudad?: string | null
+          client_id?: string | null
+          codigo_producto?: string | null
+          correo?: string | null
+          cuit_dni?: string | null
+          direccion?: string | null
+          eliminada_at?: string
+          facturacion_ars?: number | null
+          fantasia?: string | null
+          fecha_emision?: string | null
+          id?: number
+          import_batch_id?: string | null
+          letra?: string | null
+          marca?: string | null
+          motivo?: string
+          nombre?: string | null
+          pais?: string | null
+          provincia?: string | null
+          razon_social?: string | null
+          telefono?: string | null
+          ticket?: string | null
+          tipo_comprobante?: string | null
+          vendedor?: string | null
+          venta_id?: number | null
+        }
+        Update: {
+          batch_id?: string | null
+          cajas?: number | null
+          categorias?: string | null
+          celular?: string | null
+          ciudad?: string | null
+          client_id?: string | null
+          codigo_producto?: string | null
+          correo?: string | null
+          cuit_dni?: string | null
+          direccion?: string | null
+          eliminada_at?: string
+          facturacion_ars?: number | null
+          fantasia?: string | null
+          fecha_emision?: string | null
+          id?: number
+          import_batch_id?: string | null
+          letra?: string | null
+          marca?: string | null
+          motivo?: string
+          nombre?: string | null
+          pais?: string | null
+          provincia?: string | null
+          razon_social?: string | null
+          telefono?: string | null
+          ticket?: string | null
+          tipo_comprobante?: string | null
+          vendedor?: string | null
+          venta_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ventas_cupra_eliminadas_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1534,9 +1665,13 @@ export type Database = {
       canonical_vendedor: { Args: { _nombre: string }; Returns: string }
       clean_old_recommendations: { Args: never; Returns: undefined }
       cleanup_expired_import_staging: { Args: never; Returns: number }
-      commit_ventas_import: {
-        Args: { p_replace_existing?: boolean; p_rows: Json }
-        Returns: number
+      commit_ventas_import_rango: {
+        Args: {
+          p_batch_id?: string
+          p_confirmar_eliminaciones?: boolean
+          p_rows: Json
+        }
+        Returns: Json
       }
       get_user_role: {
         Args: { _user_id: string }
@@ -1550,12 +1685,18 @@ export type Database = {
       is_active_assignor: { Args: { _user_id: string }; Returns: boolean }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
       is_assignor_like: { Args: { _user_id: string }; Returns: boolean }
+      preview_ventas_import: { Args: { p_rows: Json }; Returns: Json }
       rank_fuente_ubicacion: {
         Args: { _fuente: string; _verificada: boolean }
         Returns: number
       }
+      rebase_ventas_cupra: {
+        Args: { p_batch_id: string; p_confirmacion: string; p_rows: Json }
+        Returns: Json
+      }
       recompute_client_metrics: { Args: never; Returns: number }
       reconciliar_places_primarios: { Args: never; Returns: number }
+      revertir_import_ventas: { Args: { p_batch_id: string }; Returns: Json }
       sync_places_catalog: { Args: never; Returns: number }
       titlecase_nombre: { Args: { _texto: string }; Returns: string }
       unaccent: { Args: { "": string }; Returns: string }
