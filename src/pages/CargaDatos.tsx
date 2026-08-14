@@ -599,7 +599,11 @@ const CargaDatos = () => {
                       onCheckedChange={(checked) => setReplaceExisting(checked === true)}
                     />
                     <label htmlFor="replaceExisting" className="text-sm text-muted-foreground cursor-pointer">
-                      Reemplazar datos existentes <span className="text-xs">(recomendado para carga completa)</span>
+                      Validación estricta{" "}
+                      <span className="text-xs">
+                        (frena la carga si hay filas sin cliente, sin importe o notas de crédito sin conciliar).
+                        El archivo solo reemplaza su propio período de fechas: nunca se borra el histórico completo.
+                      </span>
                     </label>
                   </>
                 ) : (
@@ -616,6 +620,45 @@ const CargaDatos = () => {
                   Procesar {rows.length.toLocaleString()} filas
                 </Button>
               </div>
+            </div>
+
+            {guardaCarga && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="space-y-3">
+                  <p className="font-medium">{guardaCarga.mensaje}</p>
+                  {guardaCarga.previa && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <p className="text-muted-foreground">Período del archivo</p>
+                        <p className="font-semibold">{guardaCarga.previa.fecha_desde} → {guardaCarga.previa.fecha_hasta}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Período en la base</p>
+                        <p className="font-semibold">{guardaCarga.previa.base_desde || "—"} → {guardaCarga.previa.base_hasta || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Filas del período en la base</p>
+                        <p className="font-semibold">{(guardaCarga.previa.filas_rango_base ?? 0).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Se eliminarían</p>
+                        <p className="font-semibold">
+                          {(guardaCarga.previa.filas_a_eliminar ?? 0).toLocaleString()} ({guardaCarga.previa.pct_eliminacion ?? 0}%)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" variant="outline" onClick={() => setGuardaCarga(null)}>Cancelar</Button>
+                    <Button size="sm" onClick={() => handleProcess({ confirmarEliminaciones: true })}>
+                      Confirmar y reemplazar el período
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
             </div>
           </div>
         )}
