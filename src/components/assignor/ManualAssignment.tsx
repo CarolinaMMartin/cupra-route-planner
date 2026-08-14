@@ -174,16 +174,27 @@ const ManualAssignment = () => {
   }, [debouncedQuery, filterCiudad, filterProvincia, suggestionMode, searchClientes]);
 
 
-  // ── Unique filter options ──
-  const ciudades = useMemo(() => {
-    const set = new Set(clientes.map(c => c.ciudad_principal).filter(Boolean) as string[]);
-    return Array.from(set).sort();
-  }, [clientes]);
+  // ── Opciones de filtro (catálogo completo, independiente del resultado actual) ──
+  const [geoOptions, setGeoOptions] = useState<{ ciudades: string[]; provincias: string[] }>({ ciudades: [], provincias: [] });
+  useEffect(() => {
+    const loadGeo = async () => {
+      const { data } = await supabase
+        .from("clientes")
+        .select("ciudad_principal, provincia_principal")
+        .limit(5000);
+      const ci = new Set<string>();
+      const pr = new Set<string>();
+      (data || []).forEach((r: { ciudad_principal: string | null; provincia_principal: string | null }) => {
+        if (r.ciudad_principal) ci.add(r.ciudad_principal);
+        if (r.provincia_principal) pr.add(r.provincia_principal);
+      });
+      setGeoOptions({ ciudades: Array.from(ci).sort(), provincias: Array.from(pr).sort() });
+    };
+    loadGeo();
+  }, []);
+  const ciudades = geoOptions.ciudades;
+  const provincias = geoOptions.provincias;
 
-  const provincias = useMemo(() => {
-    const set = new Set(clientes.map(c => c.provincia_principal).filter(Boolean) as string[]);
-    return Array.from(set).sort();
-  }, [clientes]);
 
   // ── Unificar registros duplicados del mismo cliente (mismo CUIT o misma razón social) ──
   const grupos = useMemo<ClienteGrupo[]>(() => {
