@@ -1406,6 +1406,39 @@ export type Database = {
           },
         ]
       }
+      visita_briefings: {
+        Row: {
+          briefing: string
+          client_id: string | null
+          created_at: string
+          hechos: Json
+          id: string
+          modelo: string | null
+          prospecto_place_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          briefing: string
+          client_id?: string | null
+          created_at?: string
+          hechos?: Json
+          id?: string
+          modelo?: string | null
+          prospecto_place_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          briefing?: string
+          client_id?: string | null
+          created_at?: string
+          hechos?: Json
+          id?: string
+          modelo?: string | null
+          prospecto_place_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       visitas: {
         Row: {
           created_at: string | null
