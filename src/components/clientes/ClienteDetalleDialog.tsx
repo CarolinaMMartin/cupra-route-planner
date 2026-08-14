@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-import { Loader2, MapPin, Phone, Mail, Users, ShoppingCart } from "lucide-react";
+import { Loader2, MapPin, Phone, Mail, Users, ShoppingCart, MessageSquare } from "lucide-react";
 
 interface Props {
   cliente: any | null;
