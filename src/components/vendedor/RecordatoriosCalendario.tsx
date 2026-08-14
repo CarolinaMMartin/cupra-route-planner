@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarClock, Check, Trash2, Clock } from "lucide-react";
+import { CalendarClock, Check, Trash2, Clock, Route } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface Recordatorio {
@@ -24,6 +24,7 @@ const sameDay = (a: Date, b: Date) =>
 const RecordatoriosCalendario = () => {
   const [recordatorios, setRecordatorios] = useState<Recordatorio[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const { toast } = useToast();
 
@@ -59,6 +60,53 @@ const RecordatoriosCalendario = () => {
       return;
     }
     setRecordatorios(prev => prev.map(x => (x.id === r.id ? { ...x, completado: !x.completado } : x)));
+  };
+
+  const sumarARuta = async (r: Recordatorio) => {
+    if (!r.client_id && !r.prospecto_place_id) {
+      toast({ variant: "destructive", title: "Este recordatorio no tiene cliente asociado" });
+      return;
+    }
+    setAdding(r.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      let existing = supabase
+        .from("asignaciones_vendedores_clientes")
+        .select("id, estado")
+        .eq("vendedor_id", user.id)
+        .neq("estado", "Visitado");
+      existing = r.client_id
+        ? existing.eq("client_id", r.client_id)
+        : existing.eq("prospecto_place_id", r.prospecto_place_id!);
+
+      const { data: yaAsignado } = await existing.maybeSingle();
+      if (yaAsignado) {
+        toast({ title: "Ya está en tu ruta", description: "Lo vas a encontrar en el tablero Kanban." });
+        return;
+      }
+
+      const { error } = await supabase.from("asignaciones_vendedores_clientes").insert({
+        vendedor_id: user.id,
+        client_id: r.client_id,
+        prospecto_place_id: r.prospecto_place_id,
+        es_prospecto: !!r.prospecto_place_id,
+        estado: "Por visitar",
+        origen_asignacion: "auto",
+      });
+      if (error) throw error;
+
+      toast({
+        title: "Sumado a tu ruta de hoy",
+        description: "Ya podés registrar el feedback desde el tablero Kanban.",
+      });
+    } catch (error) {
+      console.error("Error sumando a la ruta:", error);
+      toast({ variant: "destructive", title: "No se pudo sumar a la ruta" });
+    } finally {
+      setAdding(null);
+    }
   };
 
   const eliminar = async (id: string) => {
@@ -109,6 +157,18 @@ const RecordatoriosCalendario = () => {
         </p>
         {r.nota && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{r.nota}</p>}
       </div>
+      {!r.completado && (r.client_id || r.prospecto_place_id) && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 shrink-0"
+          title="Sumar a mi ruta de hoy"
+          disabled={adding === r.id}
+          onClick={() => sumarARuta(r)}
+        >
+          <Route className="h-3.5 w-3.5 text-accent" />
+        </Button>
+      )}
       <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => toggleCompletado(r)}>
         <Check className={cn("h-3.5 w-3.5", r.completado ? "text-emerald-500" : "text-muted-foreground")} />
       </Button>
