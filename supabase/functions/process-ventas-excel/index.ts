@@ -371,10 +371,23 @@ Deno.serve(async (req) => {
       replaceExisting?: boolean;
       notasCredito?: Record<string, any>[];
       fileMetadata?: FileMetadata;
+      modoCarga?: 'rango' | 'rebase';
+      confirmarEliminaciones?: boolean;
+      confirmacionRebase?: string;
     };
     const rawRows = body.rows;
     const rawNotasCredito = Array.isArray(body.notasCredito) ? body.notasCredito : [];
     const replaceExisting = body.replaceExisting !== false; // default true
+    const modoCarga: 'rango' | 'rebase' = body.modoCarga === 'rebase' ? 'rebase' : 'rango';
+    const confirmarEliminaciones = body.confirmarEliminaciones === true;
+    const confirmacionRebase = typeof body.confirmacionRebase === 'string' ? body.confirmacionRebase : '';
+
+    if (modoCarga === 'rebase' && callerProfile?.rol !== 'administrador' && callerProfile?.rol !== 'asignador') {
+      return new Response(JSON.stringify({ success: false, error: 'El reemplazo total solo lo puede ejecutar un administrador' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403,
+      });
+    }
+
 
     if (!Array.isArray(rawRows) || rawRows.length === 0) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
