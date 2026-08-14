@@ -612,6 +612,80 @@ export type Database = {
           },
         ]
       }
+      feedback_extraccion: {
+        Row: {
+          client_id: string | null
+          confianza: number
+          contacto_nombre: string | null
+          contacto_rol: string | null
+          created_at: string
+          feedback_id: string
+          id: string
+          interes_producto: string[]
+          modelo: string | null
+          no_ofrecer: boolean
+          objecion: string | null
+          prospecto_place_id: string | null
+          resumen: string | null
+          revisit_date: string | null
+          revisit_dias: number | null
+          riesgo_cobranza: string
+          sentimiento: string | null
+          updated_at: string
+          vendedor_id: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          confianza?: number
+          contacto_nombre?: string | null
+          contacto_rol?: string | null
+          created_at?: string
+          feedback_id: string
+          id?: string
+          interes_producto?: string[]
+          modelo?: string | null
+          no_ofrecer?: boolean
+          objecion?: string | null
+          prospecto_place_id?: string | null
+          resumen?: string | null
+          revisit_date?: string | null
+          revisit_dias?: number | null
+          riesgo_cobranza?: string
+          sentimiento?: string | null
+          updated_at?: string
+          vendedor_id?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          confianza?: number
+          contacto_nombre?: string | null
+          contacto_rol?: string | null
+          created_at?: string
+          feedback_id?: string
+          id?: string
+          interes_producto?: string[]
+          modelo?: string | null
+          no_ofrecer?: boolean
+          objecion?: string | null
+          prospecto_place_id?: string | null
+          resumen?: string | null
+          revisit_date?: string | null
+          revisit_dias?: number | null
+          riesgo_cobranza?: string
+          sentimiento?: string | null
+          updated_at?: string
+          vendedor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_extraccion_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: true
+            referencedRelation: "cliente_feedbacks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       import_batches: {
         Row: {
           archivo_nombre: string
