@@ -132,6 +132,109 @@ const RecordatoriosCalendario = () => {
     setRecordatorios(prev => prev.filter(x => x.id !== id));
   };
 
+  const buscar = async (q: string) => {
+    setBusqueda(q);
+    if (q.trim().length < 3) {
+      setResultados([]);
+      return;
+    }
+    setBuscando(true);
+    try {
+      const [{ data: clientes }, { data: prospectos }] = await Promise.all([
+        supabase
+          .from("clientes")
+          .select("client_id, razon_social, barrio_principal, ciudad_principal")
+          .ilike("razon_social", `%${q.trim()}%`)
+          .limit(8),
+        supabase
+          .from("prospectos")
+          .select("place_id, nombre, barrio, ciudad")
+          .ilike("nombre", `%${q.trim()}%`)
+          .limit(8),
+      ]);
+      setResultados([
+        ...(clientes || []).map(c => ({
+          id: c.client_id,
+          nombre: c.razon_social || c.client_id,
+          detalle: [c.barrio_principal, c.ciudad_principal].filter(Boolean).join(" · "),
+          esProspecto: false,
+        })),
+        ...(prospectos || []).map(p => ({
+          id: p.place_id,
+          nombre: p.nombre,
+          detalle: [p.barrio, p.ciudad].filter(Boolean).join(" · "),
+          esProspecto: true,
+        })),
+      ]);
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  const agendarVisita = async (candidato: Candidato) => {
+    if (!selectedDate) return;
+    setAgendando(candidato.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const fecha = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+
+      let existing = supabase
+        .from("asignaciones_vendedores_clientes")
+        .select("id")
+        .eq("vendedor_id", user.id);
+      existing = candidato.esProspecto
+        ? existing.eq("prospecto_place_id", candidato.id)
+        : existing.eq("client_id", candidato.id);
+      const { data: yaAsignado } = await existing.maybeSingle();
+
+      if (yaAsignado) {
+        const { error } = await supabase
+          .from("asignaciones_vendedores_clientes")
+          .update({ estado: "Por visitar", visited_at: null, fecha_programada: fecha })
+          .eq("id", yaAsignado.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("asignaciones_vendedores_clientes").insert({
+          vendedor_id: user.id,
+          client_id: candidato.esProspecto ? null : candidato.id,
+          prospecto_place_id: candidato.esProspecto ? candidato.id : null,
+          es_prospecto: candidato.esProspecto,
+          estado: "Por visitar",
+          origen_asignacion: "auto",
+          fecha_programada: fecha,
+        });
+        if (error) throw error;
+      }
+
+      const recordatorio: any = {
+        vendedor_id: user.id,
+        titulo: `Visita agendada: ${candidato.nombre}`,
+        nota: nota || null,
+        fecha_recordatorio: new Date(`${fecha}T09:00:00-03:00`).toISOString(),
+      };
+      if (candidato.esProspecto) recordatorio.prospecto_place_id = candidato.id;
+      else recordatorio.client_id = candidato.id;
+      await supabase.from("recordatorios").insert(recordatorio);
+
+      toast({
+        title: "Visita agendada",
+        description: `${candidato.nombre} va a aparecer en "Por visitar" el ${selectedDate.toLocaleDateString("es-AR")}.`,
+      });
+      setDialogAbierto(false);
+      setBusqueda("");
+      setResultados([]);
+      setNota("");
+      fetchRecordatorios();
+    } catch (error) {
+      console.error("Error agendando visita:", error);
+      toast({ variant: "destructive", title: "No se pudo agendar la visita" });
+    } finally {
+      setAgendando(null);
+    }
+  };
+
   const fechasConRecordatorio = useMemo(
     () => recordatorios.filter(r => !r.completado).map(r => new Date(r.fecha_recordatorio)),
     [recordatorios],
