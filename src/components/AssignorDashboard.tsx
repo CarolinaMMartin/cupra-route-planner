@@ -116,6 +116,8 @@ const AssignorDashboard = () => {
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [isSavingAssignments, setIsSavingAssignments] = useState(false);
+  const [showConfirmAssign, setShowConfirmAssign] = useState(false);
+
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // El botón "Volver al inicio" vive en la barra superior fija (Index) y avisa por evento.
