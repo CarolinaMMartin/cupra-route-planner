@@ -248,14 +248,18 @@ async function discoverProspectsFromGoogle(
   targetCount: number,
   excludedPlaceIds: Set<string>,
   existingClientNames: Set<string>,
+  anchor?: AnchorPoint | null,
 ): Promise<DiscoveredProspect[]> {
   const discovered: DiscoveredProspect[] = [];
   const seenIds = new Set(excludedPlaceIds);
   const targetWithBuffer = Math.min(Math.max(targetCount + 8, 20), 100);
   const requestedZones = Array.from(new Set(zones.map((zone) => zone.trim()).filter(Boolean))).slice(0, 6);
+  // El ancla (hotspot de la ruta) manda: si existe, buscamos alrededor de ese punto,
+  // sirva la zona en CABA o en GBA. Sin ancla, caemos al viewport de CABA.
+  const hasAnchor = !!anchor && Number.isFinite(anchor.lat) && Number.isFinite(anchor.lng);
   const zoneWaves = requestedZones.length > 0
-    ? [requestedZones, ["Ciudad Autónoma de Buenos Aires"]]
-    : [["Ciudad Autónoma de Buenos Aires"]];
+    ? [requestedZones, [""]]
+    : [[""]];
   const searches = [
     { query: "vinoteca premium", includedType: "liquor_store" },
     { query: "wine bar", includedType: "wine_bar" },
@@ -267,6 +271,19 @@ async function discoverProspectsFromGoogle(
     for (const search of searches) {
       for (const zone of zoneWave) {
         const gatewayKey = Deno.env.get("LOVABLE_API_KEY") || "";
+        const textQuery = zone
+          ? `${search.query}, ${zone}, Argentina`
+          : `${search.query}, Área Metropolitana de Buenos Aires, Argentina`;
+        const locationParams = hasAnchor
+          ? {
+            locationBias: {
+              circle: {
+                center: { latitude: anchor!.lat, longitude: anchor!.lng },
+                radius: 6000,
+              },
+            },
+          }
+          : { locationRestriction: { rectangle: CABA_VIEWPORT } };
         const response = await fetch("https://connector-gateway.lovable.dev/google_maps/places/v1/places:searchText", {
           method: "POST",
           headers: {
@@ -276,13 +293,13 @@ async function discoverProspectsFromGoogle(
             "X-Goog-FieldMask": GOOGLE_PROSPECT_FIELD_MASK,
           },
           body: JSON.stringify({
-            textQuery: `${search.query}, ${zone}, Ciudad Autónoma de Buenos Aires, Argentina`,
+            textQuery,
             pageSize: 20,
             languageCode: "es",
             regionCode: "AR",
             includedType: search.includedType,
             strictTypeFiltering: true,
-            locationRestriction: { rectangle: CABA_VIEWPORT },
+            ...locationParams,
           }),
         });
 
