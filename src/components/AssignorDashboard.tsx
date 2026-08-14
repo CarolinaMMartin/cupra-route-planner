@@ -287,9 +287,21 @@ const AssignorDashboard = () => {
     }
   };
 
+  const handleRequestAssignmentConfirm = () => {
+    if (selectedSucursales.length === 0) return;
+    setShowConfirmAssign(true);
+  };
+
+  const handleGoToModify = () => {
+    setShowConfirmAssign(false);
+    setFlowStep("assignment");
+  };
+
   const handleContinueToAssignment = async () => {
+    setShowConfirmAssign(false);
     const selected = recommendations.filter((rec) => selectedSucursales.includes(rec.id));
     if (selected.length === 0) return;
+
 
     const missingVendor = selected.filter((rec) => !rec.vendedor_recomendado_id);
     if (missingVendor.length > 0) {
