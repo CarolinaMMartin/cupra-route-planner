@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getGoogleMapsUrl } from "@/lib/utils";
-import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus, X, AlertTriangle, MoreHorizontal } from "lucide-react";
+import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus, X, AlertTriangle, MoreHorizontal, UserCheck, Laptop, CircleSlash, CalendarClock, Flag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -234,7 +234,10 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
   const [tipoCierre, setTipoCierre] = useState<'visitado' | 'online' | 'no_visitado' | ''>('');
   const [motivoNoVisita, setMotivoNoVisita] = useState("");
   const [tipoInteraccion, setTipoInteraccion] = useState("");
-  const [actualizarEtiquetaWa, setActualizarEtiquetaWa] = useState("");
+  const [estadoCliente, setEstadoCliente] = useState("");
+  const [recordatorioActivo, setRecordatorioActivo] = useState(false);
+  const [recordatorioFecha, setRecordatorioFecha] = useState("");
+  const [recordatorioNota, setRecordatorioNota] = useState("");
   const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
   const [showAutoAsignar, setShowAutoAsignar] = useState(false);
   const { toast } = useToast();
@@ -666,7 +669,7 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
         visita_realizada: huboContacto,
         motivo_no_visita: !huboContacto ? motivoNoVisita : null,
         tipo_interaccion: huboContacto ? `${tipoCierre === 'online' ? '[Online] ' : ''}${tipoInteraccion}` : null,
-        actualizar_etiqueta_wa: actualizarEtiquetaWa || null,
+        estado_cliente: estadoCliente || null,
       };
 
       // Agregar el campo correcto según si es prospecto o cliente
@@ -745,12 +748,35 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
           : "El feedback ha sido guardado. El cliente será recomendado nuevamente mañana.",
       });
 
+      // Recordatorio calendarizado (opcional)
+      if (recordatorioActivo && recordatorioFecha) {
+        const recordatorio: any = {
+          vendedor_id: user.id,
+          titulo: `Seguimiento: ${selectedCliente.razon_social}`,
+          nota: recordatorioNota || feedback.trim(),
+          fecha_recordatorio: new Date(recordatorioFecha).toISOString(),
+        };
+        if (esProspecto) {
+          recordatorio.prospecto_place_id = selectedCliente.client_id.replace('prospecto-', '');
+        } else {
+          recordatorio.client_id = selectedCliente.client_id;
+        }
+        const { error: recordatorioError } = await supabase.from('recordatorios').insert(recordatorio);
+        if (recordatorioError) {
+          console.error('Error creando recordatorio:', recordatorioError);
+          toast({ variant: "destructive", title: "Recordatorio no guardado", description: "El feedback sí se guardó." });
+        }
+      }
+
       setShowFeedbackDialog(false);
       setFeedback("");
       setTipoCierre('');
       setMotivoNoVisita("");
       setTipoInteraccion("");
-      setActualizarEtiquetaWa("");
+      setEstadoCliente("");
+      setRecordatorioActivo(false);
+      setRecordatorioFecha("");
+      setRecordatorioNota("");
       setSelectedCliente(null);
     } catch (error) {
       console.error('Error saving feedback:', error);
@@ -1509,42 +1535,25 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
                 Tipo de Cierre <span className="text-destructive">*</span>
               </label>
               <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTipoCierre('visitado')}
-                  className={`p-3 rounded-lg border-2 text-center transition-all ${
-                    tipoCierre === 'visitado' 
-                      ? 'border-primary bg-primary/10 text-primary font-medium' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
-                >
-                  <span className="text-lg block mb-1">👤</span>
-                  <span className="text-sm">Visitado</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTipoCierre('online')}
-                  className={`p-3 rounded-lg border-2 text-center transition-all ${
-                    tipoCierre === 'online' 
-                      ? 'border-primary bg-primary/10 text-primary font-medium' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
-                >
-                  <span className="text-lg block mb-1">💻</span>
-                  <span className="text-sm">Online</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTipoCierre('no_visitado')}
-                  className={`p-3 rounded-lg border-2 text-center transition-all ${
-                    tipoCierre === 'no_visitado' 
-                      ? 'border-amber-500 bg-amber-500/10 text-amber-600 font-medium' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
-                >
-                  <span className="text-lg block mb-1">❌</span>
-                  <span className="text-sm">No visitado</span>
-                </button>
+                {([
+                  { value: 'visitado', label: 'Visitado', Icon: UserCheck },
+                  { value: 'online', label: 'Online', Icon: Laptop },
+                  { value: 'no_visitado', label: 'No visitado', Icon: CircleSlash },
+                ] as const).map(({ value, label, Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTipoCierre(value)}
+                    className={`p-3 rounded-lg border-2 text-center transition-all ${
+                      tipoCierre === value
+                        ? 'border-accent bg-accent/10 text-accent font-medium'
+                        : 'border-border hover:border-muted-foreground'
+                    }`}
+                  >
+                    <Icon className={`w-5 h-5 mx-auto mb-1 ${tipoCierre === value ? 'text-accent' : 'text-accent/70'}`} />
+                    <span className="text-sm">{label}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -1598,27 +1607,84 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
               </div>
             )}
 
-            {/* Selector de etiqueta WhatsApp */}
+            {/* Estado del cliente */}
             <div>
-              <label className="text-sm font-medium mb-2 block">
-                Actualizar etiqueta de WhatsApp (opcional)
+              <label className="text-sm font-medium mb-2 flex items-center gap-2">
+                <Flag className="w-4 h-4 text-accent" />
+                Estado del cliente (opcional)
               </label>
               <div className="flex flex-wrap gap-2">
-                {['Nuevo Lead', 'En Conversación', 'Interesado', 'Sin Interés', 'Cliente Activo'].map((etiqueta) => (
+                {['Nuevo', 'En negociación', 'Interesado', 'Sin interés', 'Cliente activo', 'No contactable'].map((estado) => (
                   <button
-                    key={etiqueta}
+                    key={estado}
                     type="button"
-                    onClick={() => setActualizarEtiquetaWa(actualizarEtiquetaWa === etiqueta ? '' : etiqueta)}
+                    onClick={() => setEstadoCliente(estadoCliente === estado ? '' : estado)}
                     className={`px-3 py-1.5 rounded-full border text-xs transition-all ${
-                      actualizarEtiquetaWa === etiqueta 
-                        ? 'border-primary bg-primary/10 text-primary font-medium' 
+                      estadoCliente === estado
+                        ? 'border-accent bg-accent/10 text-accent font-medium'
                         : 'border-border hover:border-muted-foreground'
                     }`}
                   >
-                    {etiqueta}
+                    {estado}
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Calendarizar seguimiento */}
+            <div className="rounded-lg border border-border p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-accent" />
+                  Calendarizar seguimiento
+                </label>
+                <Checkbox
+                  checked={recordatorioActivo}
+                  onCheckedChange={(v) => setRecordatorioActivo(v === true)}
+                />
+              </div>
+              {recordatorioActivo && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: 'Mañana', dias: 1 },
+                      { label: 'En 3 días', dias: 3 },
+                      { label: 'La semana que viene', dias: 7 },
+                      { label: 'En 15 días', dias: 15 },
+                    ].map(({ label, dias }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setDate(d.getDate() + dias);
+                          d.setHours(9, 0, 0, 0);
+                          const pad = (n: number) => String(n).padStart(2, '0');
+                          setRecordatorioFecha(
+                            `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+                          );
+                        }}
+                        className="px-3 py-1.5 rounded-full border border-border text-xs hover:border-accent hover:text-accent transition-all"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={recordatorioFecha}
+                    onChange={(e) => setRecordatorioFecha(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  />
+                  <Textarea
+                    value={recordatorioNota}
+                    onChange={(e) => setRecordatorioNota(e.target.value)}
+                    placeholder="Nota del recordatorio (ej: llamar para cerrar pedido)"
+                    className="min-h-[60px]"
+                    maxLength={200}
+                  />
+                </div>
+              )}
             </div>
 
             <div>

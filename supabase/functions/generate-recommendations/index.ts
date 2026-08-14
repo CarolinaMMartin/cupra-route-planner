@@ -186,6 +186,11 @@ const GOOGLE_PROSPECT_FIELD_MASK = [
   "places.rating",
   "places.userRatingCount",
   "places.priceLevel",
+  "places.nationalPhoneNumber",
+  "places.internationalPhoneNumber",
+  "places.websiteUri",
+  "places.editorialSummary",
+  "places.generativeSummary",
 ].join(",");
 
 interface GoogleAddressComponent {
@@ -206,6 +211,11 @@ interface GooglePlace {
   rating?: number;
   userRatingCount?: number;
   priceLevel?: string;
+  nationalPhoneNumber?: string;
+  internationalPhoneNumber?: string;
+  websiteUri?: string;
+  editorialSummary?: { text?: string };
+  generativeSummary?: { overview?: { text?: string }; description?: { text?: string } };
 }
 
 interface GoogleTextSearchResponse {
@@ -216,7 +226,8 @@ interface GoogleTextSearchResponse {
 interface DiscoveredProspect {
   place_id: string;
   nombre: string;
-  telefono: null;
+  telefono: string | null;
+  resumen_google: string | null;
   direccion: string;
   barrio: string | null;
   comuna: string | null;
@@ -230,7 +241,7 @@ interface DiscoveredProspect {
   tipo_principal: string | null;
   tipos: string[];
   sirve_vinos: boolean;
-  website: null;
+  website: string | null;
   estado_negocio: string | null;
   es_cliente_cupra: false;
 }
@@ -341,7 +352,12 @@ async function discoverProspectsFromGoogle(
           discovered.push({
             place_id: placeId,
             nombre,
-            telefono: null,
+            telefono: place.nationalPhoneNumber || place.internationalPhoneNumber || null,
+            resumen_google:
+              place.generativeSummary?.overview?.text ||
+              place.generativeSummary?.description?.text ||
+              place.editorialSummary?.text ||
+              null,
             direccion: place.formattedAddress || `${nombre}, ${localidad || "Buenos Aires"}`,
             barrio,
             comuna: comunaCandidate?.toLowerCase().startsWith("comuna") ? comunaCandidate : null,
@@ -355,7 +371,7 @@ async function discoverProspectsFromGoogle(
             tipo_principal: place.primaryType || null,
             tipos: types,
             sirve_vinos: types.includes("wine_bar") || types.includes("liquor_store"),
-            website: null,
+            website: place.websiteUri || null,
             estado_negocio: place.businessStatus || null,
             es_cliente_cupra: false,
           });
@@ -613,6 +629,7 @@ function scoreClients(
       feedbacks_recientes: feedbacks.slice(0, 2).map((fb: any) => ({
         feedback: fb.feedback,
         tipo: fb.tipo_interaccion,
+        estado: fb.estado_cliente || null,
         fecha: fb.created_at?.split('T')[0],
       })),
       prioridad_comercial: score_prioridad,
@@ -728,6 +745,7 @@ function scoreProspects(
       feedbacks_recientes: feedbacks.slice(0, 2).map((fb: any) => ({
         feedback: fb.feedback,
         tipo: fb.tipo_interaccion,
+        estado: fb.estado_cliente || null,
         fecha: fb.created_at?.split('T')[0],
       })),
       tipo_negocio: p.tipo_principal,
@@ -1289,7 +1307,7 @@ Deno.serve(async (req) => {
     // ---- 8. Load feedbacks ----
     const { data: feedbacks } = await supabaseClient
       .from("cliente_feedbacks")
-      .select("client_id, prospecto_place_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, created_at")
+      .select("client_id, prospecto_place_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, estado_cliente, created_at")
       .order("created_at", { ascending: false });
 
     const feedbacksMapClientes = new Map<string, any[]>();
