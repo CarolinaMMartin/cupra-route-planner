@@ -40,6 +40,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
   const [vendorLegend, setVendorLegend] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sinUbicacion, setSinUbicacion] = useState<string[]>([]);
 
   // Initialize Google Maps
   useEffect(() => {
@@ -272,6 +273,13 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
         }
       }
 
+      const resueltos = new Set(fetchedLocations.map((l) => l.id));
+      setSinUbicacion(
+        sucursales
+          .filter((s) => !resueltos.has(s.id))
+          .map((s) => s.nombre || s.fantasia || "Sin nombre"),
+      );
+
       setLocations(fetchedLocations);
       setVendorLegend(getVendorColorMap());
       setLoading(false);
@@ -442,6 +450,19 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                 </div>
               );
             })}
+
+            {!loading && sinUbicacion.length > 0 && (
+              <div className="m-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+                <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                  {sinUbicacion.length} de {sucursales.length} sin ubicación en el mapa
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {sinUbicacion.join(", ")}. Están incluidos en la ruta, pero no se pudo resolver su dirección.
+                </p>
+              </div>
+            )}
+
 
             {locations.length === 0 && !loading && (
               <div className="text-center text-muted-foreground p-4">
