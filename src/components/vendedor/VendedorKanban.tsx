@@ -1760,6 +1760,33 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
           fetchAsignaciones();
         }}
       />
+
+      {/* Confirmación de des-asignación (solo auto-asignados) */}
+      <AlertDialog
+        open={!!desasignarTarget}
+        onOpenChange={(open) => { if (!open) setDesasignarTarget(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Quitar de tu lista?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {desasignarTarget?.razon_social} se va a quitar de tus asignaciones de hoy.
+              Solo podés quitar visitas que te auto-asignaste vos; las del asignador quedan fijas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (desasignarTarget) handleDesasignar(desasignarTarget);
+                setDesasignarTarget(null);
+              }}
+            >
+              Quitar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 });
