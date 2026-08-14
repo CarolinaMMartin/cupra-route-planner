@@ -23,6 +23,9 @@ import {
   prioridadBase,
   prioridadEscala100,
   prioridadVisita,
+  buildAreaFilter,
+  belongsToArea,
+  areaKey,
 } from "./portfolio-ranking.ts";
 
 // La ruta del día tiene que ser CAMINABLE: todas las visitas cerca unas de otras.
