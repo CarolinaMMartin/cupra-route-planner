@@ -1240,7 +1240,8 @@ Deno.serve(async (req) => {
       .filter((p: AnchorPoint) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && p.lat >= -60 && p.lat <= -20 && p.lng >= -80 && p.lng <= -40);
 
     const zoneCoords = clientZoneCoords.length > 0 ? clientZoneCoords : prospectZoneCoords;
-    const zoneCenterFallback = calculateCentroid(zoneCoords);
+    // El centroide plano de toda la ciudad cae en zonas vacías; usamos el núcleo más denso.
+    const zoneCenterFallback = findDensestHotspot(zoneCoords, 2.5) || calculateCentroid(zoneCoords);
     if (zoneCenterFallback) {
       const source = clientZoneCoords.length > 0 ? "clientes" : "prospectos";
       console.log(`🎯 Zone center fallback (${source}): ${zoneCenterFallback.lat.toFixed(4)}, ${zoneCenterFallback.lng.toFixed(4)}`);
@@ -2278,7 +2279,17 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       (vendedor) => (enrichedCountByVendor.get(vendedor.user_id) || 0) !== 8,
     );
     if (enrichedRecommendations.length === 0) {
-      throw new Error("No se encontraron candidatos disponibles para ningún vendedor con los filtros seleccionados.");
+      // Sin candidatos no es un error del sistema: devolvemos vacío con explicación.
+      return new Response(JSON.stringify({
+        recomendaciones: [],
+        resumen: {
+          total_recomendaciones: 0,
+          descripcion: "No se encontraron candidatos disponibles para los vendedores y filtros seleccionados. "
+            + "Probá ampliar la zona, elegir un vendedor con cartera en el área o revisar los filtros geográficos.",
+          distribucion_por_vendedor: {},
+          zonas_priorizadas: [],
+        },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
     // Normalización: "VILLA URQUIZA" y "Villa Urquiza" son la misma zona.
     const zonaTexto = dedupeBarrios([...barriosFinales, ...comunasFinales]).join(", ") || "la zona seleccionada";
