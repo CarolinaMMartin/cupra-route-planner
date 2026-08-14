@@ -127,9 +127,6 @@ const CargaDatos = () => {
   const [sheetName, setSheetName] = useState<string>("");
   const [headerRow, setHeaderRow] = useState<number>(1);
   const [notasCredito, setNotasCredito] = useState<SpreadsheetRow[]>([]);
-  // Doble ingesta: "Ventas por Comprobante" = verdad monetaria (todas las marcas)
-  const [comprobantes, setComprobantes] = useState<SpreadsheetRow[]>([]);
-  const [comprobantesSheetName, setComprobantesSheetName] = useState<string>("");
   const [maestroResults, setMaestroResults] = useState<MaestroResults | null>(null);
   const [maestroVendedores, setMaestroVendedores] = useState<{ vendedor: string; clientes: number }[]>([]);
 
