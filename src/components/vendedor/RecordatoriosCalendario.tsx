@@ -25,6 +25,12 @@ const RecordatoriosCalendario = () => {
   const [recordatorios, setRecordatorios] = useState<Recordatorio[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState<string | null>(null);
+  const [dialogAbierto, setDialogAbierto] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const [buscando, setBuscando] = useState(false);
+  const [resultados, setResultados] = useState<Candidato[]>([]);
+  const [nota, setNota] = useState("");
+  const [agendando, setAgendando] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const { toast } = useToast();
 
