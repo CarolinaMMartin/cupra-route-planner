@@ -81,17 +81,6 @@ interface Reconciliacion {
   clientes_razon_social?: number;
   tickets_compartidos: number;
   vendedor_breakdown?: VendedorBreakdown[];
-  // Doble ingesta (hoja "Ventas por Comprobante")
-  fuente_monto?: "comprobante" | "producto";
-  hoja_comprobantes?: string | null;
-  comprobantes_leidos?: number;
-  comprobantes_sin_identidad?: number;
-  comprobantes_sin_importe?: number;
-  comprobantes_notas_credito_omitidas?: number;
-  clientes_solo_comprobante?: number;
-  facturacion_total_comprobantes?: number;
-  facturacion_cupra?: number;
-  share_cupra_global?: number | null;
 }
 
 
