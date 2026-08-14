@@ -1063,19 +1063,40 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ============ FASE 4b: Coordenadas del informe → client_places ============
+    // ============ FASE 4b: Coordenadas del ERP → client_places (R7 / OT7) ============
+    // Prioridad: corrección manual > coordenadas del ERP > geocoding por texto.
+    // No se marca primario acá: al final `reconciliar_places_primarios()` deja
+    // un único primario por cliente eligiendo la fuente más confiable.
     let coordenadasGuardadas = 0;
     if (coordsPorCliente.size > 0) {
       const idsValidos = new Set(clientesEnriquecidos.map(c => String(c.client_id)));
-      const places = Array.from(coordsPorCliente.entries())
-        .filter(([cid]) => idsValidos.has(String(cid)))
+      const candidatos = Array.from(coordsPorCliente.entries())
+        .filter(([cid]) => idsValidos.has(String(cid)));
+
+      // Nunca pisar una corrección manual con el Excel
+      const verificadosSet = new Set<string>();
+      const idsCandidatos = candidatos.map(([cid]) => String(cid));
+      for (let i = 0; i < idsCandidatos.length; i += 200) {
+        const batch = idsCandidatos.slice(i, i + 200);
+        const { data: verificados } = await supabase
+          .from('client_places')
+          .select('client_id')
+          .in('client_id', batch)
+          .eq('direccion_verificada', true);
+        (verificados || []).forEach((v: any) => verificadosSet.add(String(v.client_id)));
+      }
+
+      const places = candidatos
+        .filter(([cid]) => !verificadosSet.has(String(cid)))
         .map(([cid, p]) => ({
           client_id: String(cid),
           lat: p.lat,
           long: p.long,
           direccion_principal: p.direccion,
+          codigo_postal: p.codigo_postal,
           provincia_principal: p.provincia,
-          is_primary: true,
+          fuente_geocoding: 'excel',
+          is_primary: false,
         }));
 
       for (let i = 0; i < places.length; i += 300) {
@@ -1093,6 +1114,15 @@ Deno.serve(async (req) => {
       console.log(`📍 Coordenadas del informe guardadas: ${coordenadasGuardadas}/${places.length}`);
     }
     (results as any).coordenadas_guardadas = coordenadasGuardadas;
+
+    {
+      const { error: reconError } = await supabase.rpc('reconciliar_places_primarios');
+      if (reconError) {
+        console.error('⚠️ No se pudo reconciliar ubicaciones primarias:', reconError.message);
+        results.errores.push(`Ubicaciones primarias: ${reconError.message}`);
+      }
+    }
+
 
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
 
