@@ -110,6 +110,11 @@ const ManualAssignment = () => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [suggestionMode, setSuggestionMode] = useState<SuggestionMode | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("monto");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const activeFilterCount = (filterCiudad !== "all" ? 1 : 0) + (filterProvincia !== "all" ? 1 : 0);
 
   // ── Debounce search ──
   useEffect(() => {
