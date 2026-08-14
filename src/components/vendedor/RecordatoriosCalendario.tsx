@@ -338,12 +338,21 @@ const RecordatoriosCalendario = () => {
         )}
 
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-base">
               {selectedDate
                 ? `Seguimientos del ${selectedDate.toLocaleDateString("es-AR")}`
                 : "Seleccioná un día"}
             </CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!selectedDate}
+              onClick={() => setDialogAbierto(true)}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Agendar visita
+            </Button>
           </CardHeader>
           <CardContent className="space-y-2">
             {loading && <p className="text-sm text-muted-foreground">Cargando…</p>}
