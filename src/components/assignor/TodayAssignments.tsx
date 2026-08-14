@@ -233,6 +233,35 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
     }
   };
 
+  const handleDeleteAssignments = async (ids: string[], label: string) => {
+    if (ids.length === 0) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("asignaciones_vendedores_clientes")
+        .delete()
+        .in("id", ids);
+
+      if (error) throw error;
+
+      setAssignments((prev) => prev.filter((a) => !ids.includes(a.id)));
+      toast({
+        title: "Asignaciones eliminadas",
+        description: `${label} (${ids.length}).`,
+      });
+    } catch (error) {
+      console.error("Error deleting assignments:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al eliminar las asignaciones",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+
   const assignmentsByVendedor = assignments.reduce(
     (acc, assignment) => {
       const vendedorNombre = toTitleCase(assignment.vendedor?.nombre) || "Vendedor desconocido";
