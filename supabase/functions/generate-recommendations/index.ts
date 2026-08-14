@@ -949,19 +949,16 @@ function justificacionComercial(c: ScoredCandidate): string {
       + `${c.alerta_nc.fecha ? ` (nota de crédito del ${c.alerta_nc.fecha})` : ""}. ${cerca}: hay que revisar el motivo de la `
       + `devolución y el estado de cobranza antes de volver a ofrecer producto.`;
   }
-  const nc = c.alerta_nc
-    ? ` ATENCIÓN: devolvió el ${Math.round(c.alerta_nc.ratio * 100)}% de lo facturado${c.alerta_nc.fecha ? ` (última nota de crédito ${c.alerta_nc.fecha})` : ""}; revisar el motivo antes de ofrecer.`
-    : "";
   const ritmo = c.cadencia_dias && dias != null && dias > c.cadencia_dias
     ? ` Compra cada ${Math.round(c.cadencia_dias)} días, así que ya está atrasado.`
     : "";
   if (c.estado_comercial === "ACTIVO") {
-    return `Cliente activo de ${c.barrio || "la zona"}${dias != null ? `, compró hace ${dias} días` : ""}.${ritmo} ${cerca}: visita de mantenimiento para sostener el ritmo de compra.${nc}`;
+    return `Cliente activo de ${c.barrio || "la zona"}${dias != null ? `, compró hace ${dias} días` : ""}.${ritmo} ${cerca}: visita de mantenimiento para sostener el ritmo de compra.`;
   }
   if (c.estado_comercial === "INACTIVO") {
-    return `Bajó el ritmo${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: conviene pasar antes de que se enfríe del todo.${nc}`;
+    return `Bajó el ritmo${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: conviene pasar antes de que se enfríe del todo.`;
   }
-  return `Cliente a recuperar${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: vale la visita de reconquista.${nc}`;
+  return `Cliente a recuperar${dias != null ? `: hace ${dias} días que no compra` : ""}.${ritmo} ${cerca}: vale la visita de reconquista.`;
 }
 
 function makeRec(c: ScoredCandidate, vendedorId: string, justificacion?: string): any {
