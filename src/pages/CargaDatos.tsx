@@ -162,6 +162,9 @@ const CargaDatos = () => {
   // TAREA 7, 9, 10: Extended ETL response
   const [calidad, setCalidad] = useState<QualityReport | null>(null);
   const [reconciliacion, setReconciliacion] = useState<Reconciliacion | null>(null);
+  const [guardaCarga, setGuardaCarga] = useState<{ mensaje: string; previa: RangoCarga | null } | null>(null);
+  const [revirtiendo, setRevirtiendo] = useState(false);
+
   const [metadata, setMetadata] = useState<ETLMetadata | null>(null);
   const [integridad, setIntegridad] = useState<Integridad | null>(null);
 
