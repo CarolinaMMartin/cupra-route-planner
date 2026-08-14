@@ -354,9 +354,15 @@ const AsignadorCalendario = () => {
 
             className={cn("p-0 pointer-events-auto")}
           />
-          <p className="mt-3 text-[11px] text-muted-foreground">
-            Subrayado = agendado por el propio vendedor
-          </p>
+          <div className="mt-3 flex flex-col gap-1 text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-primary" /> Visita programada
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" /> Agendado por el vendedor
+            </span>
+          </div>
+
         </CardContent>
       </Card>
 
