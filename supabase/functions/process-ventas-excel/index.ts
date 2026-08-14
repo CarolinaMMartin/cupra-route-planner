@@ -467,23 +467,10 @@ Deno.serve(async (req) => {
     // Conciliación: toda fila que no llega a la base queda registrada con su motivo
     const filasDescartadas: { origen: 'venta' | 'nota_credito'; motivo: string; payload: Record<string, any> }[] = [];
 
-    // ── Fix 3: Deduplicación estricta — eliminar filas 100% idénticas ──
-    const rowHashes = new Set<string>();
-    let exactDuplicates = 0;
-    const rows = rawRows.filter(row => {
-      const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
-      if (rowHashes.has(hash)) {
-        exactDuplicates++;
-        filasDescartadas.push({ origen: 'venta', motivo: 'duplicada_exacta', payload: row });
-        return false;
-      }
-      rowHashes.add(hash);
-      return true;
-    });
-
-    if (exactDuplicates > 0) {
-      console.log(`🗑️ Fix 3: ${exactDuplicates} filas 100% idénticas eliminadas (${rawRows.length} → ${rows.length})`);
-    }
+    // OT8-fix: NO se descartan filas idénticas. Dos renglones iguales en el archivo
+    // son dos renglones reales en la base (se distinguen con el ordinal de renglón).
+    const rows = rawRows;
+    const exactDuplicates = 0;
 
     console.log(`📦 ETL ${ETL_VERSION} — Recibidas ${rawRows.length} filas, procesando ${rows.length} únicas`);
 
