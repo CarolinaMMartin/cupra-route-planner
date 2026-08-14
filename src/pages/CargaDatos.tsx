@@ -659,8 +659,8 @@ const CargaDatos = () => {
               </Alert>
             )}
 
-            </div>
           </div>
+
         )}
 
         {/* STEP: Processing */}
