@@ -346,14 +346,22 @@ const AsignadorCalendario = () => {
             selected={selectedDate}
             onSelect={setSelectedDate}
             modifiers={{ evento: fechasConEvento, auto: fechasAuto }}
+            classNames={{
+              cell: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
+              day: "inline-flex h-9 w-9 items-center justify-center rounded-full p-0 font-normal text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              day_selected:
+                "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+              day_today: "ring-1 ring-inset ring-primary/50 font-semibold",
+              day_outside: "day-outside text-muted-foreground/50",
+            }}
             modifiersClassNames={{
               evento:
-                "relative font-semibold after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-primary",
-              auto: "relative after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-accent",
+                "relative after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-primary aria-selected:after:bg-primary-foreground",
+              auto: "relative after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-accent aria-selected:after:bg-primary-foreground",
             }}
-
             className={cn("p-0 pointer-events-auto")}
           />
+
           <div className="mt-3 flex flex-col gap-1 text-[11px] text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-primary" /> Visita programada
