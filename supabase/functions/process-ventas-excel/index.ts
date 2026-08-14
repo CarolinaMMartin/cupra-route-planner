@@ -919,9 +919,6 @@ Deno.serve(async (req) => {
 
     // ── TAREA 9: Reconciliación — totales para validación ──
     const totalFacturacionProcesada = Math.round(totalGlobal * 100) / 100;
-    const totalCupraProcesado = Math.round(
-      Array.from(resumenMonetario.values()).reduce((sum, r) => sum + r.montoCupra, 0) * 100
-    ) / 100;
     const totalTicketsUnicos = Array.from(clientesMap.values()).reduce((sum, c) => sum + c.tickets_set.size, 0);
     const totalClientesUnicos = clientesMap.size;
     // Fix 3: Count clients by normalized razon_social
