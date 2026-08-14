@@ -219,11 +219,19 @@ Deno.serve(async (req) => {
         const prod = (v.nombre || "").trim();
         if (prod) topMercado.set(prod, (topMercado.get(prod) || 0) + Number(v.facturacion_ars || 0));
       }
-      const comprados = new Set(compra.map(([p]) => p.toUpperCase()));
+      // Se compara por familia de producto (sin formato ni añada) para no
+      // marcar como "hueco" el mismo vino en otra presentación.
+      const comprados = new Set(compra.map(([p]) => familiaProducto(p)));
+      const vistas = new Set<string>();
       hechos.hueco_portfolio = [...topMercado.entries()]
         .sort((a, b) => b[1] - a[1])
         .map(([p]) => p)
-        .filter((p) => !comprados.has(p.toUpperCase()))
+        .filter((p) => {
+          const f = familiaProducto(p);
+          if (comprados.has(f) || vistas.has(f)) return false;
+          vistas.add(f);
+          return true;
+        })
         .slice(0, 4);
     } else {
       const { data: prospecto } = await supabase
