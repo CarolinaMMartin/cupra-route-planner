@@ -1576,6 +1576,7 @@ Deno.serve(async (req) => {
               (8 - currentTotal) + 8,
               excludedPlaceIds,
               existingClientNames,
+              vendorHotspot,
             );
             const newProspects = discovered.filter(registrarGate);
 
@@ -1802,6 +1803,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           missing + 8,
           excludedPlaceIds,
           existingClientNames,
+          hotspot,
         );
         const newProspects = discovered.filter(registrarGate);
         if (newProspects.length === 0) return [];
