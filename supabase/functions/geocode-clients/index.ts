@@ -10,8 +10,8 @@ const GOOGLE_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || "";
 const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 
-async function geocodeFetch(params: string): Promise<any> {
-  const resp = await fetch(`${GATEWAY_URL}/maps/api/geocode/json?${params}`, {
+async function gatewayFetch(path: string, params: string): Promise<any> {
+  const resp = await fetch(`${GATEWAY_URL}${path}?${params}`, {
     headers: {
       Authorization: `Bearer ${LOVABLE_API_KEY}`,
       "X-Connection-Api-Key": GOOGLE_API_KEY,
@@ -23,6 +23,35 @@ async function geocodeFetch(params: string): Promise<any> {
   }
   return await resp.json();
 }
+
+const geocodeFetch = (params: string) => gatewayFetch("/maps/api/geocode/json", params);
+
+/** Búsqueda del local por nombre comercial (Places API v1). */
+async function buscarNegocioPorNombre(textQuery: string): Promise<any | null> {
+  const resp = await fetch("https://connector-gateway.lovable.dev/google_maps/places/v1/places:searchText", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      "X-Connection-Api-Key": GOOGLE_API_KEY,
+      "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.businessStatus",
+    },
+    body: JSON.stringify({ textQuery, pageSize: 3, languageCode: "es", regionCode: "AR" }),
+  });
+  const raw = await resp.text();
+  if (!resp.ok) throw new Error(`Places ${resp.status}: ${raw.slice(0, 200)}`);
+  const data = JSON.parse(raw);
+  const place = (data.places || [])[0];
+  if (!place?.location) return null;
+  return {
+    lat: Number(place.location.latitude),
+    lng: Number(place.location.longitude),
+    place_id: place.id || null,
+    formatted_address: place.formattedAddress || null,
+    business_status: place.businessStatus || null,
+  };
+}
+
 
 // Argentina coordinate bounds
 const LAT_MIN = -56, LAT_MAX = -21, LNG_MIN = -74, LNG_MAX = -53;
@@ -92,6 +121,80 @@ function normalizeProvince(prov: string | null): string | null {
   return prov.trim();
 }
 
+// Un "barrio" que en realidad es una ciudad/provincia envenena las
+// recomendaciones regionales: nunca se guarda como barrio.
+const BARRIOS_PROHIBIDOS = new Set([
+  "BUENOS AIRES",
+  "CIUDAD AUTONOMA DE BUENOS AIRES",
+  "CAPITAL FEDERAL",
+  "CABA",
+  "ARGENTINA",
+]);
+
+function sinAcentos(texto: string): string {
+  return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
+}
+
+function barrioValido(barrio: string | null): string | null {
+  if (!barrio) return null;
+  const limpio = barrio.trim();
+  if (!limpio) return null;
+  if (BARRIOS_PROHIBIDOS.has(sinAcentos(limpio))) return null;
+  return limpio;
+}
+
+function extraerBarrio(components: any[]): string | null {
+  return barrioValido(
+    extractComponent(components, "sublocality_level_1") ||
+    extractComponent(components, "sublocality") ||
+    extractComponent(components, "neighborhood") ||
+    extractComponent(components, "locality") ||
+    extractComponent(components, "postal_town") ||
+    extractComponent(components, "administrative_area_level_3")
+  );
+}
+
+/**
+ * Control de precisión (regla fija del sistema regional): solo se acepta una
+ * coordenada que apunte a una puerta concreta. Un centro de calle, de barrio,
+ * de ciudad o de provincia se descarta: es preferible un cliente sin ubicación
+ * a un cliente ubicado en el lugar equivocado.
+ */
+const TIPOS_DEMASIADO_AMPLIOS = [
+  "administrative_area_level_1",
+  "administrative_area_level_2",
+  "administrative_area_level_3",
+  "country",
+  "locality",
+  "sublocality",
+  "neighborhood",
+  "postal_code",
+  "route",
+];
+
+function evaluarPrecision(result: any, direccionTieneAltura: boolean): { ok: boolean; precision: string; motivo?: string } {
+  const tipos: string[] = result.types || [];
+  const locationType: string = result.geometry?.location_type || "";
+  const tieneAltura = (result.address_components || []).some((c: any) => c.types?.includes("street_number"));
+
+  if (tipos.some((t) => TIPOS_DEMASIADO_AMPLIOS.includes(t)) && !tipos.includes("street_address") && !tipos.includes("premise") && !tipos.includes("subpremise")) {
+    return { ok: false, precision: "area", motivo: `resultado de área (${tipos.join("/")})` };
+  }
+  if (locationType === "APPROXIMATE") {
+    return { ok: false, precision: "aproximada", motivo: "Google devolvió un punto aproximado" };
+  }
+  if (locationType === "GEOMETRIC_CENTER" && !tieneAltura) {
+    return { ok: false, precision: "centro_calle", motivo: "centro de calle sin altura" };
+  }
+  if (direccionTieneAltura && !tieneAltura) {
+    return { ok: false, precision: "sin_altura", motivo: "Google no reconoció la altura de la calle" };
+  }
+  return {
+    ok: true,
+    precision: locationType === "ROOFTOP" ? "rooftop" : locationType === "RANGE_INTERPOLATED" ? "interpolada" : "puerta",
+  };
+}
+
 async function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -120,48 +223,46 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Find clients without coordinates
     const { data: allClients, error: clientsError } = await supabase
       .from("clientes")
-      .select("client_id, direccion_principal, codigo_postal, ciudad_principal, provincia_principal, barrio_principal")
-      .not("direccion_principal", "is", null);
+      .select("client_id, razon_social, fantasia, direccion_principal, codigo_postal, ciudad_principal, provincia_principal, barrio_principal");
 
     if (clientsError) throw new Error(`Error fetching clients: ${clientsError.message}`);
 
-    // R7 (OT7): jamás geocodificar por texto un cliente que ya tiene ubicación
-    // del ERP o corregida a mano. El geocoding es el último recurso.
     const { data: existingPlaces, error: placesError } = await supabase
       .from("client_places")
-      .select("client_id, fuente_geocoding, direccion_verificada");
+      .select("id, client_id, fuente_geocoding, direccion_verificada, ubicacion_confiable");
 
     if (placesError) throw new Error(`Error fetching places: ${placesError.message}`);
 
-    const placedClientIds = new Set((existingPlaces || []).map((p: any) => p.client_id));
+    // R7 (OT7): jamás re-geocodificar un cliente con ubicación del ERP o
+    // corregida a mano. Sí se reintenta todo lo que no sea confiable.
     const ubicacionConfiable = new Set(
       (existingPlaces || [])
-        .filter((p: any) => p.direccion_verificada === true || ["excel", "erp", "correccion_manual"].includes(p.fuente_geocoding))
+        .filter((p: any) => p.ubicacion_confiable === true)
         .map((p: any) => p.client_id)
     );
+    const placeIdPorCliente = new Map<string, string>();
+    for (const p of existingPlaces || []) {
+      if (!ubicacionConfiable.has(p.client_id)) placeIdPorCliente.set(p.client_id, p.id);
+    }
 
-    let pending = (allClients || []).filter(
-      (c: any) =>
-        !placedClientIds.has(c.client_id) &&
-        !ubicacionConfiable.has(c.client_id) &&
-        c.direccion_principal
-    );
+    let pending = (allClients || []).filter((c: any) => !ubicacionConfiable.has(c.client_id));
     if (limit > 0) pending = pending.slice(0, limit);
 
     const results = {
       total: pending.length,
       geocoded: 0,
+      por_nombre: 0,
+      rechazados_precision: 0,
       errors: 0,
       skipped: 0,
       error_details: [] as string[],
+      baja_precision: [] as string[],
     };
 
     for (const client of pending) {
       // R7: el string se arma Calle + Número + Código Postal + Ciudad.
-      // Si la ciudad falta o viene sucia y el CP es 1xxx/C1xxx, se asume CABA.
       const cp = (client.codigo_postal || "").toString().trim();
       const cpEsCaba = /^C?1\d{3}/i.test(cp);
       let ciudad = (client.ciudad_principal || "").trim();
@@ -170,92 +271,135 @@ Deno.serve(async (req) => {
         ciudad = "Ciudad Autónoma de Buenos Aires";
         provincia = "Ciudad Autónoma de Buenos Aires";
       }
-      const parts = [
-        client.direccion_principal,
-        cp || null,
-        ciudad || null,
-        provincia || null,
-        "Argentina",
-      ].filter(Boolean);
-      const address = parts.join(", ");
-
+      const direccion = (client.direccion_principal || "").trim();
+      const direccionTieneAltura = /\d/.test(direccion);
+      const address = [direccion || null, cp || null, ciudad || null, provincia || null, "Argentina"]
+        .filter(Boolean)
+        .join(", ");
 
       try {
-        const data = await geocodeFetch(`address=${encodeURIComponent(address)}&language=es&region=ar`);
+        let aceptado: any = null;
+        let precision = "";
+        let motivoRechazo = "";
 
-        if (data.status !== "OK" || !data.results?.length) {
-          results.errors++;
-          results.error_details.push(`${client.client_id}: Google status ${data.status}`);
-          await sleep(200);
+        if (direccion) {
+          const data = await geocodeFetch(`address=${encodeURIComponent(address)}&language=es&region=ar`);
+          if (data.status === "OK" && data.results?.length) {
+            for (const candidato of data.results) {
+              const { lat, lng } = candidato.geometry?.location || {};
+              if (!isValidArgentina(Number(lat), Number(lng))) continue;
+              const veredicto = evaluarPrecision(candidato, direccionTieneAltura);
+              if (veredicto.ok) {
+                aceptado = candidato;
+                precision = veredicto.precision;
+                break;
+              }
+              motivoRechazo = veredicto.motivo || "precisión insuficiente";
+            }
+          } else {
+            motivoRechazo = `Google status ${data.status}`;
+          }
+          await sleep(150);
+        }
+
+        // Respaldo por nombre comercial: muchos clientes son locales
+        // conocidos y Google los ubica con precisión de puerta.
+        if (!aceptado) {
+          const nombre = (client.fantasia || client.razon_social || "").trim();
+          if (nombre) {
+            const query = [nombre, direccion, ciudad || "Buenos Aires", "Argentina"].filter(Boolean).join(", ");
+            const candidato = await buscarNegocioPorNombre(query);
+            if (candidato && isValidArgentina(candidato.lat, candidato.lng) && candidato.business_status !== "CLOSED_PERMANENTLY") {
+              const detalle = await geocodeFetch(`latlng=${candidato.lat},${candidato.lng}&language=es`);
+              const componentes = detalle.results?.[0]?.address_components || [];
+              aceptado = {
+                geometry: { location: { lat: candidato.lat, lng: candidato.lng } },
+                address_components: componentes,
+                formatted_address: candidato.formatted_address || address,
+                place_id: candidato.place_id || null,
+              };
+              precision = "negocio_maps";
+              results.por_nombre++;
+            } else if (!motivoRechazo) {
+              motivoRechazo = "Google Maps no encontró el local por nombre";
+            }
+
+            await sleep(150);
+          }
+        }
+
+        if (!aceptado) {
+          results.rechazados_precision++;
+          results.baja_precision.push(
+            `${client.client_id} ${client.razon_social || ""}: ${motivoRechazo || "sin dirección utilizable"}`
+          );
+          // Nunca se guarda una coordenada dudosa: el cliente queda marcado
+          // como sin ubicación para que se corrija a mano.
           continue;
         }
 
-        const result = data.results[0];
-        const { lat, lng } = result.geometry.location;
+        const lat = Number(aceptado.geometry.location.lat);
+        const lng = Number(aceptado.geometry.location.lng);
+        let components = aceptado.address_components || [];
+        let barrio = extraerBarrio(components);
 
-        if (!isValidArgentina(lat, lng)) {
-          results.errors++;
-          results.error_details.push(`${client.client_id}: coords outside Argentina (${lat},${lng})`);
-          await sleep(200);
-          continue;
+        if (!barrio) {
+          const inverso = await geocodeFetch(`latlng=${lat},${lng}&language=es`);
+          if (inverso.status === "OK" && inverso.results?.length) {
+            for (const r of inverso.results) {
+              const b = extraerBarrio(r.address_components || []);
+              if (b) { barrio = b; components = r.address_components; break; }
+            }
+          }
+          await sleep(120);
         }
 
-        const components = result.address_components || [];
-        const barrio =
-          extractComponent(components, "sublocality_level_1") ||
-          extractComponent(components, "sublocality") ||
-          extractComponent(components, "neighborhood");
         const adminArea2 = extractComponent(components, "administrative_area_level_2");
-        const provincia = extractComponent(components, "administrative_area_level_1");
-        const placeId = result.place_id || null;
+        const normalizedProv = normalizeProvince(extractComponent(components, "administrative_area_level_1"));
         const comuna = resolveComuna(barrio, adminArea2);
-        const normalizedProv = normalizeProvince(provincia);
-        const formattedAddress = result.formatted_address || address;
-        const googleMapsLink = `https://www.google.com/maps/place/?q=place_id:${placeId}`;
+        const placeId = aceptado.place_id || null;
 
-        // Check if client_places row already exists
+        // Regla dura: sin barrio no hay ubicación utilizable en un sistema
+        // que recomienda por zona.
+        if (!barrio) {
+          results.rechazados_precision++;
+          results.baja_precision.push(`${client.client_id} ${client.razon_social || ""}: sin barrio resoluble`);
+          continue;
+        }
+
         const placeData = {
           lat,
           long: lng,
-          barrio_principal: barrio || client.barrio_principal,
+          barrio_principal: barrio,
           comuna,
           provincia_principal: normalizedProv || client.provincia_principal,
-          direccion_principal: formattedAddress,
+          direccion_principal: aceptado.formatted_address || address,
           codigo_postal: cp || null,
           place_id: placeId,
-          google_maps_link: googleMapsLink,
-          fuente_geocoding: "geocoding_auto",
+          google_maps_link: placeId ? `https://www.google.com/maps/place/?q=place_id:${placeId}` : null,
+          fuente_geocoding: precision === "negocio_maps" ? "places_negocio" : "geocoding_auto",
+          precision_geocoding: precision,
+          ubicacion_confiable: true,
         };
 
-        const { data: existingPlace } = await supabase
-          .from("client_places")
-          .select("id")
-          .eq("client_id", client.client_id)
-          .maybeSingle();
-
-        const { error: upsertError } = existingPlace
-          ? await supabase.from("client_places").update(placeData).eq("id", existingPlace.id)
+        const existingId = placeIdPorCliente.get(client.client_id);
+        const { error: upsertError } = existingId
+          ? await supabase.from("client_places").update(placeData).eq("id", existingId)
           : await supabase.from("client_places").insert({ client_id: client.client_id, ...placeData, is_primary: false });
-
 
         if (upsertError) {
           results.errors++;
           results.error_details.push(`${client.client_id}: upsert error: ${upsertError.message}`);
-          await sleep(200);
           continue;
         }
 
-        // Sync barrio/provincia back to clientes if missing
-        const updates: Record<string, any> = {};
-        if (!client.barrio_principal && barrio) updates.barrio_principal = barrio;
-        if (!client.provincia_principal && normalizedProv) updates.provincia_principal = normalizedProv;
-
-        if (Object.keys(updates).length > 0) {
-          await supabase
-            .from("clientes")
-            .update(updates)
-            .eq("client_id", client.client_id);
-        }
+        await supabase
+          .from("clientes")
+          .update({
+            barrio_principal: barrio,
+            ...(normalizedProv ? { provincia_principal: normalizedProv } : {}),
+          })
+          .eq("client_id", client.client_id);
 
         results.geocoded++;
       } catch (e: any) {
@@ -263,14 +407,86 @@ Deno.serve(async (req) => {
         results.error_details.push(`${client.client_id}: ${e.message}`);
       }
 
-      await sleep(200); // Throttle: 5 req/sec
+      await sleep(150); // Throttle
     }
 
-    // ===== Completar barrio: dirección completa primero, coordenadas como respaldo =====
+    // ===== Re-verificación de sucursales geocodificadas con el criterio viejo =====
+    // Toda ubicación no confiable se vuelve a resolver con el control de
+    // precisión. Si no llega a precisión de puerta, se borra: un punto falso
+    // en el mapa es peor que no tener el punto.
+    const reverificacion = { total: 0, confirmadas: 0, eliminadas: 0, errores: 0 };
+    const { data: dudosas } = await supabase
+      .from("client_places")
+      .select("id, client_id, direccion_principal, codigo_postal, provincia_principal")
+      .eq("ubicacion_confiable", false)
+      .limit(limit > 0 ? limit : 400);
+
+    reverificacion.total = (dudosas || []).length;
+
+    for (const place of dudosas || []) {
+      try {
+        const dir = (place.direccion_principal || "").trim();
+        const tieneAltura = /\d/.test(dir);
+        let confirmada: any = null;
+        let precision = "";
+
+        if (dir) {
+          const data = await geocodeFetch(
+            `address=${encodeURIComponent([dir, place.codigo_postal, place.provincia_principal, "Argentina"].filter(Boolean).join(", "))}&language=es&region=ar`
+          );
+          for (const candidato of data.results || []) {
+            const lat = Number(candidato.geometry?.location?.lat);
+            const lng = Number(candidato.geometry?.location?.lng);
+            if (!isValidArgentina(lat, lng)) continue;
+            const veredicto = evaluarPrecision(candidato, tieneAltura);
+            if (veredicto.ok) { confirmada = candidato; precision = veredicto.precision; break; }
+          }
+          await sleep(150);
+        }
+
+        if (!confirmada) {
+          await supabase.from("client_places").delete().eq("id", place.id);
+          reverificacion.eliminadas++;
+          continue;
+        }
+
+        const componentes = confirmada.address_components || [];
+        const barrio = extraerBarrio(componentes);
+        if (!barrio) {
+          await supabase.from("client_places").delete().eq("id", place.id);
+          reverificacion.eliminadas++;
+          continue;
+        }
+
+        await supabase
+          .from("client_places")
+          .update({
+            lat: Number(confirmada.geometry.location.lat),
+            long: Number(confirmada.geometry.location.lng),
+            barrio_principal: barrio,
+            comuna: resolveComuna(barrio, extractComponent(componentes, "administrative_area_level_2")),
+            provincia_principal: normalizeProvince(extractComponent(componentes, "administrative_area_level_1")),
+            direccion_principal: confirmada.formatted_address || dir,
+            place_id: confirmada.place_id || null,
+            precision_geocoding: precision,
+            ubicacion_confiable: true,
+          })
+          .eq("id", place.id);
+
+        reverificacion.confirmadas++;
+      } catch {
+        reverificacion.errores++;
+      }
+      await sleep(120);
+    }
+
+
+
+    // ===== Completar barrio de ubicaciones confiables que aún no lo tienen =====
     const reverse = { total: 0, resueltos: 0, errores: 0 };
     const { data: placesSinBarrio } = await supabase
       .from("client_places")
-      .select("id, client_id, lat, long, barrio_principal")
+      .select("id, client_id, lat, long")
       .or("barrio_principal.is.null,barrio_principal.eq.")
       .not("lat", "is", null)
       .limit(limit > 0 ? limit : 600);
@@ -279,65 +495,28 @@ Deno.serve(async (req) => {
 
     for (const place of placesSinBarrio || []) {
       try {
-        const client = (allClients || []).find((candidate: any) => candidate.client_id === place.client_id);
-        const addressParts = client ? [
-          client.direccion_principal,
-          client.codigo_postal,
-          client.ciudad_principal,
-          client.provincia_principal,
-          "Argentina",
-        ].filter(Boolean) : [];
-        let data = addressParts.length > 1
-          ? await geocodeFetch(`address=${encodeURIComponent(addressParts.join(", "))}&language=es&region=ar`)
-          : null;
-        if (!data || data.status !== "OK" || !data.results?.length) {
-          data = await geocodeFetch(`latlng=${place.lat},${place.long}&language=es`);
-        }
-        if (data.status !== "OK" || !data.results?.length) { reverse.errores++; await sleep(120); continue; }
-
-        let components = data.results[0].address_components || [];
-        let barrio =
-          extractComponent(components, "sublocality_level_1") ||
-          extractComponent(components, "sublocality") ||
-          extractComponent(components, "neighborhood") ||
-          extractComponent(components, "locality") ||
-          extractComponent(components, "postal_town") ||
-          extractComponent(components, "administrative_area_level_3");
-
-        // Una búsqueda por dirección puede devolver solo la calle. En ese caso,
-        // la consulta inversa por las coordenadas del ERP es obligatoria.
-        if (!barrio && addressParts.length > 1) {
-          const reverseData = await geocodeFetch(`latlng=${place.lat},${place.long}&language=es`);
-          if (reverseData.status === "OK" && reverseData.results?.length) {
-            data = reverseData;
-            components = reverseData.results[0].address_components || [];
-            barrio =
-              extractComponent(components, "sublocality_level_1") ||
-              extractComponent(components, "sublocality") ||
-              extractComponent(components, "neighborhood") ||
-              extractComponent(components, "locality") ||
-              extractComponent(components, "postal_town") ||
-              extractComponent(components, "administrative_area_level_3");
+        const data = await geocodeFetch(`latlng=${place.lat},${place.long}&language=es`);
+        let barrio: string | null = null;
+        let components: any[] = [];
+        if (data.status === "OK") {
+          for (const r of data.results || []) {
+            const b = extraerBarrio(r.address_components || []);
+            if (b) { barrio = b; components = r.address_components; break; }
           }
         }
+        if (!barrio) { reverse.errores++; await sleep(120); continue; }
 
         const adminArea2 = extractComponent(components, "administrative_area_level_2");
         const provincia = normalizeProvince(extractComponent(components, "administrative_area_level_1"));
-        const comuna = resolveComuna(barrio, adminArea2);
-
-        if (!barrio) { reverse.errores++; await sleep(120); continue; }
 
         await supabase
           .from("client_places")
-          .update({ barrio_principal: barrio, comuna, provincia_principal: provincia })
+          .update({ barrio_principal: barrio, comuna: resolveComuna(barrio, adminArea2), provincia_principal: provincia })
           .eq("id", place.id);
 
         await supabase
           .from("clientes")
-          .update({
-            barrio_principal: barrio,
-            ...(provincia ? { provincia_principal: provincia } : {}),
-          })
+          .update({ barrio_principal: barrio, ...(provincia ? { provincia_principal: provincia } : {}) })
           .eq("client_id", place.client_id);
 
         reverse.resueltos++;
@@ -359,14 +538,21 @@ Deno.serve(async (req) => {
     const { count: totalClientes } = await supabase
       .from("clientes")
       .select("client_id", { count: "exact", head: true });
+    const { count: sinUbicacionConfiable } = await supabase
+      .from("client_places")
+      .select("id", { count: "exact", head: true })
+      .eq("ubicacion_confiable", false);
 
     return new Response(
       JSON.stringify({
         success: true,
         results,
         reverse,
+        reverificacion,
+
         pendientes_barrio: pendientesBarrio ?? 0,
         total_clientes: totalClientes ?? 0,
+        ubicaciones_no_confiables: sinUbicacionConfiable ?? 0,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
