@@ -53,7 +53,6 @@ interface FileMetadata {
   sha256?: string | null;
   sheetName?: string;
   headerRow?: number;
-  comprobantesSheetName?: string | null;
 }
 
 type SupabaseAdminClient = SupabaseClient<any, 'public', any>;
