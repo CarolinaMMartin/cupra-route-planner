@@ -141,7 +141,13 @@ const ManualAssignment = () => {
   }, []);
 
   // ── Search clientes ──
-  const searchClientes = useCallback(async (query: string, ciudad: string, provincia: string, suggestion?: SuggestionMode) => {
+  const searchClientes = useCallback(async (
+    query: string,
+    ciudad: string,
+    provincia: string,
+    vendedor: string,
+    suggestion?: SuggestionMode
+  ) => {
     setIsSearching(true);
     setHasSearched(true);
     try {
@@ -157,6 +163,13 @@ const ManualAssignment = () => {
       }
       if (ciudad !== "all") q = q.eq("ciudad_principal", ciudad);
       if (provincia !== "all") q = q.eq("provincia_principal", provincia);
+      if (vendedor !== "all") {
+        if (vendedor === "__SIN_ASIGNAR__") {
+          q = q.is("vendedor_actual", null);
+        } else {
+          q = q.eq("vendedor_actual", vendedor);
+        }
+      }
 
       // Smart suggestions filters
       if (suggestion === "sin_vendedor") {
@@ -181,8 +194,8 @@ const ManualAssignment = () => {
 
   // ── Carga inicial + búsqueda al cambiar query o filtros ──
   useEffect(() => {
-    searchClientes(debouncedQuery, filterCiudad, filterProvincia, suggestionMode || undefined);
-  }, [debouncedQuery, filterCiudad, filterProvincia, suggestionMode, searchClientes]);
+    searchClientes(debouncedQuery, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined);
+  }, [debouncedQuery, filterCiudad, filterProvincia, filterVendedor, suggestionMode, searchClientes]);
 
 
   // ── Opciones de filtro (catálogo completo, independiente del resultado actual) ──
