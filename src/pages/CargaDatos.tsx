@@ -70,6 +70,9 @@ interface Reconciliacion {
   monto_notas_credito?: number;
   filas_procesadas: number;
   filas_deduplicadas: number;
+  renglones_con_ordinal?: number;
+  filas_bonificadas_100?: number;
+  cajas_bonificadas_100?: number;
   filas_venta_insertadas?: number;
   filas_nota_credito_insertadas?: number;
   filas_descartadas_total?: number;
