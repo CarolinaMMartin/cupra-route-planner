@@ -277,7 +277,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       setSinUbicacion(
         sucursales
           .filter((s) => !resueltos.has(s.id))
-          .map((s) => s.nombre || s.fantasia || s.razon_social || "Sin nombre"),
+          .map((s) => s.nombre || s.fantasia || "Sin nombre"),
       );
 
       setLocations(fetchedLocations);
