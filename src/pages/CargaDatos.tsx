@@ -315,9 +315,10 @@ const CargaDatos = () => {
     else toast({ title: "Formato inválido", description: "Solo archivos .xlsx o .xls", variant: "destructive" });
   };
 
-  const handleProcess = async () => {
+  const handleProcess = async (opts?: { confirmarEliminaciones?: boolean }) => {
     setStep("processing");
     setProgress(10);
+    setGuardaCarga(null);
     try {
       setProgress(30);
       const fileMetadata = {
@@ -356,8 +357,22 @@ const CargaDatos = () => {
           replaceExisting,
           notasCredito: notasCredito.length ? notasCredito : undefined,
           fileMetadata,
+          modoCarga: "rango",
+          confirmarEliminaciones: opts?.confirmarEliminaciones === true,
         },
       });
+      if (error) {
+        // La función devuelve el detalle de la guarda en el cuerpo del 500
+        let payload: any = null;
+        try { payload = await (error as any)?.context?.json?.(); } catch { /* sin cuerpo */ }
+        if (payload?.requiere_confirmacion) {
+          setGuardaCarga({ mensaje: payload.error, previa: payload.previa || null });
+          setStep("preview");
+          return;
+        }
+        throw new Error(payload?.error || error.message || "Error al procesar");
+      }
+
       setProgress(90);
       if (error) throw new Error(error.message || "Error al procesar");
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
