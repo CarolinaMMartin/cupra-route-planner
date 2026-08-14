@@ -16,6 +16,7 @@ function familiaProducto(nombre: string) {
     .replace(/\b\d+\s*X\s*\d+\b/g, " ") // formatos 6X750
     .replace(/\b(19|20)\d{2}\b/g, " ") // añadas
     .replace(/[^A-Z ]/g, " ")
+    .replace(/\b[A-Z]\b/g, " ") // sufijos sueltos tipo "V." (vidrio)
     .replace(/\s+/g, " ")
     .trim();
 }
