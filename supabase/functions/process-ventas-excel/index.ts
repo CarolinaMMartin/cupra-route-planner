@@ -389,8 +389,9 @@ Deno.serve(async (req) => {
       .select('rol')
       .eq('user_id', authData.user.id)
       .single();
-    if (profileError || callerProfile?.rol !== 'asignador') {
-      return new Response(JSON.stringify({ success: false, error: 'Solo un asignador puede importar datos' }), {
+    // Roles en cascada: administrador ⊇ asignador
+    if (profileError || (callerProfile?.rol !== 'asignador' && callerProfile?.rol !== 'administrador')) {
+      return new Response(JSON.stringify({ success: false, error: 'Solo un asignador o administrador puede importar datos' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403,
       });
     }
