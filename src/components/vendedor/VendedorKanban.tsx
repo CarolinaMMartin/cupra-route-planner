@@ -13,7 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getGoogleMapsUrl } from "@/lib/utils";
-import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus, X, AlertTriangle, MoreHorizontal } from "lucide-react";
+import { MapPin, Phone, Building, TrendingUp, TrendingDown, Package, Mail, Navigation, Map as MapIcon, Columns, Plus, UserPlus, X, AlertTriangle, MoreHorizontal, UserCheck, Laptop, CircleSlash, CalendarClock, Flag } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
