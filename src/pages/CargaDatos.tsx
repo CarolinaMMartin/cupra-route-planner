@@ -241,6 +241,7 @@ const CargaDatos = () => {
 
     // Prioridad: hoja de ventas por producto > ventas > maestro > la más grande
     const ventasProducto = candidatos.find((s) => s.tipo === "ventas" && /producto/i.test(s.name));
+    const comprobanteSheet = candidatos.find((s) => /comprobante/i.test(s.name) && s.rows.length > 0);
     const ventas = ventasProducto || candidatos.find((s) => s.tipo === "ventas");
     const maestro = candidatos.filter((s) => s.tipo === "maestro").sort((a, b) => b.rows.length - a.rows.length)[0];
     const elegido = ventas || maestro || candidatos.sort((a, b) => b.rows.length - a.rows.length)[0];
