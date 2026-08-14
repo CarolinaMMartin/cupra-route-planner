@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
 import angelBlanco from "@/assets/angel-blanco.png";
@@ -172,13 +171,7 @@ const Auth = () => {
           </div>
         </CardHeader>
         <CardContent className="pb-8">
-          <Tabs defaultValue="login" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
-              <TabsTrigger value="signup">Registrarse</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="login">
+          <div className="w-full">
               {showResetPassword ?
               <form onSubmit={handleResetPassword} className="space-y-5">
                   <p className="text-sm text-muted-foreground text-center mb-4">Ingresa tu email para restablecer tu contraseña.</p>
@@ -209,28 +202,7 @@ const Auth = () => {
                   </Button>
                 </form>
               }
-            </TabsContent>
-            
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-nombre" className="text-xs text-muted-foreground uppercase tracking-wider">Nombre</Label>
-                  <Input id="signup-nombre" type="text" placeholder="Tu nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} required className="bg-secondary/50 border-border/30" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email" className="text-xs text-muted-foreground uppercase tracking-wider">Email</Label>
-                  <Input id="signup-email" type="email" placeholder="tu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="bg-secondary/50 border-border/30" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password" className="text-xs text-muted-foreground uppercase tracking-wider">Contraseña</Label>
-                  <Input id="signup-password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="bg-secondary/50 border-border/30" />
-                </div>
-                <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
-                  {isLoading ? "Cargando..." : "Crear Cuenta"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+          </div>
           <div className="flex justify-center gap-3 mt-6 text-xs text-muted-foreground">
             <Link to="/privacidad" className="hover:text-foreground hover:underline">Privacidad</Link>
             <span aria-hidden="true">·</span>
