@@ -847,9 +847,7 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
             className="absolute -top-1 -right-1 h-5 w-5 p-0 z-10 rounded-full bg-background border shadow-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             onClick={(e) => {
               e.stopPropagation();
-              if (window.confirm(`¿Quitar "${cliente.razon_social}" de tu lista?`)) {
-                handleDesasignar(cliente);
-              }
+              setDesasignarTarget(cliente);
             }}
           >
             <X className="w-3 h-3" />
