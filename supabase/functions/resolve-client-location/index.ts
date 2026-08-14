@@ -14,8 +14,7 @@ const LAT_MIN = -56, LAT_MAX = -21, LNG_MIN = -74, LNG_MAX = -53;
 const isValidArgentina = (lat: number, lng: number) =>
   lat >= LAT_MIN && lat <= LAT_MAX && lng >= LNG_MIN && lng <= LNG_MAX;
 
-async function geocode(address: string) {
-  const params = `address=${encodeURIComponent(address)}&language=es&region=ar`;
+async function geocode(params: string) {
   const resp = await fetch(`${GATEWAY_URL}/maps/api/geocode/json?${params}`, {
     headers: {
       Authorization: `Bearer ${LOVABLE_API_KEY}`,
@@ -88,7 +87,7 @@ Deno.serve(async (req) => {
         });
       }
       const query = /argentina/i.test(direccion) ? direccion : `${direccion}, Argentina`;
-      const data = await geocode(query);
+      const data = await geocode(`address=${encodeURIComponent(query)}&language=es&region=ar`);
       if (data.status !== "OK" || !data.results?.length) {
         return new Response(
           JSON.stringify({ error: "No se pudo ubicar esa dirección en el mapa" }),
@@ -111,6 +110,41 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Las coordenadas quedan fuera de Argentina" }),
         { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
+    }
+
+    // Toda coordenada guardada debe resolver su barrio. Esto también cubre las
+    // correcciones manuales que llegan con lat/lng en vez de una dirección.
+    if (!barrio) {
+      if (!GOOGLE_API_KEY || !LOVABLE_API_KEY) {
+        return new Response(JSON.stringify({ error: "No se puede validar el barrio sin Google Maps" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const data = await geocode(`latlng=${lat},${lng}&language=es`);
+      if (data.status !== "OK" || !data.results?.length) {
+        return new Response(JSON.stringify({ error: "Las coordenadas no permitieron identificar un barrio" }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      const result = data.results[0];
+      barrio =
+        extractComponent(result.address_components, "sublocality_level_1") ||
+        extractComponent(result.address_components, "sublocality") ||
+        extractComponent(result.address_components, "neighborhood") ||
+        extractComponent(result.address_components, "locality") ||
+        extractComponent(result.address_components, "postal_town") ||
+        extractComponent(result.address_components, "administrative_area_level_3");
+      provincia = provincia || extractComponent(result.address_components, "administrative_area_level_1");
+      direccion = direccion || result.formatted_address || "";
+      placeId = placeId || result.place_id || null;
+      if (!barrio) {
+        return new Response(JSON.stringify({ error: "Google Maps no devolvió un barrio para esas coordenadas" }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     const { data: existing } = await supabase
@@ -155,12 +189,14 @@ Deno.serve(async (req) => {
     // Deja un único primario por cliente respetando la prioridad de fuentes
     await supabase.rpc("reconciliar_places_primarios");
 
-    if (manual && direccion) {
-      await supabase
-        .from("clientes")
-        .update({ direccion_principal: direccion })
-        .eq("client_id", clientId);
-    }
+    await supabase
+      .from("clientes")
+      .update({
+        barrio_principal: barrio,
+        ...(provincia ? { provincia_principal: provincia } : {}),
+        ...(manual && direccion ? { direccion_principal: direccion } : {}),
+      })
+      .eq("client_id", clientId);
 
 
     return new Response(
