@@ -1753,6 +1753,9 @@ Deno.serve(async (req) => {
           || "";
         if (!googleApiKey) {
           console.warn(`⚠️ ${vendedor.nombre}: faltan ${8 - currentTotal} candidatos y Google Maps no está configurado.`);
+          erroresCobertura.push(
+            `No se pudo buscar prospectos para ${vendedor.nombre}: falta configuración de Google Maps (faltan ${8 - currentTotal} visitas).`,
+          );
         } else {
           const existingIds = new Set([...clientPool, ...prospectPool].map(c => c.client_id));
           const excludedPlaceIds = new Set<string>([
@@ -1976,7 +1979,11 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       missing: number,
       takenIds: Set<string>,
     ): Promise<ScoredCandidate[]> => {
-      if (!googleApiKeyTopUp || missing <= 0) return [];
+      if (missing <= 0) return [];
+      if (!googleApiKeyTopUp) {
+        erroresCobertura.push("No se pudo buscar prospectos: falta configuración de Google Maps.");
+        return [];
+      }
       const hotspot = vendorHotspots.get(vendedorId) || zoneCenterFallback;
       if (!hotspot) return [];
 
@@ -2556,6 +2563,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
         `Se apartaron ${posiblesClientesExistentes.size} lugares que podrían ser clientes ya activos de la casa: ${muestras}. Verificar antes de visitarlos como nuevos.`,
       );
     }
+    for (const err of Array.from(new Set(erroresCobertura))) avisosCobertura.unshift(err);
     const cuotaIncompleta = avisosCobertura.length > 0
       ? avisosCobertura.join(" ")
       : (incompleteVendors.length > 0
