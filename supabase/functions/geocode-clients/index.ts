@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
       await sleep(200); // Throttle: 5 req/sec
     }
 
-    // ===== Reverse geocoding: lugares con coordenadas pero sin barrio =====
+    // ===== Completar barrio: dirección completa primero, coordenadas como respaldo =====
     const reverse = { total: 0, resueltos: 0, errores: 0 };
     const { data: placesSinBarrio } = await supabase
       .from("client_places")
@@ -279,7 +279,20 @@ Deno.serve(async (req) => {
 
     for (const place of placesSinBarrio || []) {
       try {
-        const data = await geocodeFetch(`latlng=${place.lat},${place.long}&language=es`);
+        const client = (allClients || []).find((candidate: any) => candidate.client_id === place.client_id);
+        const addressParts = client ? [
+          client.direccion_principal,
+          client.codigo_postal,
+          client.ciudad_principal,
+          client.provincia_principal,
+          "Argentina",
+        ].filter(Boolean) : [];
+        let data = addressParts.length > 1
+          ? await geocodeFetch(`address=${encodeURIComponent(addressParts.join(", "))}&language=es&region=ar`)
+          : null;
+        if (!data || data.status !== "OK" || !data.results?.length) {
+          data = await geocodeFetch(`latlng=${place.lat},${place.long}&language=es`);
+        }
         if (data.status !== "OK" || !data.results?.length) { reverse.errores++; await sleep(120); continue; }
 
         const components = data.results[0].address_components || [];
@@ -318,8 +331,13 @@ Deno.serve(async (req) => {
     // R7: un solo primario por cliente, ganando manual > ERP > geocoding
     await supabase.rpc("reconciliar_places_primarios");
 
+    const { count: pendientesBarrio } = await supabase
+      .from("clientes")
+      .select("client_id", { count: "exact", head: true })
+      .or("barrio_principal.is.null,barrio_principal.eq.");
+
     return new Response(
-      JSON.stringify({ success: true, results, reverse }),
+      JSON.stringify({ success: true, results, reverse, pendientes_barrio: pendientesBarrio ?? 0 }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
