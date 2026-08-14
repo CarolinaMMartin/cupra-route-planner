@@ -186,6 +186,11 @@ const GOOGLE_PROSPECT_FIELD_MASK = [
   "places.rating",
   "places.userRatingCount",
   "places.priceLevel",
+  "places.nationalPhoneNumber",
+  "places.internationalPhoneNumber",
+  "places.websiteUri",
+  "places.editorialSummary",
+  "places.generativeSummary",
 ].join(",");
 
 interface GoogleAddressComponent {
