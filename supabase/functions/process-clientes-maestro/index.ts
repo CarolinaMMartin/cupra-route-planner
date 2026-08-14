@@ -189,6 +189,7 @@ interface MaestroRow {
   razon_social: string | null;
   fantasia: string | null;
   direccion: string | null;
+  codigo_postal: string | null;
   ciudad: string | null;
   provincia: string | null;
   telefonos: string[];
