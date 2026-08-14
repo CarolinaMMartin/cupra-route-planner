@@ -3,7 +3,13 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { toTitleCase } from "@/lib/format";
-import { Users, Calendar, Edit, Trash2, MapPin, Clock } from "lucide-react";
+import { Users, Calendar, Edit, Trash2, MapPin, Clock, ChevronDown } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
