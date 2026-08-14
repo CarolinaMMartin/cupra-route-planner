@@ -323,26 +323,33 @@ const AssignorDashboard = () => {
         if (error) throw error;
       }
 
-      const assignments = selected.flatMap((rec) => {
+      const assignments: Array<{
+        vendedor_id: string;
+        client_id?: string;
+        prospecto_place_id?: string;
+        es_prospecto: boolean;
+        origen_asignacion: string;
+      }> = [];
+      selected.forEach((rec) => {
         const vendedorId = rec.vendedor_recomendado_id;
-        if (!vendedorId) return [];
+        if (!vendedorId) return;
         if (rec.es_prospecto && rec.prospecto_place_id) {
-          return [{
+          assignments.push({
             vendedor_id: vendedorId,
             prospecto_place_id: rec.prospecto_place_id,
             es_prospecto: true,
             origen_asignacion: "asignador",
-          }];
+          });
+          return;
         }
         if (rec.client_id) {
-          return [{
+          assignments.push({
             vendedor_id: vendedorId,
             client_id: rec.client_id,
             es_prospecto: false,
             origen_asignacion: "asignador",
-          }];
+          });
         }
-        return [];
       });
 
       if (assignments.length !== selected.length) {
