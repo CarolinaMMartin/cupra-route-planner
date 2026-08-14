@@ -101,6 +101,7 @@ const ManualAssignment = () => {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [filterCiudad, setFilterCiudad] = useState("all");
   const [filterProvincia, setFilterProvincia] = useState("all");
+  const [filterVendedor, setFilterVendedor] = useState("all");
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
@@ -114,7 +115,10 @@ const ManualAssignment = () => {
   const [sortKey, setSortKey] = useState<SortKey>("monto");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const activeFilterCount = (filterCiudad !== "all" ? 1 : 0) + (filterProvincia !== "all" ? 1 : 0);
+  const activeFilterCount =
+    (filterCiudad !== "all" ? 1 : 0) +
+    (filterProvincia !== "all" ? 1 : 0) +
+    (filterVendedor !== "all" ? 1 : 0);
 
   // ── Debounce search ──
   useEffect(() => {
@@ -137,7 +141,13 @@ const ManualAssignment = () => {
   }, []);
 
   // ── Search clientes ──
-  const searchClientes = useCallback(async (query: string, ciudad: string, provincia: string, suggestion?: SuggestionMode) => {
+  const searchClientes = useCallback(async (
+    query: string,
+    ciudad: string,
+    provincia: string,
+    vendedor: string,
+    suggestion?: SuggestionMode
+  ) => {
     setIsSearching(true);
     setHasSearched(true);
     try {
@@ -153,6 +163,13 @@ const ManualAssignment = () => {
       }
       if (ciudad !== "all") q = q.eq("ciudad_principal", ciudad);
       if (provincia !== "all") q = q.eq("provincia_principal", provincia);
+      if (vendedor !== "all") {
+        if (vendedor === "__SIN_ASIGNAR__") {
+          q = q.is("vendedor_actual", null);
+        } else {
+          q = q.eq("vendedor_actual", vendedor);
+        }
+      }
 
       // Smart suggestions filters
       if (suggestion === "sin_vendedor") {
@@ -177,8 +194,8 @@ const ManualAssignment = () => {
 
   // ── Carga inicial + búsqueda al cambiar query o filtros ──
   useEffect(() => {
-    searchClientes(debouncedQuery, filterCiudad, filterProvincia, suggestionMode || undefined);
-  }, [debouncedQuery, filterCiudad, filterProvincia, suggestionMode, searchClientes]);
+    searchClientes(debouncedQuery, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined);
+  }, [debouncedQuery, filterCiudad, filterProvincia, filterVendedor, suggestionMode, searchClientes]);
 
 
   // ── Opciones de filtro (catálogo completo, independiente del resultado actual) ──
@@ -375,12 +392,12 @@ const ManualAssignment = () => {
       // Reset
       setSelectedClients(new Set());
       // Refresh results
-      searchClientes(debouncedQuery, filterCiudad, filterProvincia, suggestionMode || undefined);
+      searchClientes(debouncedQuery, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined);
 
     } catch (err: any) {
       console.error("Assignment error:", err);
-      const msg = err.message?.includes("duplicate") 
-        ? "Algunos clientes ya están asignados a este vendedor" 
+      const msg = err.message?.includes("duplicate")
+        ? "Algunos clientes ya están asignados a este vendedor"
         : "Error al realizar la asignación";
       toast({ variant: "destructive", title: "Error", description: msg });
     } finally {
@@ -393,6 +410,7 @@ const ManualAssignment = () => {
     setSearchQuery("");
     setFilterCiudad("all");
     setFilterProvincia("all");
+    setFilterVendedor("all");
   };
 
   return (
@@ -499,7 +517,7 @@ const ManualAssignment = () => {
           {filtersOpen && (
             <div className="flex flex-col sm:flex-row gap-3 rounded-md border border-border/60 bg-muted/20 p-3">
               <Select value={filterProvincia} onValueChange={setFilterProvincia}>
-                <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Provincia" />
                 </SelectTrigger>
                 <SelectContent>
@@ -510,7 +528,7 @@ const ManualAssignment = () => {
                 </SelectContent>
               </Select>
               <Select value={filterCiudad} onValueChange={setFilterCiudad}>
-                <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Ciudad" />
                 </SelectTrigger>
                 <SelectContent>
@@ -520,11 +538,25 @@ const ManualAssignment = () => {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={filterVendedor} onValueChange={setFilterVendedor}>
+                <SelectTrigger className="w-full sm:w-[220px]">
+                  <SelectValue placeholder="Vendedor actual" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los vendedores</SelectItem>
+                  <SelectItem value="__SIN_ASIGNAR__">Sin asignar</SelectItem>
+                  {vendedores.map(v => (
+                    <SelectItem key={v.user_id} value={v.nombre}>
+                      {toTitleCase(v.nombre)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {activeFilterCount > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => { setFilterCiudad("all"); setFilterProvincia("all"); }}
+                  onClick={() => { setFilterCiudad("all"); setFilterProvincia("all"); setFilterVendedor("all"); }}
                 >
                   Limpiar filtros
                 </Button>
