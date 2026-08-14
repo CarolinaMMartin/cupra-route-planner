@@ -361,7 +361,7 @@ const AssignorDashboard = () => {
 
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full max-w-md">
+            <TabsList className="w-full max-w-2xl">
               <TabsTrigger value="nueva" className="flex-1 gap-2">
                 <Plus className="w-4 h-4" />
                 Nueva Asignación
@@ -369,6 +369,10 @@ const AssignorDashboard = () => {
               <TabsTrigger value="hoy" className="flex-1 gap-2">
                 <Calendar className="w-4 h-4" />
                 Asignaciones de Hoy
+              </TabsTrigger>
+              <TabsTrigger value="calendario" className="flex-1 gap-2">
+                <Calendar className="w-4 h-4" />
+                Calendario
               </TabsTrigger>
             </TabsList>
 
@@ -394,6 +398,15 @@ const AssignorDashboard = () => {
                 </CardContent>
               </Card>
             </TabsContent>
+
+            <TabsContent value="calendario">
+              <Card>
+                <CardContent className="p-8">
+                  <AsignadorCalendario />
+                </CardContent>
+              </Card>
+            </TabsContent>
+
           </Tabs>
         </div>
       )}
