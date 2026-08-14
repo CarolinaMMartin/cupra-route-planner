@@ -1,0 +1,184 @@
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { useToast } from "@/hooks/use-toast";
+import { CalendarClock, Check, Trash2, Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface Recordatorio {
+  id: string;
+  titulo: string;
+  nota: string | null;
+  fecha_recordatorio: string;
+  completado: boolean;
+  client_id: string | null;
+  prospecto_place_id: string | null;
+}
+
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+const RecordatoriosCalendario = () => {
+  const [recordatorios, setRecordatorios] = useState<Recordatorio[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const { toast } = useToast();
+
+  const fetchRecordatorios = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data, error } = await supabase
+        .from("recordatorios")
+        .select("id, titulo, nota, fecha_recordatorio, completado, client_id, prospecto_place_id")
+        .eq("vendedor_id", user.id)
+        .order("fecha_recordatorio", { ascending: true });
+      if (error) throw error;
+      setRecordatorios((data || []) as Recordatorio[]);
+    } catch (error) {
+      console.error("Error cargando recordatorios:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecordatorios();
+  }, []);
+
+  const toggleCompletado = async (r: Recordatorio) => {
+    const { error } = await supabase
+      .from("recordatorios")
+      .update({ completado: !r.completado })
+      .eq("id", r.id);
+    if (error) {
+      toast({ variant: "destructive", title: "No se pudo actualizar" });
+      return;
+    }
+    setRecordatorios(prev => prev.map(x => (x.id === r.id ? { ...x, completado: !x.completado } : x)));
+  };
+
+  const eliminar = async (id: string) => {
+    const { error } = await supabase.from("recordatorios").delete().eq("id", id);
+    if (error) {
+      toast({ variant: "destructive", title: "No se pudo eliminar" });
+      return;
+    }
+    setRecordatorios(prev => prev.filter(x => x.id !== id));
+  };
+
+  const fechasConRecordatorio = useMemo(
+    () => recordatorios.filter(r => !r.completado).map(r => new Date(r.fecha_recordatorio)),
+    [recordatorios],
+  );
+
+  const delDia = useMemo(() => {
+    if (!selectedDate) return [];
+    return recordatorios.filter(r => sameDay(new Date(r.fecha_recordatorio), selectedDate));
+  }, [recordatorios, selectedDate]);
+
+  const proximos = useMemo(() => {
+    const hoy = new Date();
+    return recordatorios
+      .filter(r => !r.completado && new Date(r.fecha_recordatorio) >= hoy)
+      .slice(0, 5);
+  }, [recordatorios]);
+
+  const vencidos = useMemo(() => {
+    const hoy = new Date();
+    return recordatorios.filter(r => !r.completado && new Date(r.fecha_recordatorio) < hoy);
+  }, [recordatorios]);
+
+  const renderItem = (r: Recordatorio) => (
+    <div
+      key={r.id}
+      className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/20 p-3"
+    >
+      <CalendarClock className={cn("mt-0.5 h-4 w-4 shrink-0", r.completado ? "text-muted-foreground" : "text-accent")} />
+      <div className="min-w-0 flex-1">
+        <p className={cn("text-sm font-medium truncate", r.completado && "line-through text-muted-foreground")}>
+          {r.titulo}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {new Date(r.fecha_recordatorio).toLocaleString("es-AR", {
+            day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit",
+          })}
+        </p>
+        {r.nota && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{r.nota}</p>}
+      </div>
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => toggleCompletado(r)}>
+        <Check className={cn("h-3.5 w-3.5", r.completado ? "text-emerald-500" : "text-muted-foreground")} />
+      </Button>
+      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => eliminar(r.id)}>
+        <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+      </Button>
+    </div>
+  );
+
+  return (
+    <div className="grid gap-4 md:grid-cols-[auto_1fr]">
+      <Card className="w-fit">
+        <CardContent className="p-3">
+          <Calendar
+            mode="single"
+            selected={selectedDate}
+            onSelect={setSelectedDate}
+            modifiers={{ pendiente: fechasConRecordatorio }}
+            modifiersClassNames={{ pendiente: "font-bold text-accent underline underline-offset-4" }}
+            className={cn("p-0 pointer-events-auto")}
+          />
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4">
+        {vencidos.length > 0 && (
+          <Card className="border-amber-500/40">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Clock className="h-4 w-4 text-amber-500" />
+                Vencidos
+                <Badge variant="secondary">{vencidos.length}</Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">{vencidos.map(renderItem)}</CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              {selectedDate
+                ? `Seguimientos del ${selectedDate.toLocaleDateString("es-AR")}`
+                : "Seleccioná un día"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {loading && <p className="text-sm text-muted-foreground">Cargando…</p>}
+            {!loading && delDia.length === 0 && (
+              <p className="text-sm text-muted-foreground">Sin seguimientos agendados para este día.</p>
+            )}
+            {delDia.map(renderItem)}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Próximos</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {proximos.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No tenés seguimientos agendados.</p>
+            ) : (
+              proximos.map(renderItem)
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default RecordatoriosCalendario;
