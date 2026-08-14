@@ -624,6 +624,7 @@ Deno.serve(async (req) => {
       const categorias = toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias']));
       const facturacion = parseNumericValue(getFieldValue(row, FACTURACION_FIELD_NAMES));
       if (facturacion === null || facturacion === undefined) facturacionNullCount++;
+      const bonificacion = parseNumericValue(getFieldValue(row, BONIFICACION_FIELD_NAMES));
 
       if (!client_id) {
         ventasSinClientId += 1;
@@ -632,10 +633,13 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // OT8-fix: el renglón de regalo factura $0 por definición y SIEMPRE se ingesta.
       ventasRaw.push({
         client_id,
         ticket, letra, fecha_emision: fecha_iso, cuit_dni, razon_social, fantasia,
-        cajas, codigo_producto, nombre: producto, marca, facturacion_ars: facturacion,
+        cajas, codigo_producto, nombre: producto, marca,
+        facturacion_ars: facturacion === null || facturacion === undefined ? 0 : facturacion,
+        bonificacion,
         vendedor, telefono, celular, correo, direccion, ciudad: ciudad_raw,
         provincia: provincia_raw, pais, categorias,
         tipo_comprobante: 'venta',
