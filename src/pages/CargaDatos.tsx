@@ -469,7 +469,6 @@ const CargaDatos = () => {
                     <CardDescription className="text-xs mt-0.5">
                       Hoja "{sheetName}" · encabezados en fila {headerRow} · {rows.length.toLocaleString()} filas · {columns.length} columnas
                       {notasCredito.length > 0 && ` · ${notasCredito.length.toLocaleString()} notas de crédito`}
-                      {comprobantes.length > 0 && ` · ${comprobantes.length.toLocaleString()} comprobantes ("${comprobantesSheetName}")`}
                     </CardDescription>
                   </div>
 
