@@ -81,7 +81,30 @@ interface Reconciliacion {
   clientes_razon_social?: number;
   tickets_compartidos: number;
   vendedor_breakdown?: VendedorBreakdown[];
+  rango?: RangoCarga | null;
 }
+
+interface RangoCarga {
+  modo?: string;
+  fecha_desde?: string | null;
+  fecha_hasta?: string | null;
+  base_desde?: string | null;
+  base_hasta?: string | null;
+  base_filas?: number;
+  base_vacia?: boolean;
+  filas_rango_base?: number;
+  filas_a_eliminar?: number;
+  pct_eliminacion?: number;
+  clientes_archivo?: number;
+  clientes_match?: number;
+  pct_match_clientes?: number;
+  filas_insertadas?: number;
+  filas_actualizadas?: number;
+  filas_eliminadas?: number;
+  requiere_confirmacion?: boolean;
+  archivo_ajeno?: boolean;
+}
+
 
 
 interface ETLMetadata {
@@ -139,6 +162,9 @@ const CargaDatos = () => {
   // TAREA 7, 9, 10: Extended ETL response
   const [calidad, setCalidad] = useState<QualityReport | null>(null);
   const [reconciliacion, setReconciliacion] = useState<Reconciliacion | null>(null);
+  const [guardaCarga, setGuardaCarga] = useState<{ mensaje: string; previa: RangoCarga | null } | null>(null);
+  const [revirtiendo, setRevirtiendo] = useState(false);
+
   const [metadata, setMetadata] = useState<ETLMetadata | null>(null);
   const [integridad, setIntegridad] = useState<Integridad | null>(null);
 
@@ -292,9 +318,10 @@ const CargaDatos = () => {
     else toast({ title: "Formato inválido", description: "Solo archivos .xlsx o .xls", variant: "destructive" });
   };
 
-  const handleProcess = async () => {
+  const handleProcess = async (opts?: { confirmarEliminaciones?: boolean }) => {
     setStep("processing");
     setProgress(10);
+    setGuardaCarga(null);
     try {
       setProgress(30);
       const fileMetadata = {
@@ -333,8 +360,22 @@ const CargaDatos = () => {
           replaceExisting,
           notasCredito: notasCredito.length ? notasCredito : undefined,
           fileMetadata,
+          modoCarga: "rango",
+          confirmarEliminaciones: opts?.confirmarEliminaciones === true,
         },
       });
+      if (error) {
+        // La función devuelve el detalle de la guarda en el cuerpo del 500
+        let payload: any = null;
+        try { payload = await (error as any)?.context?.json?.(); } catch { /* sin cuerpo */ }
+        if (payload?.requiere_confirmacion) {
+          setGuardaCarga({ mensaje: payload.error, previa: payload.previa || null });
+          setStep("preview");
+          return;
+        }
+        throw new Error(payload?.error || error.message || "Error al procesar");
+      }
+
       setProgress(90);
       if (error) throw new Error(error.message || "Error al procesar");
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
@@ -355,6 +396,24 @@ const CargaDatos = () => {
     }
   };
 
+  const handleRevertirCarga = async () => {
+    if (!batchId) return;
+    setRevirtiendo(true);
+    try {
+      const { data, error } = await supabase.rpc("revertir_import_ventas" as never, { p_batch_id: batchId } as never);
+      if (error) throw new Error(error.message);
+      const res = (data || {}) as { filas_borradas?: number; filas_restauradas?: number };
+      toast({
+        title: "Carga revertida",
+        description: `${res.filas_borradas ?? 0} filas quitadas · ${res.filas_restauradas ?? 0} restauradas`,
+      });
+      setBatchId(null);
+    } catch (err: unknown) {
+      toast({ title: "No se pudo revertir", description: getErrorMessage(err), variant: "destructive" });
+    } finally {
+      setRevirtiendo(false);
+    }
+  };
 
 
   const handleBatchGeocode = async () => {
@@ -387,6 +446,8 @@ const CargaDatos = () => {
     setResults(null);
     setCalidad(null);
     setReconciliacion(null);
+    setGuardaCarga(null);
+
     setConciliacionEntidades(null);
     setMetadata(null);
     setIntegridad(null);
@@ -540,7 +601,11 @@ const CargaDatos = () => {
                       onCheckedChange={(checked) => setReplaceExisting(checked === true)}
                     />
                     <label htmlFor="replaceExisting" className="text-sm text-muted-foreground cursor-pointer">
-                      Reemplazar datos existentes <span className="text-xs">(recomendado para carga completa)</span>
+                      Validación estricta{" "}
+                      <span className="text-xs">
+                        (frena la carga si hay filas sin cliente, sin importe o notas de crédito sin conciliar).
+                        El archivo solo reemplaza su propio período de fechas: nunca se borra el histórico completo.
+                      </span>
                     </label>
                   </>
                 ) : (
@@ -552,13 +617,52 @@ const CargaDatos = () => {
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={reset}>Cancelar</Button>
-                <Button onClick={handleProcess}>
+                <Button onClick={() => handleProcess()}>
                   <Upload className="h-4 w-4 mr-1.5" />
                   Procesar {rows.length.toLocaleString()} filas
                 </Button>
               </div>
             </div>
+
+            {guardaCarga && (
+              <Alert variant="destructive" className="mt-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="space-y-3">
+                  <p className="font-medium">{guardaCarga.mensaje}</p>
+                  {guardaCarga.previa && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                      <div>
+                        <p className="text-muted-foreground">Período del archivo</p>
+                        <p className="font-semibold">{guardaCarga.previa.fecha_desde} → {guardaCarga.previa.fecha_hasta}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Período en la base</p>
+                        <p className="font-semibold">{guardaCarga.previa.base_desde || "—"} → {guardaCarga.previa.base_hasta || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Filas del período en la base</p>
+                        <p className="font-semibold">{(guardaCarga.previa.filas_rango_base ?? 0).toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground">Se eliminarían</p>
+                        <p className="font-semibold">
+                          {(guardaCarga.previa.filas_a_eliminar ?? 0).toLocaleString()} ({guardaCarga.previa.pct_eliminacion ?? 0}%)
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" variant="outline" onClick={() => setGuardaCarga(null)}>Cancelar</Button>
+                    <Button size="sm" onClick={() => handleProcess({ confirmarEliminaciones: true })}>
+                      Confirmar y reemplazar el período
+                    </Button>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
           </div>
+
         )}
 
         {/* STEP: Processing */}
@@ -694,7 +798,60 @@ const CargaDatos = () => {
             </Card>
 
             {/* TAREA 9: Reconciliación */}
+            {reconciliacion?.rango && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Info className="h-4 w-4 text-muted-foreground" />
+                    Período reemplazado
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    El archivo es la verdad solo para su propio rango de fechas. Fuera de ese rango no se tocó nada.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                    <div className="p-2.5 rounded-lg bg-muted/20">
+                      <p className="text-sm font-bold text-foreground">
+                        {reconciliacion.rango.fecha_desde} → {reconciliacion.rango.fecha_hasta}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Rango del archivo</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/20">
+                      <p className="text-sm font-bold text-foreground">
+                        {reconciliacion.rango.base_desde || "—"} → {reconciliacion.rango.base_hasta || "—"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Rango en la base (antes)</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/20">
+                      <p className="text-lg font-bold text-foreground">
+                        {(reconciliacion.rango.filas_insertadas ?? 0).toLocaleString()} / {(reconciliacion.rango.filas_actualizadas ?? 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Nuevas / actualizadas</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/20">
+                      <p className="text-lg font-bold text-amber-500">
+                        {(reconciliacion.rango.filas_eliminadas ?? 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Anuladas dentro del rango</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Clientes del archivo que coinciden con la base: {(reconciliacion.rango.clientes_match ?? 0).toLocaleString()} de{" "}
+                    {(reconciliacion.rango.clientes_archivo ?? 0).toLocaleString()} ({reconciliacion.rango.pct_match_clientes ?? 0}%)
+                  </p>
+                  {batchId && (
+                    <Button size="sm" variant="outline" onClick={handleRevertirCarga} disabled={revirtiendo}>
+                      {revirtiendo ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <X className="h-4 w-4 mr-1.5" />}
+                      Revertir esta carga
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             {reconciliacion && (
+
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2">
