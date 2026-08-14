@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarClock, Check, Trash2, Clock, Route, Plus, Search } from "lucide-react";
+import { CalendarClock, Check, Trash2, Clock, Route, Plus, Search, CalendarIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,6 +44,8 @@ const RecordatoriosCalendario = () => {
   const [nota, setNota] = useState("");
   const [agendando, setAgendando] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  const [fechaAgenda, setFechaAgenda] = useState<Date | undefined>(new Date());
+  const [horaAgenda, setHoraAgenda] = useState("09:00");
   const { toast } = useToast();
 
   const fetchRecordatorios = async () => {
@@ -189,13 +193,14 @@ const RecordatoriosCalendario = () => {
   };
 
   const agendarVisita = async (candidato: Candidato) => {
-    if (!selectedDate) return;
+    const dia = fechaAgenda ?? selectedDate;
+    if (!dia) return;
     setAgendando(candidato.id);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const fecha = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+      const fecha = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, "0")}-${String(dia.getDate()).padStart(2, "0")}`;
 
       let existing = supabase
         .from("asignaciones_vendedores_clientes")
@@ -229,7 +234,7 @@ const RecordatoriosCalendario = () => {
         vendedor_id: user.id,
         titulo: `Visita agendada: ${candidato.nombre}`,
         nota: nota || null,
-        fecha_recordatorio: new Date(`${fecha}T09:00:00-03:00`).toISOString(),
+        fecha_recordatorio: new Date(`${fecha}T${horaAgenda || "09:00"}:00-03:00`).toISOString(),
       };
       if (candidato.esProspecto) recordatorio.prospecto_place_id = candidato.id;
       else recordatorio.client_id = candidato.id;
@@ -237,7 +242,7 @@ const RecordatoriosCalendario = () => {
 
       toast({
         title: "Visita agendada",
-        description: `${candidato.nombre} va a aparecer en "Por visitar" el ${selectedDate.toLocaleDateString("es-AR")}.`,
+        description: `${candidato.nombre} va a aparecer en "Por visitar" el ${dia.toLocaleDateString("es-AR")}.`,
       });
       setDialogAbierto(false);
       setBusqueda("");
@@ -351,8 +356,10 @@ const RecordatoriosCalendario = () => {
             <Button
               size="sm"
               variant="outline"
-              disabled={!selectedDate}
-              onClick={() => setDialogAbierto(true)}
+              onClick={() => {
+                setFechaAgenda(selectedDate ?? new Date());
+                setDialogAbierto(true);
+              }}
             >
               <Plus className="mr-1 h-3.5 w-3.5" />
               Agendar visita
@@ -384,15 +391,57 @@ const RecordatoriosCalendario = () => {
       <Dialog open={dialogAbierto} onOpenChange={setDialogAbierto}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              Agendar visita — {selectedDate?.toLocaleDateString("es-AR")}
-            </DialogTitle>
+            <DialogTitle>Agendar visita</DialogTitle>
             <DialogDescription>
-              Buscá un cliente o prospecto. Ese día te va a aparecer en "Por visitar".
+              Elegí el día, buscá un cliente o prospecto y esa fecha te va a aparecer en "Por visitar".
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Día de la visita</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !fechaAgenda && "text-muted-foreground",
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {fechaAgenda
+                        ? fechaAgenda.toLocaleDateString("es-AR", {
+                            weekday: "short",
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "Elegir fecha"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={fechaAgenda}
+                      onSelect={setFechaAgenda}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Hora</Label>
+                <Input
+                  type="time"
+                  value={horaAgenda}
+                  onChange={e => setHoraAgenda(e.target.value)}
+                  className="w-[7.5rem]"
+                />
+              </div>
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
