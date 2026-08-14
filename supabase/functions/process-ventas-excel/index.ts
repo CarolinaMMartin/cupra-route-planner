@@ -350,6 +350,14 @@ const FACTURACION_FIELD_NAMES = [
   'facturacion_ars',
 ];
 
+// OT8-fix: la bonificación distingue el renglón pagado del renglón de regalo (100%).
+const BONIFICACION_FIELD_NAMES = [
+  'Bonificación', 'Bonificacion', 'bonificacion',
+  '% Bonificación', '% Bonificacion', '% Bonif', '% Bonif.',
+  'Bonif', 'Bonif.', 'Bonif %', 'Descuento %', '% Descuento',
+];
+
+
 // === MAIN ===
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
