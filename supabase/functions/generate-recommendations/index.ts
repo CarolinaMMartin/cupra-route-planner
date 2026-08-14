@@ -729,6 +729,7 @@ function scoreProspects(
       feedbacks_recientes: feedbacks.slice(0, 2).map((fb: any) => ({
         feedback: fb.feedback,
         tipo: fb.tipo_interaccion,
+        estado: fb.estado_cliente || null,
         fecha: fb.created_at?.split('T')[0],
       })),
       tipo_negocio: p.tipo_principal,
