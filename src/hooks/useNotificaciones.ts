@@ -24,6 +24,34 @@ export const useNotificaciones = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Materializar recordatorios vencidos como notificaciones
+      try {
+        const { data: vencidos } = await supabase
+          .from("recordatorios")
+          .select("id, titulo, nota, fecha_recordatorio")
+          .eq("vendedor_id", user.id)
+          .eq("notificado", false)
+          .eq("completado", false)
+          .lte("fecha_recordatorio", new Date().toISOString());
+
+        if (vencidos && vencidos.length > 0) {
+          await supabase.from("notificaciones").insert(
+            vencidos.map(r => ({
+              vendedor_id: user.id,
+              tipo: "recordatorio",
+              titulo: r.titulo,
+              mensaje: r.nota || "Tenés un seguimiento agendado para hoy.",
+            }))
+          );
+          await supabase
+            .from("recordatorios")
+            .update({ notificado: true })
+            .in("id", vencidos.map(r => r.id));
+        }
+      } catch (e) {
+        console.error("Error procesando recordatorios:", e);
+      }
+
       const { data, error } = await supabase
         .from("notificaciones")
         .select("*")
