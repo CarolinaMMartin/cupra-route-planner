@@ -787,34 +787,17 @@ Deno.serve(async (req) => {
     }
 
 
-    // ============ FASE 1b: Deduplicar ventas ANTES de agregar clientes ============
-    const ventasByConflictKey = new Map<string, any>();
-    const ventasSinClaveConflicto: any[] = [];
-    let ventasDuplicadas = 0;
-
-    for (const venta of ventasRaw) {
-      const conflictKey = buildVentaConflictKey(venta);
-      if (!conflictKey) {
-        ventasSinClaveConflicto.push(venta);
-        continue;
-      }
-      const existingVenta = ventasByConflictKey.get(conflictKey);
-      if (!existingVenta) {
-        ventasByConflictKey.set(conflictKey, venta);
-      } else {
-        ventasDuplicadas += 1;
-        ventasByConflictKey.set(conflictKey, mergeVentaDuplicate(existingVenta, venta));
-      }
-    }
-
-    const ventasDeduplicadas = [...ventasByConflictKey.values(), ...ventasSinClaveConflicto];
+    // ============ FASE 1b: Numerar renglones (OT8-fix, ya NO se fusiona nada) ============
+    const renglonStats = asignarRenglones(ventasRaw);
+    const ventasDuplicadas = renglonStats.colisiones;
+    const ventasDeduplicadas = ventasRaw;
 
     if (ventasDeduplicadas.length === 0) {
       throw new Error('El archivo no produjo ninguna venta válida. No se modificaron las ventas existentes.');
     }
 
     if (ventasDuplicadas > 0) {
-      console.log(`♻️ ${ventasDuplicadas} filas duplicadas consolidadas (${ventasRaw.length} → ${ventasDeduplicadas.length})`);
+      console.log(`🔢 ${ventasDuplicadas} renglones comparten clave natural: se numeran con ordinal determinístico (total ${ventasDeduplicadas.length})`);
     }
 
     // ── TAREA 2: Validación de unicidad de tickets cross-client ──
