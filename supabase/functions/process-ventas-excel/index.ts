@@ -1159,19 +1159,6 @@ Deno.serve(async (req) => {
       filas_descartadas_sin_id: ventasSinClientId,
       filas_cuit_ambiguo: ventasCuitAmbiguo,
       facturacion_total_procesada: totalFacturacionProcesada,
-      // Doble ingesta
-      fuente_monto: usaComprobantes ? 'comprobante' : 'producto',
-      hoja_comprobantes: fileMetadata.comprobantesSheetName || null,
-      comprobantes_leidos: comprobantesLeidos,
-      comprobantes_sin_identidad: comprobantesSinIdentidad,
-      comprobantes_sin_importe: comprobantesSinImporte,
-      comprobantes_notas_credito_omitidas: comprobantesNotasCredito,
-      clientes_solo_comprobante: clientesSoloComprobante,
-      facturacion_total_comprobantes: Math.round(totalComprobantes * 100) / 100,
-      facturacion_cupra: totalCupraProcesado,
-      share_cupra_global: totalFacturacionProcesada > 0
-        ? Math.round((totalCupraProcesado / totalFacturacionProcesada) * 10000) / 100
-        : null,
       tickets_unicos: totalTicketsUnicos,
       clientes_unicos: totalClientesUnicos,
       clientes_razon_social: totalClientesRazonSocial,
