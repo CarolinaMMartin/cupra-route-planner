@@ -391,15 +391,57 @@ const RecordatoriosCalendario = () => {
       <Dialog open={dialogAbierto} onOpenChange={setDialogAbierto}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>
-              Agendar visita — {selectedDate?.toLocaleDateString("es-AR")}
-            </DialogTitle>
+            <DialogTitle>Agendar visita</DialogTitle>
             <DialogDescription>
-              Buscá un cliente o prospecto. Ese día te va a aparecer en "Por visitar".
+              Elegí el día, buscá un cliente o prospecto y esa fecha te va a aparecer en "Por visitar".
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
+            <div className="grid grid-cols-[1fr_auto] gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Día de la visita</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !fechaAgenda && "text-muted-foreground",
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {fechaAgenda
+                        ? fechaAgenda.toLocaleDateString("es-AR", {
+                            weekday: "short",
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "Elegir fecha"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={fechaAgenda}
+                      onSelect={setFechaAgenda}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Hora</Label>
+                <Input
+                  type="time"
+                  value={horaAgenda}
+                  onChange={e => setHoraAgenda(e.target.value)}
+                  className="w-[7.5rem]"
+                />
+              </div>
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
