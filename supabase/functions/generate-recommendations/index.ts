@@ -352,7 +352,12 @@ async function discoverProspectsFromGoogle(
           discovered.push({
             place_id: placeId,
             nombre,
-            telefono: null,
+            telefono: place.nationalPhoneNumber || place.internationalPhoneNumber || null,
+            resumen_google:
+              place.generativeSummary?.overview?.text ||
+              place.generativeSummary?.description?.text ||
+              place.editorialSummary?.text ||
+              null,
             direccion: place.formattedAddress || `${nombre}, ${localidad || "Buenos Aires"}`,
             barrio,
             comuna: comunaCandidate?.toLowerCase().startsWith("comuna") ? comunaCandidate : null,
