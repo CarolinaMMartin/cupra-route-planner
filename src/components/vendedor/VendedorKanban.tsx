@@ -1,4 +1,5 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import BriefingVisita from "@/components/shared/BriefingVisita";
 import { 
   DndContext, 
   DragEndEvent, 
@@ -1273,6 +1274,13 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
                   </Button>
                 )}
               </div>
+
+              {/* Briefing de visita (qué ofrecer / cómo encarar) */}
+              <BriefingVisita
+                clientId={selectedCliente.client_id?.startsWith('prospecto-') ? null : selectedCliente.client_id}
+                prospectoPlaceId={selectedCliente.prospecto_place_id || null}
+              />
+
 
               {/* Información de contacto y ubicación */}
               <div>

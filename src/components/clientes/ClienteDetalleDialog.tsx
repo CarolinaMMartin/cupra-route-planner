@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import BriefingVisita from "@/components/shared/BriefingVisita";
 
 import { Loader2, MapPin, Phone, Mail, Users, ShoppingCart, MessageSquare } from "lucide-react";
 
@@ -203,6 +204,8 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
                 <div className="text-lg font-semibold">{fmtDate(tickets[0]?.fecha ?? cliente.ultima_compra ?? null)}</div>
               </Card>
             </div>
+
+            {cliente.client_id && <BriefingVisita clientId={cliente.client_id} />}
 
             {loading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground gap-2">
