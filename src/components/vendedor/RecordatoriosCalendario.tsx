@@ -326,7 +326,7 @@ const RecordatoriosCalendario = () => {
             selected={selectedDate}
             onSelect={setSelectedDate}
             modifiers={{ pendiente: fechasConRecordatorio }}
-            modifiersClassNames={{ pendiente: "font-bold text-accent underline underline-offset-4" }}
+            modifiersClassNames={{ pendiente: "relative font-semibold after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-accent" }}
             className={cn("p-0 pointer-events-auto")}
           />
         </CardContent>
