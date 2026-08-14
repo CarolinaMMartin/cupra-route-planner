@@ -160,8 +160,9 @@ Deno.serve(async (req) => {
       .select('rol, activo')
       .eq('user_id', authData.user.id)
       .single();
-    if (profileError || profile?.rol !== 'asignador' || profile.activo !== true) {
-      return jsonResponse({ success: false, error: 'Solo un asignador puede buscar prospectos' }, 403);
+    // Roles en cascada: administrador ⊇ asignador
+    if (profileError || (profile?.rol !== 'asignador' && profile?.rol !== 'administrador') || profile.activo !== true) {
+      return jsonResponse({ success: false, error: 'Solo un asignador o administrador puede buscar prospectos' }, 403);
     }
 
     const body = await req.json() as DiscoveryRequest;
