@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
+import RecordatoriosCalendario from "./RecordatoriosCalendario";
 import AgregarProspectoForm from "./AgregarProspectoForm";
 import AutoAsignarDialog from "./AutoAsignarDialog";
 import ProspectoFormModal from "./ProspectoFormModal";
