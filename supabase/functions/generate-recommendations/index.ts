@@ -1360,7 +1360,9 @@ Deno.serve(async (req) => {
         prospectos = [...prospectos, ...newProspects];
         console.log(`🔎 Google Maps agregó ${newProspects.length} prospectos al repositorio operativo.`);
       }
+      }
     }
+
 
     console.log(`🆕 Prospectos disponibles: ${prospectos.length}`);
 
