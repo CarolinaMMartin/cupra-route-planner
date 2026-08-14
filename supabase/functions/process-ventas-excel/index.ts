@@ -53,6 +53,7 @@ interface FileMetadata {
   sha256?: string | null;
   sheetName?: string;
   headerRow?: number;
+  comprobantesSheetName?: string | null;
 }
 
 type SupabaseAdminClient = SupabaseClient<any, 'public', any>;
@@ -386,7 +387,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
       });
     }
-    if (rawRows.length > 50_000 || rawNotasCredito.length > 50_000) {
+    if (rawRows.length > 50_000 || rawNotasCredito.length > 50_000 || rawComprobantes.length > 50_000) {
       return new Response(JSON.stringify({ success: false, error: 'Cada hoja puede contener hasta 50.000 filas' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 413,
       });
