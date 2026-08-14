@@ -856,44 +856,6 @@ Deno.serve(async (req) => {
       c.fantasia = fantasia || c.fantasia;
     }
 
-    // ============ FASE 2b: clientes que sólo aparecen en comprobantes ============
-    // Compran otras bodegas y $0 CUPRA: sin esto quedan invisibles para el motor.
-    let clientesSoloComprobante = 0;
-    for (const [cid, agg] of comprobantesPorCliente.entries()) {
-      if (clientesMap.has(cid)) continue;
-      const b = agg.base || {};
-      const geo = normalizarGeografia(b.ciudad || null);
-      const provinciaFinal = normalizeProvincia(geo.provincia) || normalizeProvincia(b.provincia) || geo.provincia;
-      const nuevo: any = {
-        client_id: cid, cuit_dni: b.cuit_dni || null, razon_social: b.razon_social || null, fantasia: b.fantasia || null,
-        barrios: new Set<string>(), comunas: new Set<string>(), ciudades: new Set<string>(),
-        provincias: new Set<string>(), direcciones: new Set<string>(), vendedores: new Set<string>(),
-        productos: new Set<string>(), categorias_set: new Set<string>(),
-        telefonos: new Set<string>(), emails: new Set<string>(),
-        monto_total: 0, tickets_set: new Set<string>(), cantidad_lineas: 0,
-        fechas: [] as Date[], ultima_fecha_venta: null as Date | null, vendedor_ultima_venta: null as string | null,
-      };
-      if (geo.barrio) nuevo.barrios.add(geo.barrio);
-      if (geo.comuna) nuevo.comunas.add(geo.comuna);
-      if (geo.ciudad) nuevo.ciudades.add(geo.ciudad);
-      if (provinciaFinal) nuevo.provincias.add(provinciaFinal);
-      if (b.direccion) nuevo.direcciones.add(b.direccion);
-      if (b.vendedor) nuevo.vendedores.add(b.vendedor);
-      if (b.telefono) nuevo.telefonos.add(b.telefono);
-      if (b.correo) nuevo.emails.add(b.correo);
-      if (b.categorias) {
-        String(b.categorias).split(/[/|,;]/).forEach((cat: string) => { const t = cat.trim(); if (t) nuevo.categorias_set.add(t); });
-      }
-      const fechasComp = [...agg.fechas].sort((a, b2) => a.getTime() - b2.getTime());
-      const ultimaComp = fechasComp[fechasComp.length - 1] || null;
-      if (b.vendedor && ultimaComp) { nuevo.ultima_fecha_venta = ultimaComp; nuevo.vendedor_ultima_venta = b.vendedor; }
-      clientesMap.set(cid, nuevo);
-      clientesSoloComprobante++;
-    }
-    if (clientesSoloComprobante > 0) {
-      console.log(`🆕 ${clientesSoloComprobante} clientes provienen sólo de la hoja de comprobantes (sin compra CUPRA en el período)`);
-    }
-
     // ============ FASE 3: RFM + scores ============
     const ahora = new Date();
     const usaComprobantes = comprobantesPorCliente.size > 0;
