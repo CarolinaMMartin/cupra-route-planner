@@ -1365,9 +1365,15 @@ Deno.serve(async (req) => {
       rankingCartera.sort((a, b) => b.prioridad - a.prioridad);
 
       const mejorCluster = pickBestCluster(vendorPoints, HARD_RADIUS_KM, 4);
+      // Vendedor nuevo / sin cartera en la zona → territorio de conquista inteligente.
+      const conquistaHotspot = vendorCoords.length === 0
+        ? pickConquestHotspot([...vendorHotspots.values()])
+        : null;
       const vendorHotspot = mejorCluster?.anchor
         || findDensestHotspot(vendorCoords, 2.0)
+        || conquistaHotspot
         || zoneCenterFallback;
+
 
       // Cuentas de alta prioridad que quedaron fuera del núcleo elegido: se avisan.
       const hotspotRef = vendorHotspot;
