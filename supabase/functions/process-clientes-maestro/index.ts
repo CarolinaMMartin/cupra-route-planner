@@ -189,6 +189,7 @@ interface MaestroRow {
   razon_social: string | null;
   fantasia: string | null;
   direccion: string | null;
+  codigo_postal: string | null;
   ciudad: string | null;
   provincia: string | null;
   telefonos: string[];
@@ -208,13 +209,18 @@ function parseRow(row: Record<string, any>): MaestroRow {
   ]));
   const fantasia = toStr(getFieldValue(row, ['Fantasia', 'Fantasía', 'fantasia']));
 
-  // Dirección: campo único o Calle + Número
-  let direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion']));
-  if (!direccion) {
-    const calle = toStr(getFieldValue(row, ['Calle', 'calle']));
-    const numero = toStr(getFieldValue(row, ['Número', 'Numero', 'numero']));
-    direccion = calle ? [calle, numero].filter(Boolean).join(' ') : null;
+  // R7: la dirección de verdad es Calle + Número. Aunque venga el campo único
+  // "Dirección", se le suma la altura de la columna Número si falta.
+  const calle = toStr(getFieldValue(row, ['Calle', 'calle']));
+  const numero = toStr(getFieldValue(row, ['Número', 'Numero', 'numero', 'Altura', 'Nro', 'N°']));
+  const direccionUnica = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion']));
+  const baseDireccion = direccionUnica || calle;
+  let direccion: string | null = null;
+  if (baseDireccion) {
+    const yaTieneAltura = numero ? new RegExp(`(^|\\s)${numero}(\\s|$)`).test(baseDireccion) : false;
+    direccion = (yaTieneAltura ? baseDireccion : [baseDireccion, numero].filter(Boolean).join(' ')).trim() || null;
   }
+  const codigo_postal = toStr(getFieldValue(row, ['Código Postal', 'Codigo Postal', 'CP', 'cp', 'codigo_postal']));
 
   const telefonos = [
     toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono'])),
@@ -229,6 +235,7 @@ function parseRow(row: Record<string, any>): MaestroRow {
     razon_social: razonRaw,
     fantasia,
     direccion,
+    codigo_postal,
     ciudad: toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad'])),
     provincia: toStr(getFieldValue(row, ['Provincia', 'provincia'])),
     telefonos: Array.from(new Set(telefonos)),
@@ -403,6 +410,7 @@ Deno.serve(async (req) => {
           razon_social: existing.razon_social || p.razon_social,
           fantasia: existing.fantasia || p.fantasia,
           direccion: existing.direccion || p.direccion,
+          codigo_postal: existing.codigo_postal || p.codigo_postal,
           ciudad: existing.ciudad || p.ciudad,
           provincia: existing.provincia || p.provincia,
           telefonos: Array.from(new Set([...existing.telefonos, ...p.telefonos])),
@@ -446,6 +454,7 @@ Deno.serve(async (req) => {
         cuit_dni: c.cuit_dni,
         fantasia: c.fantasia,
         direccion_principal: c.direccion,
+        codigo_postal: c.codigo_postal,
         ciudad_principal: geo.ciudad || (c.ciudad ? c.ciudad.toUpperCase() : null),
         provincia_principal: provincia,
         etiquetas: etiquetas.length ? etiquetas : null,
@@ -524,7 +533,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── FASE 6: Coordenadas → client_places (principal) ──
+    // ── FASE 6: Coordenadas del ERP → client_places (R7 / OT7) ──
+    // Prioridad de ubicación: corrección manual > coordenadas del ERP > geocoding.
+    // Se escriben sin marcar primario y al final `reconciliar_places_primarios()`
+    // deja exactamente un primario por cliente, eligiendo la fuente más confiable.
     const conCoords = clientes.filter((c) => c.lat !== null && c.long !== null);
     if (conCoords.length > 0) {
       const geoRows = conCoords.map((c) => {
@@ -534,10 +546,10 @@ Deno.serve(async (req) => {
           lat: c.lat as number,
           long: c.long as number,
           direccion_principal: c.direccion,
+          codigo_postal: c.codigo_postal,
           barrio_principal: geo.barrio || (c.ciudad ? c.ciudad.toUpperCase() : null),
           provincia_principal: normalizeProvincia(c.provincia) || geo.provincia,
           comuna: geo.comuna,
-          is_primary: true,
         };
       });
 
@@ -555,17 +567,6 @@ Deno.serve(async (req) => {
       }
 
       const geoRowsAplicables = geoRows.filter((g) => !verificadosSet.has(g.client_id));
-
-      // Bajamos el flag primario de los places previos de estos clientes
-      const idsAplicables = Array.from(new Set(geoRowsAplicables.map((g) => g.client_id)));
-      for (let i = 0; i < idsAplicables.length; i += 200) {
-        const batch = idsAplicables.slice(i, i + 200);
-        await supabase
-          .from('client_places')
-          .update({ is_primary: false })
-          .in('client_id', batch)
-          .eq('direccion_verificada', false);
-      }
 
       // Fila por fila: client_places tiene 2 constraints únicos
       // (client_id, lat, long) y (client_id, direccion_principal)
@@ -585,7 +586,7 @@ Deno.serve(async (req) => {
         const payload = { ...g, fuente_geocoding: 'excel' };
         const { error } = match
           ? await supabase.from('client_places').update(payload).eq('id', match.id)
-          : await supabase.from('client_places').insert(payload);
+          : await supabase.from('client_places').insert({ ...payload, is_primary: false });
 
         if (error) {
           console.error(`❌ Place ${g.client_id}:`, error.message);
@@ -594,9 +595,17 @@ Deno.serve(async (req) => {
           results.coordenadas_actualizadas++;
         }
       }
-
-
     }
+
+    // R7: un solo primario por cliente, con la fuente más confiable ganando
+    {
+      const { error: reconError } = await supabase.rpc('reconciliar_places_primarios');
+      if (reconError) {
+        console.error('⚠️ No se pudo reconciliar ubicaciones primarias:', reconError.message);
+        results.errores.push(`Ubicaciones primarias: ${reconError.message}`);
+      }
+    }
+
 
     // ── Resumen por vendedor ──
     const vendedorAgg = new Map<string, number>();
@@ -609,6 +618,17 @@ Deno.serve(async (req) => {
       .sort((a, b) => b.clientes - a.clientes);
 
     console.log('🎉 Maestro procesado:', results);
+
+    // OT7: conciliación de entidades — cuántas razones sociales del archivo
+    // terminaron fusionadas en un mismo cliente por identidad (CUIT / nombre).
+    const razonesSociales = new Set(
+      parsed.map((p) => normalizeName(p.razon_social)).filter(Boolean) as string[]
+    ).size;
+    const conciliacion_entidades = {
+      razones_sociales: razonesSociales,
+      clientes_unicos: clientes.length,
+      fusionados_por_identidad: Math.max(0, razonesSociales - clientes.length),
+    };
 
     const estado = results.clientes_errores > 0 || results.errores.length > 0 || sinResolver > 0
       ? 'completado_con_errores'
@@ -623,6 +643,7 @@ Deno.serve(async (req) => {
           clientes_unicos: clientes.length,
           filas_sin_identificador: sinIdentificador,
           filas_sin_resolver: sinResolver,
+          ...conciliacion_entidades,
         },
         completed_at: new Date().toISOString(),
       })
@@ -646,6 +667,7 @@ Deno.serve(async (req) => {
         clientes_unicos: clientes.length,
         filas_sin_identificador: sinIdentificador,
       },
+      conciliacion_entidades,
       vendedor_breakdown,
       no_resueltos: noResueltos.slice(0, 20),
     }), {

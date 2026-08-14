@@ -500,7 +500,7 @@ Deno.serve(async (req) => {
     const ventasRaw: any[] = [];
     const clientesMap = new Map<string, any>();
     // Coordenadas reales que vienen en el propio informe de ventas (Latitud/Longitud)
-    const coordsPorCliente = new Map<string, { lat: number; long: number; direccion: string | null; ciudad: string | null; provincia: string | null }>();
+    const coordsPorCliente = new Map<string, { lat: number; long: number; direccion: string | null; codigo_postal: string | null; ciudad: string | null; provincia: string | null }>();
     let ventasSinClientId = 0;
     let ventasCuitAmbiguo = 0;
     let facturacionNullCount = 0;
@@ -580,7 +580,15 @@ Deno.serve(async (req) => {
       const telefono = toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono']));
       const celular = toStr(getFieldValue(row, ['Celular', 'celular']));
       const correo = toStr(getFieldValue(row, ['Correo', 'correo', 'Email', 'email']));
-      const direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Calle']));
+      // R7: la dirección útil es Calle + Número (la altura viene en su propia columna)
+      const calleRaw = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Calle']));
+      const numeroCalleRaw = toStr(getFieldValue(row, ['Número', 'Numero', 'numero', 'Altura', 'Nro', 'N°']));
+      const codigoPostalRaw = toStr(getFieldValue(row, ['Código Postal', 'Codigo Postal', 'CP', 'cp', 'codigo_postal']));
+      const direccion = calleRaw
+        ? ((numeroCalleRaw && new RegExp(`(^|\\s)${numeroCalleRaw}(\\s|$)`).test(calleRaw)
+            ? calleRaw
+            : [calleRaw, numeroCalleRaw].filter(Boolean).join(' ')).trim() || null)
+        : null;
       const ciudad_raw = toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad', 'localidad']));
       const provincia_raw = toStr(getFieldValue(row, ['Provincia', 'provincia']));
       const pais = toStr(getFieldValue(row, ['País', 'Pais', 'pais']));
@@ -613,12 +621,11 @@ Deno.serve(async (req) => {
         Number.isFinite(latRaw) && Number.isFinite(lngRaw) &&
         latRaw >= -56 && latRaw <= -21 && lngRaw >= -74 && lngRaw <= -53
       ) {
-        const numeroCalle = toStr(getFieldValue(row, ['Número', 'Numero', 'numero']));
-        const dirCompleta = [direccion, numeroCalle].filter(Boolean).join(' ').trim() || null;
         coordsPorCliente.set(client_id, {
           lat: latRaw,
           long: lngRaw,
-          direccion: dirCompleta,
+          direccion,
+          codigo_postal: codigoPostalRaw,
           ciudad: ciudad_raw,
           provincia: normalizeProvincia(provincia_raw),
         });
@@ -1056,19 +1063,40 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ============ FASE 4b: Coordenadas del informe → client_places ============
+    // ============ FASE 4b: Coordenadas del ERP → client_places (R7 / OT7) ============
+    // Prioridad: corrección manual > coordenadas del ERP > geocoding por texto.
+    // No se marca primario acá: al final `reconciliar_places_primarios()` deja
+    // un único primario por cliente eligiendo la fuente más confiable.
     let coordenadasGuardadas = 0;
     if (coordsPorCliente.size > 0) {
       const idsValidos = new Set(clientesEnriquecidos.map(c => String(c.client_id)));
-      const places = Array.from(coordsPorCliente.entries())
-        .filter(([cid]) => idsValidos.has(String(cid)))
+      const candidatos = Array.from(coordsPorCliente.entries())
+        .filter(([cid]) => idsValidos.has(String(cid)));
+
+      // Nunca pisar una corrección manual con el Excel
+      const verificadosSet = new Set<string>();
+      const idsCandidatos = candidatos.map(([cid]) => String(cid));
+      for (let i = 0; i < idsCandidatos.length; i += 200) {
+        const batch = idsCandidatos.slice(i, i + 200);
+        const { data: verificados } = await supabase
+          .from('client_places')
+          .select('client_id')
+          .in('client_id', batch)
+          .eq('direccion_verificada', true);
+        (verificados || []).forEach((v: any) => verificadosSet.add(String(v.client_id)));
+      }
+
+      const places = candidatos
+        .filter(([cid]) => !verificadosSet.has(String(cid)))
         .map(([cid, p]) => ({
           client_id: String(cid),
           lat: p.lat,
           long: p.long,
           direccion_principal: p.direccion,
+          codigo_postal: p.codigo_postal,
           provincia_principal: p.provincia,
-          is_primary: true,
+          fuente_geocoding: 'excel',
+          is_primary: false,
         }));
 
       for (let i = 0; i < places.length; i += 300) {
@@ -1086,6 +1114,15 @@ Deno.serve(async (req) => {
       console.log(`📍 Coordenadas del informe guardadas: ${coordenadasGuardadas}/${places.length}`);
     }
     (results as any).coordenadas_guardadas = coordenadasGuardadas;
+
+    {
+      const { error: reconError } = await supabase.rpc('reconciliar_places_primarios');
+      if (reconError) {
+        console.error('⚠️ No se pudo reconciliar ubicaciones primarias:', reconError.message);
+        results.errores.push(`Ubicaciones primarias: ${reconError.message}`);
+      }
+    }
+
 
     console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
 

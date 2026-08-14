@@ -123,21 +123,31 @@ Deno.serve(async (req) => {
     // Find clients without coordinates
     const { data: allClients, error: clientsError } = await supabase
       .from("clientes")
-      .select("client_id, direccion_principal, ciudad_principal, provincia_principal, barrio_principal")
+      .select("client_id, direccion_principal, codigo_postal, ciudad_principal, provincia_principal, barrio_principal")
       .not("direccion_principal", "is", null);
 
     if (clientsError) throw new Error(`Error fetching clients: ${clientsError.message}`);
 
+    // R7 (OT7): jamás geocodificar por texto un cliente que ya tiene ubicación
+    // del ERP o corregida a mano. El geocoding es el último recurso.
     const { data: existingPlaces, error: placesError } = await supabase
       .from("client_places")
-      .select("client_id");
+      .select("client_id, fuente_geocoding, direccion_verificada");
 
     if (placesError) throw new Error(`Error fetching places: ${placesError.message}`);
 
     const placedClientIds = new Set((existingPlaces || []).map((p: any) => p.client_id));
+    const ubicacionConfiable = new Set(
+      (existingPlaces || [])
+        .filter((p: any) => p.direccion_verificada === true || ["excel", "erp", "correccion_manual"].includes(p.fuente_geocoding))
+        .map((p: any) => p.client_id)
+    );
 
     let pending = (allClients || []).filter(
-      (c: any) => !placedClientIds.has(c.client_id) && c.direccion_principal && c.ciudad_principal
+      (c: any) =>
+        !placedClientIds.has(c.client_id) &&
+        !ubicacionConfiable.has(c.client_id) &&
+        c.direccion_principal
     );
     if (limit > 0) pending = pending.slice(0, limit);
 
@@ -150,13 +160,25 @@ Deno.serve(async (req) => {
     };
 
     for (const client of pending) {
+      // R7: el string se arma Calle + Número + Código Postal + Ciudad.
+      // Si la ciudad falta o viene sucia y el CP es 1xxx/C1xxx, se asume CABA.
+      const cp = (client.codigo_postal || "").toString().trim();
+      const cpEsCaba = /^C?1\d{3}/i.test(cp);
+      let ciudad = (client.ciudad_principal || "").trim();
+      let provincia = (client.provincia_principal || "").trim();
+      if (cpEsCaba && (!ciudad || /^(buenos aires|cbx|s\/d|-)$/i.test(ciudad))) {
+        ciudad = "Ciudad Autónoma de Buenos Aires";
+        provincia = "Ciudad Autónoma de Buenos Aires";
+      }
       const parts = [
         client.direccion_principal,
-        client.ciudad_principal,
-        client.provincia_principal,
+        cp || null,
+        ciudad || null,
+        provincia || null,
         "Argentina",
       ].filter(Boolean);
       const address = parts.join(", ");
+
 
       try {
         const data = await geocodeFetch(`address=${encodeURIComponent(address)}&language=es&region=ar`);
@@ -199,9 +221,10 @@ Deno.serve(async (req) => {
           comuna,
           provincia_principal: normalizedProv || client.provincia_principal,
           direccion_principal: formattedAddress,
+          codigo_postal: cp || null,
           place_id: placeId,
           google_maps_link: googleMapsLink,
-          is_primary: true,
+          fuente_geocoding: "geocoding_auto",
         };
 
         const { data: existingPlace } = await supabase
@@ -212,7 +235,8 @@ Deno.serve(async (req) => {
 
         const { error: upsertError } = existingPlace
           ? await supabase.from("client_places").update(placeData).eq("id", existingPlace.id)
-          : await supabase.from("client_places").insert({ client_id: client.client_id, ...placeData });
+          : await supabase.from("client_places").insert({ client_id: client.client_id, ...placeData, is_primary: false });
+
 
         if (upsertError) {
           results.errors++;
@@ -290,6 +314,9 @@ Deno.serve(async (req) => {
       }
       await sleep(120);
     }
+
+    // R7: un solo primario por cliente, ganando manual > ERP > geocoding
+    await supabase.rpc("reconciliar_places_primarios");
 
     return new Response(
       JSON.stringify({ success: true, results, reverse }),

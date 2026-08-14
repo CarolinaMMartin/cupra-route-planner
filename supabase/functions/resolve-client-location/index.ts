@@ -115,14 +115,18 @@ Deno.serve(async (req) => {
 
     const { data: existing } = await supabase
       .from("client_places")
-      .select("id, direccion_verificada")
+      .select("id, direccion_verificada, fuente_geocoding")
       .eq("client_id", clientId)
       .order("is_primary", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    // Nunca degradar una corrección manual con un guardado automático
-    if (existing?.direccion_verificada && !manual) {
+    // R7 (OT7): manual > coordenadas del ERP > geocoding. Un guardado automático
+    // nunca degrada una corrección manual ni una ubicación que vino del ERP.
+    const esConfiable =
+      existing?.direccion_verificada === true ||
+      ["excel", "erp", "correccion_manual"].includes(existing?.fuente_geocoding || "");
+    if (esConfiable && !manual) {
       return new Response(JSON.stringify({ ok: true, skipped: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -131,7 +135,6 @@ Deno.serve(async (req) => {
     const payload: Record<string, any> = {
       lat,
       long: lng,
-      is_primary: true,
       direccion_verificada: manual,
       fuente_geocoding: manual ? "correccion_manual" : "geocoding_auto",
     };
@@ -145,9 +148,12 @@ Deno.serve(async (req) => {
 
     const { error } = existing
       ? await supabase.from("client_places").update(payload).eq("id", existing.id)
-      : await supabase.from("client_places").insert({ client_id: clientId, ...payload });
+      : await supabase.from("client_places").insert({ client_id: clientId, ...payload, is_primary: false });
 
     if (error) throw new Error(error.message);
+
+    // Deja un único primario por cliente respetando la prioridad de fuentes
+    await supabase.rpc("reconciliar_places_primarios");
 
     if (manual && direccion) {
       await supabase
@@ -155,6 +161,7 @@ Deno.serve(async (req) => {
         .update({ direccion_principal: direccion })
         .eq("client_id", clientId);
     }
+
 
     return new Response(
       JSON.stringify({ ok: true, lat, lng, direccion, barrio, provincia }),

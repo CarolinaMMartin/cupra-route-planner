@@ -129,6 +129,11 @@ const CargaDatos = () => {
   const [notasCredito, setNotasCredito] = useState<SpreadsheetRow[]>([]);
   const [maestroResults, setMaestroResults] = useState<MaestroResults | null>(null);
   const [maestroVendedores, setMaestroVendedores] = useState<{ vendedor: string; clientes: number }[]>([]);
+  const [conciliacionEntidades, setConciliacionEntidades] = useState<{
+    razones_sociales: number;
+    clientes_unicos: number;
+    fusionados_por_identidad: number;
+  } | null>(null);
 
 
   // TAREA 7, 9, 10: Extended ETL response
@@ -310,6 +315,7 @@ const CargaDatos = () => {
         if (!data?.success) throw new Error(data?.error || "Error desconocido");
         setMaestroResults(data.results);
         setMaestroVendedores(data.vendedor_breakdown || []);
+        setConciliacionEntidades(data.conciliacion_entidades || null);
         setBatchId(data.batch_id || null);
         setProgress(100);
         setStep("done");
@@ -381,6 +387,7 @@ const CargaDatos = () => {
     setResults(null);
     setCalidad(null);
     setReconciliacion(null);
+    setConciliacionEntidades(null);
     setMetadata(null);
     setIntegridad(null);
     setNotasCredito([]);
@@ -595,6 +602,15 @@ const CargaDatos = () => {
                     </div>
                   ))}
                 </div>
+                {conciliacionEntidades && (
+                  <p className="text-sm text-center mt-4 text-foreground">
+                    {conciliacionEntidades.razones_sociales.toLocaleString()} razones sociales →{" "}
+                    {conciliacionEntidades.clientes_unicos.toLocaleString()} clientes
+                    {conciliacionEntidades.fusionados_por_identidad > 0
+                      ? ` (${conciliacionEntidades.fusionados_por_identidad} fusionados por identidad)`
+                      : " (sin fusiones)"}
+                  </p>
+                )}
                 {(maestroResults.clientes_errores > 0 || maestroResults.sin_resolver > 0) && (
                   <p className="text-xs text-muted-foreground mt-4 text-center">
                     {maestroResults.clientes_errores} errores · {maestroResults.sin_resolver} filas sin identificador resoluble
