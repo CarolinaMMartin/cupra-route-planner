@@ -67,7 +67,19 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
               .select("user_id, nombre")
               .in("user_id", ids);
             const nombres = new Map((profs || []).map((p: any) => [p.user_id, p.nombre]));
-            list = list.map((f: any) => ({ ...f, vendedor_nombre: nombres.get(f.vendedor_id) || null }));
+
+            // Lectura estructurada del comentario (IA). Si no existe, la tarjeta queda igual.
+            const { data: exts } = await supabase
+              .from("feedback_extraccion")
+              .select("feedback_id, revisit_date, objecion, interes_producto, riesgo_cobranza, no_ofrecer, contacto_nombre, contacto_rol, resumen, confianza")
+              .in("feedback_id", list.map((f: any) => f.id));
+            const extMap = new Map((exts || []).map((e: any) => [e.feedback_id, e]));
+
+            list = list.map((f: any) => ({
+              ...f,
+              vendedor_nombre: nombres.get(f.vendedor_id) || null,
+              extraccion: extMap.get(f.id) || null,
+            }));
           }
           if (!cancelled) setFeedbacks(list);
         } else if (!cancelled) {
