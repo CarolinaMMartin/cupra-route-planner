@@ -433,6 +433,18 @@ const AssignorDashboard = () => {
 
   const selectedRecommendations = filteredRecommendations.filter((r) => selectedSucursales.includes(r.id));
 
+  const resumenPorVendedor = useMemo(() => {
+    const map = new Map<string, number>();
+    selectedRecommendations.forEach((rec) => {
+      const nombre = rec.vendedor_actual || rec.vendedor_principal || "Sin vendedor";
+      map.set(nombre, (map.get(nombre) || 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [selectedRecommendations]);
+
+  const prospectosSeleccionados = selectedRecommendations.filter((r) => r.es_prospecto).length;
+
+
   return (
     <div className="space-y-10">
       {isLoading && (
