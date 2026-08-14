@@ -748,12 +748,35 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
           : "El feedback ha sido guardado. El cliente será recomendado nuevamente mañana.",
       });
 
+      // Recordatorio calendarizado (opcional)
+      if (recordatorioActivo && recordatorioFecha) {
+        const recordatorio: any = {
+          vendedor_id: user.id,
+          titulo: `Seguimiento: ${selectedCliente.razon_social}`,
+          nota: recordatorioNota || feedback.trim(),
+          fecha_recordatorio: new Date(recordatorioFecha).toISOString(),
+        };
+        if (esProspecto) {
+          recordatorio.prospecto_place_id = selectedCliente.client_id.replace('prospecto-', '');
+        } else {
+          recordatorio.client_id = selectedCliente.client_id;
+        }
+        const { error: recordatorioError } = await supabase.from('recordatorios').insert(recordatorio);
+        if (recordatorioError) {
+          console.error('Error creando recordatorio:', recordatorioError);
+          toast({ variant: "destructive", title: "Recordatorio no guardado", description: "El feedback sí se guardó." });
+        }
+      }
+
       setShowFeedbackDialog(false);
       setFeedback("");
       setTipoCierre('');
       setMotivoNoVisita("");
       setTipoInteraccion("");
-      setActualizarEtiquetaWa("");
+      setEstadoCliente("");
+      setRecordatorioActivo(false);
+      setRecordatorioFecha("");
+      setRecordatorioNota("");
       setSelectedCliente(null);
     } catch (error) {
       console.error('Error saving feedback:', error);
