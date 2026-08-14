@@ -2,13 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { Sucursal } from "@/types/sales";
 import { isManualPlaceId } from "@/lib/utils";
 import { GOOGLE_MAPS_BROWSER_KEY, loadGoogleMaps } from "@/lib/googleMaps";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Loader2, ArrowRight, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { MapPin, Loader2, ArrowRight, AlertTriangle, Pencil } from "lucide-react";
 import { getVendorColor, createColoredMarkerIcon, resetVendorColors, getVendorColorMap, classifyClientState, getStateColor, calcularDistanciaKmFrontend } from "@/lib/vendorColors";
+
 interface ResultsMapProps {
   sucursales: Sucursal[];
   selectedIds: string[];
