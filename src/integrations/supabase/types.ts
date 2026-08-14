@@ -392,9 +392,11 @@ export type Database = {
           excluir_recomendaciones: boolean | null
           fantasia: string | null
           fecha_ultima_nc: string | null
+          fuente_monto: string
           id: string
           last_recommendation_at: string | null
           monto_notas_credito: number | null
+          monto_total_cupra: number | null
           monto_total_historico: number | null
           motivo_exclusion: string | null
           participacion_mercado: number | null
@@ -407,6 +409,7 @@ export type Database = {
           score_comercial: number | null
           score_recencia: number | null
           score_volumen: number | null
+          share_cupra: number | null
           telefonos: string[] | null
           ticket_promedio: number | null
           todas_ciudades: string[] | null
@@ -437,9 +440,11 @@ export type Database = {
           excluir_recomendaciones?: boolean | null
           fantasia?: string | null
           fecha_ultima_nc?: string | null
+          fuente_monto?: string
           id?: string
           last_recommendation_at?: string | null
           monto_notas_credito?: number | null
+          monto_total_cupra?: number | null
           monto_total_historico?: number | null
           motivo_exclusion?: string | null
           participacion_mercado?: number | null
@@ -452,6 +457,7 @@ export type Database = {
           score_comercial?: number | null
           score_recencia?: number | null
           score_volumen?: number | null
+          share_cupra?: number | null
           telefonos?: string[] | null
           ticket_promedio?: number | null
           todas_ciudades?: string[] | null
@@ -482,9 +488,11 @@ export type Database = {
           excluir_recomendaciones?: boolean | null
           fantasia?: string | null
           fecha_ultima_nc?: string | null
+          fuente_monto?: string
           id?: string
           last_recommendation_at?: string | null
           monto_notas_credito?: number | null
+          monto_total_cupra?: number | null
           monto_total_historico?: number | null
           motivo_exclusion?: string | null
           participacion_mercado?: number | null
@@ -497,6 +505,7 @@ export type Database = {
           score_comercial?: number | null
           score_recencia?: number | null
           score_volumen?: number | null
+          share_cupra?: number | null
           telefonos?: string[] | null
           ticket_promedio?: number | null
           todas_ciudades?: string[] | null
