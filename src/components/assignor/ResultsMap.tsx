@@ -252,8 +252,25 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                 }
               });
             });
-            if (geocoded) return geocoded;
+            if (geocoded) {
+              // Persistimos la geocodificación para que el cliente quede ubicado a futuro
+              const clientId = (sucursal as any).client_id as string | undefined;
+              if (clientId && !sucursal.es_prospecto) {
+                supabase.functions
+                  .invoke("resolve-client-location", {
+                    body: {
+                      client_id: clientId,
+                      lat: geocoded.lat,
+                      lng: geocoded.lng,
+                      direccion: geocoded.direccion,
+                    },
+                  })
+                  .catch(() => undefined);
+              }
+              return geocoded;
+            }
           }
+
 
           console.warn(`[ResultsMap] Sin ubicación resoluble:`, sucursal.nombre);
           return null;
