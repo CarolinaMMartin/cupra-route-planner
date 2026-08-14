@@ -396,6 +396,24 @@ const CargaDatos = () => {
     }
   };
 
+  const handleRevertirCarga = async () => {
+    if (!batchId) return;
+    setRevirtiendo(true);
+    try {
+      const { data, error } = await supabase.rpc("revertir_import_ventas" as never, { p_batch_id: batchId } as never);
+      if (error) throw new Error(error.message);
+      const res = (data || {}) as { filas_borradas?: number; filas_restauradas?: number };
+      toast({
+        title: "Carga revertida",
+        description: `${res.filas_borradas ?? 0} filas quitadas · ${res.filas_restauradas ?? 0} restauradas`,
+      });
+      setBatchId(null);
+    } catch (err: unknown) {
+      toast({ title: "No se pudo revertir", description: getErrorMessage(err), variant: "destructive" });
+    } finally {
+      setRevirtiendo(false);
+    }
+  };
 
 
   const handleBatchGeocode = async () => {
