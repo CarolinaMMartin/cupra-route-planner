@@ -667,6 +667,7 @@ Deno.serve(async (req) => {
         clientes_unicos: clientes.length,
         filas_sin_identificador: sinIdentificador,
       },
+      conciliacion_entidades,
       vendedor_breakdown,
       no_resueltos: noResueltos.slice(0, 20),
     }), {
