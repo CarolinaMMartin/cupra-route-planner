@@ -301,24 +301,45 @@ const countNonEmptyValues = (obj: Record<string, any>): number => {
   return Object.values(obj).reduce((acc, value) => acc + (isEmpty(value) ? 0 : 1), 0);
 };
 
+// OT8-fix: la identidad de la línea NO incluye el importe. Incluye la bonificación,
+// porque un mismo ticket trae habitualmente dos renglones del mismo producto:
+// el pagado (bonif. parcial) y el regalado (bonif. 100%, importe $0).
 const buildVentaConflictKey = (venta: Record<string, any>): string | null => {
-  // Only ticket is strictly required for dedup
   const ticket = venta.ticket;
   if (isEmpty(ticket)) return null;
-  // Use COALESCE logic: treat nulls as empty string to avoid dedup bypass
   const parts = [
     String(ticket).trim().toUpperCase(),
     String(venta.letra ?? '').trim().toUpperCase(),
     String(venta.fecha_emision ?? '').trim(),
     String(venta.client_id ?? '').trim().toUpperCase(),
     String(venta.codigo_producto ?? '').trim().toUpperCase(),
-    String(venta.facturacion_ars ?? 0),
+    String(venta.tipo_comprobante ?? 'venta'),
+    venta.bonificacion === null || venta.bonificacion === undefined ? '-1' : String(venta.bonificacion),
   ];
   return parts.join('||');
 };
 
-const mergeVentaDuplicate = (current: Record<string, any>, incoming: Record<string, any>) => {
-  return countNonEmptyValues(incoming) >= countNonEmptyValues(current) ? incoming : current;
+// Último desempate determinístico: dos renglones que comparten hasta la bonificación
+// se numeran por (cantidad, importe). Nunca se fusionan silenciosamente.
+const asignarRenglones = (ventas: Record<string, any>[]) => {
+  const grupos = new Map<string, Record<string, any>[]>();
+  const sinClave: Record<string, any>[] = [];
+  for (const v of ventas) {
+    const key = buildVentaConflictKey(v);
+    if (!key) { v.renglon = 1; sinClave.push(v); continue; }
+    if (!grupos.has(key)) grupos.set(key, []);
+    grupos.get(key)!.push(v);
+  }
+  let colisiones = 0;
+  for (const grupo of grupos.values()) {
+    if (grupo.length > 1) colisiones += grupo.length - 1;
+    grupo
+      .sort((a, b) =>
+        (Number(a.cajas ?? 0) - Number(b.cajas ?? 0)) ||
+        (Number(a.facturacion_ars ?? 0) - Number(b.facturacion_ars ?? 0)))
+      .forEach((v, i) => { v.renglon = i + 1; });
+  }
+  return { total: ventas.length, colisiones, sinClave: sinClave.length };
 };
 
 // === Campo de facturación: nombres de columna en orden de prioridad ===
