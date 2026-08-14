@@ -518,7 +518,9 @@ Deno.serve(async (req) => {
     const localCuitToId = new Map<string, string>();
     const localNameToId = new Map<string, string>();
 
-    for (const row of rows) {
+    // Resolución de identidad reutilizable: la usan la hoja de producto y la de
+    // comprobantes, para que ambas caigan exactamente en el mismo client_id.
+    const resolverIdentidad = (row: Record<string, any>) => {
       const externalClientId = normalizeClientId(getFieldValue(row, ['client_id', 'Número Externo', 'Numero Externo']));
       const cuit_dni = normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni']));
       const razon_social = toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social']));
@@ -528,6 +530,7 @@ Deno.serve(async (req) => {
         || nameToClientId.get(normalizeBusinessName(fantasia) || '');
       const cuitMatches = cuit_dni ? (cuitToClientIds.get(cuit_dni) || []) : [];
       let client_id: string | null = null;
+      let cuitAmbiguo = false;
 
       // El CUIT manda sobre el "Número Externo": ese Id viene por comprobante y
       // usarlo primero crea un cliente nuevo por cada factura.
@@ -538,7 +541,7 @@ Deno.serve(async (req) => {
       } else if (nameMatch && (cuitMatches.length === 0 || cuitMatches.includes(nameMatch))) {
         client_id = nameMatch;
       } else if (cuitMatches.length > 1) {
-        ventasCuitAmbiguo++;
+        cuitAmbiguo = true;
       } else if (nameMatch) {
         client_id = nameMatch;
       } else if (!cuit_dni && nameKey && localNameToId.has(nameKey)) {
@@ -549,10 +552,24 @@ Deno.serve(async (req) => {
         client_id = externalClientId;
       }
 
+      // Fix 1: identidad sintética desde la razón social cuando no hay Id ni CUIT
+      if (!client_id && razon_social) {
+        client_id = `RS_${razon_social.trim().toUpperCase().replace(/\s+/g, ' ')}`;
+      }
+
       if (client_id) {
         if (cuit_dni && !localCuitToId.has(cuit_dni)) localCuitToId.set(cuit_dni, client_id);
         if (!cuit_dni && nameKey && !localNameToId.has(nameKey)) localNameToId.set(nameKey, client_id);
       }
+
+      return { client_id, cuit_dni, razon_social, fantasia, cuitAmbiguo };
+    };
+
+    for (const row of rows) {
+      const identidad = resolverIdentidad(row);
+      const { cuit_dni, razon_social, fantasia } = identidad;
+      const client_id = identidad.client_id;
+      if (identidad.cuitAmbiguo) ventasCuitAmbiguo++;
 
       const ticket = toStr(getFieldValue(row, ['Ticket', 'ticket', 'Comprobante', 'comprobante']));
       const letra = toStr(getFieldValue(row, ['Letra', 'letra']));
@@ -577,11 +594,6 @@ Deno.serve(async (req) => {
       const facturacion = parseNumericValue(getFieldValue(row, FACTURACION_FIELD_NAMES));
       if (facturacion === null || facturacion === undefined) facturacionNullCount++;
 
-      // Fix 1: Generate synthetic client_id from razon_social when no ID/CUIT exists
-      if (!client_id && razon_social) {
-        const normalizedRS = razon_social.trim().toUpperCase().replace(/\s+/g, ' ');
-        client_id = `RS_${normalizedRS}`;
-      }
       if (!client_id) {
         ventasSinClientId += 1;
         descartados.push({ cuit_dni, razon_social });
