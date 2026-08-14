@@ -722,7 +722,10 @@ function scoreProspects(
     }
 
     // Potencial = volumen de reseñas (proxy de tamaño), no la nota del consumidor final.
-    const score_comercial = potencialProspecto(p);
+    // Bonus por teléfono: un prospecto contactable rinde más que uno a ciegas.
+    const tieneTelefono = Boolean(String(p.telefono || "").trim());
+    const score_comercial = Math.min(100, potencialProspecto(p) + (tieneTelefono ? 10 : 0));
+
 
     let score_rotacion = 100;
     if (p.last_recommendation_at) {
