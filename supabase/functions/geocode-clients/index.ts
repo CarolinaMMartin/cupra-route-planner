@@ -295,12 +295,32 @@ Deno.serve(async (req) => {
         }
         if (data.status !== "OK" || !data.results?.length) { reverse.errores++; await sleep(120); continue; }
 
-        const components = data.results[0].address_components || [];
-        const barrio =
+        let components = data.results[0].address_components || [];
+        let barrio =
           extractComponent(components, "sublocality_level_1") ||
           extractComponent(components, "sublocality") ||
           extractComponent(components, "neighborhood") ||
-          extractComponent(components, "locality");
+          extractComponent(components, "locality") ||
+          extractComponent(components, "postal_town") ||
+          extractComponent(components, "administrative_area_level_3");
+
+        // Una búsqueda por dirección puede devolver solo la calle. En ese caso,
+        // la consulta inversa por las coordenadas del ERP es obligatoria.
+        if (!barrio && addressParts.length > 1) {
+          const reverseData = await geocodeFetch(`latlng=${place.lat},${place.long}&language=es`);
+          if (reverseData.status === "OK" && reverseData.results?.length) {
+            data = reverseData;
+            components = reverseData.results[0].address_components || [];
+            barrio =
+              extractComponent(components, "sublocality_level_1") ||
+              extractComponent(components, "sublocality") ||
+              extractComponent(components, "neighborhood") ||
+              extractComponent(components, "locality") ||
+              extractComponent(components, "postal_town") ||
+              extractComponent(components, "administrative_area_level_3");
+          }
+        }
+
         const adminArea2 = extractComponent(components, "administrative_area_level_2");
         const provincia = normalizeProvince(extractComponent(components, "administrative_area_level_1"));
         const comuna = resolveComuna(barrio, adminArea2);
