@@ -2455,7 +2455,10 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
         const lista = cob.cuentas_prioritarias_fuera_de_zona
           .map((c: any) => `${c.nombre}${c.dias ? ` (${c.dias} días sin comprar)` : ""}${c.barrio ? ` en ${c.barrio}` : ""}`)
           .join(", ");
-        partes.push(`Fuera de esta zona quedaron cuentas importantes de ${vendedor.nombre}: ${lista}. Conviene armarles una ruta propia.`);
+        partes.push(
+          `Aviso (no forma parte de esta ruta): ${vendedor.nombre} tiene cuentas importantes en otros barrios, fuera de ${zonaTexto}: ${lista}. `
+          + `No se incluyeron porque quedan fuera del área elegida; conviene armarles una ruta aparte otro día.`,
+        );
       }
       if (cob.total < 8) {
         partes.push(`Sólo se pudieron armar ${cob.total} de 8 visitas para ${vendedor.nombre} con los filtros elegidos. Probá ampliar la zona.`);
