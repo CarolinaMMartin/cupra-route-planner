@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, UserCheck, Users, AlertCircle, Lightbulb, Clock, UserX, TrendingDown, Loader2 } from "lucide-react";
+import { Search, UserCheck, Users, AlertCircle, Lightbulb, Clock, UserX, TrendingDown, Loader2, SlidersHorizontal, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -74,6 +74,8 @@ interface Vendedor {
 }
 
 type SuggestionMode = "sin_vendedor" | "baja_frecuencia" | "no_visitados";
+type SortKey = "nombre" | "ciudad" | "provincia" | "vendedor" | "monto" | "dias";
+type SortDir = "asc" | "desc";
 
 const formatCurrency = (v: number | null) =>
   v != null ? `$${v.toLocaleString("es-AR", { maximumFractionDigits: 0 })}` : "—";
@@ -108,6 +110,11 @@ const ManualAssignment = () => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [suggestionMode, setSuggestionMode] = useState<SuggestionMode | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("monto");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const activeFilterCount = (filterCiudad !== "all" ? 1 : 0) + (filterProvincia !== "all" ? 1 : 0);
 
   // ── Debounce search ──
   useEffect(() => {
@@ -241,6 +248,56 @@ const ManualAssignment = () => {
       .sort((a, b) => b.monto_total_historico - a.monto_total_historico);
   }, [clientes]);
 
+  // ── Ordenamiento de la tabla ──
+  const sortedGrupos = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const txt = (v: string | null) => (v || "").toLocaleLowerCase("es-AR");
+    return [...grupos].sort((a, b) => {
+      switch (sortKey) {
+        case "nombre":
+          return txt(a.razon_social || a.fantasia).localeCompare(txt(b.razon_social || b.fantasia), "es-AR") * dir;
+        case "ciudad":
+          return txt(a.ciudad_principal).localeCompare(txt(b.ciudad_principal), "es-AR") * dir;
+        case "provincia":
+          return txt(a.provincia_principal).localeCompare(txt(b.provincia_principal), "es-AR") * dir;
+        case "vendedor":
+          return txt(a.vendedor_actual || a.vendedor_principal).localeCompare(txt(b.vendedor_actual || b.vendedor_principal), "es-AR") * dir;
+        case "dias":
+          return ((a.dias_sin_compra ?? -1) - (b.dias_sin_compra ?? -1)) * dir;
+        default:
+          return (a.monto_total_historico - b.monto_total_historico) * dir;
+      }
+    });
+  }, [grupos, sortKey, sortDir]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "monto" || key === "dias" ? "desc" : "asc");
+    }
+  };
+
+  const SortHeader = ({ column, label, align = "left" }: { column: SortKey; label: string; align?: "left" | "right" }) => (
+    <button
+      type="button"
+      onClick={() => toggleSort(column)}
+      className={`flex items-center gap-1 text-xs font-medium hover:text-foreground transition-colors ${
+        sortKey === column ? "text-foreground" : "text-muted-foreground"
+      } ${align === "right" ? "ml-auto" : ""}`}
+    >
+      {label}
+      {sortKey !== column ? (
+        <ArrowUpDown className="w-3 h-3 opacity-50" />
+      ) : sortDir === "asc" ? (
+        <ArrowUp className="w-3 h-3" />
+      ) : (
+        <ArrowDown className="w-3 h-3" />
+      )}
+    </button>
+  );
+
   // ── Selection helpers (por cliente unificado) ──
   const toggleClient = (groupKey: string) => {
     setSelectedClients(prev => {
@@ -339,89 +396,82 @@ const ManualAssignment = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* ── Vendor selector ── */}
+    <div className="space-y-4">
+      {/* ── Barra superior: vendedor destino + sugerencias + acción ── */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <UserCheck className="w-5 h-5 text-primary" />
-            <CardTitle className="text-lg font-sans">Vendedor Destino</CardTitle>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-col lg:flex-row lg:items-end gap-3">
+            <div className="w-full lg:w-[320px] shrink-0">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-primary" /> Vendedor destino
+              </label>
+              <SearchableSelect
+                options={vendedores.map(v => ({ value: v.user_id, label: toTitleCase(v.nombre) }))}
+                value={selectedVendedorId}
+                onValueChange={setSelectedVendedorId}
+                placeholder="Seleccionar vendedor..."
+                searchPlaceholder="Escribí el nombre..."
+                emptyMessage="No se encontró ese vendedor."
+                className="h-10"
+              />
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1.5">
+                <Lightbulb className="w-3.5 h-3.5 text-primary" /> Sugerencias inteligentes
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={suggestionMode === "sin_vendedor" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSuggestion("sin_vendedor")}
+                  className="gap-2 h-10"
+                >
+                  <UserX className="w-4 h-4" /> Sin vendedor
+                </Button>
+                <Button
+                  variant={suggestionMode === "baja_frecuencia" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSuggestion("baja_frecuencia")}
+                  className="gap-2 h-10"
+                >
+                  <TrendingDown className="w-4 h-4" /> Baja frecuencia
+                </Button>
+                <Button
+                  variant={suggestionMode === "no_visitados" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSuggestion("no_visitados")}
+                  className="gap-2 h-10"
+                >
+                  <Clock className="w-4 h-4" /> Sin compra +60d
+                </Button>
+              </div>
+            </div>
+
+            <div className="shrink-0">
+              <Button
+                onClick={() => setShowConfirmDialog(true)}
+                disabled={!selectedVendedorId || selectedClients.size === 0 || isAssigning}
+                className="gap-2 h-10 w-full lg:w-auto"
+              >
+                {isAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
+                Asignar{selectedClients.size > 0 ? ` (${selectedClients.size})` : ""}
+              </Button>
+            </div>
           </div>
-          <CardDescription>Buscá y seleccioná el vendedor al que se asignarán los clientes</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="max-w-md">
-            <SearchableSelect
-              options={vendedores.map(v => ({ value: v.user_id, label: toTitleCase(v.nombre) }))}
-              value={selectedVendedorId}
-              onValueChange={setSelectedVendedorId}
-              placeholder="Seleccionar vendedor..."
-              searchPlaceholder="Escribí el nombre..."
-              emptyMessage="No se encontró ese vendedor."
-              className="h-11"
-            />
-          </div>
+
           {!selectedVendedorId && (
-            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
               <AlertCircle className="w-3 h-3" /> Seleccioná un vendedor para habilitar la asignación
             </p>
           )}
         </CardContent>
       </Card>
 
-
-      {/* ── Smart Suggestions ── */}
+      {/* ── Búsqueda + filtros colapsables + resultados ── */}
       <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <Lightbulb className="w-5 h-5 text-primary" />
-            <CardTitle className="text-lg font-sans">Sugerencias Inteligentes</CardTitle>
-          </div>
-          <CardDescription>Filtros rápidos para encontrar oportunidades</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={suggestionMode === "sin_vendedor" ? "default" : "outline"}
-              size="sm"
-              onClick={() => handleSuggestion("sin_vendedor")}
-              className="gap-2"
-            >
-              <UserX className="w-4 h-4" />
-              Sin vendedor asignado
-            </Button>
-            <Button
-              variant={suggestionMode === "baja_frecuencia" ? "default" : "outline"}
-              size="sm"
-              onClick={() => handleSuggestion("baja_frecuencia")}
-              className="gap-2"
-            >
-              <TrendingDown className="w-4 h-4" />
-              Baja frecuencia (&lt;3 órdenes)
-            </Button>
-            <Button
-              variant={suggestionMode === "no_visitados" ? "default" : "outline"}
-              size="sm"
-              onClick={() => handleSuggestion("no_visitados")}
-              className="gap-2"
-            >
-              <Clock className="w-4 h-4" />
-              Sin compra +60 días
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Search + Filters ── */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <Search className="w-5 h-5 text-primary" />
-            <CardTitle className="text-lg font-sans">Buscar Clientes</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col sm:flex-row gap-3">
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -431,33 +481,60 @@ const ManualAssignment = () => {
                 className="pl-10"
               />
             </div>
-            <Select value={filterProvincia} onValueChange={setFilterProvincia}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Provincia" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las provincias</SelectItem>
-                {provincias.map(p => (
-                  <SelectItem key={p} value={p}>{p}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterCiudad} onValueChange={setFilterCiudad}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Ciudad" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las ciudades</SelectItem>
-                {ciudades.map(c => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setFiltersOpen(o => !o)}
+              className="gap-2 h-10"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              Filtros
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">{activeFilterCount}</Badge>
+              )}
+              <ChevronDown className={`w-4 h-4 transition-transform ${filtersOpen ? "rotate-180" : ""}`} />
+            </Button>
           </div>
 
-          {/* ── Results counter + action bar ── */}
+          {filtersOpen && (
+            <div className="flex flex-col sm:flex-row gap-3 rounded-md border border-border/60 bg-muted/20 p-3">
+              <Select value={filterProvincia} onValueChange={setFilterProvincia}>
+                <SelectTrigger className="w-full sm:w-[220px]">
+                  <SelectValue placeholder="Provincia" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las provincias</SelectItem>
+                  {provincias.map(p => (
+                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filterCiudad} onValueChange={setFilterCiudad}>
+                <SelectTrigger className="w-full sm:w-[220px]">
+                  <SelectValue placeholder="Ciudad" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las ciudades</SelectItem>
+                  {ciudades.map(c => (
+                    <SelectItem key={c} value={c}>{c}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {activeFilterCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => { setFilterCiudad("all"); setFilterProvincia("all"); }}
+                >
+                  Limpiar filtros
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* ── Results counter + orden ── */}
           {hasSearched && (
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground">
                   {grupos.length} cliente(s){grupos.length !== clientes.length ? ` · ${clientes.length} registros unificados` : ""}
@@ -469,18 +546,37 @@ const ManualAssignment = () => {
                   </Badge>
                 )}
               </div>
-              <Button
-                onClick={() => setShowConfirmDialog(true)}
-                disabled={!selectedVendedorId || selectedClients.size === 0 || isAssigning}
-                className="gap-2"
-              >
-                {isAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
-                Asignar seleccionados
-              </Button>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Ordenar por</span>
+                <Select
+                  value={`${sortKey}:${sortDir}`}
+                  onValueChange={v => {
+                    const [k, d] = v.split(":");
+                    setSortKey(k as SortKey);
+                    setSortDir(d as SortDir);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[220px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="nombre:asc">Razón social (A → Z)</SelectItem>
+                    <SelectItem value="nombre:desc">Razón social (Z → A)</SelectItem>
+                    <SelectItem value="vendedor:asc">Vendedor (A → Z)</SelectItem>
+                    <SelectItem value="vendedor:desc">Vendedor (Z → A)</SelectItem>
+                    <SelectItem value="monto:desc">Ventas (mayor a menor)</SelectItem>
+                    <SelectItem value="monto:asc">Ventas (menor a mayor)</SelectItem>
+                    <SelectItem value="dias:desc">Días s/compra (más)</SelectItem>
+                    <SelectItem value="dias:asc">Días s/compra (menos)</SelectItem>
+                    <SelectItem value="ciudad:asc">Ciudad (A → Z)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
 
           <Separator />
+
 
           {/* ── Results table ── */}
           {isSearching ? (
@@ -509,16 +605,16 @@ const ManualAssignment = () => {
                         onCheckedChange={toggleAll}
                       />
                     </TableHead>
-                    <TableHead>Razón Social</TableHead>
-                    <TableHead>Ciudad</TableHead>
-                    <TableHead>Provincia</TableHead>
-                    <TableHead>Vendedor Actual</TableHead>
-                    <TableHead className="text-right">Total Compras</TableHead>
-                    <TableHead className="text-right">Días s/compra</TableHead>
+                    <TableHead><SortHeader column="nombre" label="Razón Social" /></TableHead>
+                    <TableHead><SortHeader column="ciudad" label="Ciudad" /></TableHead>
+                    <TableHead><SortHeader column="provincia" label="Provincia" /></TableHead>
+                    <TableHead><SortHeader column="vendedor" label="Vendedor Actual" /></TableHead>
+                    <TableHead className="text-right"><SortHeader column="monto" label="Total Compras" align="right" /></TableHead>
+                    <TableHead className="text-right"><SortHeader column="dias" label="Días s/compra" align="right" /></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {grupos.map(c => {
+                  {sortedGrupos.map(c => {
                     const isSelected = selectedClients.has(c.key);
                     return (
                       <TableRow
