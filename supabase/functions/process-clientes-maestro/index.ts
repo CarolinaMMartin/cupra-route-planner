@@ -208,13 +208,18 @@ function parseRow(row: Record<string, any>): MaestroRow {
   ]));
   const fantasia = toStr(getFieldValue(row, ['Fantasia', 'Fantasía', 'fantasia']));
 
-  // Dirección: campo único o Calle + Número
-  let direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion']));
-  if (!direccion) {
-    const calle = toStr(getFieldValue(row, ['Calle', 'calle']));
-    const numero = toStr(getFieldValue(row, ['Número', 'Numero', 'numero']));
-    direccion = calle ? [calle, numero].filter(Boolean).join(' ') : null;
+  // R7: la dirección de verdad es Calle + Número. Aunque venga el campo único
+  // "Dirección", se le suma la altura de la columna Número si falta.
+  const calle = toStr(getFieldValue(row, ['Calle', 'calle']));
+  const numero = toStr(getFieldValue(row, ['Número', 'Numero', 'numero', 'Altura', 'Nro', 'N°']));
+  const direccionUnica = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion']));
+  const baseDireccion = direccionUnica || calle;
+  let direccion: string | null = null;
+  if (baseDireccion) {
+    const yaTieneAltura = numero ? new RegExp(`(^|\\s)${numero}(\\s|$)`).test(baseDireccion) : false;
+    direccion = (yaTieneAltura ? baseDireccion : [baseDireccion, numero].filter(Boolean).join(' ')).trim() || null;
   }
+  const codigo_postal = toStr(getFieldValue(row, ['Código Postal', 'Codigo Postal', 'CP', 'cp', 'codigo_postal']));
 
   const telefonos = [
     toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono'])),
