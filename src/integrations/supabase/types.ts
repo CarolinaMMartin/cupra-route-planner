@@ -290,7 +290,9 @@ export type Database = {
           lat: number
           long: number
           place_id: string | null
+          precision_geocoding: string | null
           provincia_principal: string | null
+          ubicacion_confiable: boolean
           updated_at: string | null
         }
         Insert: {
@@ -308,7 +310,9 @@ export type Database = {
           lat: number
           long: number
           place_id?: string | null
+          precision_geocoding?: string | null
           provincia_principal?: string | null
+          ubicacion_confiable?: boolean
           updated_at?: string | null
         }
         Update: {
@@ -326,7 +330,9 @@ export type Database = {
           lat?: number
           long?: number
           place_id?: string | null
+          precision_geocoding?: string | null
           provincia_principal?: string | null
+          ubicacion_confiable?: boolean
           updated_at?: string | null
         }
         Relationships: []
