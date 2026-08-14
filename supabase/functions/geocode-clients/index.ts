@@ -410,6 +410,93 @@ Deno.serve(async (req) => {
       await sleep(150); // Throttle
     }
 
+    // ===== Auditoría de las coordenadas que vinieron del ERP =====
+    // El ERP repite coordenadas entre clientes distintos y a veces el punto
+    // no corresponde a la dirección. Cada punto del ERP se contrasta contra
+    // la geocodificación de su propia dirección: si difieren más de 300 m,
+    // manda la dirección.
+    const auditoriaErp = { total: 0, verificadas: 0, corregidas: 0, sin_verificar: 0, errores: 0 };
+    const { data: puntosErp } = await supabase
+      .from("client_places")
+      .select("id, client_id, lat, long, direccion_principal, codigo_postal, provincia_principal, precision_geocoding, direccion_verificada")
+      .in("precision_geocoding", ["erp", "erp_no_verificada"])
+      .neq("direccion_verificada", true)
+      .limit(limit > 0 ? limit : 400);
+
+    auditoriaErp.total = (puntosErp || []).length;
+
+    for (const place of puntosErp || []) {
+      try {
+        const dir = (place.direccion_principal || "").trim();
+        if (!dir) {
+          await supabase.from("client_places")
+            .update({ precision_geocoding: "erp_no_verificada", ubicacion_confiable: false })
+            .eq("id", place.id);
+          auditoriaErp.sin_verificar++;
+          continue;
+        }
+
+        const data = await geocodeFetch(
+          `address=${encodeURIComponent([dir, place.codigo_postal, place.provincia_principal, "Argentina"].filter(Boolean).join(", "))}&language=es&region=ar`
+        );
+        let preciso: any = null;
+        let precision = "";
+        for (const candidato of data.results || []) {
+          const lat = Number(candidato.geometry?.location?.lat);
+          const lng = Number(candidato.geometry?.location?.lng);
+          if (!isValidArgentina(lat, lng)) continue;
+          const veredicto = evaluarPrecision(candidato, /\d/.test(dir));
+          if (veredicto.ok) { preciso = candidato; precision = veredicto.precision; break; }
+        }
+
+        if (!preciso) {
+          await supabase.from("client_places")
+            .update({ precision_geocoding: "erp_no_verificada", ubicacion_confiable: false })
+            .eq("id", place.id);
+          auditoriaErp.sin_verificar++;
+          await sleep(150);
+          continue;
+        }
+
+        const latGeo = Number(preciso.geometry.location.lat);
+        const lngGeo = Number(preciso.geometry.location.lng);
+        const distanciaKm = haversineKm(Number(place.lat), Number(place.long), latGeo, lngGeo);
+        const componentes = preciso.address_components || [];
+        const barrio = extraerBarrio(componentes);
+        const provincia = normalizeProvince(extractComponent(componentes, "administrative_area_level_1"));
+        const comuna = resolveComuna(barrio, extractComponent(componentes, "administrative_area_level_2"));
+
+        if (distanciaKm > 0.3) {
+          await supabase.from("client_places").update({
+            lat: latGeo,
+            long: lngGeo,
+            ...(barrio ? { barrio_principal: barrio, comuna } : {}),
+            ...(provincia ? { provincia_principal: provincia } : {}),
+            direccion_principal: preciso.formatted_address || dir,
+            place_id: preciso.place_id || null,
+            precision_geocoding: precision,
+            ubicacion_confiable: true,
+          }).eq("id", place.id);
+          if (barrio) {
+            await supabase.from("clientes").update({ barrio_principal: barrio }).eq("client_id", place.client_id);
+          }
+          auditoriaErp.corregidas++;
+        } else {
+          await supabase.from("client_places").update({
+            ...(barrio ? { barrio_principal: barrio, comuna } : {}),
+            precision_geocoding: "erp_verificada",
+            ubicacion_confiable: true,
+          }).eq("id", place.id);
+          auditoriaErp.verificadas++;
+        }
+      } catch {
+        auditoriaErp.errores++;
+      }
+      await sleep(150);
+    }
+
+
+
     // ===== Re-verificación de sucursales geocodificadas con el criterio viejo =====
     // Toda ubicación no confiable se vuelve a resolver con el control de
     // precisión. Si no llega a precisión de puerta, se borra: un punto falso
