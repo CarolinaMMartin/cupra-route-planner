@@ -63,7 +63,7 @@ function limpiarJustificacion(texto: string | null | undefined, fallback: string
     .trim();
   out = out.replace(/^[\s\-–,;.]+/, "").trim();
   if (out.length < 12) return fallback;
-  return out.length > 320 ? `${out.slice(0, 317)}...` : out;
+  return out.length > maxLen ? `${out.slice(0, maxLen - 3)}...` : out;
 }
 
 
