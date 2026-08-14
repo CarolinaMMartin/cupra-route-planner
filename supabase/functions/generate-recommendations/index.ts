@@ -1298,8 +1298,11 @@ Deno.serve(async (req) => {
         || Deno.env.get("VITE_GOOGLE_MAPS_API_KEY")
         || "";
       if (!googleApiKey) {
-        throw new Error(`Faltan ${missingProspects} prospectos para completar 8 y Google Maps no está configurado.`);
-      }
+        erroresCobertura.push(
+          `No se pudo buscar prospectos: falta configuración de Google Maps. Faltan ${missingProspects} lugares nuevos para completar las rutas.`,
+        );
+      } else {
+
 
       const excludedPlaceIds = new Set<string>([
         ...prospectos.map((prospecto) => prospecto.place_id),
