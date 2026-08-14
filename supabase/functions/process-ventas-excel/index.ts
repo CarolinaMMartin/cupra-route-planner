@@ -621,12 +621,11 @@ Deno.serve(async (req) => {
         Number.isFinite(latRaw) && Number.isFinite(lngRaw) &&
         latRaw >= -56 && latRaw <= -21 && lngRaw >= -74 && lngRaw <= -53
       ) {
-        const numeroCalle = toStr(getFieldValue(row, ['Número', 'Numero', 'numero']));
-        const dirCompleta = [direccion, numeroCalle].filter(Boolean).join(' ').trim() || null;
         coordsPorCliente.set(client_id, {
           lat: latRaw,
           long: lngRaw,
-          direccion: dirCompleta,
+          direccion,
+          codigo_postal: codigoPostalRaw,
           ciudad: ciudad_raw,
           provincia: normalizeProvincia(provincia_raw),
         });
