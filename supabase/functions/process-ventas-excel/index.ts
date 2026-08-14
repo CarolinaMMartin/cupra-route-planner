@@ -1332,8 +1332,17 @@ Deno.serve(async (req) => {
         .eq('id', batchId);
       if (auditError) console.error('No se pudo registrar el fallo del lote:', auditError.message);
     }
-    return new Response(JSON.stringify({ success: false, error: message, batch_id: batchId }), {
+    const previa = (error as any)?.previa ?? null;
+    const requiereConfirmacion = Boolean(previa?.requiere_confirmacion) && !/otra empresa/i.test(message);
+    return new Response(JSON.stringify({
+      success: false,
+      error: message,
+      batch_id: batchId,
+      previa,
+      requiere_confirmacion: requiereConfirmacion,
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500,
     });
+
   }
 });
