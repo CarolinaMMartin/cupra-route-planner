@@ -193,13 +193,14 @@ const RecordatoriosCalendario = () => {
   };
 
   const agendarVisita = async (candidato: Candidato) => {
-    if (!selectedDate) return;
+    const dia = fechaAgenda ?? selectedDate;
+    if (!dia) return;
     setAgendando(candidato.id);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const fecha = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+      const fecha = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, "0")}-${String(dia.getDate()).padStart(2, "0")}`;
 
       let existing = supabase
         .from("asignaciones_vendedores_clientes")
