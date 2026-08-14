@@ -307,8 +307,17 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       setSinUbicacion(
         sucursales
           .filter((s) => !resueltos.has(s.id))
-          .map((s) => s.nombre || s.fantasia || "Sin nombre"),
+          .map((s) => ({
+            id: s.id,
+            nombre: s.nombre || s.fantasia || "Sin nombre",
+            direccion: [s.direccion_principal || s.direccion, s.barrio_principal, s.provincia_principal]
+              .filter(Boolean)
+              .join(", "),
+            client_id: (s as any).client_id as string | undefined,
+            es_prospecto: !!s.es_prospecto,
+          })),
       );
+
 
       setLocations(fetchedLocations);
       setVendorLegend(getVendorColorMap());
