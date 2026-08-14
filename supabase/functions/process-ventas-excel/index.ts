@@ -858,52 +858,18 @@ Deno.serve(async (req) => {
 
     // ============ FASE 3: RFM + scores ============
     const ahora = new Date();
-    const usaComprobantes = comprobantesPorCliente.size > 0;
 
-    // Resumen monetario por cliente: manda el comprobante cuando existe.
-    const resumenMonetario = new Map<string, {
-      monto: number; ordenes: number; fechas: Date[]; fuente: 'comprobante' | 'producto'; montoCupra: number;
-    }>();
-    for (const c of clientesMap.values()) {
-      const agg = comprobantesPorCliente.get(c.client_id);
-      const montoCupra = Math.round(c.monto_total * 100) / 100;
-      if (agg && agg.tickets.size > 0) {
-        resumenMonetario.set(c.client_id, {
-          monto: Math.round(agg.monto * 100) / 100,
-          ordenes: agg.tickets.size,
-          fechas: agg.fechas.slice(),
-          fuente: 'comprobante',
-          montoCupra,
-        });
-      } else {
-        resumenMonetario.set(c.client_id, {
-          monto: montoCupra,
-          ordenes: c.tickets_set.size > 0 ? c.tickets_set.size : (c.cantidad_lineas > 0 ? 1 : 0),
-          fechas: c.fechas.slice(),
-          fuente: 'producto',
-          montoCupra,
-        });
-      }
-    }
-
-    const totalGlobal = Array.from(resumenMonetario.values()).reduce((sum, r) => sum + r.monto, 0);
+    const totalGlobal = Array.from(clientesMap.values()).reduce((sum, c) => sum + c.monto_total, 0);
 
     const clientesEnriquecidos = Array.from(clientesMap.values()).map(c => {
-      const resumen = resumenMonetario.get(c.client_id)!;
-      // Las fechas de comprobante cubren todas las marcas: mejor señal de recencia.
-      const fechasBase = resumen.fechas.length > 0 ? resumen.fechas : c.fechas;
-      const fechasOrd = [...fechasBase].sort((a: Date, b: Date) => a.getTime() - b.getTime());
+      const fechasOrd = [...c.fechas].sort((a: Date, b: Date) => a.getTime() - b.getTime());
       const primera = fechasOrd[0] || null;
       const ultima = fechasOrd[fechasOrd.length - 1] || null;
       const dias = ultima ? Math.floor((ahora.getTime() - ultima.getTime()) / 86400000) : 9999;
 
-      const montoTotal = resumen.monto;
-      // TAREA 1: cantidad_ordenes = comprobantes únicos (no líneas de producto)
-      const cantidadOrdenes = resumen.ordenes;
+      const montoTotal = c.monto_total;
+      const cantidadOrdenes = c.tickets_set.size > 0 ? c.tickets_set.size : (c.cantidad_lineas > 0 ? 1 : 0);
       const ticket_promedio = cantidadOrdenes > 0 ? Math.round((montoTotal / cantidadOrdenes) * 100) / 100 : 0;
-      const share_cupra = montoTotal > 0
-        ? Math.round(Math.min(100, Math.max(0, (resumen.montoCupra / montoTotal) * 100)) * 100) / 100
-        : 0;
 
       let categoria_recencia = 'PERDIDO', score_recencia = 10;
       if (dias <= DIAS_ACTIVO) { categoria_recencia = 'ACTIVO'; score_recencia = 100; }
@@ -933,9 +899,9 @@ Deno.serve(async (req) => {
         dias_desde_ultima_compra: dias === 9999 ? null : dias,
         cantidad_ordenes: cantidadOrdenes,
         monto_total_historico: Math.round(montoTotal * 100) / 100,
-        monto_total_cupra: resumen.montoCupra,
-        share_cupra,
-        fuente_monto: resumen.fuente,
+        monto_total_cupra: Math.round(montoTotal * 100) / 100,
+        share_cupra: 100,
+        fuente_monto: 'producto',
         ticket_promedio, categoria_recencia, categoria_volumen,
         score_recencia, score_volumen, score_comercial,
         participacion_mercado: Math.round(participacion * 10000) / 100,
