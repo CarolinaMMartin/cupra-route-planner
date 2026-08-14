@@ -52,7 +52,7 @@ const ActividadesResumen = ({ vendedorIdFilter }: ActividadesResumenProps) => {
       let vendedoresQuery = supabase
         .from('profiles')
         .select('user_id, nombre')
-        .eq('rol', 'vendedor')
+        .in('rol', ['vendedor', 'asignador', 'administrador'])
         .eq('activo', true);
 
       if (vendedorIdFilter && vendedorIdFilter !== 'all') {

@@ -132,7 +132,7 @@ const ManualAssignment = () => {
       const { data } = await supabase
         .from("profiles")
         .select("user_id, nombre")
-        .eq("rol", "vendedor")
+        .in("rol", ["vendedor", "asignador", "administrador"])
         .eq("activo", true)
         .order("nombre");
       setVendedores(data || []);
