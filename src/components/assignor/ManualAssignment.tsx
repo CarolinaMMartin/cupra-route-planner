@@ -517,7 +517,7 @@ const ManualAssignment = () => {
           {filtersOpen && (
             <div className="flex flex-col sm:flex-row gap-3 rounded-md border border-border/60 bg-muted/20 p-3">
               <Select value={filterProvincia} onValueChange={setFilterProvincia}>
-                <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Provincia" />
                 </SelectTrigger>
                 <SelectContent>
@@ -528,7 +528,7 @@ const ManualAssignment = () => {
                 </SelectContent>
               </Select>
               <Select value={filterCiudad} onValueChange={setFilterCiudad}>
-                <SelectTrigger className="w-full sm:w-[220px]">
+                <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder="Ciudad" />
                 </SelectTrigger>
                 <SelectContent>
@@ -538,11 +538,25 @@ const ManualAssignment = () => {
                   ))}
                 </SelectContent>
               </Select>
+              <Select value={filterVendedor} onValueChange={setFilterVendedor}>
+                <SelectTrigger className="w-full sm:w-[220px]">
+                  <SelectValue placeholder="Vendedor actual" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos los vendedores</SelectItem>
+                  <SelectItem value="__SIN_ASIGNAR__">Sin asignar</SelectItem>
+                  {vendedores.map(v => (
+                    <SelectItem key={v.user_id} value={v.nombre}>
+                      {toTitleCase(v.nombre)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {activeFilterCount > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => { setFilterCiudad("all"); setFilterProvincia("all"); }}
+                  onClick={() => { setFilterCiudad("all"); setFilterProvincia("all"); setFilterVendedor("all"); }}
                 >
                   Limpiar filtros
                 </Button>
