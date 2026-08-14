@@ -75,15 +75,29 @@ const RecordatoriosCalendario = () => {
       let existing = supabase
         .from("asignaciones_vendedores_clientes")
         .select("id, estado")
-        .eq("vendedor_id", user.id)
-        .neq("estado", "Visitado");
+        .eq("vendedor_id", user.id);
       existing = r.client_id
         ? existing.eq("client_id", r.client_id)
         : existing.eq("prospecto_place_id", r.prospecto_place_id!);
 
-      const { data: yaAsignado } = await existing.maybeSingle();
+      const { data: yaAsignado, error: existingError } = await existing.maybeSingle();
+      if (existingError) throw existingError;
+
+      // Ya existe una asignación (única por vendedor+cliente): la reactivamos.
       if (yaAsignado) {
-        toast({ title: "Ya está en tu ruta", description: "Lo vas a encontrar en el tablero Kanban." });
+        if (yaAsignado.estado !== "Visitado") {
+          toast({ title: "Ya está en tu ruta", description: "Lo vas a encontrar en el tablero Kanban." });
+          return;
+        }
+        const { error: reactivarError } = await supabase
+          .from("asignaciones_vendedores_clientes")
+          .update({ estado: "Por visitar", visited_at: null })
+          .eq("id", yaAsignado.id);
+        if (reactivarError) throw reactivarError;
+        toast({
+          title: "Sumado a tu ruta de hoy",
+          description: "Estaba marcado como visitado: lo reactivé para una nueva visita.",
+        });
         return;
       }
 
