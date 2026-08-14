@@ -95,19 +95,52 @@ function parseRevisitDays(text: string | null | undefined): number | null {
   return null;
 }
 
-/** Mapa negocio -> fecha mínima de próxima visita según el feedback más reciente. */
-function buildRevisitMap(feedbacksMap: Map<string, any[]>): Map<string, RevisitInfo> {
+/** Extracción estructurada del feedback (IA), indexada por feedback_id. */
+export interface FeedbackExtraccion {
+  feedback_id: string;
+  revisit_date?: string | null;
+  resumen?: string | null;
+  confianza?: number | null;
+}
+
+/** Confianza mínima para dejar que la extracción de IA mande sobre el parser de texto. */
+const MIN_CONFIANZA_EXTRACCION = 0.5;
+
+/**
+ * Mapa negocio -> fecha mínima de próxima visita según el feedback más reciente.
+ * Primero se usa la fecha extraída por IA (si tiene confianza suficiente);
+ * si no existe, cae al parser de texto de siempre. Nunca queda peor que antes.
+ */
+function buildRevisitMap(
+  feedbacksMap: Map<string, any[]>,
+  extracciones?: Map<string, FeedbackExtraccion>,
+): Map<string, RevisitInfo> {
   const map = new Map<string, RevisitInfo>();
   for (const [id, feedbacks] of feedbacksMap) {
     for (const fb of feedbacks) {
-      const days = parseRevisitDays(fb.feedback) ?? parseRevisitDays(fb.motivo_no_visita);
-      if (days === null) continue;
       const base = fb.created_at ? new Date(fb.created_at).getTime() : Date.now();
-      const dueAt = base + days * 24 * 60 * 60 * 1000;
-      const prev = map.get(id);
-      if (!prev || dueAt > prev.dueAt) {
-        map.set(id, { dueAt, source: `${fb.feedback || fb.motivo_no_visita} (+${days}d)` });
+      let dueAt: number | null = null;
+      let source = "";
+
+      const ext = fb.id ? extracciones?.get(fb.id) : undefined;
+      const confianza = Number(ext?.confianza ?? 0);
+      if (ext?.revisit_date && confianza >= MIN_CONFIANZA_EXTRACCION) {
+        const parsed = new Date(`${ext.revisit_date}T12:00:00Z`).getTime();
+        if (Number.isFinite(parsed)) {
+          dueAt = parsed;
+          source = ext.resumen || `Revisita sugerida por el vendedor (${ext.revisit_date})`;
+        }
       }
+
+      if (dueAt === null) {
+        const days = parseRevisitDays(fb.feedback) ?? parseRevisitDays(fb.motivo_no_visita);
+        if (days === null) continue;
+        dueAt = base + days * 24 * 60 * 60 * 1000;
+        source = `${fb.feedback || fb.motivo_no_visita} (+${days}d)`;
+      }
+
+      const prev = map.get(id);
+      if (!prev || dueAt > prev.dueAt) map.set(id, { dueAt, source });
       break; // feedbacks vienen ordenados por fecha desc: vale el más reciente
     }
   }
