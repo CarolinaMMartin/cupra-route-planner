@@ -1102,9 +1102,11 @@ Deno.serve(async (req) => {
     if (placesError) throw placesError;
 
     // Red de seguridad: nada que no pertenezca al área elegida entra a la ruta.
-    const clientPlaces = (clientPlacesRaw || []).filter((p: any) =>
-      belongsToSelectedArea({ barrio: p.barrio_principal, comuna: p.comuna })
-    );
+    const clientPlaces = (clientPlacesRaw || []).filter((p: any) => {
+      const tieneCoords = Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.long));
+      const tieneBarrio = typeof p.barrio_principal === "string" && p.barrio_principal.trim().length > 0;
+      return tieneCoords && tieneBarrio && belongsToSelectedArea({ barrio: p.barrio_principal, comuna: p.comuna });
+    });
 
     const clientIdsEnZona = Array.from(new Set(clientPlaces?.map(p => p.client_id) || []));
     const placesMap = new Map();

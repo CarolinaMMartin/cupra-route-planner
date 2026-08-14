@@ -548,7 +548,9 @@ Deno.serve(async (req) => {
           long: c.long as number,
           direccion_principal: c.direccion,
           codigo_postal: c.codigo_postal,
-          barrio_principal: geo.barrio || (c.ciudad ? c.ciudad.toUpperCase() : null),
+          // Nunca usar la ciudad como barrio. Si el archivo no trae un barrio
+          // real, geocode-clients debe resolverlo desde las coordenadas del ERP.
+          barrio_principal: geo.barrio || null,
           provincia_principal: normalizeProvincia(c.provincia) || geo.provincia,
           comuna: geo.comuna,
         };
@@ -605,6 +607,32 @@ Deno.serve(async (req) => {
         console.error('⚠️ No se pudo reconciliar ubicaciones primarias:', reconError.message);
         results.errores.push(`Ubicaciones primarias: ${reconError.message}`);
       }
+    }
+
+    // Regla permanente de calidad geográfica: cada carga dispara la resolución
+    // inversa de barrios para toda ubicación con coordenadas. Se espera la
+    // respuesta para que el resultado de la carga refleje el estado real.
+    try {
+      const geocodeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocode-clients`, {
+        method: 'POST',
+        headers: {
+          Authorization: req.headers.get('Authorization') || '',
+          apikey: Deno.env.get('SUPABASE_ANON_KEY') || '',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ limit: 600 }),
+      });
+      const geocodeResult = await geocodeResponse.json();
+      if (!geocodeResponse.ok) {
+        throw new Error(geocodeResult?.error || `HTTP ${geocodeResponse.status}`);
+      }
+      (results as any).ubicaciones = {
+        barrios_resueltos: Number(geocodeResult?.reverse?.resueltos || 0),
+        pendientes_barrio: Number(geocodeResult?.pendientes_barrio || 0),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      results.errores.push(`No se pudo completar el barrio desde las coordenadas: ${message}`);
     }
 
 
