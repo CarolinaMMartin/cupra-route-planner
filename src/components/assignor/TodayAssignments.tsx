@@ -510,7 +510,9 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                 );
               })}
             </div>
-          </div>
+            </CollapsibleContent>
+          </Collapsible>
+
         ))}
       </div>
 
