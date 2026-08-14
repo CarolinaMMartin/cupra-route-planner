@@ -1289,7 +1289,7 @@ Deno.serve(async (req) => {
     // ---- 8. Load feedbacks ----
     const { data: feedbacks } = await supabaseClient
       .from("cliente_feedbacks")
-      .select("client_id, prospecto_place_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, created_at")
+      .select("client_id, prospecto_place_id, vendedor_id, visita_realizada, feedback, motivo_no_visita, tipo_interaccion, estado_cliente, created_at")
       .order("created_at", { ascending: false });
 
     const feedbacksMapClientes = new Map<string, any[]>();
