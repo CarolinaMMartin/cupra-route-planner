@@ -619,6 +619,17 @@ Deno.serve(async (req) => {
 
     console.log('🎉 Maestro procesado:', results);
 
+    // OT7: conciliación de entidades — cuántas razones sociales del archivo
+    // terminaron fusionadas en un mismo cliente por identidad (CUIT / nombre).
+    const razonesSociales = new Set(
+      parsed.map((p) => normalizeName(p.razon_social)).filter(Boolean) as string[]
+    ).size;
+    const conciliacion_entidades = {
+      razones_sociales: razonesSociales,
+      clientes_unicos: clientes.length,
+      fusionados_por_identidad: Math.max(0, razonesSociales - clientes.length),
+    };
+
     const estado = results.clientes_errores > 0 || results.errores.length > 0 || sinResolver > 0
       ? 'completado_con_errores'
       : 'completado';
@@ -632,6 +643,7 @@ Deno.serve(async (req) => {
           clientes_unicos: clientes.length,
           filas_sin_identificador: sinIdentificador,
           filas_sin_resolver: sinResolver,
+          ...conciliacion_entidades,
         },
         completed_at: new Date().toISOString(),
       })
