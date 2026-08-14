@@ -371,7 +371,7 @@ async function discoverProspectsFromGoogle(
             tipo_principal: place.primaryType || null,
             tipos: types,
             sirve_vinos: types.includes("wine_bar") || types.includes("liquor_store"),
-            website: null,
+            website: place.websiteUri || null,
             estado_negocio: place.businessStatus || null,
             es_cliente_cupra: false,
           });
