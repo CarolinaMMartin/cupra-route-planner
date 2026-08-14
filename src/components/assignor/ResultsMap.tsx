@@ -40,6 +40,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
   const [vendorLegend, setVendorLegend] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sinUbicacion, setSinUbicacion] = useState<string[]>([]);
 
   // Initialize Google Maps
   useEffect(() => {
