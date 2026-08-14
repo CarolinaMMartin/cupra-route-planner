@@ -20,6 +20,7 @@ const normalizeRS = (rs: string | null | undefined) =>
 const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: Props) => {
   const [loading, setLoading] = useState(false);
   const [ventas, setVentas] = useState<any[]>([]);
+  const [feedbacks, setFeedbacks] = useState<any[]>([]);
 
   useEffect(() => {
     if (!open || !cliente) return;
