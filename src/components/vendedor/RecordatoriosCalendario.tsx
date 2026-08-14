@@ -234,7 +234,7 @@ const RecordatoriosCalendario = () => {
         vendedor_id: user.id,
         titulo: `Visita agendada: ${candidato.nombre}`,
         nota: nota || null,
-        fecha_recordatorio: new Date(`${fecha}T09:00:00-03:00`).toISOString(),
+        fecha_recordatorio: new Date(`${fecha}T${horaAgenda || "09:00"}:00-03:00`).toISOString(),
       };
       if (candidato.esProspecto) recordatorio.prospecto_place_id = candidato.id;
       else recordatorio.client_id = candidato.id;
