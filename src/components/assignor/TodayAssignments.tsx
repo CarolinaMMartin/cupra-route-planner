@@ -484,13 +484,52 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                           </Badge>
                         )}
                       </div>
-                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0 tabular-nums">
-                        <Clock className="w-3 h-3" />
-                        {new Date(assignment.created_at).toLocaleTimeString("es-AR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+                          <Clock className="w-3 h-3" />
+                          {new Date(assignment.created_at).toLocaleTimeString("es-AR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={isDeleting}
+                              aria-label="Quitar asignación"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="font-sans">¿Quitar esta asignación?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Se quitará {toTitleCase(clientName)} de la ruta de hoy de{" "}
+                                {toTitleCase(vendedorNombre)}.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="h-9">Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="h-9"
+                                onClick={() =>
+                                  handleDeleteAssignments(
+                                    [assignment.id],
+                                    `Se quitó ${toTitleCase(clientName)}`,
+                                  )
+                                }
+                              >
+                                Quitar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+
                     </div>
 
                     {/* Row 2: Secondary info */}
