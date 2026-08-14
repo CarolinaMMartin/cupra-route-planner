@@ -2130,6 +2130,8 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
         prospectos_de_maps: obtMapsLive,
         radio_final_km: Number(radioFinal.toFixed(1)),
         clientes_propios_en_zona: (vendorClientPools.get(vendedor.user_id) || []).length,
+        cuentas_sin_ubicacion: (sinUbicacionPorVendedor.get(vendedor.user_id) || []).map((c) => c.nombre),
+
         cuentas_prioritarias_fuera_de_zona: (cuentasFueraPorVendedor.get(vendedor.user_id) || []).map((r) => ({
           nombre: r.nombre,
           barrio: r.barrio,
