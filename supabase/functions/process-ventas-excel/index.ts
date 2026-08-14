@@ -53,7 +53,6 @@ interface FileMetadata {
   sha256?: string | null;
   sheetName?: string;
   headerRow?: number;
-  comprobantesSheetName?: string | null;
 }
 
 type SupabaseAdminClient = SupabaseClient<any, 'public', any>;
@@ -371,15 +370,10 @@ Deno.serve(async (req) => {
       rows: Record<string, any>[];
       replaceExisting?: boolean;
       notasCredito?: Record<string, any>[];
-      comprobantes?: Record<string, any>[];
       fileMetadata?: FileMetadata;
     };
     const rawRows = body.rows;
     const rawNotasCredito = Array.isArray(body.notasCredito) ? body.notasCredito : [];
-    // Doble ingesta: la hoja "Ventas por Comprobante" trae el total por factura de
-    // TODAS las marcas (universo completo). La hoja de producto viene filtrada por
-    // proveedor CUPRA, así que sólo sirve para el mix (cajas/SKU/share).
-    const rawComprobantes = Array.isArray(body.comprobantes) ? body.comprobantes : [];
     const replaceExisting = body.replaceExisting !== false; // default true
 
     if (!Array.isArray(rawRows) || rawRows.length === 0) {
@@ -387,7 +381,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400,
       });
     }
-    if (rawRows.length > 50_000 || rawNotasCredito.length > 50_000 || rawComprobantes.length > 50_000) {
+    if (rawRows.length > 50_000 || rawNotasCredito.length > 50_000) {
       return new Response(JSON.stringify({ success: false, error: 'Cada hoja puede contener hasta 50.000 filas' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 413,
       });
@@ -732,85 +726,6 @@ Deno.serve(async (req) => {
 
     }
 
-    // ============ FASE 1c: Comprobantes (verdad monetaria, todas las marcas) ============
-    // La hoja "Ventas por Comprobante" trae una fila por factura con el total del
-    // negocio del cliente. Es la fuente de monto_total_historico / cantidad_ordenes /
-    // ticket_promedio / recencia. La hoja de producto queda como mix CUPRA.
-    interface AggComprobante {
-      monto: number; tickets: Set<string>; fechas: Date[];
-      base: Record<string, any> | null;
-    }
-    const comprobantesPorCliente = new Map<string, AggComprobante>();
-    let comprobantesLeidos = 0;
-    let comprobantesSinIdentidad = 0;
-    let comprobantesSinImporte = 0;
-    let comprobantesNotasCredito = 0;
-    let totalComprobantes = 0;
-
-    if (rawComprobantes.length > 0) {
-      const compHashes = new Set<string>();
-      for (const row of rawComprobantes) {
-        const hash = JSON.stringify(Object.values(row).map(v => String(v ?? '').trim()));
-        if (compHashes.has(hash)) continue;
-        compHashes.add(hash);
-
-        const tipoTexto = String(
-          getFieldValue(row, ['Tipo Comprobante', 'Tipo', 'Comprobante', 'tipo_comprobante']) ?? ''
-        ).toUpperCase();
-        const letra = toStr(getFieldValue(row, ['Letra', 'letra']));
-        if (/NOTA\s*DE\s*CR/.test(tipoTexto) || (letra || '').toUpperCase() === 'NC') {
-          comprobantesNotasCredito++;
-          continue;
-        }
-
-        const { client_id } = resolverIdentidad(row);
-        if (!client_id) {
-          comprobantesSinIdentidad++;
-          filasDescartadas.push({ origen: 'venta', motivo: 'comprobante_sin_identidad_cliente', payload: row });
-          continue;
-        }
-
-        const importe = parseNumericValue(getFieldValue(row, [
-          'Total Final', 'Precio Total Final', 'Importe Total', 'Total Comprobante', 'Total',
-        ]));
-        if (importe === null || importe === undefined) {
-          comprobantesSinImporte++;
-          filasDescartadas.push({ origen: 'venta', motivo: 'comprobante_sin_importe', payload: row });
-          continue;
-        }
-
-        const ticket = toStr(getFieldValue(row, ['Ticket', 'ticket', 'Número', 'Numero', 'Comprobante Nro']));
-        const fecha = parseDate(getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision', 'Fecha', 'fecha']));
-
-        let agg = comprobantesPorCliente.get(client_id);
-        if (!agg) { agg = { monto: 0, tickets: new Set<string>(), fechas: [], base: null }; comprobantesPorCliente.set(client_id, agg); }
-        if (!agg.base) {
-          agg.base = {
-            cuit_dni: normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni'])),
-            razon_social: toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social'])),
-            fantasia: toStr(getFieldValue(row, ['Fantasía', 'Fantasia', 'fantasia'])),
-            vendedor: toStr(getFieldValue(row, ['Vendedor', 'vendedor'])),
-            direccion: toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Calle'])),
-            ciudad: toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad', 'localidad'])),
-            provincia: toStr(getFieldValue(row, ['Provincia', 'provincia'])),
-            telefono: toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono'])),
-            correo: toStr(getFieldValue(row, ['Correo', 'correo', 'Email', 'email'])),
-            categorias: toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias'])),
-          };
-        }
-        agg.monto += importe;
-        agg.tickets.add(`${ticket || ''}|${letra || ''}|${fecha || ''}`);
-        if (fecha) agg.fechas.push(new Date(fecha));
-        comprobantesLeidos++;
-        totalComprobantes += importe;
-      }
-      console.log(
-        `🧾 Comprobantes: ${comprobantesLeidos} leídos, ${comprobantesPorCliente.size} clientes, ` +
-        `$${Math.round(totalComprobantes).toLocaleString()} | ${comprobantesSinIdentidad} sin identidad, ` +
-        `${comprobantesSinImporte} sin importe, ${comprobantesNotasCredito} notas de crédito omitidas`
-      );
-    }
-
     if (facturacionNullCount > 0) {
       console.log(`⚠️ ${facturacionNullCount} filas con facturación null (columna: ${facturacionColumnResolved})`);
     }
@@ -941,92 +856,20 @@ Deno.serve(async (req) => {
       c.fantasia = fantasia || c.fantasia;
     }
 
-    // ============ FASE 2b: clientes que sólo aparecen en comprobantes ============
-    // Compran otras bodegas y $0 CUPRA: sin esto quedan invisibles para el motor.
-    let clientesSoloComprobante = 0;
-    for (const [cid, agg] of comprobantesPorCliente.entries()) {
-      if (clientesMap.has(cid)) continue;
-      const b = agg.base || {};
-      const geo = normalizarGeografia(b.ciudad || null);
-      const provinciaFinal = normalizeProvincia(geo.provincia) || normalizeProvincia(b.provincia) || geo.provincia;
-      const nuevo: any = {
-        client_id: cid, cuit_dni: b.cuit_dni || null, razon_social: b.razon_social || null, fantasia: b.fantasia || null,
-        barrios: new Set<string>(), comunas: new Set<string>(), ciudades: new Set<string>(),
-        provincias: new Set<string>(), direcciones: new Set<string>(), vendedores: new Set<string>(),
-        productos: new Set<string>(), categorias_set: new Set<string>(),
-        telefonos: new Set<string>(), emails: new Set<string>(),
-        monto_total: 0, tickets_set: new Set<string>(), cantidad_lineas: 0,
-        fechas: [] as Date[], ultima_fecha_venta: null as Date | null, vendedor_ultima_venta: null as string | null,
-      };
-      if (geo.barrio) nuevo.barrios.add(geo.barrio);
-      if (geo.comuna) nuevo.comunas.add(geo.comuna);
-      if (geo.ciudad) nuevo.ciudades.add(geo.ciudad);
-      if (provinciaFinal) nuevo.provincias.add(provinciaFinal);
-      if (b.direccion) nuevo.direcciones.add(b.direccion);
-      if (b.vendedor) nuevo.vendedores.add(b.vendedor);
-      if (b.telefono) nuevo.telefonos.add(b.telefono);
-      if (b.correo) nuevo.emails.add(b.correo);
-      if (b.categorias) {
-        String(b.categorias).split(/[/|,;]/).forEach((cat: string) => { const t = cat.trim(); if (t) nuevo.categorias_set.add(t); });
-      }
-      const fechasComp = [...agg.fechas].sort((a, b2) => a.getTime() - b2.getTime());
-      const ultimaComp = fechasComp[fechasComp.length - 1] || null;
-      if (b.vendedor && ultimaComp) { nuevo.ultima_fecha_venta = ultimaComp; nuevo.vendedor_ultima_venta = b.vendedor; }
-      clientesMap.set(cid, nuevo);
-      clientesSoloComprobante++;
-    }
-    if (clientesSoloComprobante > 0) {
-      console.log(`🆕 ${clientesSoloComprobante} clientes provienen sólo de la hoja de comprobantes (sin compra CUPRA en el período)`);
-    }
-
     // ============ FASE 3: RFM + scores ============
     const ahora = new Date();
-    const usaComprobantes = comprobantesPorCliente.size > 0;
 
-    // Resumen monetario por cliente: manda el comprobante cuando existe.
-    const resumenMonetario = new Map<string, {
-      monto: number; ordenes: number; fechas: Date[]; fuente: 'comprobante' | 'producto'; montoCupra: number;
-    }>();
-    for (const c of clientesMap.values()) {
-      const agg = comprobantesPorCliente.get(c.client_id);
-      const montoCupra = Math.round(c.monto_total * 100) / 100;
-      if (agg && agg.tickets.size > 0) {
-        resumenMonetario.set(c.client_id, {
-          monto: Math.round(agg.monto * 100) / 100,
-          ordenes: agg.tickets.size,
-          fechas: agg.fechas.slice(),
-          fuente: 'comprobante',
-          montoCupra,
-        });
-      } else {
-        resumenMonetario.set(c.client_id, {
-          monto: montoCupra,
-          ordenes: c.tickets_set.size > 0 ? c.tickets_set.size : (c.cantidad_lineas > 0 ? 1 : 0),
-          fechas: c.fechas.slice(),
-          fuente: 'producto',
-          montoCupra,
-        });
-      }
-    }
-
-    const totalGlobal = Array.from(resumenMonetario.values()).reduce((sum, r) => sum + r.monto, 0);
+    const totalGlobal = Array.from(clientesMap.values()).reduce((sum, c) => sum + c.monto_total, 0);
 
     const clientesEnriquecidos = Array.from(clientesMap.values()).map(c => {
-      const resumen = resumenMonetario.get(c.client_id)!;
-      // Las fechas de comprobante cubren todas las marcas: mejor señal de recencia.
-      const fechasBase = resumen.fechas.length > 0 ? resumen.fechas : c.fechas;
-      const fechasOrd = [...fechasBase].sort((a: Date, b: Date) => a.getTime() - b.getTime());
+      const fechasOrd = [...c.fechas].sort((a: Date, b: Date) => a.getTime() - b.getTime());
       const primera = fechasOrd[0] || null;
       const ultima = fechasOrd[fechasOrd.length - 1] || null;
       const dias = ultima ? Math.floor((ahora.getTime() - ultima.getTime()) / 86400000) : 9999;
 
-      const montoTotal = resumen.monto;
-      // TAREA 1: cantidad_ordenes = comprobantes únicos (no líneas de producto)
-      const cantidadOrdenes = resumen.ordenes;
+      const montoTotal = c.monto_total;
+      const cantidadOrdenes = c.tickets_set.size > 0 ? c.tickets_set.size : (c.cantidad_lineas > 0 ? 1 : 0);
       const ticket_promedio = cantidadOrdenes > 0 ? Math.round((montoTotal / cantidadOrdenes) * 100) / 100 : 0;
-      const share_cupra = montoTotal > 0
-        ? Math.round(Math.min(100, Math.max(0, (resumen.montoCupra / montoTotal) * 100)) * 100) / 100
-        : 0;
 
       let categoria_recencia = 'PERDIDO', score_recencia = 10;
       if (dias <= DIAS_ACTIVO) { categoria_recencia = 'ACTIVO'; score_recencia = 100; }
@@ -1056,9 +899,9 @@ Deno.serve(async (req) => {
         dias_desde_ultima_compra: dias === 9999 ? null : dias,
         cantidad_ordenes: cantidadOrdenes,
         monto_total_historico: Math.round(montoTotal * 100) / 100,
-        monto_total_cupra: resumen.montoCupra,
-        share_cupra,
-        fuente_monto: resumen.fuente,
+        monto_total_cupra: Math.round(montoTotal * 100) / 100,
+        share_cupra: 100,
+        fuente_monto: 'producto',
         ticket_promedio, categoria_recencia, categoria_volumen,
         score_recencia, score_volumen, score_comercial,
         participacion_mercado: Math.round(participacion * 10000) / 100,
@@ -1076,9 +919,6 @@ Deno.serve(async (req) => {
 
     // ── TAREA 9: Reconciliación — totales para validación ──
     const totalFacturacionProcesada = Math.round(totalGlobal * 100) / 100;
-    const totalCupraProcesado = Math.round(
-      Array.from(resumenMonetario.values()).reduce((sum, r) => sum + r.montoCupra, 0) * 100
-    ) / 100;
     const totalTicketsUnicos = Array.from(clientesMap.values()).reduce((sum, c) => sum + c.tickets_set.size, 0);
     const totalClientesUnicos = clientesMap.size;
     // Fix 3: Count clients by normalized razon_social
@@ -1261,8 +1101,7 @@ Deno.serve(async (req) => {
     // ── TAREA 11: Consistencia clientes ↔ ventas_cupra (post-carga check) ──
     // Solo reportamos las discrepancias, no corregimos aquí
     const discrepancias: string[] = [];
-    // Compare total processed vs what we just upserted
-    if (Math.abs(totalFacturacionProcesada - Array.from(resumenMonetario.values()).reduce((s2, r) => s2 + r.monto, 0)) > 1) {
+    if (Math.abs(totalFacturacionProcesada - totalGlobal) > 1) {
       discrepancias.push('Discrepancia interna en facturación total procesada');
     }
 
@@ -1320,19 +1159,6 @@ Deno.serve(async (req) => {
       filas_descartadas_sin_id: ventasSinClientId,
       filas_cuit_ambiguo: ventasCuitAmbiguo,
       facturacion_total_procesada: totalFacturacionProcesada,
-      // Doble ingesta
-      fuente_monto: usaComprobantes ? 'comprobante' : 'producto',
-      hoja_comprobantes: fileMetadata.comprobantesSheetName || null,
-      comprobantes_leidos: comprobantesLeidos,
-      comprobantes_sin_identidad: comprobantesSinIdentidad,
-      comprobantes_sin_importe: comprobantesSinImporte,
-      comprobantes_notas_credito_omitidas: comprobantesNotasCredito,
-      clientes_solo_comprobante: clientesSoloComprobante,
-      facturacion_total_comprobantes: Math.round(totalComprobantes * 100) / 100,
-      facturacion_cupra: totalCupraProcesado,
-      share_cupra_global: totalFacturacionProcesada > 0
-        ? Math.round((totalCupraProcesado / totalFacturacionProcesada) * 10000) / 100
-        : null,
       tickets_unicos: totalTicketsUnicos,
       clientes_unicos: totalClientesUnicos,
       clientes_razon_social: totalClientesRazonSocial,

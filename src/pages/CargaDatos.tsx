@@ -81,17 +81,6 @@ interface Reconciliacion {
   clientes_razon_social?: number;
   tickets_compartidos: number;
   vendedor_breakdown?: VendedorBreakdown[];
-  // Doble ingesta (hoja "Ventas por Comprobante")
-  fuente_monto?: "comprobante" | "producto";
-  hoja_comprobantes?: string | null;
-  comprobantes_leidos?: number;
-  comprobantes_sin_identidad?: number;
-  comprobantes_sin_importe?: number;
-  comprobantes_notas_credito_omitidas?: number;
-  clientes_solo_comprobante?: number;
-  facturacion_total_comprobantes?: number;
-  facturacion_cupra?: number;
-  share_cupra_global?: number | null;
 }
 
 
@@ -138,9 +127,6 @@ const CargaDatos = () => {
   const [sheetName, setSheetName] = useState<string>("");
   const [headerRow, setHeaderRow] = useState<number>(1);
   const [notasCredito, setNotasCredito] = useState<SpreadsheetRow[]>([]);
-  // Doble ingesta: "Ventas por Comprobante" = verdad monetaria (todas las marcas)
-  const [comprobantes, setComprobantes] = useState<SpreadsheetRow[]>([]);
-  const [comprobantesSheetName, setComprobantesSheetName] = useState<string>("");
   const [maestroResults, setMaestroResults] = useState<MaestroResults | null>(null);
   const [maestroVendedores, setMaestroVendedores] = useState<{ vendedor: string; clientes: number }[]>([]);
 
@@ -251,10 +237,8 @@ const CargaDatos = () => {
       .filter((s) => s.rows.length > 0 && !/nota/i.test(s.name))
       .map((s) => ({ ...s, tipo: classify(s.keys) }));
 
-    // Prioridad: hoja de ventas por producto > ventas > maestro > la más grande
-    const ventasProducto = candidatos.find((s) => s.tipo === "ventas" && /producto/i.test(s.name));
-    const comprobanteSheet = candidatos.find((s) => /comprobante/i.test(s.name) && s.rows.length > 0);
-    const ventas = ventasProducto || candidatos.find((s) => s.tipo === "ventas");
+    // Prioridad: hoja de ventas > maestro > la más grande
+    const ventas = candidatos.find((s) => s.tipo === "ventas");
     const maestro = candidatos.filter((s) => s.tipo === "maestro").sort((a, b) => b.rows.length - a.rows.length)[0];
     const elegido = ventas || maestro || candidatos.sort((a, b) => b.rows.length - a.rows.length)[0];
 
@@ -280,10 +264,6 @@ const CargaDatos = () => {
     setRows(elegido.rows);
     setColumns(Object.keys(elegido.rows[0]));
     setNotasCredito(tipo === "ventas" && ncSheet ? ncSheet.rows : []);
-    const usaComprobantes =
-      tipo === "ventas" && comprobanteSheet && comprobanteSheet.name !== elegido.name;
-    setComprobantes(usaComprobantes ? comprobanteSheet!.rows : []);
-    setComprobantesSheetName(usaComprobantes ? comprobanteSheet!.name : "");
     setStep("preview");
     } catch (error) {
       toast({
@@ -346,8 +326,7 @@ const CargaDatos = () => {
           rows,
           replaceExisting,
           notasCredito: notasCredito.length ? notasCredito : undefined,
-          comprobantes: comprobantes.length ? comprobantes : undefined,
-          fileMetadata: { ...fileMetadata, comprobantesSheetName: comprobantesSheetName || null },
+          fileMetadata,
         },
       });
       setProgress(90);
@@ -405,8 +384,6 @@ const CargaDatos = () => {
     setMetadata(null);
     setIntegridad(null);
     setNotasCredito([]);
-    setComprobantes([]);
-    setComprobantesSheetName("");
     setMaestroResults(null);
     setMaestroVendedores([]);
     setSheetName("");
@@ -492,7 +469,6 @@ const CargaDatos = () => {
                     <CardDescription className="text-xs mt-0.5">
                       Hoja "{sheetName}" · encabezados en fila {headerRow} · {rows.length.toLocaleString()} filas · {columns.length} columnas
                       {notasCredito.length > 0 && ` · ${notasCredito.length.toLocaleString()} notas de crédito`}
-                      {comprobantes.length > 0 && ` · ${comprobantes.length.toLocaleString()} comprobantes ("${comprobantesSheetName}")`}
                     </CardDescription>
                   </div>
 
@@ -502,29 +478,6 @@ const CargaDatos = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                {fileKind === "ventas" && (
-                  <Alert className="mb-3">
-                    {comprobantes.length > 0 ? (
-                      <>
-                        <Info className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          Doble ingesta activa: <strong>"{comprobantesSheetName}"</strong> define la facturación total del
-                          cliente (todas las marcas) y <strong>"{sheetName}"</strong> aporta el mix CUPRA (cajas, SKUs y
-                          share).
-                        </AlertDescription>
-                      </>
-                    ) : (
-                      <>
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription className="text-xs">
-                          No se encontró la hoja <strong>"Ventas por Comprobante"</strong>. La hoja de productos viene
-                          filtrada por proveedor CUPRA, así que los clientes multi-marca quedarán subvaluados. Pedí el
-                          export completo del ERP para tener la facturación real por cliente.
-                        </AlertDescription>
-                      </>
-                    )}
-                  </Alert>
-                )}
                 <div className="mb-3">
                   <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                     <Eye className="h-3 w-3" /> Columnas detectadas
@@ -757,20 +710,8 @@ const CargaDatos = () => {
                     </div>
                   </div>
                   <div className="mt-3 p-2.5 rounded-lg bg-accent/5 text-center">
-                    <p className="text-xs text-muted-foreground">
-                      {reconciliacion.fuente_monto === "comprobante"
-                        ? "Facturación total del período (todas las marcas)"
-                        : "Facturación total procesada (solo CUPRA)"}
-                    </p>
+                    <p className="text-xs text-muted-foreground">Facturación total procesada</p>
                     <p className="text-xl font-bold text-accent">{formatCurrency(reconciliacion.facturacion_total_procesada)}</p>
-                    {reconciliacion.fuente_monto === "comprobante" && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        CUPRA: {formatCurrency(reconciliacion.facturacion_cupra ?? 0)}
-                        {reconciliacion.share_cupra_global != null && ` · share ${reconciliacion.share_cupra_global}%`}
-                        {(reconciliacion.clientes_solo_comprobante ?? 0) > 0 &&
-                          ` · ${reconciliacion.clientes_solo_comprobante} clientes sin compra CUPRA en el período`}
-                      </p>
-                    )}
                   </div>
 
                   {/* Conciliación fila por fila: Excel vs base */}
