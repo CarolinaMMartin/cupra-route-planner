@@ -1165,10 +1165,12 @@ Deno.serve(async (req) => {
       .limit(200);
 
     if (provincia && provincia !== "all") prospectosQuery = prospectosQuery.ilike("provincia", `%${provincia}%`);
-    const geoConditionsP: string[] = [];
-    if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditionsP.push(`comuna.ilike.%${c}%`));
-    if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditionsP.push(`barrio.ilike.%${b}%`));
+    const geoConditionsP: string[] = [
+      ...comunaExactConditions("comuna"),
+      ...barrioLikeConditions("barrio"),
+    ];
     if (geoConditionsP.length > 0) prospectosQuery = prospectosQuery.or(geoConditionsP.join(","));
+
 
     const { data: prospectosData, error: prospectosError } = await prospectosQuery;
     if (prospectosError) throw prospectosError;
