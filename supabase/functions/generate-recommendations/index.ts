@@ -1399,7 +1399,8 @@ Deno.serve(async (req) => {
 
       vendorHotspots.set(vendedor.user_id, vendorHotspot);
       const isConquestMode = vendorCoords.length === 0;
-      console.log(`🔥 ${vendedor.nombre}: Hotspot ${vendorHotspot.lat.toFixed(4)}, ${vendorHotspot.lng.toFixed(4)}${isConquestMode ? ' (MODO CONQUISTA — fallback a centro de zona/prospectos)' : ` (${vendorCoords.length} clientes propios)`}`);
+      console.log(`🔥 ${vendedor.nombre}: Hotspot ${vendorHotspot.lat.toFixed(4)}, ${vendorHotspot.lng.toFixed(4)}${isConquestMode ? ` (MODO CONQUISTA — núcleo de oportunidad, ${conquestPoints.length} puntos libres evaluados)` : ` (${vendorCoords.length} clientes propios)`}`);
+
 
       // === Other vendors' hotspots for overlap penalty ===
       const otherHotspots = [...vendorHotspots.entries()]
