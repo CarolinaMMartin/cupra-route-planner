@@ -53,7 +53,39 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
   const [vendorLegend, setVendorLegend] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sinUbicacion, setSinUbicacion] = useState<string[]>([]);
+  const [sinUbicacion, setSinUbicacion] = useState<SinUbicacionItem[]>([]);
+  const [correccion, setCorreccion] = useState<SinUbicacionItem | null>(null);
+  const [direccionEditada, setDireccionEditada] = useState("");
+  const [guardandoDireccion, setGuardandoDireccion] = useState(false);
+  const { toast } = useToast();
+
+  const guardarCorreccion = async () => {
+    if (!correccion?.client_id || !direccionEditada.trim()) return;
+    setGuardandoDireccion(true);
+    const { data, error } = await supabase.functions.invoke("resolve-client-location", {
+      body: {
+        client_id: correccion.client_id,
+        direccion: direccionEditada.trim(),
+        manual: true,
+      },
+    });
+    setGuardandoDireccion(false);
+    if (error || (data as any)?.error) {
+      toast({
+        title: "No se pudo guardar",
+        description: (data as any)?.error || error?.message || "Revisá la dirección ingresada.",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: "Dirección corregida",
+      description: "Queda verificada y no se pisa con las próximas cargas de Excel.",
+    });
+    setSinUbicacion((prev) => prev.filter((s) => s.id !== correccion.id));
+    setCorreccion(null);
+  };
+
 
   // Initialize Google Maps
   useEffect(() => {
