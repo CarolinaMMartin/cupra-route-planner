@@ -276,3 +276,48 @@ export function dedupeBarrios(values: (string | null | undefined)[]): string[] {
   }
   return out;
 }
+
+// ============================================================
+// Pertenencia al área elegida (OT1)
+// Única implementación: se usa tanto para clientes como para prospectos.
+// ============================================================
+
+/** Clave comparable de barrio/comuna: sin acentos, sin dobles espacios, mayúsculas. */
+export function areaKey(value?: string | null): string {
+  return (value || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+export interface AreaFilter {
+  barrioKeys: Set<string>;
+  comunaKeys: Set<string>;
+  activo: boolean;
+}
+
+export function buildAreaFilter(
+  barrios: (string | null | undefined)[],
+  comunas: (string | null | undefined)[],
+): AreaFilter {
+  const barrioKeys = new Set((barrios || []).map(areaKey).filter(Boolean));
+  const comunaKeys = new Set((comunas || []).map(areaKey).filter(Boolean));
+  return { barrioKeys, comunaKeys, activo: barrioKeys.size > 0 || comunaKeys.size > 0 };
+}
+
+/**
+ * El barrio manda. La comuna se usa SOLO como respaldo cuando el registro no
+ * tiene barrio: derivar comunas de los barrios y filtrar por ambas expande
+ * el área en silencio (Retiro, Parque Patricios, Nueva Pompeya...).
+ */
+export function belongsToArea(
+  place: { barrio?: string | null; comuna?: string | null },
+  filter: AreaFilter,
+): boolean {
+  if (!filter.activo) return true;
+  const barrio = areaKey(place.barrio);
+  if (barrio) return filter.barrioKeys.has(barrio);
+  const comuna = areaKey(place.comuna);
+  return Boolean(comuna) && filter.comunaKeys.has(comuna);
+}
