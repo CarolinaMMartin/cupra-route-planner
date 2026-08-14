@@ -1191,12 +1191,27 @@ Deno.serve(async (req) => {
         ...comunasFinales.map((value: string) => String(value)),
       ];
 
+      // Ancla previa: centroide de los clientes de la zona (sirve tanto en CABA como en GBA).
+      const zoneCoordsForDiscovery: AnchorPoint[] = (clientPlaces || [])
+        .map((p: any) => ({ lat: Number(p.lat), lng: Number(p.long) }))
+        .filter((p: AnchorPoint) =>
+          Number.isFinite(p.lat) && Number.isFinite(p.lng)
+          && p.lat >= -60 && p.lat <= -20 && p.lng >= -80 && p.lng <= -40
+        );
+      const discoveryAnchor: AnchorPoint | null = zoneCoordsForDiscovery.length > 0
+        ? {
+          lat: zoneCoordsForDiscovery.reduce((a, p) => a + p.lat, 0) / zoneCoordsForDiscovery.length,
+          lng: zoneCoordsForDiscovery.reduce((a, p) => a + p.lng, 0) / zoneCoordsForDiscovery.length,
+        }
+        : null;
+
       const discovered = await discoverProspectsFromGoogle(
         googleApiKey,
         discoveryZones,
         missingProspects,
         excludedPlaceIds,
         existingClientNames,
+        discoveryAnchor,
       );
       const newProspects = discovered.filter(registrarGate);
 
