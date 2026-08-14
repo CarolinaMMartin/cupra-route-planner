@@ -272,6 +272,13 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
         }
       }
 
+      const resueltos = new Set(fetchedLocations.map((l) => l.id));
+      setSinUbicacion(
+        sucursales
+          .filter((s) => !resueltos.has(s.id))
+          .map((s) => s.nombre || s.fantasia || s.razon_social || "Sin nombre"),
+      );
+
       setLocations(fetchedLocations);
       setVendorLegend(getVendorColorMap());
       setLoading(false);
