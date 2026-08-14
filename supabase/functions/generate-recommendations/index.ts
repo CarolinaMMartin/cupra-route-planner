@@ -226,7 +226,8 @@ interface GoogleTextSearchResponse {
 interface DiscoveredProspect {
   place_id: string;
   nombre: string;
-  telefono: null;
+  telefono: string | null;
+  resumen_google: string | null;
   direccion: string;
   barrio: string | null;
   comuna: string | null;
