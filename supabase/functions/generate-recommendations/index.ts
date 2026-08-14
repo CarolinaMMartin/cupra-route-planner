@@ -1059,12 +1059,16 @@ Deno.serve(async (req) => {
     let placesQuery = supabaseClient.from("client_places").select("*").eq("is_primary", true);
     if (provincia && provincia !== "all") placesQuery = placesQuery.ilike("provincia_principal", `%${provincia}%`);
 
-    const geoConditions: string[] = [];
     // OJO: comuna con comodines ("%Comuna 1%") arrastra Comuna 10..15 (Palermo).
-    // Se compara exacto (case-insensitive) para no salirse del área elegida.
-    if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditions.push(`comuna.ilike.${String(c).trim()}`));
-    if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditions.push(`barrio_principal.ilike.%${b}%`));
+    // Se compara exacto (case-insensitive). Los barrios se buscan con patrón
+    // tolerante a acentos ("San Nicol_s") porque el catálogo y el geocoding
+    // no siempre coinciden en tildes.
+    const geoConditions: string[] = [
+      ...comunaExactConditions("comuna"),
+      ...barrioLikeConditions("barrio_principal"),
+    ];
     if (geoConditions.length > 0) placesQuery = placesQuery.or(geoConditions.join(","));
+
 
     const { data: clientPlacesRaw, error: placesError } = await placesQuery;
     if (placesError) throw placesError;
