@@ -1071,9 +1071,11 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
         <div>
           <h2 className="text-xl md:text-2xl font-bold">Mis Clientes Asignados</h2>
           <p className="text-sm text-muted-foreground">
-            {viewMode === 'kanban' 
+            {viewMode === 'kanban'
               ? 'Toca un cliente para ver detalles'
-              : 'Visualiza la ubicación de tus clientes'}
+              : viewMode === 'map'
+                ? 'Visualiza la ubicación de tus clientes'
+                : 'Tus seguimientos agendados'}
           </p>
         </div>
         
