@@ -736,7 +736,10 @@ Deno.serve(async (req) => {
     // La hoja "Ventas por Comprobante" trae una fila por factura con el total del
     // negocio del cliente. Es la fuente de monto_total_historico / cantidad_ordenes /
     // ticket_promedio / recencia. La hoja de producto queda como mix CUPRA.
-    interface AggComprobante { monto: number; tickets: Set<string>; fechas: Date[]; }
+    interface AggComprobante {
+      monto: number; tickets: Set<string>; fechas: Date[];
+      base: Record<string, any> | null;
+    }
     const comprobantesPorCliente = new Map<string, AggComprobante>();
     let comprobantesLeidos = 0;
     let comprobantesSinIdentidad = 0;
@@ -780,7 +783,21 @@ Deno.serve(async (req) => {
         const fecha = parseDate(getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision', 'Fecha', 'fecha']));
 
         let agg = comprobantesPorCliente.get(client_id);
-        if (!agg) { agg = { monto: 0, tickets: new Set<string>(), fechas: [] }; comprobantesPorCliente.set(client_id, agg); }
+        if (!agg) { agg = { monto: 0, tickets: new Set<string>(), fechas: [], base: null }; comprobantesPorCliente.set(client_id, agg); }
+        if (!agg.base) {
+          agg.base = {
+            cuit_dni: normalizeCuit(getFieldValue(row, ['CUIT / DNI', 'CUIT/DNI', 'CUIT DNI', 'cuit_dni'])),
+            razon_social: toStr(getFieldValue(row, ['Razón Social', 'Razon Social', 'razon_social'])),
+            fantasia: toStr(getFieldValue(row, ['Fantasía', 'Fantasia', 'fantasia'])),
+            vendedor: toStr(getFieldValue(row, ['Vendedor', 'vendedor'])),
+            direccion: toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Calle'])),
+            ciudad: toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad', 'localidad'])),
+            provincia: toStr(getFieldValue(row, ['Provincia', 'provincia'])),
+            telefono: toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono'])),
+            correo: toStr(getFieldValue(row, ['Correo', 'correo', 'Email', 'email'])),
+            categorias: toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias'])),
+          };
+        }
         agg.monto += importe;
         agg.tickets.add(`${ticket || ''}|${letra || ''}|${fecha || ''}`);
         if (fecha) agg.fechas.push(new Date(fecha));
