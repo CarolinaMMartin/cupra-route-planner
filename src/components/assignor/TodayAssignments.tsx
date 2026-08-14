@@ -407,6 +407,44 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                   <MapPin className="w-3 h-3" />
                   Ver en mapa
                 </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isDeleting}
+                      className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Borrar ruta
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="font-sans">
+                        ¿Borrar la ruta de {toTitleCase(vendedorNombre)}?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Se eliminarán las {data.clientes.length} asignaciones de hoy de este vendedor.
+                        El resto de los vendedores no se ve afectado.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel className="h-9">Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="h-9"
+                        onClick={() =>
+                          handleDeleteAssignments(
+                            data.clientes.map((c) => c.id),
+                            `Se borró la ruta de ${toTitleCase(vendedorNombre)}`,
+                          )
+                        }
+                      >
+                        Borrar ruta
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 <Badge
                   variant="secondary"
                   className="px-2.5 py-0.5 text-xs font-medium tabular-nums"
@@ -414,6 +452,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                   {data.clientes.length} cliente{data.clientes.length !== 1 ? "s" : ""}
                 </Badge>
               </div>
+
             </div>
 
             {/* Client items */}
