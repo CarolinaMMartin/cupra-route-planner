@@ -2526,6 +2526,14 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
       if (cob.total < 8) {
         partes.push(`Sólo se pudieron armar ${cob.total} de 8 visitas para ${vendedor.nombre} con los filtros elegidos. Probá ampliar la zona.`);
       }
+      if (cob.cuentas_sin_ubicacion?.length > 0) {
+        partes.push(
+          `${cob.cuentas_sin_ubicacion.length} cuenta${cob.cuentas_sin_ubicacion.length === 1 ? "" : "s"} de ${vendedor.nombre} en ${zonaTexto} `
+          + `no tiene dirección ubicable y quedó fuera del análisis: ${cob.cuentas_sin_ubicacion.slice(0, 5).join(", ")}. `
+          + `Corregí la dirección para que entren en la ruta.`,
+        );
+
+      }
       if (partes.length > 0) avisosCobertura.push(partes.join(" "));
       if (propios === 0 && cob.total > 0) {
         console.log(`ℹ️ ${vendedor.nombre}: ruta 100% de prospección.`);
