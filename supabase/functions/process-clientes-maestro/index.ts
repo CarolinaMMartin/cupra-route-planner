@@ -235,6 +235,7 @@ function parseRow(row: Record<string, any>): MaestroRow {
     razon_social: razonRaw,
     fantasia,
     direccion,
+    codigo_postal,
     ciudad: toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad'])),
     provincia: toStr(getFieldValue(row, ['Provincia', 'provincia'])),
     telefonos: Array.from(new Set(telefonos)),
