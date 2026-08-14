@@ -242,7 +242,7 @@ const RecordatoriosCalendario = () => {
 
       toast({
         title: "Visita agendada",
-        description: `${candidato.nombre} va a aparecer en "Por visitar" el ${selectedDate.toLocaleDateString("es-AR")}.`,
+        description: `${candidato.nombre} va a aparecer en "Por visitar" el ${dia.toLocaleDateString("es-AR")}.`,
       });
       setDialogAbierto(false);
       setBusqueda("");
