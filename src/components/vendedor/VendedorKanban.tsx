@@ -1214,8 +1214,10 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
             </div>
           </div>
         </>
-      ) : (
+      ) : viewMode === 'map' ? (
         <VendedorAssignmentsMap assignments={assignments} />
+      ) : (
+        <RecordatoriosCalendario />
       )}
 
       {/* Dialog de información del cliente */}
