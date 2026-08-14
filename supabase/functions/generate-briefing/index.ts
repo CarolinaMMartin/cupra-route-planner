@@ -10,6 +10,12 @@ const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto"
 
 type Hechos = Record<string, unknown>;
 
+const NO_PRODUCTO = /(DESCUENTO|BONIFICAC|FLETE|AJUSTE|NOTA DE CREDITO|REDONDEO|INTERES|SERVICIO|ENVIO)/;
+
+function esProducto(nombre: string) {
+  return !!nombre && !NO_PRODUCTO.test(nombre.toUpperCase());
+}
+
 function familiaProducto(nombre: string) {
   return nombre
     .toUpperCase()
@@ -238,6 +244,7 @@ Deno.serve(async (req) => {
         .sort((a, b) => b[1] - a[1])
         .map(([p]) => p)
         .filter((p) => {
+          if (!esProducto(p)) return false;
           const f = familiaProducto(p);
           if (comprados.has(f) || vistas.has(f)) return false;
           vistas.add(f);
