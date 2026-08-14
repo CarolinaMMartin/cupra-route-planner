@@ -233,6 +233,35 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
     }
   };
 
+  const handleDeleteAssignments = async (ids: string[], label: string) => {
+    if (ids.length === 0) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("asignaciones_vendedores_clientes")
+        .delete()
+        .in("id", ids);
+
+      if (error) throw error;
+
+      setAssignments((prev) => prev.filter((a) => !ids.includes(a.id)));
+      toast({
+        title: "Asignaciones eliminadas",
+        description: `${label} (${ids.length}).`,
+      });
+    } catch (error) {
+      console.error("Error deleting assignments:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Error al eliminar las asignaciones",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+
   const assignmentsByVendedor = assignments.reduce(
     (acc, assignment) => {
       const vendedorNombre = toTitleCase(assignment.vendedor?.nombre) || "Vendedor desconocido";
@@ -378,6 +407,44 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                   <MapPin className="w-3 h-3" />
                   Ver en mapa
                 </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isDeleting}
+                      className="gap-1.5 h-8 text-xs text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Borrar ruta
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="font-sans">
+                        ¿Borrar la ruta de {toTitleCase(vendedorNombre)}?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Se eliminarán las {data.clientes.length} asignaciones de hoy de este vendedor.
+                        El resto de los vendedores no se ve afectado.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel className="h-9">Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="h-9"
+                        onClick={() =>
+                          handleDeleteAssignments(
+                            data.clientes.map((c) => c.id),
+                            `Se borró la ruta de ${toTitleCase(vendedorNombre)}`,
+                          )
+                        }
+                      >
+                        Borrar ruta
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 <Badge
                   variant="secondary"
                   className="px-2.5 py-0.5 text-xs font-medium tabular-nums"
@@ -385,6 +452,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                   {data.clientes.length} cliente{data.clientes.length !== 1 ? "s" : ""}
                 </Badge>
               </div>
+
             </div>
 
             {/* Client items */}
@@ -416,13 +484,52 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                           </Badge>
                         )}
                       </div>
-                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground shrink-0 tabular-nums">
-                        <Clock className="w-3 h-3" />
-                        {new Date(assignment.created_at).toLocaleTimeString("es-AR", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground tabular-nums">
+                          <Clock className="w-3 h-3" />
+                          {new Date(assignment.created_at).toLocaleTimeString("es-AR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={isDeleting}
+                              aria-label="Quitar asignación"
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="font-sans">¿Quitar esta asignación?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Se quitará {toTitleCase(clientName)} de la ruta de hoy de{" "}
+                                {toTitleCase(vendedorNombre)}.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="h-9">Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="h-9"
+                                onClick={() =>
+                                  handleDeleteAssignments(
+                                    [assignment.id],
+                                    `Se quitó ${toTitleCase(clientName)}`,
+                                  )
+                                }
+                              >
+                                Quitar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+
                     </div>
 
                     {/* Row 2: Secondary info */}

@@ -281,6 +281,8 @@ export type Database = {
           comuna: string | null
           created_at: string | null
           direccion_principal: string | null
+          direccion_verificada: boolean
+          fuente_geocoding: string | null
           google_maps_link: string | null
           id: string
           is_primary: boolean | null
@@ -296,6 +298,8 @@ export type Database = {
           comuna?: string | null
           created_at?: string | null
           direccion_principal?: string | null
+          direccion_verificada?: boolean
+          fuente_geocoding?: string | null
           google_maps_link?: string | null
           id?: string
           is_primary?: boolean | null
@@ -311,6 +315,8 @@ export type Database = {
           comuna?: string | null
           created_at?: string | null
           direccion_principal?: string | null
+          direccion_verificada?: boolean
+          fuente_geocoding?: string | null
           google_maps_link?: string | null
           id?: string
           is_primary?: boolean | null

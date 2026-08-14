@@ -541,20 +541,40 @@ Deno.serve(async (req) => {
         };
       });
 
-      // Bajamos el flag primario de los places previos de estos clientes
+      // Direcciones corregidas manualmente: nunca se pisan desde el Excel
+      const verificadosSet = new Set<string>();
       const idsConCoords = Array.from(new Set(geoRows.map((g) => g.client_id)));
       for (let i = 0; i < idsConCoords.length; i += 200) {
         const batch = idsConCoords.slice(i, i + 200);
-        await supabase.from('client_places').update({ is_primary: false }).in('client_id', batch);
+        const { data: verificados } = await supabase
+          .from('client_places')
+          .select('client_id')
+          .in('client_id', batch)
+          .eq('direccion_verificada', true);
+        (verificados || []).forEach((v: any) => verificadosSet.add(String(v.client_id)));
+      }
+
+      const geoRowsAplicables = geoRows.filter((g) => !verificadosSet.has(g.client_id));
+
+      // Bajamos el flag primario de los places previos de estos clientes
+      const idsAplicables = Array.from(new Set(geoRowsAplicables.map((g) => g.client_id)));
+      for (let i = 0; i < idsAplicables.length; i += 200) {
+        const batch = idsAplicables.slice(i, i + 200);
+        await supabase
+          .from('client_places')
+          .update({ is_primary: false })
+          .in('client_id', batch)
+          .eq('direccion_verificada', false);
       }
 
       // Fila por fila: client_places tiene 2 constraints únicos
       // (client_id, lat, long) y (client_id, direccion_principal)
-      for (const g of geoRows) {
+      for (const g of geoRowsAplicables) {
         const { data: existingPlaces } = await supabase
           .from('client_places')
           .select('id, lat, long, direccion_principal')
-          .eq('client_id', g.client_id);
+          .eq('client_id', g.client_id)
+          .eq('direccion_verificada', false);
 
         const match = (existingPlaces || []).find(
           (p) => Number(p.lat) === g.lat && Number(p.long) === g.long
@@ -562,9 +582,10 @@ Deno.serve(async (req) => {
           ? (existingPlaces || []).find((p) => p.direccion_principal === g.direccion_principal)
           : undefined);
 
+        const payload = { ...g, fuente_geocoding: 'excel' };
         const { error } = match
-          ? await supabase.from('client_places').update(g).eq('id', match.id)
-          : await supabase.from('client_places').insert(g);
+          ? await supabase.from('client_places').update(payload).eq('id', match.id)
+          : await supabase.from('client_places').insert(payload);
 
         if (error) {
           console.error(`❌ Place ${g.client_id}:`, error.message);
@@ -573,6 +594,7 @@ Deno.serve(async (req) => {
           results.coordenadas_actualizadas++;
         }
       }
+
 
     }
 

@@ -2,13 +2,26 @@ import { useEffect, useRef, useState } from "react";
 import { Sucursal } from "@/types/sales";
 import { isManualPlaceId } from "@/lib/utils";
 import { GOOGLE_MAPS_BROWSER_KEY, loadGoogleMaps } from "@/lib/googleMaps";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Loader2, ArrowRight, AlertTriangle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { MapPin, Loader2, ArrowRight, AlertTriangle, Pencil } from "lucide-react";
 import { getVendorColor, createColoredMarkerIcon, resetVendorColors, getVendorColorMap, classifyClientState, getStateColor, calcularDistanciaKmFrontend } from "@/lib/vendorColors";
+
 interface ResultsMapProps {
   sucursales: Sucursal[];
   selectedIds: string[];
@@ -29,6 +42,15 @@ interface ClientLocation {
   hasOverlap?: boolean;
 }
 
+interface SinUbicacionItem {
+  id: string;
+  nombre: string;
+  direccion: string;
+  client_id?: string;
+  es_prospecto: boolean;
+}
+
+
 // Carga centralizada del script de Google Maps
 const loadGoogleMapsScript = (apiKey: string) => loadGoogleMaps(apiKey);
 
@@ -40,7 +62,39 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
   const [vendorLegend, setVendorLegend] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sinUbicacion, setSinUbicacion] = useState<string[]>([]);
+  const [sinUbicacion, setSinUbicacion] = useState<SinUbicacionItem[]>([]);
+  const [correccion, setCorreccion] = useState<SinUbicacionItem | null>(null);
+  const [direccionEditada, setDireccionEditada] = useState("");
+  const [guardandoDireccion, setGuardandoDireccion] = useState(false);
+  const { toast } = useToast();
+
+  const guardarCorreccion = async () => {
+    if (!correccion?.client_id || !direccionEditada.trim()) return;
+    setGuardandoDireccion(true);
+    const { data, error } = await supabase.functions.invoke("resolve-client-location", {
+      body: {
+        client_id: correccion.client_id,
+        direccion: direccionEditada.trim(),
+        manual: true,
+      },
+    });
+    setGuardandoDireccion(false);
+    if (error || (data as any)?.error) {
+      toast({
+        title: "No se pudo guardar",
+        description: (data as any)?.error || error?.message || "Revisá la dirección ingresada.",
+        variant: "destructive",
+      });
+      return;
+    }
+    toast({
+      title: "Dirección corregida",
+      description: "Queda verificada y no se pisa con las próximas cargas de Excel.",
+    });
+    setSinUbicacion((prev) => prev.filter((s) => s.id !== correccion.id));
+    setCorreccion(null);
+  };
+
 
   // Initialize Google Maps
   useEffect(() => {
@@ -239,8 +293,25 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                 }
               });
             });
-            if (geocoded) return geocoded;
+            if (geocoded) {
+              // Persistimos la geocodificación para que el cliente quede ubicado a futuro
+              const clientId = (sucursal as any).client_id as string | undefined;
+              if (clientId && !sucursal.es_prospecto) {
+                supabase.functions
+                  .invoke("resolve-client-location", {
+                    body: {
+                      client_id: clientId,
+                      lat: geocoded.lat,
+                      lng: geocoded.lng,
+                      direccion: geocoded.direccion,
+                    },
+                  })
+                  .catch(() => undefined);
+              }
+              return geocoded;
+            }
           }
+
 
           console.warn(`[ResultsMap] Sin ubicación resoluble:`, sucursal.nombre);
           return null;
@@ -277,8 +348,17 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       setSinUbicacion(
         sucursales
           .filter((s) => !resueltos.has(s.id))
-          .map((s) => s.nombre || s.fantasia || "Sin nombre"),
+          .map((s) => ({
+            id: s.id,
+            nombre: s.nombre || s.fantasia || "Sin nombre",
+            direccion: [s.direccion_principal || s.direccion, s.barrio_principal, s.provincia_principal]
+              .filter(Boolean)
+              .join(", "),
+            client_id: (s as any).client_id as string | undefined,
+            es_prospecto: !!s.es_prospecto,
+          })),
       );
+
 
       setLocations(fetchedLocations);
       setVendorLegend(getVendorColorMap());
@@ -452,16 +532,47 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
             })}
 
             {!loading && sinUbicacion.length > 0 && (
-              <div className="m-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+              <div className="m-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 space-y-2">
                 <div className="flex items-center gap-2 text-xs font-medium text-foreground">
                   <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                  {sinUbicacion.length} de {sucursales.length} sin ubicación en el mapa
+                  {sinUbicacion.length} de {sucursales.length} sin dirección válida
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {sinUbicacion.join(", ")}. Están incluidos en la ruta, pero no se pudo resolver su dirección.
+                <p className="text-xs text-muted-foreground">
+                  Están en la ruta por su historial comercial, pero no se pudo ubicar su dirección.
+                  Corregila una vez y queda guardada aunque se recargue el Excel.
                 </p>
+                <div className="space-y-1.5">
+                  {sinUbicacion.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-start justify-between gap-2 rounded border border-border/60 bg-background/60 p-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-foreground">{item.nombre}</p>
+                        <p className="truncate text-[11px] text-muted-foreground">
+                          {item.direccion || "Sin dirección cargada"}
+                        </p>
+                      </div>
+                      {item.client_id && !item.es_prospecto && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 flex-shrink-0 gap-1 text-[11px]"
+                          onClick={() => {
+                            setCorreccion(item);
+                            setDireccionEditada(item.direccion || "");
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                          Corregir
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
+
 
 
             {locations.length === 0 && !loading && (
@@ -503,7 +614,38 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
         )}
         </div>
       </div>
+
+      <Dialog open={!!correccion} onOpenChange={(open) => !open && setCorreccion(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Corregir dirección</DialogTitle>
+            <DialogDescription>
+              {correccion?.nombre}. La dirección corregida se verifica en el mapa y queda fija:
+              las próximas cargas de Excel no la sobrescriben.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="direccion-correccion">Dirección completa</Label>
+            <Input
+              id="direccion-correccion"
+              value={direccionEditada}
+              onChange={(e) => setDireccionEditada(e.target.value)}
+              placeholder="Av. Corrientes 1234, Balvanera, CABA"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCorreccion(null)}>
+              Cancelar
+            </Button>
+            <Button onClick={guardarCorreccion} disabled={guardandoDireccion || !direccionEditada.trim()}>
+              {guardandoDireccion && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Verificar y guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+
   );
 };
 
