@@ -268,6 +268,10 @@ const CargaDatos = () => {
     setRows(elegido.rows);
     setColumns(Object.keys(elegido.rows[0]));
     setNotasCredito(tipo === "ventas" && ncSheet ? ncSheet.rows : []);
+    const usaComprobantes =
+      tipo === "ventas" && comprobanteSheet && comprobanteSheet.name !== elegido.name;
+    setComprobantes(usaComprobantes ? comprobanteSheet!.rows : []);
+    setComprobantesSheetName(usaComprobantes ? comprobanteSheet!.name : "");
     setStep("preview");
     } catch (error) {
       toast({
