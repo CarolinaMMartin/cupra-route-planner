@@ -271,7 +271,7 @@ Deno.serve(async (req) => {
     const { data: placesSinBarrio } = await supabase
       .from("client_places")
       .select("id, client_id, lat, long, barrio_principal")
-      .is("barrio_principal", null)
+      .or("barrio_principal.is.null,barrio_principal.eq.")
       .not("lat", "is", null)
       .limit(limit > 0 ? limit : 600);
 
@@ -318,8 +318,7 @@ Deno.serve(async (req) => {
             barrio_principal: barrio,
             ...(provincia ? { provincia_principal: provincia } : {}),
           })
-          .eq("client_id", place.client_id)
-          .is("barrio_principal", null);
+          .eq("client_id", place.client_id);
 
         reverse.resueltos++;
       } catch {
@@ -335,9 +334,18 @@ Deno.serve(async (req) => {
       .from("clientes")
       .select("client_id", { count: "exact", head: true })
       .or("barrio_principal.is.null,barrio_principal.eq.");
+    const { count: totalClientes } = await supabase
+      .from("clientes")
+      .select("client_id", { count: "exact", head: true });
 
     return new Response(
-      JSON.stringify({ success: true, results, reverse, pendientes_barrio: pendientesBarrio ?? 0 }),
+      JSON.stringify({
+        success: true,
+        results,
+        reverse,
+        pendientes_barrio: pendientesBarrio ?? 0,
+        total_clientes: totalClientes ?? 0,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

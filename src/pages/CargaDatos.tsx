@@ -449,6 +449,15 @@ const CargaDatos = () => {
       setGeocodeResults(mergedResults);
       if (typeof data.pendientes_barrio === "number") {
         setPendingGeocount(data.pendientes_barrio);
+        if (calidad && typeof data.total_clientes === "number" && data.total_clientes > 0) {
+          const pctSinBarrio = Math.round((data.pendientes_barrio / data.total_clientes) * 100);
+          setCalidad({
+            ...calidad,
+            clientes_sin_barrio: data.pendientes_barrio,
+            pct_sin_barrio: pctSinBarrio,
+            alerta: pctSinBarrio > 10 || calidad.pct_sin_vendedor > 5,
+          });
+        }
       }
       const barriosResueltos = data.reverse?.resueltos ?? 0;
       toast({
