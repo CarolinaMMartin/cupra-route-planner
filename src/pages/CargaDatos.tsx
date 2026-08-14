@@ -393,6 +393,8 @@ const CargaDatos = () => {
     setMetadata(null);
     setIntegridad(null);
     setNotasCredito([]);
+    setComprobantes([]);
+    setComprobantesSheetName("");
     setMaestroResults(null);
     setMaestroVendedores([]);
     setSheetName("");
