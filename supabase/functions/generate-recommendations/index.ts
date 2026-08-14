@@ -1064,12 +1064,19 @@ Deno.serve(async (req) => {
     if (provincia && provincia !== "all") placesQuery = placesQuery.ilike("provincia_principal", `%${provincia}%`);
 
     const geoConditions: string[] = [];
-    if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditions.push(`comuna.ilike.%${c}%`));
+    // OJO: comuna con comodines ("%Comuna 1%") arrastra Comuna 10..15 (Palermo).
+    // Se compara exacto (case-insensitive) para no salirse del área elegida.
+    if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditions.push(`comuna.ilike.${String(c).trim()}`));
     if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditions.push(`barrio_principal.ilike.%${b}%`));
     if (geoConditions.length > 0) placesQuery = placesQuery.or(geoConditions.join(","));
 
-    const { data: clientPlaces, error: placesError } = await placesQuery;
+    const { data: clientPlacesRaw, error: placesError } = await placesQuery;
     if (placesError) throw placesError;
+
+    // Red de seguridad: nada que no pertenezca al área elegida entra a la ruta.
+    const clientPlaces = (clientPlacesRaw || []).filter((p: any) =>
+      belongsToSelectedArea({ barrio: p.barrio_principal, comuna: p.comuna })
+    );
 
     const clientIdsEnZona = Array.from(new Set(clientPlaces?.map(p => p.client_id) || []));
     const placesMap = new Map();
