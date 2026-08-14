@@ -605,16 +605,16 @@ const ManualAssignment = () => {
                         onCheckedChange={toggleAll}
                       />
                     </TableHead>
-                    <TableHead>Razón Social</TableHead>
-                    <TableHead>Ciudad</TableHead>
-                    <TableHead>Provincia</TableHead>
-                    <TableHead>Vendedor Actual</TableHead>
-                    <TableHead className="text-right">Total Compras</TableHead>
-                    <TableHead className="text-right">Días s/compra</TableHead>
+                    <TableHead><SortHeader column="nombre" label="Razón Social" /></TableHead>
+                    <TableHead><SortHeader column="ciudad" label="Ciudad" /></TableHead>
+                    <TableHead><SortHeader column="provincia" label="Provincia" /></TableHead>
+                    <TableHead><SortHeader column="vendedor" label="Vendedor Actual" /></TableHead>
+                    <TableHead className="text-right"><SortHeader column="monto" label="Total Compras" align="right" /></TableHead>
+                    <TableHead className="text-right"><SortHeader column="dias" label="Días s/compra" align="right" /></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {grupos.map(c => {
+                  {sortedGrupos.map(c => {
                     const isSelected = selectedClients.has(c.key);
                     return (
                       <TableRow
