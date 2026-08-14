@@ -454,6 +454,7 @@ Deno.serve(async (req) => {
         cuit_dni: c.cuit_dni,
         fantasia: c.fantasia,
         direccion_principal: c.direccion,
+        codigo_postal: c.codigo_postal,
         ciudad_principal: geo.ciudad || (c.ciudad ? c.ciudad.toUpperCase() : null),
         provincia_principal: provincia,
         etiquetas: etiquetas.length ? etiquetas : null,
