@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Search, Sparkles, X } from "lucide-react";
 
 interface RecommendationProgressProps {
@@ -60,16 +59,6 @@ const RecommendationProgress = ({ progress, onCancel }: RecommendationProgressPr
     >
       <div className="w-full max-w-md rounded-2xl border border-primary/25 bg-card p-6 shadow-large sm:p-8">
         <div className="flex flex-col items-center text-center">
-          <div className="relative mb-5 h-24 w-24 overflow-hidden rounded-xl bg-background/60" aria-hidden="true">
-            <img src={cupraLogo} alt="" className="absolute inset-0 h-full w-full object-contain opacity-15 grayscale" />
-            <div
-              className="absolute inset-x-0 bottom-0 overflow-hidden transition-[height] duration-500 ease-out"
-              style={{ height: `${normalizedProgress}%` }}
-            >
-              <img src={cupraLogo} alt="" className="absolute bottom-0 left-0 h-24 w-24 object-contain" />
-            </div>
-          </div>
-
           <div className="mb-2 flex items-center gap-2 text-primary">
             {normalizedProgress >= 98 ? <Sparkles className="h-5 w-5" /> : <Search className="h-5 w-5 animate-pulse" />}
             <span className="text-sm font-semibold uppercase tracking-wider">Generando recomendaciones</span>
