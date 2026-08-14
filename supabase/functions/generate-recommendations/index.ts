@@ -241,7 +241,7 @@ interface DiscoveredProspect {
   tipo_principal: string | null;
   tipos: string[];
   sirve_vinos: boolean;
-  website: null;
+  website: string | null;
   estado_negocio: string | null;
   es_cliente_cupra: false;
 }
