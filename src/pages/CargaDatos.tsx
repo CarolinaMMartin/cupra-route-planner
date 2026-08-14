@@ -129,6 +129,11 @@ const CargaDatos = () => {
   const [notasCredito, setNotasCredito] = useState<SpreadsheetRow[]>([]);
   const [maestroResults, setMaestroResults] = useState<MaestroResults | null>(null);
   const [maestroVendedores, setMaestroVendedores] = useState<{ vendedor: string; clientes: number }[]>([]);
+  const [conciliacionEntidades, setConciliacionEntidades] = useState<{
+    razones_sociales: number;
+    clientes_unicos: number;
+    fusionados_por_identidad: number;
+  } | null>(null);
 
 
   // TAREA 7, 9, 10: Extended ETL response
