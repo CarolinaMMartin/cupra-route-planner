@@ -84,7 +84,7 @@ const TableAssignment = ({
       const { data, error } = await supabase
         .from("profiles")
         .select("user_id, nombre, email")
-        .eq("rol", "vendedor")
+        .in("rol", ["vendedor", "asignador", "administrador"])
         .eq("activo", true);
 
       if (error) throw error;

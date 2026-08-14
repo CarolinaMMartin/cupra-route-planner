@@ -1018,6 +1018,20 @@ Deno.serve(async (req) => {
       }
     }
 
+    const requestedBarrioKeys = new Set(
+      barriosFinales.map((value: string) => normalizeBarrio(value).toUpperCase()).filter(Boolean),
+    );
+    const requestedComunaKeys = new Set(
+      comunasFinales.map((value: string) => String(value || "").trim().toUpperCase()).filter(Boolean),
+    );
+    const belongsToSelectedArea = (place: { barrio?: string | null; comuna?: string | null }): boolean => {
+      if (!area_id) return true;
+      const barrioKey = normalizeBarrio(place.barrio).toUpperCase();
+      const comunaKey = String(place.comuna || "").trim().toUpperCase();
+      return (Boolean(barrioKey) && requestedBarrioKeys.has(barrioKey))
+        || (Boolean(comunaKey) && requestedComunaKeys.has(comunaKey));
+    };
+
     // ---- 2. Load vendor profiles ----
     const { data: vendedoresData, error: vendedoresError } = await supabaseClient
       .from("profiles")
@@ -1035,8 +1049,15 @@ Deno.serve(async (req) => {
 
     // ALL vendor profiles for name resolution
     const { data: allVendorProfiles } = await supabaseClient
-      .from("profiles").select("user_id, nombre").eq("rol", "vendedor").eq("activo", true);
-    const sellerNameMap = buildSellerNameMap(allVendorProfiles || vendedoresData);
+      .from("profiles").select("user_id, nombre").eq("activo", true);
+    // Administrador ⊇ asignador ⊇ vendedor: un perfil superior también puede
+    // tener cartera. Nunca debe caer en modo conquista por no tener rol literal
+    // "vendedor".
+    const profilesForOwnership = new Map<string, any>();
+    [...(allVendorProfiles || []), ...vendedoresData].forEach((profile: any) => {
+      if (profile?.user_id) profilesForOwnership.set(profile.user_id, profile);
+    });
+    const sellerNameMap = buildSellerNameMap([...profilesForOwnership.values()]);
 
     // ---- 3. Load client_places (geography) ----
     let placesQuery = supabaseClient.from("client_places").select("*").eq("is_primary", true);
@@ -1264,7 +1285,9 @@ Deno.serve(async (req) => {
         existingClientNames,
         discoveryAnchor,
       );
-      const newProspects = discovered.filter(registrarGate);
+      const newProspects = discovered
+        .filter((prospecto) => belongsToSelectedArea(prospecto))
+        .filter(registrarGate);
 
       if (newProspects.length > 0) {
         const { error: discoveryUpsertError } = await supabaseClient
@@ -1527,8 +1550,13 @@ Deno.serve(async (req) => {
       const rescatarClientes = (radius: number, opts: ScoreOptions, label: string) => {
         if (clientPool.length >= 8) return;
         const existingClientIds = new Set(clientPool.map(c => c.client_id));
+        // En modo Por Área, la selección geográfica es un límite estricto.
+        // La cartera externa solo se usa en búsquedas personalizadas sin área.
+        const rescueCandidates = area_id
+          ? myValidClients
+          : [...myValidClients, ...portfolioClients.filter((c: any) => isClientAffiliated(c, vendedor.user_id, sellerNameMap))];
         const rescued = scoreClients(
-          [...myValidClients, ...portfolioClients.filter((c: any) => isClientAffiliated(c, vendedor.user_id, sellerNameMap))],
+          rescueCandidates,
           placesMap, feedbacksMapClientes,
           vendedor.user_id, sellerNameMap,
           vendorHotspot, radius, otherHotspots, opts,
@@ -1570,7 +1598,8 @@ Deno.serve(async (req) => {
         const extraFiltered = (geoProspectos || []).filter(p =>
           !prospectosAsignadosHoy.has(p.place_id) &&
           !existingIds.has(p.place_id) &&
-          !p.client_id
+          !p.client_id &&
+          belongsToSelectedArea(p)
         );
 
         extraProspectosLoaded.push(...extraFiltered);
@@ -1681,7 +1710,9 @@ Deno.serve(async (req) => {
               existingClientNames,
               vendorHotspot,
             );
-            const newProspects = discovered.filter(registrarGate);
+            const newProspects = discovered
+              .filter((prospecto) => belongsToSelectedArea(prospecto))
+              .filter(registrarGate);
 
             if (newProspects.length > 0) {
               const { error: liveUpsertError } = await supabaseClient
@@ -1908,7 +1939,9 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           existingClientNames,
           hotspot,
         );
-        const newProspects = discovered.filter(registrarGate);
+        const newProspects = discovered
+          .filter((prospecto) => belongsToSelectedArea(prospecto))
+          .filter(registrarGate);
         if (newProspects.length === 0) return [];
 
         const { error: upsertError } = await supabaseClient
