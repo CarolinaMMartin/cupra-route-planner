@@ -221,9 +221,10 @@ Deno.serve(async (req) => {
           comuna,
           provincia_principal: normalizedProv || client.provincia_principal,
           direccion_principal: formattedAddress,
+          codigo_postal: cp || null,
           place_id: placeId,
           google_maps_link: googleMapsLink,
-          is_primary: true,
+          fuente_geocoding: "geocoding_auto",
         };
 
         const { data: existingPlace } = await supabase
@@ -234,7 +235,8 @@ Deno.serve(async (req) => {
 
         const { error: upsertError } = existingPlace
           ? await supabase.from("client_places").update(placeData).eq("id", existingPlace.id)
-          : await supabase.from("client_places").insert({ client_id: client.client_id, ...placeData });
+          : await supabase.from("client_places").insert({ client_id: client.client_id, ...placeData, is_primary: false });
+
 
         if (upsertError) {
           results.errors++;
