@@ -198,6 +198,37 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
               </div>
             ) : (
               <>
+                {/* Observaciones de vendedores */}
+                <Card className="matte-card">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="section-title flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4 text-foreground/40" /> Observaciones del vendedor
+                      {feedbacks.length > 0 && <Badge variant="secondary">{feedbacks.length}</Badge>}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {feedbacks.length === 0 && (
+                      <p className="text-sm text-muted-foreground">Sin comentarios registrados por vendedores.</p>
+                    )}
+                    {feedbacks.map((f) => (
+                      <div key={f.id} className="p-2.5 rounded-lg bg-card/50 border border-border/40 text-sm space-y-1">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">{toTitleCase(f.vendedor_nombre) || "Vendedor"}</span>
+                          <span>{new Date(f.created_at).toLocaleDateString("es-AR")}</span>
+                          <Badge variant={f.visita_realizada ? "secondary" : "outline"}>
+                            {f.visita_realizada ? "Visitó" : "No visitó"}
+                          </Badge>
+                          {f.tipo_interaccion && <Badge variant="outline">{f.tipo_interaccion}</Badge>}
+                        </div>
+                        <p className="whitespace-pre-wrap">{f.feedback}</p>
+                        {!f.visita_realizada && f.motivo_no_visita && (
+                          <p className="text-xs text-muted-foreground">Motivo: {f.motivo_no_visita}</p>
+                        )}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+
                 {/* Vendedores históricos */}
                 <Card className="matte-card">
                   <CardHeader className="pb-3">
