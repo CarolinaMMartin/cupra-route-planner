@@ -1027,6 +1027,22 @@ Deno.serve(async (req) => {
       return belongsToArea(place, areaFilter);
     };
 
+    // Patrón ilike tolerante a acentos: "San Nicolás" -> "%San Nicol_s%".
+    const ilikeLoose = (value: string): string =>
+      String(value || "").trim().replace(/[%,()]/g, " ").replace(/[^\x20-\x7E]/g, "_");
+    const barrioLikeConditions = (column: string): string[] =>
+      (barriosFinales || [])
+        .map((b: string) => ilikeLoose(b))
+        .filter(Boolean)
+        .map((b: string) => `${column}.ilike.%${b}%`);
+    const comunaExactConditions = (column: string): string[] =>
+      (comunasFinales || [])
+        .map((c: string) => ilikeLoose(c))
+        .filter(Boolean)
+        .map((c: string) => `${column}.ilike.${c}`);
+
+
+
 
     // ---- 2. Load vendor profiles ----
     const { data: vendedoresData, error: vendedoresError } = await supabaseClient
