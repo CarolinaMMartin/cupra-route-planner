@@ -798,20 +798,21 @@ Deno.serve(async (req) => {
       console.log(`⚠️ ${facturacionNullCount} filas con facturación null (columna: ${facturacionColumnResolved})`);
     }
 
-    // Guarda de integridad: las ventas sin cliente o sin facturación siguen siendo
-    // bloqueantes. Las NC sin conciliar solo bloquean si superan el 20% del total
-    // de NC del archivo (el resto se reporta como advertencia y queda en descartadas).
+    // Guarda de integridad (contrato ERP §3.4): solo bloquean los datos PRIMARIOS de
+    // venta corruptos (filas sin cliente o sin facturación). Las NC sin conciliar
+    // JAMÁS bloquean la carga — son un hecho del negocio (NC de ventas anteriores al
+    // período del export, emitidas para clientes sin ventas en el archivo). Quedan en
+    // staging con motivo y se informan en el resumen y en el panel de NC.
     const ncTotal = notasCreditoAplicadas + notasCreditoSinMatch + notasCreditoSinImporte;
     const ncSinMatchRatio = ncTotal > 0 ? notasCreditoSinMatch / ncTotal : 0;
-    if (replaceExisting && (ventasSinClientId > 0 || facturacionNullCount > 0 || ncSinMatchRatio > 0.2)) {
+    if (replaceExisting && (ventasSinClientId > 0 || facturacionNullCount > 0)) {
       throw new Error(
-        `Carga completa rechazada por integridad: ${ventasSinClientId} filas sin cliente, ` +
-        `${facturacionNullCount} sin facturación y ${notasCreditoSinMatch} de ${ncTotal} notas de crédito sin conciliar ` +
-        `(${Math.round(ncSinMatchRatio * 100)}%). No se modificaron las ventas existentes.`
+        `Carga completa rechazada por integridad: ${ventasSinClientId} filas sin cliente y ` +
+        `${facturacionNullCount} sin facturación. No se modificaron las ventas existentes.`
       );
     }
     if (notasCreditoSinMatch > 0) {
-      console.log(`⚠️ ${notasCreditoSinMatch}/${ncTotal} notas de crédito sin conciliar (${Math.round(ncSinMatchRatio * 100)}%) — se cargan las ventas igual`);
+      console.log(`ℹ️ ${notasCreditoSinMatch}/${ncTotal} notas de crédito sin conciliar (${Math.round(ncSinMatchRatio * 100)}%) — legítimas (períodos anteriores); van a staging y las ventas se cargan igual`);
     }
 
 
