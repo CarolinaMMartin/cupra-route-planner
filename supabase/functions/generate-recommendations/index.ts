@@ -1174,7 +1174,10 @@ Deno.serve(async (req) => {
 
     const { data: prospectosData, error: prospectosError } = await prospectosQuery;
     if (prospectosError) throw prospectosError;
-    let prospectos = (prospectosData || []).filter(p => !prospectosAsignadosHoy.has(p.place_id));
+    let prospectos = (prospectosData || [])
+      .filter(p => !prospectosAsignadosHoy.has(p.place_id))
+      .filter((p: any) => belongsToSelectedArea({ barrio: p.barrio, comuna: p.comuna }));
+
 
     // ---- 6b. GATE prospecto ↔ cartera ----
     // Google Places no devuelve CUIT: el cruce se hace por nombre de fantasía
