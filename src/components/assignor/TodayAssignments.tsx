@@ -3,7 +3,13 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { toTitleCase } from "@/lib/format";
-import { Users, Calendar, Edit, Trash2, MapPin, Clock } from "lucide-react";
+import { Users, Calendar, Edit, Trash2, MapPin, Clock, ChevronDown } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -79,6 +85,8 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showMapAll, setShowMapAll] = useState(false);
   const [showMapVendedor, setShowMapVendedor] = useState<string | null>(null);
+  const [openVendors, setOpenVendors] = useState<Record<string, boolean>>({});
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -332,23 +340,34 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
       {/* Vendor groups */}
       <div className="space-y-4">
         {Object.entries(assignmentsByVendedor).map(([vendedorNombre, data]) => (
-          <div
+          <Collapsible
             key={vendedorNombre}
+            open={!!openVendors[vendedorNombre]}
+            onOpenChange={(open) =>
+              setOpenVendors((prev) => ({ ...prev, [vendedorNombre]: open }))
+            }
             className="rounded-xl border border-border bg-card overflow-hidden"
           >
             {/* Vendor header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border/60">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10">
-                  <Users className="w-4 h-4 text-primary" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-sans text-sm font-semibold text-foreground truncate">
-                    {toTitleCase(vendedorNombre)}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">{data.email}</p>
-                </div>
-              </div>
+            <div className="flex items-center justify-between px-5 py-4">
+              <CollapsibleTrigger asChild>
+                <button className="flex items-center gap-3 min-w-0 text-left flex-1">
+                  <ChevronDown
+                    className={`w-4 h-4 text-muted-foreground transition-transform ${
+                      openVendors[vendedorNombre] ? "rotate-180" : ""
+                    }`}
+                  />
+                  <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10">
+                    <Users className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-sans text-sm font-semibold text-foreground truncate">
+                      {toTitleCase(vendedorNombre)}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">{data.email}</p>
+                  </div>
+                </button>
+              </CollapsibleTrigger>
               <div className="flex items-center gap-2 shrink-0">
                 <Button
                   onClick={() => setShowMapVendedor(vendedorNombre)}
@@ -369,7 +388,9 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
             </div>
 
             {/* Client items */}
-            <div className="divide-y divide-border/40">
+            <CollapsibleContent>
+            <div className="divide-y divide-border/40 border-t border-border/60">
+
               {data.clientes.map((assignment) => {
                 const clientName = assignment.es_prospecto
                   ? assignment.prospecto?.nombre || "Prospecto sin nombre"
@@ -497,7 +518,9 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
                 );
               })}
             </div>
-          </div>
+            </CollapsibleContent>
+          </Collapsible>
+
         ))}
       </div>
 
