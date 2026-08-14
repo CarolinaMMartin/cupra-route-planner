@@ -1535,42 +1535,25 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
                 Tipo de Cierre <span className="text-destructive">*</span>
               </label>
               <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTipoCierre('visitado')}
-                  className={`p-3 rounded-lg border-2 text-center transition-all ${
-                    tipoCierre === 'visitado' 
-                      ? 'border-primary bg-primary/10 text-primary font-medium' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
-                >
-                  <span className="text-lg block mb-1">👤</span>
-                  <span className="text-sm">Visitado</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTipoCierre('online')}
-                  className={`p-3 rounded-lg border-2 text-center transition-all ${
-                    tipoCierre === 'online' 
-                      ? 'border-primary bg-primary/10 text-primary font-medium' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
-                >
-                  <span className="text-lg block mb-1">💻</span>
-                  <span className="text-sm">Online</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTipoCierre('no_visitado')}
-                  className={`p-3 rounded-lg border-2 text-center transition-all ${
-                    tipoCierre === 'no_visitado' 
-                      ? 'border-amber-500 bg-amber-500/10 text-amber-600 font-medium' 
-                      : 'border-border hover:border-muted-foreground'
-                  }`}
-                >
-                  <span className="text-lg block mb-1">❌</span>
-                  <span className="text-sm">No visitado</span>
-                </button>
+                {([
+                  { value: 'visitado', label: 'Visitado', Icon: UserCheck },
+                  { value: 'online', label: 'Online', Icon: Laptop },
+                  { value: 'no_visitado', label: 'No visitado', Icon: CircleSlash },
+                ] as const).map(({ value, label, Icon }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setTipoCierre(value)}
+                    className={`p-3 rounded-lg border-2 text-center transition-all ${
+                      tipoCierre === value
+                        ? 'border-accent bg-accent/10 text-accent font-medium'
+                        : 'border-border hover:border-muted-foreground'
+                    }`}
+                  >
+                    <Icon className={`w-5 h-5 mx-auto mb-1 ${tipoCierre === value ? 'text-accent' : 'text-accent/70'}`} />
+                    <span className="text-sm">{label}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
