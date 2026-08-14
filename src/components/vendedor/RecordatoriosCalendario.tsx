@@ -24,6 +24,7 @@ const sameDay = (a: Date, b: Date) =>
 const RecordatoriosCalendario = () => {
   const [recordatorios, setRecordatorios] = useState<Recordatorio[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const { toast } = useToast();
 
