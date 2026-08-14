@@ -74,6 +74,8 @@ interface Vendedor {
 }
 
 type SuggestionMode = "sin_vendedor" | "baja_frecuencia" | "no_visitados";
+type SortKey = "nombre" | "ciudad" | "provincia" | "vendedor" | "monto" | "dias";
+type SortDir = "asc" | "desc";
 
 const formatCurrency = (v: number | null) =>
   v != null ? `$${v.toLocaleString("es-AR", { maximumFractionDigits: 0 })}` : "—";
