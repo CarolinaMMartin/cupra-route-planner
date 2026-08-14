@@ -219,6 +219,7 @@ const MobileClientCard = ({
 
 const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKanban(_props, ref) {
   const [viewMode, setViewMode] = useState<'kanban' | 'map' | 'calendar'>('kanban');
+  const [desasignarTarget, setDesasignarTarget] = useState<ClienteAsignado | null>(null);
   const [mobileActiveTab, setMobileActiveTab] = useState<'Por visitar' | 'Visitado'>('Por visitar');
   const [assignments, setAssignments] = useState<Record<string, ClienteAsignado[]>>({
     'Por visitar': [],
