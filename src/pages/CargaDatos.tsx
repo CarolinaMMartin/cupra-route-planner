@@ -590,7 +590,7 @@ const CargaDatos = () => {
               </div>
               <div className="flex gap-3">
                 <Button variant="outline" onClick={reset}>Cancelar</Button>
-                <Button onClick={handleProcess}>
+                <Button onClick={() => handleProcess()}>
                   <Upload className="h-4 w-4 mr-1.5" />
                   Procesar {rows.length.toLocaleString()} filas
                 </Button>
