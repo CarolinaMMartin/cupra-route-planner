@@ -326,7 +326,16 @@ const RecordatoriosCalendario = () => {
             selected={selectedDate}
             onSelect={setSelectedDate}
             modifiers={{ pendiente: fechasConRecordatorio }}
-            modifiersClassNames={{ pendiente: "relative font-semibold after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-accent" }}
+            classNames={{
+              cell: "h-9 w-9 text-center text-sm p-0 relative focus-within:relative focus-within:z-20",
+              day: "inline-flex h-9 w-9 items-center justify-center rounded-full p-0 font-normal text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+              day_selected:
+                "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+              day_today: "ring-1 ring-inset ring-primary/50 font-semibold",
+              day_outside: "day-outside text-muted-foreground/50",
+            }}
+            modifiersClassNames={{ pendiente: "relative after:absolute after:bottom-1 after:left-1/2 after:h-1 after:w-1 after:-translate-x-1/2 after:rounded-full after:bg-accent aria-selected:after:bg-primary-foreground" }}
+
             className={cn("p-0 pointer-events-auto")}
           />
         </CardContent>
