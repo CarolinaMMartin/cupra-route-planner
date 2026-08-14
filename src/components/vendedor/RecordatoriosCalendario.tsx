@@ -356,8 +356,10 @@ const RecordatoriosCalendario = () => {
             <Button
               size="sm"
               variant="outline"
-              disabled={!selectedDate}
-              onClick={() => setDialogAbierto(true)}
+              onClick={() => {
+                setFechaAgenda(selectedDate ?? new Date());
+                setDialogAbierto(true);
+              }}
             >
               <Plus className="mr-1 h-3.5 w-3.5" />
               Agendar visita
