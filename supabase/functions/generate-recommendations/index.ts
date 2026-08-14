@@ -1144,6 +1144,33 @@ Deno.serve(async (req) => {
       }
     }
 
+    // ---- 4c. Cuentas del área SIN ubicación utilizable ----
+    // Hoy desaparecen de cluster, ruta y avisos sin dejar rastro. Se cuentan
+    // por vendedor para que la cobertura lo diga explícitamente.
+    const sinUbicacionPorVendedor = new Map<string, { nombre: string; barrio: string | null }[]>();
+    {
+      const selectedVendorIds = vendedoresData.map((v: any) => v.user_id);
+      for (const c of portfolioClients) {
+        const place = placesMap.get(c.client_id);
+        const tieneCoords = place && Number.isFinite(Number(place.lat)) && Number.isFinite(Number(place.long));
+        if (tieneCoords) continue;
+        const declarado = c.barrio_principal || null;
+        // Sin barrio declarado tampoco sabemos si es del área: se reporta igual
+        // cuando el área está activa y el cliente no tiene dónde ubicarse.
+        const esDelArea = declarado
+          ? belongsToSelectedArea({ barrio: declarado, comuna: null })
+          : false;
+        if (!esDelArea) continue;
+        for (const vid of selectedVendorIds) {
+          if (!isClientAffiliated(c, vid, sellerNameMap)) continue;
+          const lista = sinUbicacionPorVendedor.get(vid) || [];
+          lista.push({ nombre: c.fantasia || c.razon_social || c.client_id, barrio: declarado });
+          sinUbicacionPorVendedor.set(vid, lista);
+        }
+      }
+    }
+
+
     // ---- 5. Exclude already assigned today ----
     const now = new Date();
     now.setHours(now.getUTCHours() - 3);
