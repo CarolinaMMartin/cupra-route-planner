@@ -204,6 +204,8 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
               </Card>
             </div>
 
+            {cliente.client_id && <BriefingVisita clientId={cliente.client_id} />}
+
             {loading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> Cargando historial...
