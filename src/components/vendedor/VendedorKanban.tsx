@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
+import RecordatoriosCalendario from "./RecordatoriosCalendario";
 import AgregarProspectoForm from "./AgregarProspectoForm";
 import AutoAsignarDialog from "./AutoAsignarDialog";
 import ProspectoFormModal from "./ProspectoFormModal";
@@ -217,7 +218,7 @@ const MobileClientCard = ({
 };
 
 const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKanban(_props, ref) {
-  const [viewMode, setViewMode] = useState<'kanban' | 'map'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'map' | 'calendar'>('kanban');
   const [mobileActiveTab, setMobileActiveTab] = useState<'Por visitar' | 'Visitado'>('Por visitar');
   const [assignments, setAssignments] = useState<Record<string, ClienteAsignado[]>>({
     'Por visitar': [],
@@ -1071,9 +1072,11 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
         <div>
           <h2 className="text-xl md:text-2xl font-bold">Mis Clientes Asignados</h2>
           <p className="text-sm text-muted-foreground">
-            {viewMode === 'kanban' 
+            {viewMode === 'kanban'
               ? 'Toca un cliente para ver detalles'
-              : 'Visualiza la ubicación de tus clientes'}
+              : viewMode === 'map'
+                ? 'Visualiza la ubicación de tus clientes'
+                : 'Tus seguimientos agendados'}
           </p>
         </div>
         
@@ -1105,9 +1108,18 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
               variant={viewMode === 'map' ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setViewMode('map')}
-              className="rounded-l-none"
+              className="rounded-none"
             >
               <MapIcon className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'calendar' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('calendar')}
+              className="rounded-l-none"
+              title="Calendario de seguimientos"
+            >
+              <CalendarClock className="w-4 h-4" />
             </Button>
           </div>
           
@@ -1203,8 +1215,10 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
             </div>
           </div>
         </>
-      ) : (
+      ) : viewMode === 'map' ? (
         <VendedorAssignmentsMap assignments={assignments} />
+      ) : (
+        <RecordatoriosCalendario />
       )}
 
       {/* Dialog de información del cliente */}
