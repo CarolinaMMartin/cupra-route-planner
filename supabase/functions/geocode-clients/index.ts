@@ -349,6 +349,8 @@ Deno.serve(async (req) => {
 
     // R7: un solo primario por cliente, ganando manual > ERP > geocoding
     await supabase.rpc("reconciliar_places_primarios");
+    // Propaga el barrio de la ubicación principal a la ficha del cliente
+    await supabase.rpc("sync_clientes_barrio_from_places");
 
     const { count: pendientesBarrio } = await supabase
       .from("clientes")

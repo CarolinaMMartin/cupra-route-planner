@@ -1709,6 +1709,7 @@ export type Database = {
       recompute_client_metrics: { Args: never; Returns: number }
       reconciliar_places_primarios: { Args: never; Returns: number }
       revertir_import_ventas: { Args: { p_batch_id: string }; Returns: Json }
+      sync_clientes_barrio_from_places: { Args: never; Returns: number }
       sync_places_catalog: { Args: never; Returns: number }
       titlecase_nombre: { Args: { _texto: string }; Returns: string }
       unaccent: { Args: { "": string }; Returns: string }
