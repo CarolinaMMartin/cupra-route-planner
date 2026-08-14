@@ -1660,9 +1660,10 @@ Deno.serve(async (req) => {
           fallbackQuery = fallbackQuery.ilike("provincia", `%${provincia}%`);
         }
 
-        const geoConditionsFallback: string[] = [];
-        if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditionsFallback.push(`comuna.ilike.%${c}%`));
-        if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditionsFallback.push(`barrio.ilike.%${b}%`));
+        const geoConditionsFallback: string[] = [
+          ...comunaExactConditions("comuna"),
+          ...barrioLikeConditions("barrio"),
+        ];
         if (geoConditionsFallback.length > 0) {
           fallbackQuery = fallbackQuery.or(geoConditionsFallback.join(","));
         }
@@ -1678,8 +1679,10 @@ Deno.serve(async (req) => {
         const fallbackFiltered = Array.from(fallbackById.values()).filter(p =>
           !prospectosAsignadosHoy.has(p.place_id) &&
           !existingIds.has(p.place_id) &&
-          !p.client_id
+          !p.client_id &&
+          belongsToSelectedArea({ barrio: p.barrio, comuna: p.comuna })
         );
+
 
         extraProspectosLoaded.push(...fallbackFiltered);
 
