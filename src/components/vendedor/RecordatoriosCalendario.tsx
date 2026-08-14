@@ -107,7 +107,7 @@ const RecordatoriosCalendario = () => {
         }
         const { error: reactivarError } = await supabase
           .from("asignaciones_vendedores_clientes")
-          .update({ estado: "Por visitar", visited_at: null })
+          .update({ estado: "Por visitar", visited_at: null, fecha_programada: null })
           .eq("id", yaAsignado.id);
         if (reactivarError) throw reactivarError;
         toast({
@@ -124,6 +124,7 @@ const RecordatoriosCalendario = () => {
         es_prospecto: !!r.prospecto_place_id,
         estado: "Por visitar",
         origen_asignacion: "auto",
+        fecha_programada: null,
       });
       if (error) throw error;
 
