@@ -370,10 +370,15 @@ Deno.serve(async (req) => {
       rows: Record<string, any>[];
       replaceExisting?: boolean;
       notasCredito?: Record<string, any>[];
+      comprobantes?: Record<string, any>[];
       fileMetadata?: FileMetadata;
     };
     const rawRows = body.rows;
     const rawNotasCredito = Array.isArray(body.notasCredito) ? body.notasCredito : [];
+    // Doble ingesta: la hoja "Ventas por Comprobante" trae el total por factura de
+    // TODAS las marcas (universo completo). La hoja de producto viene filtrada por
+    // proveedor CUPRA, así que sólo sirve para el mix (cajas/SKU/share).
+    const rawComprobantes = Array.isArray(body.comprobantes) ? body.comprobantes : [];
     const replaceExisting = body.replaceExisting !== false; // default true
 
     if (!Array.isArray(rawRows) || rawRows.length === 0) {
