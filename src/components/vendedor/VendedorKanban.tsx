@@ -30,6 +30,16 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -219,6 +229,7 @@ const MobileClientCard = ({
 
 const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKanban(_props, ref) {
   const [viewMode, setViewMode] = useState<'kanban' | 'map' | 'calendar'>('kanban');
+  const [desasignarTarget, setDesasignarTarget] = useState<ClienteAsignado | null>(null);
   const [mobileActiveTab, setMobileActiveTab] = useState<'Por visitar' | 'Visitado'>('Por visitar');
   const [assignments, setAssignments] = useState<Record<string, ClienteAsignado[]>>({
     'Por visitar': [],
@@ -846,9 +857,7 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
             className="absolute -top-1 -right-1 h-5 w-5 p-0 z-10 rounded-full bg-background border shadow-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             onClick={(e) => {
               e.stopPropagation();
-              if (window.confirm(`¿Quitar "${cliente.razon_social}" de tu lista?`)) {
-                handleDesasignar(cliente);
-              }
+              setDesasignarTarget(cliente);
             }}
           >
             <X className="w-3 h-3" />
@@ -1751,6 +1760,33 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
           fetchAsignaciones();
         }}
       />
+
+      {/* Confirmación de des-asignación (solo auto-asignados) */}
+      <AlertDialog
+        open={!!desasignarTarget}
+        onOpenChange={(open) => { if (!open) setDesasignarTarget(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Quitar de tu lista?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {desasignarTarget?.razon_social} se va a quitar de tus asignaciones de hoy.
+              Solo podés quitar visitas que te auto-asignaste vos; las del asignador quedan fijas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (desasignarTarget) handleDesasignar(desasignarTarget);
+                setDesasignarTarget(null);
+              }}
+            >
+              Quitar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 });
