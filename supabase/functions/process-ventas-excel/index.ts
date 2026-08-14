@@ -580,7 +580,15 @@ Deno.serve(async (req) => {
       const telefono = toStr(getFieldValue(row, ['Teléfono', 'Telefono', 'telefono']));
       const celular = toStr(getFieldValue(row, ['Celular', 'celular']));
       const correo = toStr(getFieldValue(row, ['Correo', 'correo', 'Email', 'email']));
-      const direccion = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Calle']));
+      // R7: la dirección útil es Calle + Número (la altura viene en su propia columna)
+      const calleRaw = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Calle']));
+      const numeroCalleRaw = toStr(getFieldValue(row, ['Número', 'Numero', 'numero', 'Altura', 'Nro', 'N°']));
+      const codigoPostalRaw = toStr(getFieldValue(row, ['Código Postal', 'Codigo Postal', 'CP', 'cp', 'codigo_postal']));
+      const direccion = calleRaw
+        ? ((numeroCalleRaw && new RegExp(`(^|\\s)${numeroCalleRaw}(\\s|$)`).test(calleRaw)
+            ? calleRaw
+            : [calleRaw, numeroCalleRaw].filter(Boolean).join(' ')).trim() || null)
+        : null;
       const ciudad_raw = toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad', 'localidad']));
       const provincia_raw = toStr(getFieldValue(row, ['Provincia', 'provincia']));
       const pais = toStr(getFieldValue(row, ['País', 'Pais', 'pais']));
