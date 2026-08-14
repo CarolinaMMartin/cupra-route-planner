@@ -315,6 +315,9 @@ Deno.serve(async (req) => {
       await sleep(120);
     }
 
+    // R7: un solo primario por cliente, ganando manual > ERP > geocoding
+    await supabase.rpc("reconciliar_places_primarios");
+
     return new Response(
       JSON.stringify({ success: true, results, reverse }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
