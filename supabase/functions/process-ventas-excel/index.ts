@@ -798,13 +798,22 @@ Deno.serve(async (req) => {
       console.log(`⚠️ ${facturacionNullCount} filas con facturación null (columna: ${facturacionColumnResolved})`);
     }
 
-    if (replaceExisting && (ventasSinClientId > 0 || facturacionNullCount > 0 || notasCreditoSinMatch > 0)) {
+    // Guarda de integridad: las ventas sin cliente o sin facturación siguen siendo
+    // bloqueantes. Las NC sin conciliar solo bloquean si superan el 20% del total
+    // de NC del archivo (el resto se reporta como advertencia y queda en descartadas).
+    const ncTotal = notasCreditoAplicadas + notasCreditoSinMatch + notasCreditoSinImporte;
+    const ncSinMatchRatio = ncTotal > 0 ? notasCreditoSinMatch / ncTotal : 0;
+    if (replaceExisting && (ventasSinClientId > 0 || facturacionNullCount > 0 || ncSinMatchRatio > 0.2)) {
       throw new Error(
         `Carga completa rechazada por integridad: ${ventasSinClientId} filas sin cliente, ` +
-        `${facturacionNullCount} sin facturación y ${notasCreditoSinMatch} notas de crédito sin conciliar. ` +
-        'No se modificaron las ventas existentes.'
+        `${facturacionNullCount} sin facturación y ${notasCreditoSinMatch} de ${ncTotal} notas de crédito sin conciliar ` +
+        `(${Math.round(ncSinMatchRatio * 100)}%). No se modificaron las ventas existentes.`
       );
     }
+    if (notasCreditoSinMatch > 0) {
+      console.log(`⚠️ ${notasCreditoSinMatch}/${ncTotal} notas de crédito sin conciliar (${Math.round(ncSinMatchRatio * 100)}%) — se cargan las ventas igual`);
+    }
+
 
 
     // ============ FASE 1b: Numerar renglones (OT8-fix, ya NO se fusiona nada) ============
