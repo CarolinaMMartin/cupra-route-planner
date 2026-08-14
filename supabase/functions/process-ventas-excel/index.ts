@@ -1264,6 +1264,8 @@ Deno.serve(async (req) => {
       clientes_razon_social: totalClientesRazonSocial,
       tickets_compartidos: ticketsCompartidos.length,
       vendedor_breakdown: vendedorBreakdown,
+      rango: rangoCarga,
+
     };
 
     const integridad = {
