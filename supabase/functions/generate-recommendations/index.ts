@@ -248,14 +248,18 @@ async function discoverProspectsFromGoogle(
   targetCount: number,
   excludedPlaceIds: Set<string>,
   existingClientNames: Set<string>,
+  anchor?: AnchorPoint | null,
 ): Promise<DiscoveredProspect[]> {
   const discovered: DiscoveredProspect[] = [];
   const seenIds = new Set(excludedPlaceIds);
   const targetWithBuffer = Math.min(Math.max(targetCount + 8, 20), 100);
   const requestedZones = Array.from(new Set(zones.map((zone) => zone.trim()).filter(Boolean))).slice(0, 6);
+  // El ancla (hotspot de la ruta) manda: si existe, buscamos alrededor de ese punto,
+  // sirva la zona en CABA o en GBA. Sin ancla, caemos al viewport de CABA.
+  const hasAnchor = !!anchor && Number.isFinite(anchor.lat) && Number.isFinite(anchor.lng);
   const zoneWaves = requestedZones.length > 0
-    ? [requestedZones, ["Ciudad Autónoma de Buenos Aires"]]
-    : [["Ciudad Autónoma de Buenos Aires"]];
+    ? [requestedZones, [""]]
+    : [[""]];
   const searches = [
     { query: "vinoteca premium", includedType: "liquor_store" },
     { query: "wine bar", includedType: "wine_bar" },
@@ -267,6 +271,19 @@ async function discoverProspectsFromGoogle(
     for (const search of searches) {
       for (const zone of zoneWave) {
         const gatewayKey = Deno.env.get("LOVABLE_API_KEY") || "";
+        const textQuery = zone
+          ? `${search.query}, ${zone}, Argentina`
+          : `${search.query}, Área Metropolitana de Buenos Aires, Argentina`;
+        const locationParams = hasAnchor
+          ? {
+            locationBias: {
+              circle: {
+                center: { latitude: anchor!.lat, longitude: anchor!.lng },
+                radius: 6000,
+              },
+            },
+          }
+          : { locationRestriction: { rectangle: CABA_VIEWPORT } };
         const response = await fetch("https://connector-gateway.lovable.dev/google_maps/places/v1/places:searchText", {
           method: "POST",
           headers: {
@@ -276,13 +293,13 @@ async function discoverProspectsFromGoogle(
             "X-Goog-FieldMask": GOOGLE_PROSPECT_FIELD_MASK,
           },
           body: JSON.stringify({
-            textQuery: `${search.query}, ${zone}, Ciudad Autónoma de Buenos Aires, Argentina`,
+            textQuery,
             pageSize: 20,
             languageCode: "es",
             regionCode: "AR",
             includedType: search.includedType,
             strictTypeFiltering: true,
-            locationRestriction: { rectangle: CABA_VIEWPORT },
+            ...locationParams,
           }),
         });
 
@@ -305,6 +322,8 @@ async function discoverProspectsFromGoogle(
           if (!placeId || !nombre || !Number.isFinite(latitud) || !Number.isFinite(longitud)) continue;
           if (place.businessStatus === "CLOSED_PERMANENTLY" || seenIds.has(placeId)) continue;
           if (existingClientNames.has(normalizeName(nombre))) continue;
+          // locationBias es una preferencia, no un límite: cortamos a mano lo que quede lejos del ancla.
+          if (hasAnchor && calcularDistanciaKm(anchor!.lat, anchor!.lng, latitud, longitud) > 8) continue;
           // Calidad: mínimo de reseñas y rubro coherente con el canal mayorista.
           if (!esProspectoComercialmenteValido({
             rating: place.rating ?? null,
@@ -315,17 +334,19 @@ async function discoverProspectsFromGoogle(
 
           const barrio = getAddressComponent(place, "neighborhood", "sublocality_level_1", "sublocality");
           const comunaCandidate = getAddressComponent(place, "administrative_area_level_2");
+          const localidad = getAddressComponent(place, "locality", "administrative_area_level_2");
+          const provinciaPlace = getAddressComponent(place, "administrative_area_level_1");
           const types = place.types || [];
 
           discovered.push({
             place_id: placeId,
             nombre,
             telefono: null,
-            direccion: place.formattedAddress || `${nombre}, Ciudad Autónoma de Buenos Aires`,
+            direccion: place.formattedAddress || `${nombre}, ${localidad || "Buenos Aires"}`,
             barrio,
             comuna: comunaCandidate?.toLowerCase().startsWith("comuna") ? comunaCandidate : null,
-            ciudad: "Ciudad Autónoma de Buenos Aires",
-            provincia: "Ciudad Autónoma de Buenos Aires",
+            ciudad: localidad || provinciaPlace || "Ciudad Autónoma de Buenos Aires",
+            provincia: provinciaPlace || "Ciudad Autónoma de Buenos Aires",
             latitud,
             longitud,
             rating: Number(place.rating || 0),
@@ -1170,12 +1191,27 @@ Deno.serve(async (req) => {
         ...comunasFinales.map((value: string) => String(value)),
       ];
 
+      // Ancla previa: centroide de los clientes de la zona (sirve tanto en CABA como en GBA).
+      const zoneCoordsForDiscovery: AnchorPoint[] = (clientPlaces || [])
+        .map((p: any) => ({ lat: Number(p.lat), lng: Number(p.long) }))
+        .filter((p: AnchorPoint) =>
+          Number.isFinite(p.lat) && Number.isFinite(p.lng)
+          && p.lat >= -60 && p.lat <= -20 && p.lng >= -80 && p.lng <= -40
+        );
+      const discoveryAnchor: AnchorPoint | null = zoneCoordsForDiscovery.length > 0
+        ? {
+          lat: zoneCoordsForDiscovery.reduce((a, p) => a + p.lat, 0) / zoneCoordsForDiscovery.length,
+          lng: zoneCoordsForDiscovery.reduce((a, p) => a + p.lng, 0) / zoneCoordsForDiscovery.length,
+        }
+        : null;
+
       const discovered = await discoverProspectsFromGoogle(
         googleApiKey,
         discoveryZones,
         missingProspects,
         excludedPlaceIds,
         existingClientNames,
+        discoveryAnchor,
       );
       const newProspects = discovered.filter(registrarGate);
 
@@ -1540,6 +1576,7 @@ Deno.serve(async (req) => {
               (8 - currentTotal) + 8,
               excludedPlaceIds,
               existingClientNames,
+              vendorHotspot,
             );
             const newProspects = discovered.filter(registrarGate);
 
@@ -1766,6 +1803,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           missing + 8,
           excludedPlaceIds,
           existingClientNames,
+          hotspot,
         );
         const newProspects = discovered.filter(registrarGate);
         if (newProspects.length === 0) return [];
