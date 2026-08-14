@@ -16,7 +16,6 @@ const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [nombre, setNombre] = useState("");
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -87,34 +86,6 @@ const Auth = () => {
       navigate("/");
     } catch (error: unknown) {
       toast({ variant: "destructive", title: "Error", description: getErrorMessage(error) || "Error al iniciar sesión" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email, password,
-        options: { data: { nombre, rol: "vendedor" }, emailRedirectTo: `${window.location.origin}/` }
-      });
-      if (error) throw error;
-      if (data.session) await supabase.auth.signOut();
-      toast({
-        title: "Solicitud recibida",
-        description: "Revisá tu email si requiere confirmación. Un asignador debe habilitar la cuenta antes del primer ingreso.",
-      });
-      setEmail("");setPassword("");setNombre("");
-    } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error);
-      let msg = "Error al crear cuenta";
-      if (errorMessage.includes("already registered")) msg = "Este correo ya está registrado.";else
-      if (errorMessage.includes("Invalid email")) msg = "Email inválido.";else
-      if (errorMessage.includes("Password")) msg = "Contraseña: mínimo 6 caracteres.";else
-      if (errorMessage) msg = errorMessage;
-      toast({ variant: "destructive", title: "Error", description: msg });
     } finally {
       setIsLoading(false);
     }
@@ -200,6 +171,9 @@ const Auth = () => {
                   <Button type="button" variant="link" className="w-full text-xs text-muted-foreground" onClick={() => setShowResetPassword(true)}>
                     ¿Olvidaste tu contraseña?
                   </Button>
+                  <p className="text-center text-xs text-muted-foreground pt-1">
+                    Acceso interno. Las cuentas las crea un administrador de Cupra.
+                  </p>
                 </form>
               }
           </div>
