@@ -211,6 +211,11 @@ interface GooglePlace {
   rating?: number;
   userRatingCount?: number;
   priceLevel?: string;
+  nationalPhoneNumber?: string;
+  internationalPhoneNumber?: string;
+  websiteUri?: string;
+  editorialSummary?: { text?: string };
+  generativeSummary?: { overview?: { text?: string }; description?: { text?: string } };
 }
 
 interface GoogleTextSearchResponse {
