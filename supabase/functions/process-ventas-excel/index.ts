@@ -1132,17 +1132,39 @@ Deno.serve(async (req) => {
       );
     }
 
-    // ============ FASE 5: Insert/Upsert ventas ============
-    // El RPC ejecuta DELETE/merge + INSERT dentro de una sola transacción.
-    // Si una fila falla, PostgreSQL revierte todo y conserva la carga anterior.
-    const { data: committedSales, error: commitError } = await supabase.rpc('commit_ventas_import', {
+    // ============ FASE 5: Insert/Upsert ventas (R8: reemplazo por rango) ============
+    // El archivo es la verdad SOLO para su propio rango de fechas.
+    // Nunca se borra el histórico completo desde acá: eso es una acción de admin (rebase_ventas_cupra).
+    const { data: previaRango } = await supabase.rpc('preview_ventas_import', {
       p_rows: ventasDeduplicadas,
-      p_replace_existing: replaceExisting,
     });
-    if (commitError) {
-      throw new Error(`No se pudo confirmar el lote de ventas: ${commitError.message}`);
+
+    let rangoCarga: Record<string, any> | null = null;
+
+    if (modoCarga === 'rebase') {
+      const { data: rebased, error: rebaseError } = await supabase.rpc('rebase_ventas_cupra', {
+        p_rows: ventasDeduplicadas,
+        p_batch_id: batchId,
+        p_confirmacion: confirmacionRebase || '',
+      });
+      if (rebaseError) throw new Error(rebaseError.message);
+      rangoCarga = { ...(previaRango || {}), ...(rebased || {}), modo: 'rebase' };
+      results.ventas_procesadas = Number((rebased as any)?.filas_insertadas || 0);
+    } else {
+      const { data: committed, error: commitError } = await supabase.rpc('commit_ventas_import_rango', {
+        p_rows: ventasDeduplicadas,
+        p_batch_id: batchId,
+        p_confirmar_eliminaciones: confirmarEliminaciones,
+      });
+      if (commitError) {
+        const err: any = new Error(commitError.message);
+        err.previa = previaRango || null;
+        throw err;
+      }
+      rangoCarga = { ...(previaRango || {}), ...((committed as any) || {}), modo: 'rango' };
+      results.ventas_procesadas = Number((committed as any)?.total_procesadas || 0);
     }
-    results.ventas_procesadas = Number(committedSales || 0);
+
 
     // ── TAREA 11: Consistencia clientes ↔ ventas_cupra (post-carga check) ──
     // Solo reportamos las discrepancias, no corregimos aquí
