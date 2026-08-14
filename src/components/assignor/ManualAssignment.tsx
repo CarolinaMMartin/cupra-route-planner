@@ -248,6 +248,56 @@ const ManualAssignment = () => {
       .sort((a, b) => b.monto_total_historico - a.monto_total_historico);
   }, [clientes]);
 
+  // ── Ordenamiento de la tabla ──
+  const sortedGrupos = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    const txt = (v: string | null) => (v || "").toLocaleLowerCase("es-AR");
+    return [...grupos].sort((a, b) => {
+      switch (sortKey) {
+        case "nombre":
+          return txt(a.razon_social || a.fantasia).localeCompare(txt(b.razon_social || b.fantasia), "es-AR") * dir;
+        case "ciudad":
+          return txt(a.ciudad_principal).localeCompare(txt(b.ciudad_principal), "es-AR") * dir;
+        case "provincia":
+          return txt(a.provincia_principal).localeCompare(txt(b.provincia_principal), "es-AR") * dir;
+        case "vendedor":
+          return txt(a.vendedor_actual || a.vendedor_principal).localeCompare(txt(b.vendedor_actual || b.vendedor_principal), "es-AR") * dir;
+        case "dias":
+          return ((a.dias_sin_compra ?? -1) - (b.dias_sin_compra ?? -1)) * dir;
+        default:
+          return (a.monto_total_historico - b.monto_total_historico) * dir;
+      }
+    });
+  }, [grupos, sortKey, sortDir]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "monto" || key === "dias" ? "desc" : "asc");
+    }
+  };
+
+  const SortHeader = ({ column, label, align = "left" }: { column: SortKey; label: string; align?: "left" | "right" }) => (
+    <button
+      type="button"
+      onClick={() => toggleSort(column)}
+      className={`flex items-center gap-1 text-xs font-medium hover:text-foreground transition-colors ${
+        sortKey === column ? "text-foreground" : "text-muted-foreground"
+      } ${align === "right" ? "ml-auto" : ""}`}
+    >
+      {label}
+      {sortKey !== column ? (
+        <ArrowUpDown className="w-3 h-3 opacity-50" />
+      ) : sortDir === "asc" ? (
+        <ArrowUp className="w-3 h-3" />
+      ) : (
+        <ArrowDown className="w-3 h-3" />
+      )}
+    </button>
+  );
+
   // ── Selection helpers (por cliente unificado) ──
   const toggleClient = (groupKey: string) => {
     setSelectedClients(prev => {
