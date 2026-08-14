@@ -261,11 +261,13 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Obtener asignaciones del vendedor
+      // Obtener asignaciones del vendedor (ocultando las agendadas para días futuros)
+      const hoyAR = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const { data: asignaciones, error } = await supabase
         .from('asignaciones_vendedores_clientes')
         .select('*')
-        .eq('vendedor_id', user.id);
+        .eq('vendedor_id', user.id)
+        .or(`fecha_programada.is.null,fecha_programada.lte.${hoyAR}`);
 
       if (error) throw error;
 

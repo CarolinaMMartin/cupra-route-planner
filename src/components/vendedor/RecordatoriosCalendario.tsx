@@ -5,7 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarClock, Check, Trash2, Clock, Route } from "lucide-react";
+import { CalendarClock, Check, Trash2, Clock, Route, Plus, Search } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 interface Recordatorio {
@@ -18,6 +21,13 @@ interface Recordatorio {
   prospecto_place_id: string | null;
 }
 
+interface Candidato {
+  id: string;
+  nombre: string;
+  detalle: string;
+  esProspecto: boolean;
+}
+
 const sameDay = (a: Date, b: Date) =>
   a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
@@ -25,6 +35,12 @@ const RecordatoriosCalendario = () => {
   const [recordatorios, setRecordatorios] = useState<Recordatorio[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState<string | null>(null);
+  const [dialogAbierto, setDialogAbierto] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
+  const [buscando, setBuscando] = useState(false);
+  const [resultados, setResultados] = useState<Candidato[]>([]);
+  const [nota, setNota] = useState("");
+  const [agendando, setAgendando] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const { toast } = useToast();
 
@@ -91,7 +107,7 @@ const RecordatoriosCalendario = () => {
         }
         const { error: reactivarError } = await supabase
           .from("asignaciones_vendedores_clientes")
-          .update({ estado: "Por visitar", visited_at: null })
+          .update({ estado: "Por visitar", visited_at: null, fecha_programada: null })
           .eq("id", yaAsignado.id);
         if (reactivarError) throw reactivarError;
         toast({
@@ -108,6 +124,7 @@ const RecordatoriosCalendario = () => {
         es_prospecto: !!r.prospecto_place_id,
         estado: "Por visitar",
         origen_asignacion: "auto",
+        fecha_programada: null,
       });
       if (error) throw error;
 
@@ -130,6 +147,109 @@ const RecordatoriosCalendario = () => {
       return;
     }
     setRecordatorios(prev => prev.filter(x => x.id !== id));
+  };
+
+  const buscar = async (q: string) => {
+    setBusqueda(q);
+    if (q.trim().length < 3) {
+      setResultados([]);
+      return;
+    }
+    setBuscando(true);
+    try {
+      const [{ data: clientes }, { data: prospectos }] = await Promise.all([
+        supabase
+          .from("clientes")
+          .select("client_id, razon_social, barrio_principal, ciudad_principal")
+          .ilike("razon_social", `%${q.trim()}%`)
+          .limit(8),
+        supabase
+          .from("prospectos")
+          .select("place_id, nombre, barrio, ciudad")
+          .ilike("nombre", `%${q.trim()}%`)
+          .limit(8),
+      ]);
+      setResultados([
+        ...(clientes || []).map(c => ({
+          id: c.client_id,
+          nombre: c.razon_social || c.client_id,
+          detalle: [c.barrio_principal, c.ciudad_principal].filter(Boolean).join(" · "),
+          esProspecto: false,
+        })),
+        ...(prospectos || []).map(p => ({
+          id: p.place_id,
+          nombre: p.nombre,
+          detalle: [p.barrio, p.ciudad].filter(Boolean).join(" · "),
+          esProspecto: true,
+        })),
+      ]);
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  const agendarVisita = async (candidato: Candidato) => {
+    if (!selectedDate) return;
+    setAgendando(candidato.id);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const fecha = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+
+      let existing = supabase
+        .from("asignaciones_vendedores_clientes")
+        .select("id")
+        .eq("vendedor_id", user.id);
+      existing = candidato.esProspecto
+        ? existing.eq("prospecto_place_id", candidato.id)
+        : existing.eq("client_id", candidato.id);
+      const { data: yaAsignado } = await existing.maybeSingle();
+
+      if (yaAsignado) {
+        const { error } = await supabase
+          .from("asignaciones_vendedores_clientes")
+          .update({ estado: "Por visitar", visited_at: null, fecha_programada: fecha })
+          .eq("id", yaAsignado.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("asignaciones_vendedores_clientes").insert({
+          vendedor_id: user.id,
+          client_id: candidato.esProspecto ? null : candidato.id,
+          prospecto_place_id: candidato.esProspecto ? candidato.id : null,
+          es_prospecto: candidato.esProspecto,
+          estado: "Por visitar",
+          origen_asignacion: "auto",
+          fecha_programada: fecha,
+        });
+        if (error) throw error;
+      }
+
+      const recordatorio: any = {
+        vendedor_id: user.id,
+        titulo: `Visita agendada: ${candidato.nombre}`,
+        nota: nota || null,
+        fecha_recordatorio: new Date(`${fecha}T09:00:00-03:00`).toISOString(),
+      };
+      if (candidato.esProspecto) recordatorio.prospecto_place_id = candidato.id;
+      else recordatorio.client_id = candidato.id;
+      await supabase.from("recordatorios").insert(recordatorio);
+
+      toast({
+        title: "Visita agendada",
+        description: `${candidato.nombre} va a aparecer en "Por visitar" el ${selectedDate.toLocaleDateString("es-AR")}.`,
+      });
+      setDialogAbierto(false);
+      setBusqueda("");
+      setResultados([]);
+      setNota("");
+      fetchRecordatorios();
+    } catch (error) {
+      console.error("Error agendando visita:", error);
+      toast({ variant: "destructive", title: "No se pudo agendar la visita" });
+    } finally {
+      setAgendando(null);
+    }
   };
 
   const fechasConRecordatorio = useMemo(
@@ -222,12 +342,21 @@ const RecordatoriosCalendario = () => {
         )}
 
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="flex-row items-center justify-between gap-2 space-y-0 pb-2">
             <CardTitle className="text-base">
               {selectedDate
                 ? `Seguimientos del ${selectedDate.toLocaleDateString("es-AR")}`
                 : "Seleccioná un día"}
             </CardTitle>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!selectedDate}
+              onClick={() => setDialogAbierto(true)}
+            >
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Agendar visita
+            </Button>
           </CardHeader>
           <CardContent className="space-y-2">
             {loading && <p className="text-sm text-muted-foreground">Cargando…</p>}
@@ -251,6 +380,61 @@ const RecordatoriosCalendario = () => {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={dialogAbierto} onOpenChange={setDialogAbierto}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              Agendar visita — {selectedDate?.toLocaleDateString("es-AR")}
+            </DialogTitle>
+            <DialogDescription>
+              Buscá un cliente o prospecto. Ese día te va a aparecer en "Por visitar".
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                autoFocus
+                value={busqueda}
+                onChange={e => buscar(e.target.value)}
+                placeholder="Nombre del cliente o prospecto…"
+                className="pl-9"
+              />
+            </div>
+
+            <Textarea
+              value={nota}
+              onChange={e => setNota(e.target.value)}
+              placeholder="Nota del seguimiento (opcional)"
+              rows={2}
+            />
+
+            <div className="space-y-2">
+              {buscando && <p className="text-sm text-muted-foreground">Buscando…</p>}
+              {!buscando && busqueda.trim().length >= 3 && resultados.length === 0 && (
+                <p className="text-sm text-muted-foreground">Sin resultados.</p>
+              )}
+              {resultados.map(c => (
+                <button
+                  key={`${c.esProspecto ? "p" : "c"}-${c.id}`}
+                  type="button"
+                  disabled={agendando === c.id}
+                  onClick={() => agendarVisita(c)}
+                  className="flex w-full items-center gap-2 rounded-md border border-border/60 bg-muted/20 p-3 text-left transition-colors hover:bg-muted/40 disabled:opacity-50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{c.nombre}</p>
+                    {c.detalle && <p className="truncate text-xs text-muted-foreground">{c.detalle}</p>}
+                  </div>
+                  {c.esProspecto && <Badge variant="secondary" className="shrink-0">Prospecto</Badge>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
