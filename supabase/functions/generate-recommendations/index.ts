@@ -1064,7 +1064,9 @@ Deno.serve(async (req) => {
     if (provincia && provincia !== "all") placesQuery = placesQuery.ilike("provincia_principal", `%${provincia}%`);
 
     const geoConditions: string[] = [];
-    if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditions.push(`comuna.ilike.%${c}%`));
+    // OJO: comuna con comodines ("%Comuna 1%") arrastra Comuna 10..15 (Palermo).
+    // Se compara exacto (case-insensitive) para no salirse del área elegida.
+    if (comunasFinales.length > 0) comunasFinales.forEach((c: string) => geoConditions.push(`comuna.ilike.${String(c).trim()}`));
     if (barriosFinales.length > 0) barriosFinales.forEach((b: string) => geoConditions.push(`barrio_principal.ilike.%${b}%`));
     if (geoConditions.length > 0) placesQuery = placesQuery.or(geoConditions.join(","));
 
