@@ -1607,27 +1607,84 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
               </div>
             )}
 
-            {/* Selector de etiqueta WhatsApp */}
+            {/* Estado del cliente */}
             <div>
-              <label className="text-sm font-medium mb-2 block">
-                Actualizar etiqueta de WhatsApp (opcional)
+              <label className="text-sm font-medium mb-2 flex items-center gap-2">
+                <Flag className="w-4 h-4 text-accent" />
+                Estado del cliente (opcional)
               </label>
               <div className="flex flex-wrap gap-2">
-                {['Nuevo Lead', 'En Conversación', 'Interesado', 'Sin Interés', 'Cliente Activo'].map((etiqueta) => (
+                {['Nuevo', 'En negociación', 'Interesado', 'Sin interés', 'Cliente activo', 'No contactable'].map((estado) => (
                   <button
-                    key={etiqueta}
+                    key={estado}
                     type="button"
-                    onClick={() => setActualizarEtiquetaWa(actualizarEtiquetaWa === etiqueta ? '' : etiqueta)}
+                    onClick={() => setEstadoCliente(estadoCliente === estado ? '' : estado)}
                     className={`px-3 py-1.5 rounded-full border text-xs transition-all ${
-                      actualizarEtiquetaWa === etiqueta 
-                        ? 'border-primary bg-primary/10 text-primary font-medium' 
+                      estadoCliente === estado
+                        ? 'border-accent bg-accent/10 text-accent font-medium'
                         : 'border-border hover:border-muted-foreground'
                     }`}
                   >
-                    {etiqueta}
+                    {estado}
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Calendarizar seguimiento */}
+            <div className="rounded-lg border border-border p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-accent" />
+                  Calendarizar seguimiento
+                </label>
+                <Checkbox
+                  checked={recordatorioActivo}
+                  onCheckedChange={(v) => setRecordatorioActivo(v === true)}
+                />
+              </div>
+              {recordatorioActivo && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: 'Mañana', dias: 1 },
+                      { label: 'En 3 días', dias: 3 },
+                      { label: 'La semana que viene', dias: 7 },
+                      { label: 'En 15 días', dias: 15 },
+                    ].map(({ label, dias }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => {
+                          const d = new Date();
+                          d.setDate(d.getDate() + dias);
+                          d.setHours(9, 0, 0, 0);
+                          const pad = (n: number) => String(n).padStart(2, '0');
+                          setRecordatorioFecha(
+                            `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+                          );
+                        }}
+                        className="px-3 py-1.5 rounded-full border border-border text-xs hover:border-accent hover:text-accent transition-all"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={recordatorioFecha}
+                    onChange={(e) => setRecordatorioFecha(e.target.value)}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  />
+                  <Textarea
+                    value={recordatorioNota}
+                    onChange={(e) => setRecordatorioNota(e.target.value)}
+                    placeholder="Nota del recordatorio (ej: llamar para cerrar pedido)"
+                    className="min-h-[60px]"
+                    maxLength={200}
+                  />
+                </div>
+              )}
             </div>
 
             <div>
