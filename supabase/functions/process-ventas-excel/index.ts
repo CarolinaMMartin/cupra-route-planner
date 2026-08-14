@@ -941,26 +941,99 @@ Deno.serve(async (req) => {
       c.fantasia = fantasia || c.fantasia;
     }
 
+    // ============ FASE 2b: clientes que sólo aparecen en comprobantes ============
+    // Compran otras bodegas y $0 CUPRA: sin esto quedan invisibles para el motor.
+    let clientesSoloComprobante = 0;
+    for (const [cid, agg] of comprobantesPorCliente.entries()) {
+      if (clientesMap.has(cid)) continue;
+      const b = agg.base || {};
+      const geo = normalizarGeografia(b.ciudad || null);
+      const provinciaFinal = normalizeProvincia(geo.provincia) || normalizeProvincia(b.provincia) || geo.provincia;
+      const nuevo: any = {
+        client_id: cid, cuit_dni: b.cuit_dni || null, razon_social: b.razon_social || null, fantasia: b.fantasia || null,
+        barrios: new Set<string>(), comunas: new Set<string>(), ciudades: new Set<string>(),
+        provincias: new Set<string>(), direcciones: new Set<string>(), vendedores: new Set<string>(),
+        productos: new Set<string>(), categorias_set: new Set<string>(),
+        telefonos: new Set<string>(), emails: new Set<string>(),
+        monto_total: 0, tickets_set: new Set<string>(), cantidad_lineas: 0,
+        fechas: [] as Date[], ultima_fecha_venta: null as Date | null, vendedor_ultima_venta: null as string | null,
+      };
+      if (geo.barrio) nuevo.barrios.add(geo.barrio);
+      if (geo.comuna) nuevo.comunas.add(geo.comuna);
+      if (geo.ciudad) nuevo.ciudades.add(geo.ciudad);
+      if (provinciaFinal) nuevo.provincias.add(provinciaFinal);
+      if (b.direccion) nuevo.direcciones.add(b.direccion);
+      if (b.vendedor) nuevo.vendedores.add(b.vendedor);
+      if (b.telefono) nuevo.telefonos.add(b.telefono);
+      if (b.correo) nuevo.emails.add(b.correo);
+      if (b.categorias) {
+        String(b.categorias).split(/[/|,;]/).forEach((cat: string) => { const t = cat.trim(); if (t) nuevo.categorias_set.add(t); });
+      }
+      const fechasComp = [...agg.fechas].sort((a, b2) => a.getTime() - b2.getTime());
+      const ultimaComp = fechasComp[fechasComp.length - 1] || null;
+      if (b.vendedor && ultimaComp) { nuevo.ultima_fecha_venta = ultimaComp; nuevo.vendedor_ultima_venta = b.vendedor; }
+      clientesMap.set(cid, nuevo);
+      clientesSoloComprobante++;
+    }
+    if (clientesSoloComprobante > 0) {
+      console.log(`🆕 ${clientesSoloComprobante} clientes provienen sólo de la hoja de comprobantes (sin compra CUPRA en el período)`);
+    }
+
     // ============ FASE 3: RFM + scores ============
     const ahora = new Date();
-    const totalGlobal = Array.from(clientesMap.values()).reduce((sum, c) => sum + c.monto_total, 0);
+    const usaComprobantes = comprobantesPorCliente.size > 0;
+
+    // Resumen monetario por cliente: manda el comprobante cuando existe.
+    const resumenMonetario = new Map<string, {
+      monto: number; ordenes: number; fechas: Date[]; fuente: 'comprobante' | 'producto'; montoCupra: number;
+    }>();
+    for (const c of clientesMap.values()) {
+      const agg = comprobantesPorCliente.get(c.client_id);
+      const montoCupra = Math.round(c.monto_total * 100) / 100;
+      if (agg && agg.tickets.size > 0) {
+        resumenMonetario.set(c.client_id, {
+          monto: Math.round(agg.monto * 100) / 100,
+          ordenes: agg.tickets.size,
+          fechas: agg.fechas.slice(),
+          fuente: 'comprobante',
+          montoCupra,
+        });
+      } else {
+        resumenMonetario.set(c.client_id, {
+          monto: montoCupra,
+          ordenes: c.tickets_set.size > 0 ? c.tickets_set.size : (c.cantidad_lineas > 0 ? 1 : 0),
+          fechas: c.fechas.slice(),
+          fuente: 'producto',
+          montoCupra,
+        });
+      }
+    }
+
+    const totalGlobal = Array.from(resumenMonetario.values()).reduce((sum, r) => sum + r.monto, 0);
 
     const clientesEnriquecidos = Array.from(clientesMap.values()).map(c => {
-      const fechasOrd = c.fechas.sort((a: Date, b: Date) => a.getTime() - b.getTime());
+      const resumen = resumenMonetario.get(c.client_id)!;
+      // Las fechas de comprobante cubren todas las marcas: mejor señal de recencia.
+      const fechasBase = resumen.fechas.length > 0 ? resumen.fechas : c.fechas;
+      const fechasOrd = [...fechasBase].sort((a: Date, b: Date) => a.getTime() - b.getTime());
       const primera = fechasOrd[0] || null;
       const ultima = fechasOrd[fechasOrd.length - 1] || null;
       const dias = ultima ? Math.floor((ahora.getTime() - ultima.getTime()) / 86400000) : 9999;
 
-      // TAREA 1: cantidad_ordenes = tickets únicos (no líneas de producto)
-      const cantidadOrdenes = c.tickets_set.size > 0 ? c.tickets_set.size : (c.cantidad_lineas > 0 ? 1 : 0);
-      const ticket_promedio = cantidadOrdenes > 0 ? Math.round((c.monto_total / cantidadOrdenes) * 100) / 100 : 0;
+      const montoTotal = resumen.monto;
+      // TAREA 1: cantidad_ordenes = comprobantes únicos (no líneas de producto)
+      const cantidadOrdenes = resumen.ordenes;
+      const ticket_promedio = cantidadOrdenes > 0 ? Math.round((montoTotal / cantidadOrdenes) * 100) / 100 : 0;
+      const share_cupra = montoTotal > 0
+        ? Math.round(Math.min(100, Math.max(0, (resumen.montoCupra / montoTotal) * 100)) * 100) / 100
+        : 0;
 
       let categoria_recencia = 'PERDIDO', score_recencia = 10;
       if (dias <= DIAS_ACTIVO) { categoria_recencia = 'ACTIVO'; score_recencia = 100; }
       else if (dias <= DIAS_INTERMITENTE) { categoria_recencia = 'INTERMITENTE'; score_recencia = 70; }
       else if (dias <= DIAS_INACTIVO) { categoria_recencia = 'INACTIVO'; score_recencia = 40; }
 
-      const participacion = totalGlobal > 0 ? c.monto_total / totalGlobal : 0;
+      const participacion = totalGlobal > 0 ? montoTotal / totalGlobal : 0;
       let categoria_volumen = 'BAJO', score_volumen = 25;
       if (participacion >= 0.10) { categoria_volumen = 'TOP_10'; score_volumen = 100; }
       else if (participacion >= 0.05) { categoria_volumen = 'ALTO'; score_volumen = 75; }
@@ -982,7 +1055,10 @@ Deno.serve(async (req) => {
         ultima_compra: ultima ? ultima.toISOString().split('T')[0] : null,
         dias_desde_ultima_compra: dias === 9999 ? null : dias,
         cantidad_ordenes: cantidadOrdenes,
-        monto_total_historico: Math.round(c.monto_total * 100) / 100,
+        monto_total_historico: Math.round(montoTotal * 100) / 100,
+        monto_total_cupra: resumen.montoCupra,
+        share_cupra,
+        fuente_monto: resumen.fuente,
         ticket_promedio, categoria_recencia, categoria_volumen,
         score_recencia, score_volumen, score_comercial,
         participacion_mercado: Math.round(participacion * 10000) / 100,
@@ -1000,6 +1076,9 @@ Deno.serve(async (req) => {
 
     // ── TAREA 9: Reconciliación — totales para validación ──
     const totalFacturacionProcesada = Math.round(totalGlobal * 100) / 100;
+    const totalCupraProcesado = Math.round(
+      Array.from(resumenMonetario.values()).reduce((sum, r) => sum + r.montoCupra, 0) * 100
+    ) / 100;
     const totalTicketsUnicos = Array.from(clientesMap.values()).reduce((sum, c) => sum + c.tickets_set.size, 0);
     const totalClientesUnicos = clientesMap.size;
     // Fix 3: Count clients by normalized razon_social
@@ -1077,7 +1156,7 @@ Deno.serve(async (req) => {
     const camposVentas = [
       'cuit_dni', 'razon_social', 'fantasia', 'telefonos', 'emails',
       'primera_compra', 'ultima_compra', 'dias_desde_ultima_compra',
-      'cantidad_ordenes', 'monto_total_historico', 'ticket_promedio',
+      'cantidad_ordenes', 'monto_total_historico', 'monto_total_cupra', 'share_cupra', 'fuente_monto', 'ticket_promedio',
       'categoria_recencia', 'categoria_volumen', 'score_recencia', 'score_volumen', 'score_comercial',
       'participacion_mercado', 'vendedor_principal', 'vendedor_actual', 'productos_comprados',
       'todos_barrios', 'todas_ciudades', 'todas_direcciones', 'todos_vendedores',
@@ -1183,7 +1262,7 @@ Deno.serve(async (req) => {
     // Solo reportamos las discrepancias, no corregimos aquí
     const discrepancias: string[] = [];
     // Compare total processed vs what we just upserted
-    if (Math.abs(totalFacturacionProcesada - Array.from(clientesMap.values()).reduce((s, c) => s + c.monto_total, 0)) > 1) {
+    if (Math.abs(totalFacturacionProcesada - Array.from(resumenMonetario.values()).reduce((s2, r) => s2 + r.monto, 0)) > 1) {
       discrepancias.push('Discrepancia interna en facturación total procesada');
     }
 
