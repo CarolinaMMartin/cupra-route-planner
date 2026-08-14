@@ -10,6 +10,16 @@ const MESES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto"
 
 type Hechos = Record<string, unknown>;
 
+function familiaProducto(nombre: string) {
+  return nombre
+    .toUpperCase()
+    .replace(/\b\d+\s*X\s*\d+\b/g, " ") // formatos 6X750
+    .replace(/\b(19|20)\d{2}\b/g, " ") // añadas
+    .replace(/[^A-Z ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function fmtARS(n: number | null | undefined) {
   if (n === null || n === undefined || !isFinite(Number(n))) return null;
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(Number(n));
