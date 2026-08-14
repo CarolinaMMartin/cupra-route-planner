@@ -914,6 +914,15 @@ const CargaDatos = () => {
                             <td className="px-3 py-1.5 text-right font-bold text-foreground">{reconciliacion.filas_deduplicadas.toLocaleString()}</td>
                           </tr>
                           <tr>
+                            <td className="px-3 py-1.5 text-foreground/80">Renglones bonificados al 100% (regalo)</td>
+                            <td className="px-3 py-1.5 text-right font-medium text-foreground">
+                              {(reconciliacion.filas_bonificadas_100 ?? 0).toLocaleString()}
+                              {reconciliacion.cajas_bonificadas_100
+                                ? ` (${reconciliacion.cajas_bonificadas_100.toLocaleString()} cajas)`
+                                : ''}
+                            </td>
+                          </tr>
+                          <tr>
                             <td className="px-3 py-1.5 text-foreground/80">Filas omitidas</td>
                             <td className="px-3 py-1.5 text-right font-medium text-amber-500">{(reconciliacion.filas_descartadas_total ?? reconciliacion.filas_descartadas_sin_id).toLocaleString()}</td>
                           </tr>
