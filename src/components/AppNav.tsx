@@ -169,13 +169,31 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
                   <ChevronDown className="w-3 h-3 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-56">
                 {profile && (
                   <>
                     <div className="px-3 py-2">
                       <p className="text-sm font-medium">{toTitleCase(profile.nombre)}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{profile.rol}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {profile.rol}
+                        {puedeAlternar && (enGestion ? " · modo gestión" : " · modo ventas")}
+                      </p>
                     </div>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {puedeAlternar && (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setMode(enGestion ? "ventas" : "gestion");
+                        navigate("/");
+                      }}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <Briefcase className="w-4 h-4" />
+                      {enGestion ? "Mi perfil de ventas" : "Volver a gestión"}
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
                 )}
