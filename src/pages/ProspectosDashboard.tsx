@@ -143,6 +143,70 @@ const ProspectosDashboard = () => {
   const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
   const [showBuscarProspectos, setShowBuscarProspectos] = useState(false);
 
+  // Asignación de prospectos
+  const [showAsignarDialog, setShowAsignarDialog] = useState(false);
+  const [vendedores, setVendedores] = useState<{ user_id: string; nombre: string }[]>([]);
+  const [selectedVendedorId, setSelectedVendedorId] = useState<string>("");
+  const [isAssigning, setIsAssigning] = useState(false);
+
+  useEffect(() => {
+    const loadVendedores = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, nombre")
+        .in("rol", ["vendedor", "asignador", "administrador"])
+        .eq("activo", true)
+        .order("nombre");
+      setVendedores(data || []);
+    };
+    void loadVendedores();
+  }, []);
+
+  const handleAsignarProspectos = async () => {
+    if (!selectedVendedorId || selectedIds.length === 0) return;
+    setIsAssigning(true);
+    try {
+      const seleccionados = prospectosData.filter((p) => selectedIds.includes(p.id));
+      const placeIds = seleccionados.map((p) => p.place_id).filter(Boolean);
+      if (placeIds.length === 0) throw new Error("Los prospectos seleccionados no tienen identificador de Maps");
+
+      // Evitar duplicados: limpiar asignaciones previas de esos prospectos para ese vendedor
+      await supabase
+        .from("asignaciones_vendedores_clientes")
+        .delete()
+        .eq("vendedor_id", selectedVendedorId)
+        .in("prospecto_place_id", placeIds);
+
+      const { error } = await supabase.from("asignaciones_vendedores_clientes").insert(
+        placeIds.map((place_id) => ({
+          vendedor_id: selectedVendedorId,
+          prospecto_place_id: place_id,
+          es_prospecto: true,
+          origen_asignacion: "asignador",
+        }))
+      );
+      if (error) throw error;
+
+      const vendedor = vendedores.find((v) => v.user_id === selectedVendedorId);
+      toast({
+        title: "Prospectos asignados",
+        description: `${placeIds.length} prospecto(s) asignado(s) a ${vendedor?.nombre || "el vendedor"}`,
+      });
+      setShowAsignarDialog(false);
+      setSelectedVendedorId("");
+      setSelectedIds([]);
+    } catch (err: any) {
+      console.error("Error asignando prospectos:", err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: err?.message || "No se pudieron asignar los prospectos",
+      });
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
