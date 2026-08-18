@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   BarChart3,
+  Briefcase,
   ChevronDown,
   ClipboardList,
   Home,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { toTitleCase } from "@/lib/format";
+import { useViewMode } from "@/hooks/useViewMode";
 
 interface AppNavProps {
   /** Perfil ya cargado por la página (evita una consulta extra). */
