@@ -1,0 +1,2 @@
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS perfil_ventas boolean NOT NULL DEFAULT false;
+UPDATE public.profiles SET perfil_ventas = true WHERE rol IN ('administrador'::public.app_role, 'asignador'::public.app_role);
