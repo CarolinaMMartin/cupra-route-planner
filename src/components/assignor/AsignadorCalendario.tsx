@@ -231,13 +231,13 @@ const AsignadorCalendario = () => {
       existing = candidato.esProspecto
         ? existing.eq("prospecto_place_id", candidato.id)
         : existing.eq("client_id", candidato.id);
-      const { data: yaAsignado } = await existing.maybeSingle();
+      const { data: yaAsignados } = await existing;
 
-      if (yaAsignado) {
+      if (yaAsignados && yaAsignados.length > 0) {
         const { error: delError } = await supabase
           .from("asignaciones_vendedores_clientes")
           .delete()
-          .eq("id", yaAsignado.id);
+          .in("id", yaAsignados.map((a: any) => a.id));
         if (delError) throw delError;
       }
 
