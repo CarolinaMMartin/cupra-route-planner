@@ -271,9 +271,13 @@ const AsignadorCalendario = () => {
       setResultados([]);
       setNota("");
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error agendando visita:", error);
-      toast({ variant: "destructive", title: "No se pudo agendar la visita" });
+      toast({
+        variant: "destructive",
+        title: "No se pudo agendar la visita",
+        description: error?.message || undefined,
+      });
     } finally {
       setAgendando(null);
     }
