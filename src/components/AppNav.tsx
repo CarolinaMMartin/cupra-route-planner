@@ -42,6 +42,8 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
   const navigate = useNavigate();
   const { toast } = useToast();
   const [profile, setProfile] = useState<{ nombre: string; rol: string } | null>(profileProp ?? null);
+  const { mode, setMode, puedeAlternar } = useViewMode(profile?.rol);
+  const enGestion = mode === "gestion";
 
   useEffect(() => {
     if (profileProp) {
