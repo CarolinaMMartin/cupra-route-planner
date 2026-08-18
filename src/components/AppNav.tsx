@@ -88,7 +88,7 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
               <span className="hidden sm:inline">Volver al inicio</span>
             </Button>
 
-            {isAssignorLike(profile?.rol) && (
+            {isAssignorLike(profile?.rol) && enGestion && (
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
