@@ -7,6 +7,7 @@
 // ============================================================
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { aiChat, hayProveedorIA } from "../_shared/ai-chat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -65,35 +66,30 @@ function hoyArgentina(): string {
   return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-async function extraer(texto: string, apiKey: string): Promise<Record<string, unknown> | null> {
-  const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            `Sos un analista comercial de una distribuidora de vinos en Argentina. Hoy es ${hoyArgentina()}.\n` +
-            `Extraés datos estructurados de comentarios informales escritos por vendedores de calle.\n` +
-            `Reglas: no inventes nada que no esté en el texto; si un dato no aparece, devolvé null o vacío.\n` +
-            `Interpretá referencias temporales del castellano rioplatense ("fin de mes", "después de las fiestas", ` +
-            `"cuando vuelva de vacaciones") y convertilas a días desde hoy con criterio conservador.`,
-        },
-        { role: "user", content: texto },
-      ],
-      tools: [EXTRACTION_TOOL],
-      tool_choice: { type: "function", function: { name: "registrar_extraccion" } },
-    }),
+async function extraer(texto: string, _apiKey: string): Promise<Record<string, unknown> | null> {
+  const res = await aiChat({
+    model: MODEL,
+    messages: [
+      {
+        role: "system",
+        content:
+          `Sos un analista comercial de una distribuidora de vinos en Argentina. Hoy es ${hoyArgentina()}.\n` +
+          `Extraés datos estructurados de comentarios informales escritos por vendedores de calle.\n` +
+          `Reglas: no inventes nada que no esté en el texto; si un dato no aparece, devolvé null o vacío.\n` +
+          `Interpretá referencias temporales del castellano rioplatense ("fin de mes", "después de las fiestas", ` +
+          `"cuando vuelva de vacaciones") y convertilas a días desde hoy con criterio conservador.`,
+      },
+      { role: "user", content: texto },
+    ],
+    tools: [EXTRACTION_TOOL],
+    tool_choice: { type: "function", function: { name: "registrar_extraccion" } },
   });
 
   if (!res.ok) {
-    console.error(`Gateway ${res.status}: ${await res.text()}`);
+    console.error(`IA ${res.proveedor} ${res.status}: ${res.errorText}`);
     return null;
   }
-  const json = await res.json();
-  const args = json?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+  const args = res.data?.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
   if (!args) return null;
   try {
     return JSON.parse(args);
@@ -106,7 +102,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const apiKey = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("LOVABLE_API_KEY");
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -116,9 +112,9 @@ Deno.serve(async (req) => {
     const feedbackId: string | undefined = body.feedback_id;
     const limite: number = Math.min(Number(body.limit) || 25, 100);
 
-    if (!apiKey) {
+    if (!hayProveedorIA()) {
       // Sin clave no rompemos nada: el motor sigue con el parser de siempre.
-      return new Response(JSON.stringify({ procesados: 0, motivo: "LOVABLE_API_KEY ausente" }), {
+      return new Response(JSON.stringify({ procesados: 0, motivo: "Sin clave de IA configurada" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

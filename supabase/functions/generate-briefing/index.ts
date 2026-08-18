@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { aiChat, hayProveedorIA } from "../_shared/ai-chat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,15 +34,11 @@ function fmtARS(n: number | null | undefined) {
 }
 
 async function redactarBriefing(hechos: Hechos, nombre: string): Promise<{ texto: string; modelo: string }> {
-  const apiKey = Deno.env.get("LOVABLE_API_KEY");
   const fallback = construirFallback(hechos);
-  if (!apiKey) return { texto: fallback, modelo: "reglas" };
+  if (!hayProveedorIA()) return { texto: fallback, modelo: "reglas" };
 
   try {
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const res = await aiChat({
         model: MODEL,
         messages: [
           {
@@ -57,15 +54,13 @@ async function redactarBriefing(hechos: Hechos, nombre: string): Promise<{ texto
           },
           { role: "user", content: `Cliente: ${nombre}\nHechos:\n${JSON.stringify(hechos, null, 2)}` },
         ],
-      }),
     });
 
     if (!res.ok) {
-      console.error("Gateway error", res.status, await res.text());
+      console.error(`IA ${res.proveedor} error`, res.status, res.errorText);
       return { texto: fallback, modelo: "reglas" };
     }
-    const data = await res.json();
-    const texto = (data?.choices?.[0]?.message?.content || "").trim();
+    const texto = (res.data?.choices?.[0]?.message?.content || "").trim();
     if (!texto) return { texto: fallback, modelo: "reglas" };
     return { texto, modelo: MODEL };
   } catch (e) {
