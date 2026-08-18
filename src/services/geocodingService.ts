@@ -1,8 +1,8 @@
-// Servicio de geocodificación directo vía Google Geocoding API.
-// La clave usada en el navegador debe estar restringida por dominio y por API
-// desde Google Cloud Console.
+// Servicio de geocodificación. La clave de navegador de Google sólo sirve para
+// Maps JS/Places, NO para Geocoding (devuelve REQUEST_DENIED), así que todas las
+// geocodificaciones pasan por la función backend `geocode-address`.
 
-import { GOOGLE_MAPS_BROWSER_KEY, loadGoogleMaps } from "@/lib/googleMaps";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface GeocodingRequest {
   direccion: string;
@@ -10,6 +10,7 @@ export interface GeocodingRequest {
   ciudad: string;
   provincia: string;
   pais: string; // Siempre "Argentina"
+  codigo_postal?: string;
 }
 
 export interface GeocodingResponse {
@@ -30,96 +31,52 @@ export interface GeocodingResponse {
   place_id?: string;
 }
 
-const GOOGLE_MAPS_API_KEY = GOOGLE_MAPS_BROWSER_KEY;
-
-function extractComponent(components: any[], type: string): string | null {
-  const c = components.find((comp: any) => comp.types?.includes(type));
-  return c?.long_name || null;
-}
-
 /**
- * Geocodifica una dirección usando el SDK de Google Maps.
- * (La clave de navegador está restringida por dominio y no puede usarse
- * contra la API REST de Geocoding.)
+ * Geocodifica una dirección vía la función backend (gateway de Google Maps).
  */
 export async function geocodeAddress(request: GeocodingRequest): Promise<GeocodingResponse> {
-  if (!GOOGLE_MAPS_API_KEY) {
-    console.error("No hay clave de Google Maps configurada");
-    return {
-      status: "ERROR",
-      error_code: "CONFIG_ERROR",
-      message: "El servicio de geocodificación no está configurado. Contacte al administrador.",
-    };
-  }
-
-  const parts = [request.direccion, request.barrio, request.ciudad, request.provincia, request.pais].filter(Boolean);
-  const fullAddress = parts.join(", ");
-
   try {
-    await loadGoogleMaps();
-
-    const geocoder = new google.maps.Geocoder();
-    const { results } = await geocoder.geocode({
-      address: fullAddress,
-      region: "ar",
+    const { data, error } = await supabase.functions.invoke("geocode-address", {
+      body: {
+        direccion: request.direccion,
+        barrio: request.barrio || "",
+        ciudad: request.ciudad,
+        provincia: request.provincia,
+        codigo_postal: request.codigo_postal || "",
+      },
     });
 
-    if (!results?.length) {
+    if (error) {
+      let detalle = error.message;
+      try {
+        const ctx = (error as any)?.context;
+        if (ctx?.text) {
+          const raw = await ctx.text();
+          const parsed = JSON.parse(raw);
+          if (parsed?.message) detalle = parsed.message;
+        }
+      } catch {
+        /* sin detalle adicional */
+      }
+      console.error("Error al geocodificar:", detalle);
       return {
         status: "ERROR",
-        error_code: "NO_RESULTS",
-        message: "No se encontraron resultados para esa dirección.",
+        error_code: "NETWORK_ERROR",
+        message: detalle || "No se pudo validar la dirección. Intentá nuevamente.",
       };
     }
 
-    const result = results[0];
-    const lat = result.geometry.location.lat();
-    const lng = result.geometry.location.lng();
-    const components: any[] = result.address_components || [];
-
-    const barrio =
-      extractComponent(components, "sublocality_level_1") ||
-      extractComponent(components, "sublocality") ||
-      extractComponent(components, "neighborhood");
-    const adminArea2 = extractComponent(components, "administrative_area_level_2");
-    const ciudad = extractComponent(components, "locality");
-    const provincia = extractComponent(components, "administrative_area_level_1");
-    const postalCode = extractComponent(components, "postal_code");
-
-    return {
-      status: "OK",
-      lat,
-      lng,
-      formatted_address: result.formatted_address,
-      location_type: String(result.geometry.location_type),
-      barrio,
-      comuna: adminArea2?.toLowerCase().startsWith("comuna") ? adminArea2 : null,
-      ciudad,
-      provincia,
-      postal_code: postalCode,
-      admin_area_level_2: adminArea2,
-      barrio_fallback_admin2: barrio || adminArea2,
-      place_id: result.place_id,
-    };
+    return data as GeocodingResponse;
   } catch (error: any) {
-    console.error("Error al geocodificar con Google Maps:", error);
-
-    const code = error?.code || error?.name;
-    if (code === "ZERO_RESULTS") {
-      return {
-        status: "ERROR",
-        error_code: "NO_RESULTS",
-        message: "No se encontraron resultados para esa dirección.",
-      };
-    }
-
+    console.error("Error al geocodificar:", error);
     return {
       status: "ERROR",
       error_code: "NETWORK_ERROR",
-      message: "No se pudo conectar con Google Maps. Verificá tu conexión e intentá nuevamente.",
+      message: "No se pudo conectar con el servicio de mapas. Verificá tu conexión e intentá nuevamente.",
     };
   }
 }
+
 
 /**
  * Valida que las coordenadas estén dentro del rango de Argentina
