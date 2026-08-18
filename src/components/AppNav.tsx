@@ -29,7 +29,7 @@ import { useViewMode } from "@/hooks/useViewMode";
 
 interface AppNavProps {
   /** Perfil ya cargado por la página (evita una consulta extra). */
-  profile?: { nombre: string; rol: string } | null;
+  profile?: { nombre: string; rol: string; perfil_ventas?: boolean | null } | null;
   /** Contenido extra a la derecha (por ejemplo, notificaciones). */
   rightSlot?: ReactNode;
 }
@@ -41,8 +41,8 @@ interface AppNavProps {
 export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [profile, setProfile] = useState<{ nombre: string; rol: string } | null>(profileProp ?? null);
-  const { mode, setMode, puedeAlternar } = useViewMode(profile?.rol);
+  const [profile, setProfile] = useState<{ nombre: string; rol: string; perfil_ventas?: boolean | null } | null>(profileProp ?? null);
+  const { mode, setMode, puedeAlternar } = useViewMode(profile?.rol, profile?.perfil_ventas);
   const enGestion = mode === "gestion";
 
   useEffect(() => {
@@ -57,10 +57,10 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
       if (!userId) return;
       const { data } = await supabase
         .from("profiles")
-        .select("nombre, rol")
+        .select("nombre, rol, perfil_ventas")
         .eq("user_id", userId)
         .maybeSingle();
-      if (!cancelled && data) setProfile({ nombre: data.nombre, rol: data.rol });
+      if (!cancelled && data) setProfile({ nombre: data.nombre, rol: data.rol, perfil_ventas: data.perfil_ventas });
     })();
     return () => { cancelled = true; };
   }, [profileProp]);

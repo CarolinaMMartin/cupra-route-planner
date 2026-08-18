@@ -919,6 +919,7 @@ export type Database = {
           email: string
           id: string
           nombre: string
+          perfil_ventas: boolean
           rol: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
@@ -928,6 +929,7 @@ export type Database = {
           email: string
           id?: string
           nombre: string
+          perfil_ventas?: boolean
           rol: Database["public"]["Enums"]["app_role"]
           user_id: string
         }
@@ -937,6 +939,7 @@ export type Database = {
           email?: string
           id?: string
           nombre?: string
+          perfil_ventas?: boolean
           rol?: Database["public"]["Enums"]["app_role"]
           user_id?: string
         }

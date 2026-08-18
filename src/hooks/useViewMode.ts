@@ -16,8 +16,8 @@ function read(): ViewMode {
  * que además trabajan como vendedores: permite alternar entre el panel de
  * asignación y su propio espacio de ventas con la misma cuenta.
  */
-export function useViewMode(rol?: string | null) {
-  const puedeAlternar = isAssignorLike(rol);
+export function useViewMode(rol?: string | null, perfilVentas?: boolean | null) {
+  const puedeAlternar = isAssignorLike(rol) && perfilVentas === true;
   const [mode, setModeState] = useState<ViewMode>(read);
 
   useEffect(() => {
@@ -35,8 +35,12 @@ export function useViewMode(rol?: string | null) {
     window.dispatchEvent(new CustomEvent(EVENT));
   }, []);
 
-  // Un vendedor puro siempre está en su espacio de ventas.
-  const effectiveMode: ViewMode = puedeAlternar ? mode : "ventas";
+  // Sin doble perfil: gestión para asignadores/admins, ventas para vendedores.
+  const effectiveMode: ViewMode = puedeAlternar
+    ? mode
+    : isAssignorLike(rol)
+      ? "gestion"
+      : "ventas";
 
   return { mode: effectiveMode, setMode, puedeAlternar };
 }
