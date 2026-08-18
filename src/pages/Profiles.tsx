@@ -61,11 +61,13 @@ const Profiles = () => {
     email: string;
     rol: AppRole;
     activo: boolean;
+    perfil_ventas: boolean;
   }>({
     nombre: "",
     email: "",
     rol: "vendedor",
     activo: true,
+    perfil_ventas: false,
   });
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -184,6 +186,7 @@ const Profiles = () => {
       email: profileData.email,
       rol: profileData.rol,
       activo: profileData.activo ?? true,
+      perfil_ventas: profileData.perfil_ventas ?? false,
     });
     setIsDialogOpen(true);
   };
@@ -296,6 +299,8 @@ const Profiles = () => {
           nombre: formData.nombre,
           rol: formData.rol,
           activo: formData.activo,
+          // El doble perfil solo aplica a roles de gestión.
+          perfil_ventas: isAssignorLike(formData.rol) ? formData.perfil_ventas : false,
         })
         .eq('id', editingProfile.id);
 
@@ -413,9 +418,14 @@ const Profiles = () => {
                   <TableCell className="font-medium">{profileItem.nombre}</TableCell>
                   <TableCell>{profileItem.email}</TableCell>
                   <TableCell>
-                    <Badge variant={isAssignorLike(profileItem.rol) ? "default" : "secondary"}>
-                      {ROLE_LABELS[profileItem.rol] ?? profileItem.rol}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Badge variant={isAssignorLike(profileItem.rol) ? "default" : "secondary"}>
+                        {ROLE_LABELS[profileItem.rol] ?? profileItem.rol}
+                      </Badge>
+                      {isAssignorLike(profileItem.rol) && profileItem.perfil_ventas && (
+                        <Badge variant="outline">+ Ventas</Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {profileItem.rol === 'vendedor' ? (
@@ -584,6 +594,21 @@ const Profiles = () => {
                   </SelectContent>
                 </Select>
               </div>
+              {isAssignorLike(formData.rol) && (
+                <div className="flex items-start justify-between gap-4 rounded-md border p-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="perfil-ventas">También vende (doble perfil)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Habilita "Mi perfil de ventas" en su menú: puede alternar entre gestión y su propio Kanban de visitas.
+                    </p>
+                  </div>
+                  <Switch
+                    id="perfil-ventas"
+                    checked={formData.perfil_ventas}
+                    onCheckedChange={(checked) => setFormData({ ...formData, perfil_ventas: checked })}
+                  />
+                </div>
+              )}
               {formData.rol === 'vendedor' && (
                 <div className="flex items-center justify-between">
                   <Label htmlFor="activo">Activo</Label>
