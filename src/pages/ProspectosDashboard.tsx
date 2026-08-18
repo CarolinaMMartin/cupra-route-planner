@@ -982,6 +982,39 @@ const ProspectosDashboard = () => {
           </DialogContent>
         </Dialog>
 
+        {/* Dialog para asignar prospectos a un vendedor */}
+        <Dialog open={showAsignarDialog} onOpenChange={setShowAsignarDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Asignar a vendedor</DialogTitle>
+              <DialogDescription>
+                {selectedIds.length} prospecto(s) seleccionado(s). Elegí el vendedor destino.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <SearchableSelect
+                value={selectedVendedorId}
+                onValueChange={setSelectedVendedorId}
+                options={vendedores.map((v) => ({ value: v.user_id, label: v.nombre }))}
+                placeholder="Seleccioná un vendedor"
+                searchPlaceholder="Buscar vendedor..."
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowAsignarDialog(false)} disabled={isAssigning}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="wine-button"
+                  onClick={handleAsignarProspectos}
+                  disabled={!selectedVendedorId || isAssigning}
+                >
+                  {isAssigning ? "Asignando..." : "Asignar"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         <ProspectDiscoveryDialog
           open={showBuscarProspectos}
           onOpenChange={setShowBuscarProspectos}
