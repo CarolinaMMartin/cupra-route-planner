@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.47.10";
 import { composeRecommendationIds } from "./recommendation-composition.ts";
+import { aiChat, hayProveedorIA } from "../_shared/ai-chat.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1899,17 +1900,10 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
     // ============================================================
     // 11. CALL AI
     // ============================================================
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY no configurado");
+    if (!hayProveedorIA()) throw new Error("No hay clave de IA configurada (GEMINI_API_KEY o LOVABLE_API_KEY)");
 
     console.log("🚀 Enviando a IA (gemini-2.5-flash)...");
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const aiResponse = await aiChat({
         model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: buildSystemPrompt(instrucciones_adicionales) },
@@ -1954,17 +1948,16 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           },
         }],
         tool_choice: { type: "function", function: { name: "generate_recommendations" } },
-      }),
     });
 
     if (!aiResponse.ok) {
-      const errorText = await aiResponse.text().catch(() => "unreadable");
+      const errorText = aiResponse.errorText || "unreadable";
       if (aiResponse.status === 429) return new Response(JSON.stringify({ error: "Límite de consultas IA alcanzado." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       if (aiResponse.status === 402) return new Response(JSON.stringify({ error: "Créditos de IA agotados." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      throw new Error(`Lovable AI error: ${aiResponse.status} - ${errorText}`);
+      throw new Error(`IA (${aiResponse.proveedor}) error: ${aiResponse.status} - ${errorText}`);
     }
 
-    const aiData = await aiResponse.json();
+    const aiData = aiResponse.data;
     const toolCall = aiData.choices[0]?.message?.tool_calls?.[0];
     if (!toolCall?.function?.arguments) throw new Error("No se recibió tool call de la IA");
 
@@ -2252,10 +2245,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           return `### ${v.nombre} (${v.user_id}) — hotspot ${h ? `${h.lat.toFixed(4)},${h.lng.toFixed(4)}` : "N/A"}\n${lineas}`;
         }).join("\n\n");
 
-          const auditResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
+          const auditResponse = await aiChat({
             model: "google/gemini-2.5-pro",
             messages: [
               {
@@ -2297,12 +2287,11 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
               },
             }],
             tool_choice: { type: "function", function: { name: "auditar_distribucion" } },
-          }),
-        });
+          });
 
           if (!auditResponse.ok) throw new Error(`Auditoría IA no disponible (${auditResponse.status})`);
 
-          const auditData = await auditResponse.json();
+          const auditData = auditResponse.data;
           const auditArgs = auditData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
           if (!auditArgs) throw new Error("La auditoría IA no devolvió una validación estructurada");
 
