@@ -773,10 +773,7 @@ const ProspectosDashboard = () => {
                 <Button
                   size="sm"
                   className="h-8 wine-button"
-                  onClick={() => toast({
-                    title: "Asignar vendedor",
-                    description: "La asignación de prospectos se hace desde el panel de asignación.",
-                  })}
+                  onClick={() => setShowAsignarDialog(true)}
                 >
                   Asignar vendedor
                 </Button>
