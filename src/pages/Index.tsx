@@ -43,7 +43,7 @@ const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const kanbanRef = useRef<VendedorKanbanRef>(null);
-  const { mode: viewMode } = useViewMode(profile?.rol);
+  const { mode: viewMode } = useViewMode(profile?.rol, profile?.perfil_ventas);
 
   const handleNotificacionClick = (asignacionId: string) => {
     kanbanRef.current?.focusAssignment(asignacionId);
@@ -170,7 +170,7 @@ const Index = () => {
 
       {/* Header global */}
       <AppNav
-        profile={{ nombre: profile.nombre, rol: profile.rol }}
+        profile={{ nombre: profile.nombre, rol: profile.rol, perfil_ventas: profile.perfil_ventas }}
         rightSlot={viewMode === 'ventas'
           ? <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />
           : null}
