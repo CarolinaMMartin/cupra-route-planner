@@ -1104,19 +1104,7 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
         
         {/* Acciones - responsive */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Botón primario siempre visible */}
-          <Button
-            variant="default"
-            onClick={() => setShowAgregarProspecto(true)}
-            size="sm"
-            className="gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Agregar Prospecto</span>
-            <span className="sm:hidden">Prospecto</span>
-          </Button>
-          
-          {/* Toggle Kanban/Mapa - siempre visible (importante para operación) */}
+          {/* Toggle Kanban/Mapa/Calendario - siempre visible (importante para operación) */}
           <div className="flex items-center border rounded-md">
             <Button
               variant={viewMode === 'kanban' ? 'default' : 'ghost'}
@@ -1144,6 +1132,18 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
               <CalendarClock className="w-4 h-4" />
             </Button>
           </div>
+          
+          {/* Botones de acción agrupados: mismo tamaño y forma */}
+          <Button
+            variant="default"
+            onClick={() => setShowAgregarProspecto(true)}
+            size="sm"
+            className="gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Agregar Prospecto</span>
+            <span className="sm:hidden">Prospecto</span>
+          </Button>
           
           {/* Desktop: Auto-asignar visible */}
           <Button
