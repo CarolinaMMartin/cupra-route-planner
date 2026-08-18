@@ -45,6 +45,7 @@ interface FormData {
   direccion: string;
   barrio: string;
   ciudad: string;
+  codigo_postal: string;
   provincia: string;
   telefono: string;
   email: string;
@@ -109,6 +110,7 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
     direccion: "",
     barrio: "",
     ciudad: "",
+    codigo_postal: "",
     provincia: "",
     telefono: "",
     email: "",
@@ -415,6 +417,7 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
         barrio: formData.barrio || undefined,
         ciudad: formData.ciudad,
         provincia: formData.provincia,
+        codigo_postal: formData.codigo_postal.trim() || undefined,
         pais: "Argentina",
       });
 
@@ -779,6 +782,18 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
             className="bg-input border-border h-10"
           />
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="codigo_postal" className="text-sm">Código postal</Label>
+        <Input
+          id="codigo_postal"
+          placeholder="C1425 o 1425"
+          value={formData.codigo_postal}
+          onChange={(e) => handleInputChange("codigo_postal", e.target.value)}
+          className="bg-input border-border h-10"
+        />
+        <p className="text-xs text-muted-foreground">Mejora la precisión de la ubicación en Google Maps.</p>
       </div>
 
       <div className="space-y-1.5">
