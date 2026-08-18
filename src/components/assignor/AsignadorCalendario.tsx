@@ -247,7 +247,7 @@ const AsignadorCalendario = () => {
         prospecto_place_id: candidato.esProspecto ? candidato.id : null,
         es_prospecto: candidato.esProspecto,
         estado: "Por visitar",
-        origen_asignacion: "manual",
+        origen_asignacion: "asignador",
         fecha_programada: fecha,
       });
       if (error) throw error;
