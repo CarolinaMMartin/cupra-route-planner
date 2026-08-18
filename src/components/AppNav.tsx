@@ -143,7 +143,7 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
               </>
             )}
 
-            {profile?.rol === "vendedor" && (
+            {!enGestion && (
               <>
                 <Button variant="ghost" size="sm" onClick={() => navigate("/vendedor-dashboard")} className="gap-1.5 text-sm">
                   <BarChart3 className="w-4 h-4" />
