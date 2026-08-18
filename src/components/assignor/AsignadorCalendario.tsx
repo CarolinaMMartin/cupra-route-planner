@@ -231,13 +231,13 @@ const AsignadorCalendario = () => {
       existing = candidato.esProspecto
         ? existing.eq("prospecto_place_id", candidato.id)
         : existing.eq("client_id", candidato.id);
-      const { data: yaAsignado } = await existing.maybeSingle();
+      const { data: yaAsignados } = await existing;
 
-      if (yaAsignado) {
+      if (yaAsignados && yaAsignados.length > 0) {
         const { error: delError } = await supabase
           .from("asignaciones_vendedores_clientes")
           .delete()
-          .eq("id", yaAsignado.id);
+          .in("id", yaAsignados.map((a: any) => a.id));
         if (delError) throw delError;
       }
 
@@ -247,7 +247,7 @@ const AsignadorCalendario = () => {
         prospecto_place_id: candidato.esProspecto ? candidato.id : null,
         es_prospecto: candidato.esProspecto,
         estado: "Por visitar",
-        origen_asignacion: "manual",
+        origen_asignacion: "asignador",
         fecha_programada: fecha,
       });
       if (error) throw error;
@@ -271,9 +271,13 @@ const AsignadorCalendario = () => {
       setResultados([]);
       setNota("");
       fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error agendando visita:", error);
-      toast({ variant: "destructive", title: "No se pudo agendar la visita" });
+      toast({
+        variant: "destructive",
+        title: "No se pudo agendar la visita",
+        description: error?.message || undefined,
+      });
     } finally {
       setAgendando(null);
     }
