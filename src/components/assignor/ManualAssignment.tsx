@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, UserCheck, Users, AlertCircle, Lightbulb, Clock, UserX, TrendingDown, Loader2, SlidersHorizontal, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Search, UserCheck, Users, AlertCircle, Lightbulb, Clock, UserX, TrendingDown, Loader2, SlidersHorizontal, ChevronDown, ArrowUpDown, ArrowUp, ArrowDown, Building2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -53,19 +53,36 @@ interface Cliente {
   cantidad_ordenes: number | null;
 }
 
-interface ClienteGrupo {
+interface Prospecto {
+  place_id: string;
+  nombre: string;
+  ciudad: string | null;
+  provincia: string | null;
+  barrio: string | null;
+  telefono: string | null;
+  rating: number | null;
+  total_ratings: number | null;
+}
+
+/** Fila unificada de la tabla: puede ser un cliente consolidado o un prospecto */
+interface Fila {
   key: string;
+  tipo: "cliente" | "prospecto";
+  /** client_ids reales (clientes) — vacío para prospectos */
   clientIds: string[];
-  razon_social: string | null;
-  fantasia: string | null;
-  ciudad_principal: string | null;
-  provincia_principal: string | null;
+  /** place_id de Google (solo prospectos) */
+  placeId?: string;
+  nombre: string;
+  ciudad: string | null;
+  provincia: string | null;
   vendedor_actual: string | null;
-  vendedor_principal: string | null;
   monto_total_historico: number;
   dias_sin_compra: number | null;
   cantidad_ordenes: number;
   registros: number;
+  /** datos extra de prospecto */
+  rating?: number | null;
+  total_ratings?: number | null;
 }
 
 interface Vendedor {
@@ -74,8 +91,9 @@ interface Vendedor {
 }
 
 type SuggestionMode = "sin_vendedor" | "baja_frecuencia" | "no_visitados";
-type SortKey = "nombre" | "ciudad" | "provincia" | "vendedor" | "monto" | "dias";
+type SortKey = "nombre" | "ciudad" | "provincia" | "vendedor" | "monto" | "dias" | "tipo";
 type SortDir = "asc" | "desc";
+type TipoFiltro = "todos" | "clientes" | "prospectos";
 
 const formatCurrency = (v: number | null) =>
   v != null ? `$${v.toLocaleString("es-AR", { maximumFractionDigits: 0 })}` : "—";
@@ -99,12 +117,14 @@ const ManualAssignment = () => {
   // ── State ──
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [filterTipo, setFilterTipo] = useState<TipoFiltro>("todos");
   const [filterCiudad, setFilterCiudad] = useState("all");
   const [filterProvincia, setFilterProvincia] = useState("all");
   const [filterVendedor, setFilterVendedor] = useState("all");
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [prospectos, setProspectos] = useState<Prospecto[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [selectedVendedorId, setSelectedVendedorId] = useState<string>("");
   const [isSearching, setIsSearching] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
@@ -140,9 +160,10 @@ const ManualAssignment = () => {
     loadVendedores();
   }, []);
 
-  // ── Search clientes ──
-  const searchClientes = useCallback(async (
+  // ── Search clientes + prospectos ──
+  const buscar = useCallback(async (
     query: string,
+    tipo: TipoFiltro,
     ciudad: string,
     provincia: string,
     vendedor: string,
@@ -151,42 +172,68 @@ const ManualAssignment = () => {
     setIsSearching(true);
     setHasSearched(true);
     try {
-      let q = supabase
-        .from("clientes")
-        .select("client_id, cuit_dni, ultima_compra, razon_social, fantasia, ciudad_principal, provincia_principal, vendedor_actual, vendedor_principal, monto_total_historico, dias_desde_ultima_compra, cantidad_ordenes")
-        .order("monto_total_historico", { ascending: false })
-        .limit(200);
+      const sanitized = query.trim().replace(/[%_]/g, "");
 
-      if (query.trim()) {
-        const sanitized = query.trim().replace(/[%_]/g, "");
-        q = q.or(`razon_social.ilike.%${sanitized}%,fantasia.ilike.%${sanitized}%`);
-      }
-      if (ciudad !== "all") q = q.eq("ciudad_principal", ciudad);
-      if (provincia !== "all") q = q.eq("provincia_principal", provincia);
-      if (vendedor !== "all") {
-        if (vendedor === "__SIN_ASIGNAR__") {
-          q = q.is("vendedor_actual", null);
-        } else {
-          q = q.eq("vendedor_actual", vendedor);
+      // ── Clientes ──
+      const incluirClientes = tipo !== "prospectos";
+      let clientesData: Cliente[] = [];
+      if (incluirClientes) {
+        let q = supabase
+          .from("clientes")
+          .select("client_id, cuit_dni, ultima_compra, razon_social, fantasia, ciudad_principal, provincia_principal, vendedor_actual, vendedor_principal, monto_total_historico, dias_desde_ultima_compra, cantidad_ordenes")
+          .order("monto_total_historico", { ascending: false })
+          .limit(200);
+
+        if (sanitized) q = q.or(`razon_social.ilike.%${sanitized}%,fantasia.ilike.%${sanitized}%`);
+        if (ciudad !== "all") q = q.eq("ciudad_principal", ciudad);
+        if (provincia !== "all") q = q.eq("provincia_principal", provincia);
+        if (vendedor !== "all") {
+          if (vendedor === "__SIN_ASIGNAR__") q = q.is("vendedor_actual", null);
+          else q = q.eq("vendedor_actual", vendedor);
         }
+
+        if (suggestion === "sin_vendedor") q = q.is("vendedor_actual", null);
+        else if (suggestion === "baja_frecuencia") q = q.lt("cantidad_ordenes", 3).not("cantidad_ordenes", "is", null);
+        else if (suggestion === "no_visitados") q = q.gt("dias_desde_ultima_compra", 60);
+
+        const { data, error } = await q;
+        if (error) throw error;
+        clientesData = data || [];
       }
 
-      // Smart suggestions filters
-      if (suggestion === "sin_vendedor") {
-        q = q.is("vendedor_actual", null);
-      } else if (suggestion === "baja_frecuencia") {
-        q = q.lt("cantidad_ordenes", 3).not("cantidad_ordenes", "is", null);
-      } else if (suggestion === "no_visitados") {
-        q = q.gt("dias_desde_ultima_compra", 60);
+      // ── Prospectos ──
+      // Los prospectos no tienen vendedor titular ni historial de compras:
+      // se excluyen si el usuario filtra por un vendedor concreto o pide baja
+      // frecuencia / sin compra reciente (métricas que no aplican).
+      const incluirProspectos =
+        tipo !== "clientes" &&
+        (vendedor === "all" || vendedor === "__SIN_ASIGNAR__") &&
+        (!suggestion || suggestion === "sin_vendedor");
+
+      let prospectosData: Prospecto[] = [];
+      if (incluirProspectos) {
+        let p = supabase
+          .from("prospectos")
+          .select("place_id, nombre, ciudad, provincia, barrio, telefono, rating, total_ratings")
+          .eq("es_cliente_cupra", false)
+          .order("total_ratings", { ascending: false, nullsFirst: false })
+          .limit(200);
+
+        if (sanitized) p = p.ilike("nombre", `%${sanitized}%`);
+        if (ciudad !== "all") p = p.eq("ciudad", ciudad);
+        if (provincia !== "all") p = p.eq("provincia", provincia);
+
+        const { data, error } = await p;
+        if (error) throw error;
+        prospectosData = data || [];
       }
 
-      const { data, error } = await q;
-      if (error) throw error;
-      setClientes(data || []);
-      setSelectedClients(new Set());
+      setClientes(clientesData);
+      setProspectos(prospectosData);
+      setSelectedRows(new Set());
     } catch (err) {
       console.error("Error searching:", err);
-      toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los clientes" });
+      toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los resultados" });
     } finally {
       setIsSearching(false);
     }
@@ -194,23 +241,27 @@ const ManualAssignment = () => {
 
   // ── Carga inicial + búsqueda al cambiar query o filtros ──
   useEffect(() => {
-    searchClientes(debouncedQuery, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined);
-  }, [debouncedQuery, filterCiudad, filterProvincia, filterVendedor, suggestionMode, searchClientes]);
+    buscar(debouncedQuery, filterTipo, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined);
+  }, [debouncedQuery, filterTipo, filterCiudad, filterProvincia, filterVendedor, suggestionMode, buscar]);
 
 
   // ── Opciones de filtro (catálogo completo, independiente del resultado actual) ──
   const [geoOptions, setGeoOptions] = useState<{ ciudades: string[]; provincias: string[] }>({ ciudades: [], provincias: [] });
   useEffect(() => {
     const loadGeo = async () => {
-      const { data } = await supabase
-        .from("clientes")
-        .select("ciudad_principal, provincia_principal")
-        .limit(5000);
+      const [{ data: cli }, { data: pros }] = await Promise.all([
+        supabase.from("clientes").select("ciudad_principal, provincia_principal").limit(5000),
+        supabase.from("prospectos").select("ciudad, provincia").limit(5000),
+      ]);
       const ci = new Set<string>();
       const pr = new Set<string>();
-      (data || []).forEach((r: { ciudad_principal: string | null; provincia_principal: string | null }) => {
+      (cli || []).forEach((r: { ciudad_principal: string | null; provincia_principal: string | null }) => {
         if (r.ciudad_principal) ci.add(r.ciudad_principal);
         if (r.provincia_principal) pr.add(r.provincia_principal);
+      });
+      (pros || []).forEach((r: { ciudad: string | null; provincia: string | null }) => {
+        if (r.ciudad) ci.add(r.ciudad);
+        if (r.provincia) pr.add(r.provincia);
       });
       setGeoOptions({ ciudades: Array.from(ci).sort(), provincias: Array.from(pr).sort() });
     };
@@ -220,24 +271,23 @@ const ManualAssignment = () => {
   const provincias = geoOptions.provincias;
 
 
-  // ── Unificar registros duplicados del mismo cliente (mismo CUIT o misma razón social) ──
-  const grupos = useMemo<ClienteGrupo[]>(() => {
-    const map = new Map<string, ClienteGrupo>();
+  // ── Unificar registros duplicados del mismo cliente + sumar prospectos ──
+  const filas = useMemo<Fila[]>(() => {
+    const map = new Map<string, Fila>();
     const ultimaCompraPorGrupo = new Map<string, string>();
 
     for (const c of clientes) {
-      const key = (c.cuit_dni?.trim() || normalizeRS(c.razon_social || c.fantasia || c.client_id));
+      const key = `C:${c.cuit_dni?.trim() || normalizeRS(c.razon_social || c.fantasia || c.client_id)}`;
       const existing = map.get(key);
       if (!existing) {
         map.set(key, {
           key,
+          tipo: "cliente",
           clientIds: [c.client_id],
-          razon_social: c.razon_social,
-          fantasia: c.fantasia,
-          ciudad_principal: c.ciudad_principal,
-          provincia_principal: c.provincia_principal,
-          vendedor_actual: c.vendedor_actual,
-          vendedor_principal: c.vendedor_principal,
+          nombre: c.razon_social || c.fantasia || "Sin nombre",
+          ciudad: c.ciudad_principal,
+          provincia: c.provincia_principal,
+          vendedor_actual: c.vendedor_actual || c.vendedor_principal,
           monto_total_historico: c.monto_total_historico || 0,
           dias_sin_compra: null,
           cantidad_ordenes: c.cantidad_ordenes || 0,
@@ -248,44 +298,67 @@ const ManualAssignment = () => {
         existing.monto_total_historico += c.monto_total_historico || 0;
         existing.cantidad_ordenes += c.cantidad_ordenes || 0;
         existing.registros += 1;
-        existing.ciudad_principal ||= c.ciudad_principal;
-        existing.provincia_principal ||= c.provincia_principal;
-        existing.vendedor_actual ||= c.vendedor_actual;
-        existing.vendedor_principal ||= c.vendedor_principal;
+        existing.ciudad ||= c.ciudad_principal;
+        existing.provincia ||= c.provincia_principal;
+        existing.vendedor_actual ||= c.vendedor_actual || c.vendedor_principal;
       }
-      // La última compra del cliente unificado es la más reciente de sus registros
       const prev = ultimaCompraPorGrupo.get(key);
       if (c.ultima_compra && (!prev || c.ultima_compra > prev)) {
         ultimaCompraPorGrupo.set(key, c.ultima_compra);
       }
     }
 
-    return Array.from(map.values())
-      .map(g => ({ ...g, dias_sin_compra: diasDesde(ultimaCompraPorGrupo.get(g.key) || null) }))
-      .sort((a, b) => b.monto_total_historico - a.monto_total_historico);
-  }, [clientes]);
+    const filasClientes = Array.from(map.values()).map(g => ({
+      ...g,
+      dias_sin_compra: diasDesde(ultimaCompraPorGrupo.get(g.key) || null),
+    }));
+
+    const filasProspectos: Fila[] = prospectos.map(p => ({
+      key: `P:${p.place_id}`,
+      tipo: "prospecto" as const,
+      clientIds: [],
+      placeId: p.place_id,
+      nombre: p.nombre,
+      ciudad: p.ciudad,
+      provincia: p.provincia,
+      vendedor_actual: null,
+      monto_total_historico: 0,
+      dias_sin_compra: null,
+      cantidad_ordenes: 0,
+      registros: 1,
+      rating: p.rating,
+      total_ratings: p.total_ratings,
+    }));
+
+    return [...filasClientes, ...filasProspectos];
+  }, [clientes, prospectos]);
+
+  const totalClientes = filas.filter(f => f.tipo === "cliente").length;
+  const totalProspectos = filas.filter(f => f.tipo === "prospecto").length;
 
   // ── Ordenamiento de la tabla ──
-  const sortedGrupos = useMemo(() => {
+  const sortedFilas = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
     const txt = (v: string | null) => (v || "").toLocaleLowerCase("es-AR");
-    return [...grupos].sort((a, b) => {
+    return [...filas].sort((a, b) => {
       switch (sortKey) {
         case "nombre":
-          return txt(a.razon_social || a.fantasia).localeCompare(txt(b.razon_social || b.fantasia), "es-AR") * dir;
+          return txt(a.nombre).localeCompare(txt(b.nombre), "es-AR") * dir;
+        case "tipo":
+          return a.tipo.localeCompare(b.tipo) * dir;
         case "ciudad":
-          return txt(a.ciudad_principal).localeCompare(txt(b.ciudad_principal), "es-AR") * dir;
+          return txt(a.ciudad).localeCompare(txt(b.ciudad), "es-AR") * dir;
         case "provincia":
-          return txt(a.provincia_principal).localeCompare(txt(b.provincia_principal), "es-AR") * dir;
+          return txt(a.provincia).localeCompare(txt(b.provincia), "es-AR") * dir;
         case "vendedor":
-          return txt(a.vendedor_actual || a.vendedor_principal).localeCompare(txt(b.vendedor_actual || b.vendedor_principal), "es-AR") * dir;
+          return txt(a.vendedor_actual).localeCompare(txt(b.vendedor_actual), "es-AR") * dir;
         case "dias":
           return ((a.dias_sin_compra ?? -1) - (b.dias_sin_compra ?? -1)) * dir;
         default:
           return (a.monto_total_historico - b.monto_total_historico) * dir;
       }
     });
-  }, [grupos, sortKey, sortDir]);
+  }, [filas, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -315,29 +388,29 @@ const ManualAssignment = () => {
     </button>
   );
 
-  // ── Selection helpers (por cliente unificado) ──
-  const toggleClient = (groupKey: string) => {
-    setSelectedClients(prev => {
+  // ── Selection helpers ──
+  const toggleRow = (rowKey: string) => {
+    setSelectedRows(prev => {
       const next = new Set(prev);
-      if (next.has(groupKey)) next.delete(groupKey);
-      else next.add(groupKey);
+      if (next.has(rowKey)) next.delete(rowKey);
+      else next.add(rowKey);
       return next;
     });
   };
 
   const toggleAll = () => {
-    if (selectedClients.size === grupos.length) {
-      setSelectedClients(new Set());
-    } else {
-      setSelectedClients(new Set(grupos.map(g => g.key)));
-    }
+    if (selectedRows.size === filas.length) setSelectedRows(new Set());
+    else setSelectedRows(new Set(filas.map(f => f.key)));
   };
 
   // ── Assign ──
   const selectedVendedor = vendedores.find(v => v.user_id === selectedVendedorId);
+  const selectedFilas = filas.filter(f => selectedRows.has(f.key));
+  const selClientes = selectedFilas.filter(f => f.tipo === "cliente");
+  const selProspectos = selectedFilas.filter(f => f.tipo === "prospecto");
 
   const handleAssign = async () => {
-    if (!selectedVendedorId || selectedClients.size === 0) return;
+    if (!selectedVendedorId || selectedRows.size === 0) return;
     setIsAssigning(true);
     setShowConfirmDialog(false);
 
@@ -345,26 +418,34 @@ const ManualAssignment = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No autenticado");
 
-      const selectedGrupos = grupos.filter(g => selectedClients.has(g.key));
-      const clientIds = selectedGrupos.flatMap(g => g.clientIds);
+      const clientIds = selClientes.flatMap(f => f.clientIds);
+      const placeIds = selProspectos.map(f => f.placeId!).filter(Boolean);
       const selectedClientesData = clientes.filter(c => clientIds.includes(c.client_id));
 
-
-      // 1. Create assignments in asignaciones_vendedores_clientes
-      const assignments = clientIds.map(client_id => ({
-        vendedor_id: selectedVendedorId,
-        client_id,
-        es_prospecto: false,
-        origen_asignacion: "asignador",
-        estado: "Asignado" as const,
-      }));
+      // 1. Crear asignaciones (clientes + prospectos)
+      const assignments = [
+        ...clientIds.map(client_id => ({
+          vendedor_id: selectedVendedorId,
+          client_id,
+          es_prospecto: false,
+          origen_asignacion: "asignador",
+          estado: "Asignado" as const,
+        })),
+        ...placeIds.map(place_id => ({
+          vendedor_id: selectedVendedorId,
+          prospecto_place_id: place_id,
+          es_prospecto: true,
+          origen_asignacion: "asignador",
+          estado: "Asignado" as const,
+        })),
+      ];
 
       const { error: assignError } = await supabase
         .from("asignaciones_vendedores_clientes")
         .insert(assignments);
       if (assignError) throw assignError;
 
-      // 2. Update vendedor_actual on clientes table
+      // 2. Actualizar vendedor_actual solo en clientes reales
       for (const clientId of clientIds) {
         await supabase
           .from("clientes")
@@ -372,32 +453,36 @@ const ManualAssignment = () => {
           .eq("client_id", clientId);
       }
 
-      // 3. Audit trail
-      const auditRecords = selectedClientesData.map(c => ({
-        usuario_id: session.user.id,
-        vendedor_anterior: c.vendedor_actual || c.vendedor_principal || null,
-        vendedor_nuevo_id: selectedVendedorId,
-        vendedor_nuevo_nombre: selectedVendedor!.nombre,
-        client_id: c.client_id,
-        razon_social: c.razon_social,
-      }));
+      // 3. Auditoría (la tabla exige client_id, aplica solo a clientes)
+      if (selectedClientesData.length > 0) {
+        const auditRecords = selectedClientesData.map(c => ({
+          usuario_id: session.user.id,
+          vendedor_anterior: c.vendedor_actual || c.vendedor_principal || null,
+          vendedor_nuevo_id: selectedVendedorId,
+          vendedor_nuevo_nombre: selectedVendedor!.nombre,
+          client_id: c.client_id,
+          razon_social: c.razon_social,
+        }));
+        await supabase.from("asignaciones_manuales_audit").insert(auditRecords);
+      }
 
-      await supabase.from("asignaciones_manuales_audit").insert(auditRecords);
+      const partes = [
+        clientIds.length ? `${clientIds.length} cliente(s)` : null,
+        placeIds.length ? `${placeIds.length} prospecto(s)` : null,
+      ].filter(Boolean).join(" y ");
 
       toast({
         title: "Asignación realizada",
-        description: `${clientIds.length} cliente(s) asignado(s) a ${selectedVendedor!.nombre}`,
+        description: `${partes} asignado(s) a ${selectedVendedor!.nombre}`,
       });
 
-      // Reset
-      setSelectedClients(new Set());
-      // Refresh results
-      searchClientes(debouncedQuery, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined);
+      setSelectedRows(new Set());
+      buscar(debouncedQuery, filterTipo, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined);
 
     } catch (err: any) {
       console.error("Assignment error:", err);
       const msg = err.message?.includes("duplicate")
-        ? "Algunos clientes ya están asignados a este vendedor"
+        ? "Algunos registros ya están asignados a este vendedor"
         : "Error al realizar la asignación";
       toast({ variant: "destructive", title: "Error", description: msg });
     } finally {
@@ -412,6 +497,17 @@ const ManualAssignment = () => {
     setFilterProvincia("all");
     setFilterVendedor("all");
   };
+
+  const TipoBadge = ({ tipo }: { tipo: Fila["tipo"] }) =>
+    tipo === "cliente" ? (
+      <Badge variant="secondary" className="gap-1 text-[10px] font-normal">
+        <Building2 className="w-3 h-3" /> Cliente
+      </Badge>
+    ) : (
+      <Badge variant="outline" className="gap-1 text-[10px] font-normal border-primary/50 text-primary">
+        <Sparkles className="w-3 h-3" /> Prospecto
+      </Badge>
+    );
 
   return (
     <div className="space-y-4">
@@ -469,11 +565,11 @@ const ManualAssignment = () => {
             <div className="shrink-0">
               <Button
                 onClick={() => setShowConfirmDialog(true)}
-                disabled={!selectedVendedorId || selectedClients.size === 0 || isAssigning}
+                disabled={!selectedVendedorId || selectedRows.size === 0 || isAssigning}
                 className="gap-2 h-10 w-full lg:w-auto"
               >
                 {isAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
-                Asignar{selectedClients.size > 0 ? ` (${selectedClients.size})` : ""}
+                Asignar{selectedRows.size > 0 ? ` (${selectedRows.size})` : ""}
               </Button>
             </div>
           </div>
@@ -490,10 +586,33 @@ const ManualAssignment = () => {
       <Card>
         <CardContent className="p-4 space-y-3">
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+            {/* Selector Clientes / Prospectos */}
+            <div className="flex rounded-md border border-border/60 p-0.5 bg-muted/30 shrink-0">
+              {([
+                { v: "todos", label: "Todos", icon: Users },
+                { v: "clientes", label: "Clientes", icon: Building2 },
+                { v: "prospectos", label: "Prospectos", icon: Sparkles },
+              ] as const).map(opt => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  onClick={() => setFilterTipo(opt.v)}
+                  className={`flex items-center gap-1.5 rounded px-3 h-9 text-xs font-medium transition-colors ${
+                    filterTipo === opt.v
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <opt.icon className="w-3.5 h-3.5" />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por razón social..."
+                placeholder="Buscar por nombre o razón social..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 className="pl-10"
@@ -576,17 +695,26 @@ const ManualAssignment = () => {
             </div>
           )}
 
+          {filterTipo !== "clientes" && filterVendedor !== "all" && filterVendedor !== "__SIN_ASIGNAR__" && (
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <AlertCircle className="w-3 h-3" /> Los prospectos no tienen vendedor titular, por eso quedan fuera al filtrar por vendedor.
+            </p>
+          )}
+
           {/* ── Results counter + orden ── */}
           {hasSearched && (
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-muted-foreground">
-                  {grupos.length} cliente(s){grupos.length !== clientes.length ? ` · ${clientes.length} registros unificados` : ""}
-                </span>
-                {selectedClients.size > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary" className="gap-1">
+                  <Building2 className="w-3 h-3" /> {totalClientes} cliente(s)
+                </Badge>
+                <Badge variant="outline" className="gap-1 border-primary/50 text-primary">
+                  <Sparkles className="w-3 h-3" /> {totalProspectos} prospecto(s)
+                </Badge>
+                {selectedRows.size > 0 && (
                   <Badge variant="default" className="gap-1">
                     <Users className="w-3 h-3" />
-                    {selectedClients.size} seleccionado(s)
+                    {selectedRows.size} seleccionado(s)
                   </Badge>
                 )}
               </div>
@@ -604,8 +732,10 @@ const ManualAssignment = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="nombre:asc">Razón social (A → Z)</SelectItem>
-                    <SelectItem value="nombre:desc">Razón social (Z → A)</SelectItem>
+                    <SelectItem value="tipo:asc">Tipo (clientes primero)</SelectItem>
+                    <SelectItem value="tipo:desc">Tipo (prospectos primero)</SelectItem>
+                    <SelectItem value="nombre:asc">Nombre (A → Z)</SelectItem>
+                    <SelectItem value="nombre:desc">Nombre (Z → A)</SelectItem>
                     <SelectItem value="vendedor:asc">Vendedor (A → Z)</SelectItem>
                     <SelectItem value="vendedor:desc">Vendedor (Z → A)</SelectItem>
                     <SelectItem value="monto:desc">Ventas (mayor a menor)</SelectItem>
@@ -631,12 +761,12 @@ const ManualAssignment = () => {
           ) : !hasSearched ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
               <Search className="w-8 h-8 opacity-40" />
-              <p className="text-sm">Usá el buscador o las sugerencias inteligentes para encontrar clientes</p>
+              <p className="text-sm">Usá el buscador o las sugerencias inteligentes para encontrar clientes y prospectos</p>
             </div>
-          ) : grupos.length === 0 ? (
+          ) : filas.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-2">
               <AlertCircle className="w-8 h-8 opacity-40" />
-              <p className="text-sm">No se encontraron clientes con esos criterios</p>
+              <p className="text-sm">No se encontraron resultados con esos criterios</p>
             </div>
           ) : (
             <ScrollArea className="max-h-[450px]">
@@ -645,11 +775,12 @@ const ManualAssignment = () => {
                   <TableRow>
                     <TableHead className="w-10">
                       <Checkbox
-                        checked={selectedClients.size === grupos.length && grupos.length > 0}
+                        checked={selectedRows.size === filas.length && filas.length > 0}
                         onCheckedChange={toggleAll}
                       />
                     </TableHead>
-                    <TableHead><SortHeader column="nombre" label="Razón Social" /></TableHead>
+                    <TableHead className="w-[110px]"><SortHeader column="tipo" label="Tipo" /></TableHead>
+                    <TableHead><SortHeader column="nombre" label="Nombre / Razón Social" /></TableHead>
                     <TableHead><SortHeader column="ciudad" label="Ciudad" /></TableHead>
                     <TableHead><SortHeader column="provincia" label="Provincia" /></TableHead>
                     <TableHead><SortHeader column="vendedor" label="Vendedor Actual" /></TableHead>
@@ -658,49 +789,59 @@ const ManualAssignment = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedGrupos.map(c => {
-                    const isSelected = selectedClients.has(c.key);
+                  {sortedFilas.map(c => {
+                    const isSelected = selectedRows.has(c.key);
+                    const esProspecto = c.tipo === "prospecto";
                     return (
                       <TableRow
                         key={c.key}
                         className={`cursor-pointer transition-colors ${isSelected ? "bg-primary/5" : "hover:bg-accent/30"}`}
-                        onClick={() => toggleClient(c.key)}
+                        onClick={() => toggleRow(c.key)}
                       >
                         <TableCell onClick={e => e.stopPropagation()}>
                           <Checkbox
                             checked={isSelected}
-                            onCheckedChange={() => toggleClient(c.key)}
+                            onCheckedChange={() => toggleRow(c.key)}
                           />
                         </TableCell>
+                        <TableCell><TipoBadge tipo={c.tipo} /></TableCell>
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
-                            <span>{c.razon_social || c.fantasia || "Sin nombre"}</span>
+                            <span>{c.nombre}</span>
                             {c.registros > 1 && (
                               <Badge variant="outline" className="text-[10px] font-normal">
                                 {c.registros} registros
                               </Badge>
                             )}
+                            {esProspecto && c.total_ratings ? (
+                              <span className="text-[11px] text-muted-foreground">
+                                ★ {c.rating ?? "—"} ({c.total_ratings})
+                              </span>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {c.ciudad_principal || "—"}
+                          {c.ciudad || "—"}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
-                          {c.provincia_principal || "—"}
+                          {c.provincia || "—"}
                         </TableCell>
                         <TableCell>
-                          {c.vendedor_actual ? (
+                          {esProspecto ? (
+                            <span className="text-xs text-muted-foreground italic">No aplica</span>
+                          ) : c.vendedor_actual ? (
                             <span className="text-sm">{toTitleCase(c.vendedor_actual)}</span>
-
                           ) : (
                             <span className="text-xs text-muted-foreground italic">Sin asignar</span>
                           )}
                         </TableCell>
                         <TableCell className="text-right font-mono text-sm">
-                          {formatCurrency(c.monto_total_historico)}
+                          {esProspecto ? <span className="text-xs text-muted-foreground italic">—</span> : formatCurrency(c.monto_total_historico)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {c.dias_sin_compra != null ? (
+                          {esProspecto ? (
+                            <span className="text-xs text-muted-foreground italic">Sin historial</span>
+                          ) : c.dias_sin_compra != null ? (
                             <Badge variant={c.dias_sin_compra > 90 ? "destructive" : c.dias_sin_compra > 30 ? "secondary" : "default"} className="text-xs">
                               {c.dias_sin_compra}d
                             </Badge>
@@ -724,14 +865,16 @@ const ManualAssignment = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar asignación manual</AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
-              <p>
-                Vas a asignar <strong>{selectedClients.size} cliente(s)</strong> a{" "}
-                <strong>{selectedVendedor?.nombre}</strong>.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Se creará una asignación para cada cliente y se actualizará el vendedor actual. 
-                Esta acción queda registrada en el historial de auditoría.
-              </p>
+              <span className="block">
+                Vas a asignar{" "}
+                <strong>{selClientes.length} cliente(s)</strong>
+                {selProspectos.length > 0 && <> y <strong>{selProspectos.length} prospecto(s)</strong></>}
+                {" "}a <strong>{selectedVendedor ? toTitleCase(selectedVendedor.nombre) : ""}</strong>.
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                Se crea una asignación por cada registro. En los clientes se actualiza el vendedor actual y queda
+                registrado en el historial de auditoría; los prospectos se asignan sin cambiar titularidad.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
