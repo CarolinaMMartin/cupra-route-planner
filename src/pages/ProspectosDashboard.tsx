@@ -143,6 +143,70 @@ const ProspectosDashboard = () => {
   const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
   const [showBuscarProspectos, setShowBuscarProspectos] = useState(false);
 
+  // Asignación de prospectos
+  const [showAsignarDialog, setShowAsignarDialog] = useState(false);
+  const [vendedores, setVendedores] = useState<{ user_id: string; nombre: string }[]>([]);
+  const [selectedVendedorId, setSelectedVendedorId] = useState<string>("");
+  const [isAssigning, setIsAssigning] = useState(false);
+
+  useEffect(() => {
+    const loadVendedores = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("user_id, nombre")
+        .in("rol", ["vendedor", "asignador", "administrador"])
+        .eq("activo", true)
+        .order("nombre");
+      setVendedores(data || []);
+    };
+    void loadVendedores();
+  }, []);
+
+  const handleAsignarProspectos = async () => {
+    if (!selectedVendedorId || selectedIds.length === 0) return;
+    setIsAssigning(true);
+    try {
+      const seleccionados = prospectosData.filter((p) => selectedIds.includes(p.id));
+      const placeIds = seleccionados.map((p) => p.place_id).filter(Boolean);
+      if (placeIds.length === 0) throw new Error("Los prospectos seleccionados no tienen identificador de Maps");
+
+      // Evitar duplicados: limpiar asignaciones previas de esos prospectos para ese vendedor
+      await supabase
+        .from("asignaciones_vendedores_clientes")
+        .delete()
+        .eq("vendedor_id", selectedVendedorId)
+        .in("prospecto_place_id", placeIds);
+
+      const { error } = await supabase.from("asignaciones_vendedores_clientes").insert(
+        placeIds.map((place_id) => ({
+          vendedor_id: selectedVendedorId,
+          prospecto_place_id: place_id,
+          es_prospecto: true,
+          origen_asignacion: "asignador",
+        }))
+      );
+      if (error) throw error;
+
+      const vendedor = vendedores.find((v) => v.user_id === selectedVendedorId);
+      toast({
+        title: "Prospectos asignados",
+        description: `${placeIds.length} prospecto(s) asignado(s) a ${vendedor?.nombre || "el vendedor"}`,
+      });
+      setShowAsignarDialog(false);
+      setSelectedVendedorId("");
+      setSelectedIds([]);
+    } catch (err: any) {
+      console.error("Error asignando prospectos:", err);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: err?.message || "No se pudieron asignar los prospectos",
+      });
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
@@ -709,10 +773,7 @@ const ProspectosDashboard = () => {
                 <Button
                   size="sm"
                   className="h-8 wine-button"
-                  onClick={() => toast({
-                    title: "Asignar vendedor",
-                    description: "La asignación de prospectos se hace desde el panel de asignación.",
-                  })}
+                  onClick={() => setShowAsignarDialog(true)}
                 >
                   Asignar vendedor
                 </Button>
@@ -918,6 +979,39 @@ const ProspectosDashboard = () => {
               }}
               onCancel={() => setShowAgregarProspecto(false)}
             />
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog para asignar prospectos a un vendedor */}
+        <Dialog open={showAsignarDialog} onOpenChange={setShowAsignarDialog}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Asignar a vendedor</DialogTitle>
+              <DialogDescription>
+                {selectedIds.length} prospecto(s) seleccionado(s). Elegí el vendedor destino.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <SearchableSelect
+                value={selectedVendedorId}
+                onValueChange={setSelectedVendedorId}
+                options={vendedores.map((v) => ({ value: v.user_id, label: v.nombre }))}
+                placeholder="Seleccioná un vendedor"
+                searchPlaceholder="Buscar vendedor..."
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowAsignarDialog(false)} disabled={isAssigning}>
+                  Cancelar
+                </Button>
+                <Button
+                  className="wine-button"
+                  onClick={handleAsignarProspectos}
+                  disabled={!selectedVendedorId || isAssigning}
+                >
+                  {isAssigning ? "Asignando..." : "Asignar"}
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
 
