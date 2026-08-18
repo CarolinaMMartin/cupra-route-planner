@@ -2287,8 +2287,7 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
               },
             }],
             tool_choice: { type: "function", function: { name: "auditar_distribucion" } },
-          }),
-        });
+          });
 
           if (!auditResponse.ok) throw new Error(`Auditoría IA no disponible (${auditResponse.status})`);
 
