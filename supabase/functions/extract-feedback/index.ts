@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
     let procesados = 0;
     for (const fb of pendientes) {
       const texto = [fb.feedback, fb.motivo_no_visita].filter(Boolean).join(" | ");
-      const datos = await extraer(texto, apiKey);
+      const datos = await extraer(texto, apiKey || "");
       if (!datos) continue;
 
       const dias = Number(datos.revisit_dias);
