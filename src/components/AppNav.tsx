@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   BarChart3,
+  Briefcase,
   ChevronDown,
   ClipboardList,
   Home,
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { toTitleCase } from "@/lib/format";
+import { useViewMode } from "@/hooks/useViewMode";
 
 interface AppNavProps {
   /** Perfil ya cargado por la página (evita una consulta extra). */
@@ -40,6 +42,8 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
   const navigate = useNavigate();
   const { toast } = useToast();
   const [profile, setProfile] = useState<{ nombre: string; rol: string } | null>(profileProp ?? null);
+  const { mode, setMode, puedeAlternar } = useViewMode(profile?.rol);
+  const enGestion = mode === "gestion";
 
   useEffect(() => {
     if (profileProp) {
@@ -84,7 +88,7 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
               <span className="hidden sm:inline">Volver al inicio</span>
             </Button>
 
-            {isAssignorLike(profile?.rol) && (
+            {isAssignorLike(profile?.rol) && enGestion && (
               <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -139,7 +143,7 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
               </>
             )}
 
-            {profile?.rol === "vendedor" && (
+            {!enGestion && (
               <>
                 <Button variant="ghost" size="sm" onClick={() => navigate("/vendedor-dashboard")} className="gap-1.5 text-sm">
                   <BarChart3 className="w-4 h-4" />
@@ -165,13 +169,31 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
                   <ChevronDown className="w-3 h-3 opacity-50" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-56">
                 {profile && (
                   <>
                     <div className="px-3 py-2">
                       <p className="text-sm font-medium">{toTitleCase(profile.nombre)}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{profile.rol}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {profile.rol}
+                        {puedeAlternar && (enGestion ? " · modo gestión" : " · modo ventas")}
+                      </p>
                     </div>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {puedeAlternar && (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setMode(enGestion ? "ventas" : "gestion");
+                        navigate("/");
+                      }}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <Briefcase className="w-4 h-4" />
+                      {enGestion ? "Mi perfil de ventas" : "Volver a gestión"}
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
                 )}
