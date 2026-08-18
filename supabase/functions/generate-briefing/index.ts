@@ -324,13 +324,13 @@ Deno.serve(async (req) => {
 
     // Los índices únicos son parciales, así que el upsert por onConflict no aplica:
     // buscamos la fila existente y actualizamos, o insertamos.
-    const buscar = supabase.from("visita_briefings").select("id").limit(1);
-    const { data: existente } = clientId
-      ? await buscar.eq("client_id", clientId).maybeSingle()
-      : await buscar.eq("prospecto_place_id", placeId!).maybeSingle();
+    const buscarExistente = supabase.from("visita_briefings").select("id").limit(1);
+    const { data: filaPrevia } = clientId
+      ? await buscarExistente.eq("client_id", clientId).maybeSingle()
+      : await buscarExistente.eq("prospecto_place_id", placeId!).maybeSingle();
 
-    const { error: upsertError } = existente?.id
-      ? await supabase.from("visita_briefings").update(payload).eq("id", existente.id)
+    const { error: upsertError } = filaPrevia?.id
+      ? await supabase.from("visita_briefings").update(payload).eq("id", filaPrevia.id)
       : await supabase.from("visita_briefings").insert(payload);
 
     if (upsertError) console.error("Error guardando briefing", upsertError);
