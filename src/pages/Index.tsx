@@ -169,7 +169,7 @@ const Index = () => {
       {/* Header global */}
       <AppNav
         profile={{ nombre: profile.nombre, rol: profile.rol }}
-        rightSlot={profile.rol === 'vendedor'
+        rightSlot={viewMode === 'ventas'
           ? <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />
           : null}
       />
