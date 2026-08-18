@@ -17,6 +17,7 @@ import cupraLogo from "@/assets/cupra-logo-new.png";
 import angelBlanco from "@/assets/angel-blanco.png";
 import AssignorDashboard from "@/components/AssignorDashboard";
 import AppNav from "@/components/AppNav";
+import { useViewMode } from "@/hooks/useViewMode";
 
 import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/VendedorKanbanWrapper";
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
@@ -42,6 +43,7 @@ const Index = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const kanbanRef = useRef<VendedorKanbanRef>(null);
+  const { mode: viewMode } = useViewMode(profile?.rol);
 
   const handleNotificacionClick = (asignacionId: string) => {
     kanbanRef.current?.focusAssignment(asignacionId);
@@ -176,7 +178,7 @@ const Index = () => {
 
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
-        {isAssignorLike(profile.rol) ? <AssignorDashboard /> : <VendedorKanban ref={kanbanRef} />}
+        {isAssignorLike(profile.rol) && viewMode === "gestion" ? <AssignorDashboard /> : <VendedorKanban ref={kanbanRef} />}
       </main>
     </div>);
 
