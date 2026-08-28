@@ -745,7 +745,8 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
           placeholder="Ej: Restaurante Don Carlos"
           value={formData.nombre}
           onChange={(e) => handleInputChange("nombre", e.target.value)}
-          className="bg-input border-border h-10"
+          autoCapitalize="words"
+          className="bg-input border-border h-12 text-base md:h-10 md:text-sm"
         />
       </div>
 
@@ -756,12 +757,13 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
           placeholder="Ej: Av. Santa Fe 1234"
           value={formData.direccion}
           onChange={(e) => handleInputChange("direccion", e.target.value)}
-          className="bg-input border-border h-10"
+          autoCapitalize="words"
+          className="bg-input border-border h-12 text-base md:h-10 md:text-sm"
         />
       </div>
 
-      {/* Fila: Barrio + Ciudad en grid 2 columnas en mobile */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* En mobile cada campo ocupa el ancho completo para escribir cómodo */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="barrio" className="text-sm">Barrio</Label>
           <Input
@@ -769,7 +771,8 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
             placeholder="Recoleta"
             value={formData.barrio}
             onChange={(e) => handleInputChange("barrio", e.target.value)}
-            className="bg-input border-border h-10"
+            autoCapitalize="words"
+            className="bg-input border-border h-12 text-base md:h-10 md:text-sm"
           />
         </div>
         <div className="space-y-1.5">
@@ -779,52 +782,59 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
             placeholder="Buenos Aires"
             value={formData.ciudad}
             onChange={(e) => handleInputChange("ciudad", e.target.value)}
-            className="bg-input border-border h-10"
+            autoCapitalize="words"
+            className="bg-input border-border h-12 text-base md:h-10 md:text-sm"
           />
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="codigo_postal" className="text-sm">Código postal</Label>
-        <Input
-          id="codigo_postal"
-          placeholder="C1425 o 1425"
-          value={formData.codigo_postal}
-          onChange={(e) => handleInputChange("codigo_postal", e.target.value)}
-          className="bg-input border-border h-10"
-        />
-        <p className="text-xs text-muted-foreground">Mejora la precisión de la ubicación en Google Maps.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="codigo_postal" className="text-sm">Código postal</Label>
+          <Input
+            id="codigo_postal"
+            placeholder="C1425 o 1425"
+            value={formData.codigo_postal}
+            onChange={(e) => handleInputChange("codigo_postal", e.target.value)}
+            inputMode="text"
+            autoCapitalize="characters"
+            className="bg-input border-border h-12 text-base md:h-10 md:text-sm"
+          />
+          <p className="text-xs text-muted-foreground">Mejora la precisión en Google Maps.</p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="provincia" className="text-sm">Provincia *</Label>
+          <Select
+            value={formData.provincia}
+            onValueChange={(value) => handleInputChange("provincia", value)}
+          >
+            <SelectTrigger className="bg-input border-border h-12 text-base md:h-10 md:text-sm">
+              <SelectValue placeholder="Seleccionar provincia" />
+            </SelectTrigger>
+            <SelectContent>
+              {PROVINCIAS_ARGENTINA.map((prov) => (
+                <SelectItem key={prov} value={prov}>
+                  {prov}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <div className="space-y-1.5">
-        <Label htmlFor="provincia" className="text-sm">Provincia *</Label>
-        <Select
-          value={formData.provincia}
-          onValueChange={(value) => handleInputChange("provincia", value)}
-        >
-          <SelectTrigger className="bg-input border-border h-10">
-            <SelectValue placeholder="Seleccionar provincia" />
-          </SelectTrigger>
-          <SelectContent>
-            {PROVINCIAS_ARGENTINA.map((prov) => (
-              <SelectItem key={prov} value={prov}>
-                {prov}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Campos opcionales en grid más compacto */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Datos de contacto (opcionales) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor="telefono" className="text-sm">Teléfono</Label>
           <Input
             id="telefono"
+            type="tel"
+            inputMode="tel"
             placeholder="11 1234-5678"
             value={formData.telefono}
             onChange={(e) => handleInputChange("telefono", e.target.value)}
-            className="bg-input border-border h-10"
+            className="bg-input border-border h-12 text-base md:h-10 md:text-sm"
           />
         </div>
         <div className="space-y-1.5">
@@ -832,10 +842,12 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
           <Input
             id="email"
             type="email"
+            inputMode="email"
+            autoCapitalize="none"
             placeholder="contacto@..."
             value={formData.email}
             onChange={(e) => handleInputChange("email", e.target.value)}
-            className="bg-input border-border h-10"
+            className="bg-input border-border h-12 text-base md:h-10 md:text-sm"
           />
         </div>
       </div>
@@ -844,19 +856,20 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
         <Label htmlFor="instagram" className="text-sm">Instagram</Label>
         <Input
           id="instagram"
+          autoCapitalize="none"
           placeholder="@restaurante_doncarlos"
           value={formData.instagram}
           onChange={(e) => handleInputChange("instagram", e.target.value)}
-          className="bg-input border-border h-10"
+          className="bg-input border-border h-12 text-base md:h-10 md:text-sm"
         />
       </div>
 
       {/* Botones de acción sticky en mobile */}
-      <div className="flex gap-3 pt-3 sticky bottom-0 bg-background pb-2">
-        <Button variant="outline" onClick={onCancel} className="flex-1 h-11">
+      <div className="flex gap-3 pt-3 sticky bottom-0 bg-background pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <Button variant="outline" onClick={onCancel} className="flex-1 h-12 md:h-11">
           Cancelar
         </Button>
-        <Button onClick={handleValidateAndSave} className="flex-1 wine-button h-11">
+        <Button onClick={handleValidateAndSave} className="flex-1 wine-button h-12 md:h-11">
           <MapPin className="w-4 h-4 mr-2" />
           Validar
         </Button>
