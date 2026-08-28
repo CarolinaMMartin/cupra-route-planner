@@ -169,9 +169,61 @@ const Profiles = () => {
     }
   };
 
-  /** Un asignador solo puede gestionar vendedores; el administrador gestiona todo. */
+  /** El administrador gestiona todo; el asignador, vendedores y otros asignadores. */
   const puedeGestionar = (target: any) =>
-    canManageAssignors(profile?.rol) || target?.rol === 'vendedor';
+    canManageAssignors(profile?.rol) || target?.rol !== 'administrador';
+
+  /** Cambia el doble perfil de varios usuarios a la vez. */
+  const aplicarDoblePerfil = async (valor: boolean) => {
+    const objetivos = profiles.filter(
+      (p) => selectedIds.includes(p.id) && isAssignorLike(p.rol) && puedeGestionar(p),
+    );
+    if (objetivos.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Nada para cambiar",
+        description: "El doble perfil solo aplica a administradores y asignadores.",
+      });
+      return;
+    }
+    setIsBulkSaving(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ perfil_ventas: valor })
+        .in('id', objetivos.map((p) => p.id));
+      if (error) throw error;
+      toast({
+        title: valor ? "Doble perfil activado" : "Doble perfil quitado",
+        description: `${objetivos.length} perfil(es) actualizado(s).`,
+      });
+      setSelectedIds([]);
+      fetchProfiles();
+    } catch (error) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el doble perfil" });
+    } finally {
+      setIsBulkSaving(false);
+    }
+  };
+
+  const enviarResetPassword = async (target: any) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(target.email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      if (error) throw error;
+      toast({
+        title: "Mail de recupero enviado",
+        description: `${target.email} recibirá el enlace para reiniciar su contraseña.`,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "No se pudo enviar",
+        description: error instanceof Error ? error.message : "Error inesperado",
+      });
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
