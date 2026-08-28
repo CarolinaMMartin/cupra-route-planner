@@ -77,7 +77,10 @@ const Profiles = () => {
     password: string;
     rol: AppRole;
     activo: boolean;
-  }>({ nombre: "", email: "", password: "", rol: "vendedor", activo: true });
+    perfil_ventas: boolean;
+  }>({ nombre: "", email: "", password: "", rol: "vendedor", activo: true, perfil_ventas: false });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
