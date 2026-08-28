@@ -331,7 +331,7 @@ const Profiles = () => {
         description: `${createData.nombre} ya puede iniciar sesión con su email y contraseña.`,
       });
       setIsCreateOpen(false);
-      setCreateData({ nombre: "", email: "", password: "", rol: "vendedor", activo: true });
+      setCreateData({ nombre: "", email: "", password: "", rol: "vendedor", activo: true, perfil_ventas: false });
       fetchProfiles();
     } catch (error) {
       toast({
