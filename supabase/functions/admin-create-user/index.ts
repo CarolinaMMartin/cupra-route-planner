@@ -31,12 +31,16 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-    // 2) Solo administradores activos
-    const { data: esAdmin, error: rolErr } = await admin.rpc("is_active_admin", {
-      _user_id: userData.user.id,
-    });
+    // 2) Administradores y asignadores activos
+    const [{ data: esAdmin, error: rolErr }, { data: esAsignador, error: asigErr }] = await Promise.all([
+      admin.rpc("is_active_admin", { _user_id: userData.user.id }),
+      admin.rpc("is_assignor_like", { _user_id: userData.user.id }),
+    ]);
     if (rolErr) throw rolErr;
-    if (!esAdmin) return json({ error: "Solo un administrador puede crear perfiles" }, 403);
+    if (asigErr) throw asigErr;
+    if (!esAdmin && !esAsignador) {
+      return json({ error: "No tenés permisos para crear perfiles" }, 403);
+    }
 
     // 3) Validar entrada
     const body = await req.json().catch(() => ({}));
@@ -45,6 +49,7 @@ Deno.serve(async (req) => {
     const password = String(body?.password ?? "");
     const rol = String(body?.rol ?? "vendedor") as Rol;
     const activo = body?.activo !== false;
+    const perfilVentas = body?.perfil_ventas === true;
 
     const errores: string[] = [];
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errores.push("Email inválido");
@@ -52,6 +57,11 @@ Deno.serve(async (req) => {
     if (password.length < 8 || password.length > 72) errores.push("La contraseña debe tener entre 8 y 72 caracteres");
     if (!ROLES.includes(rol)) errores.push("Rol inválido");
     if (errores.length) return json({ error: errores.join(". ") }, 400);
+
+    // Un asignador no puede crear administradores.
+    if (!esAdmin && rol === "administrador") {
+      return json({ error: "Un asignador no puede crear administradores" }, 403);
+    }
 
     // 4) Crear usuario (email ya confirmado: el alta es interna)
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
