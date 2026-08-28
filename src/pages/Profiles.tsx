@@ -4,7 +4,8 @@ import { isAssignorLike, canManageAssignors, ROLE_LABELS, type AppRole } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Wine, LogOut, User, ArrowLeft, Pencil, Filter, Trash2, UserPlus } from "lucide-react";
+import { Wine, LogOut, User, ArrowLeft, Pencil, Filter, Trash2, UserPlus, Briefcase, KeyRound } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import PermisosMatriz from "@/components/admin/PermisosMatriz";
 import { useToast } from "@/hooks/use-toast";
 import cupraLogo from "@/assets/cupra-logo-new.png";
