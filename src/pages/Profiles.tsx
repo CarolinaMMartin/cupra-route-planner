@@ -428,17 +428,11 @@ const Profiles = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {canManageAssignors(profile?.rol) && <PermisosMatriz />}
 
-        <div className="mb-6 flex items-center justify-between gap-3">
-          {canManageAssignors(profile?.rol) ? (
-            <Button className="wine-button gap-2" onClick={() => setIsCreateOpen(true)}>
-              <UserPlus className="w-4 h-4" />
-              Nuevo perfil
-            </Button>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Solo un administrador puede crear nuevos perfiles.
-            </p>
-          )}
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <Button className="wine-button gap-2" onClick={() => setIsCreateOpen(true)}>
+            <UserPlus className="w-4 h-4" />
+            Nuevo perfil
+          </Button>
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={filterRole} onValueChange={(value: any) => setFilterRole(value)}>
@@ -455,74 +449,144 @@ const Profiles = () => {
           </div>
         </div>
 
-        <div className="bg-card rounded-lg shadow-soft border">
+        {/* Barra de acciones masivas para el doble perfil */}
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
+          <p className="text-sm text-muted-foreground">
+            {selectedIds.length > 0
+              ? `${selectedIds.length} perfil(es) seleccionado(s)`
+              : "Seleccioná perfiles de gestión para activarles el doble perfil (gestión + ventas)."}
+          </p>
+          <div className="ml-auto flex gap-2">
+            <Button
+              size="sm"
+              className="wine-button gap-2"
+              disabled={selectedIds.length === 0 || isBulkSaving}
+              onClick={() => aplicarDoblePerfil(true)}
+            >
+              <Briefcase className="w-4 h-4" />
+              Activar doble perfil
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={selectedIds.length === 0 || isBulkSaving}
+              onClick={() => aplicarDoblePerfil(false)}
+            >
+              Quitar doble perfil
+            </Button>
+          </div>
+        </div>
+
+        <div className="bg-card rounded-lg shadow-soft border overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={
+                      seleccionables.length > 0 &&
+                      seleccionables.every((p) => selectedIds.includes(p.id))
+                    }
+                    onCheckedChange={(checked) =>
+                      setSelectedIds(checked ? seleccionables.map((p) => p.id) : [])
+                    }
+                    aria-label="Seleccionar todos"
+                  />
+                </TableHead>
                 <TableHead>Nombre</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Rol</TableHead>
-                <TableHead>Estado</TableHead>
+                <TableHead>Doble perfil</TableHead>
+                <TableHead>Activo</TableHead>
                 <TableHead>Fecha de Registro</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProfiles.map((profileItem) => (
-                <TableRow key={profileItem.id}>
-                  <TableCell className="font-medium">{profileItem.nombre}</TableCell>
-                  <TableCell>{profileItem.email}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap items-center gap-1">
-                      <Badge variant={isAssignorLike(profileItem.rol) ? "default" : "secondary"}>
+              {filteredProfiles.map((profileItem) => {
+                const gestion = isAssignorLike(profileItem.rol);
+                const editable = puedeGestionar(profileItem);
+                return (
+                  <TableRow key={profileItem.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.includes(profileItem.id)}
+                        disabled={!gestion || !editable}
+                        onCheckedChange={(checked) =>
+                          setSelectedIds((prev) =>
+                            checked
+                              ? [...prev, profileItem.id]
+                              : prev.filter((id) => id !== profileItem.id),
+                          )
+                        }
+                        aria-label={`Seleccionar ${profileItem.nombre}`}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">{profileItem.nombre}</TableCell>
+                    <TableCell>{profileItem.email}</TableCell>
+                    <TableCell>
+                      <Badge variant={gestion ? "default" : "secondary"}>
                         {ROLE_LABELS[profileItem.rol] ?? profileItem.rol}
                       </Badge>
-                      {isAssignorLike(profileItem.rol) && profileItem.perfil_ventas && (
-                        <Badge variant="outline">+ Ventas</Badge>
+                    </TableCell>
+                    <TableCell>
+                      {gestion ? (
+                        profileItem.perfil_ventas ? (
+                          <Badge variant="outline" className="gap-1">
+                            <Briefcase className="w-3 h-3" />
+                            Gestión + Ventas
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Solo gestión</span>
+                        )
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Solo ventas</span>
                       )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {profileItem.rol === 'vendedor' ? (
-                      <Badge variant={profileItem.activo ? "default" : "secondary"}>
-                        {profileItem.activo ? "Activo" : "Inactivo"}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground">N/A</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {new Date(profileItem.created_at).toLocaleDateString('es-ES')}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleOpenDialog(profileItem)}
-                        disabled={!puedeGestionar(profileItem)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      {profileItem.rol === 'vendedor' && (
-                        <Switch
-                          checked={profileItem.activo}
-                          onCheckedChange={() => toggleActivo(profileItem)}
-                          disabled={!puedeGestionar(profileItem)}
-                        />
-                      )}
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => handleDeleteClick(profileItem)}
-                        disabled={profileItem.user_id === session?.user?.id || !puedeGestionar(profileItem)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={!!profileItem.activo}
+                        onCheckedChange={() => toggleActivo(profileItem)}
+                        disabled={!editable}
+                        aria-label="Activo"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {new Date(profileItem.created_at).toLocaleDateString('es-ES')}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Reiniciar contraseña"
+                          onClick={() => enviarResetPassword(profileItem)}
+                        >
+                          <KeyRound className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Editar"
+                          onClick={() => handleOpenDialog(profileItem)}
+                          disabled={!editable}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          title="Eliminar"
+                          onClick={() => handleDeleteClick(profileItem)}
+                          disabled={profileItem.user_id === session?.user?.id || !editable}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
