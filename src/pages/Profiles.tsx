@@ -207,6 +207,11 @@ const Profiles = () => {
     }
   };
 
+  /** Perfiles de gestión visibles que este usuario puede editar. */
+  const seleccionables = filteredProfiles.filter(
+    (p) => isAssignorLike(p.rol) && puedeGestionar(p),
+  );
+
   const enviarResetPassword = async (target: any) => {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(target.email, {
