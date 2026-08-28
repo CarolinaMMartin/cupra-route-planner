@@ -648,10 +648,27 @@ const Profiles = () => {
                   <SelectContent>
                     <SelectItem value="vendedor">Vendedor</SelectItem>
                     <SelectItem value="asignador">Asignador</SelectItem>
-                    <SelectItem value="administrador">Administrador</SelectItem>
+                    {canManageAssignors(profile?.rol) && (
+                      <SelectItem value="administrador">Administrador</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
+              {isAssignorLike(createData.rol) && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="new-doble">Doble perfil (gestión + ventas)</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Puede alternar entre asignar y vender.
+                    </p>
+                  </div>
+                  <Switch
+                    id="new-doble"
+                    checked={createData.perfil_ventas}
+                    onCheckedChange={(checked) => setCreateData({ ...createData, perfil_ventas: checked })}
+                  />
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <Label htmlFor="new-activo">Activo</Label>
                 <Switch
