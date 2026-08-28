@@ -82,7 +82,13 @@ Deno.serve(async (req) => {
     // 5) El trigger crea el perfil como vendedor inactivo: ajustamos rol y estado
     const { error: profErr } = await admin
       .from("profiles")
-      .update({ nombre, email, rol, activo })
+      .update({
+        nombre,
+        email,
+        rol,
+        activo,
+        perfil_ventas: rol === "vendedor" ? false : perfilVentas,
+      })
       .eq("user_id", newUserId);
     if (profErr) {
       await admin.auth.admin.deleteUser(newUserId);
