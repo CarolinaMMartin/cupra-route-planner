@@ -502,7 +502,7 @@ const Profiles = () => {
                 <TableHead>Nombre</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Rol</TableHead>
-                <TableHead>Doble perfil</TableHead>
+                <TableHead>Perfil</TableHead>
                 <TableHead>Activo</TableHead>
                 <TableHead>Fecha de Registro</TableHead>
                 <TableHead className="text-right">Acciones</TableHead>
@@ -530,25 +530,17 @@ const Profiles = () => {
                     </TableCell>
                     <TableCell className="font-medium">{profileItem.nombre}</TableCell>
                     <TableCell>{profileItem.email}</TableCell>
-                    <TableCell>
-                      <Badge variant={gestion ? "default" : "secondary"}>
-                        {ROLE_LABELS[profileItem.rol] ?? profileItem.rol}
-                      </Badge>
+                    <TableCell className="text-sm">
+                      {ROLE_LABELS[profileItem.rol] ?? profileItem.rol}
                     </TableCell>
-                    <TableCell>
-                      {gestion ? (
-                        profileItem.perfil_ventas ? (
-                          <Badge variant="outline" className="gap-1">
-                            <Briefcase className="w-3 h-3" />
-                            Gestión + Ventas
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">Solo gestión</span>
-                        )
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Solo ventas</span>
-                      )}
+                    <TableCell className="text-sm">
+                      {gestion
+                        ? profileItem.perfil_ventas
+                          ? "Gestión + Ventas"
+                          : "Gestión"
+                        : "Ventas"}
                     </TableCell>
+
                     <TableCell>
                       <Switch
                         checked={!!profileItem.activo}
