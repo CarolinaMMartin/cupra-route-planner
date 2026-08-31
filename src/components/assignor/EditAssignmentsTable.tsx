@@ -28,6 +28,7 @@ import { Save, Search, ChevronDown, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { toTitleCase } from "@/lib/format";
+import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 
 interface Vendedor {
   id: string;
@@ -89,7 +90,7 @@ const EditAssignmentsTable = ({
       const { data, error } = await supabase
         .from("profiles")
         .select("user_id, nombre, email")
-        .eq("rol", "vendedor")
+        .or(SALES_PROFILE_OR_FILTER)
         .eq("activo", true);
 
       if (error) throw error;

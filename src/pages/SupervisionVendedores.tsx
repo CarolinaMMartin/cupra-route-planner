@@ -151,7 +151,7 @@ const SupervisionVendedores = () => {
       const { data } = await supabase.
       from("profiles").
       select("user_id, nombre").
-      eq("rol", "vendedor").
+      or(SALES_PROFILE_OR_FILTER).
       eq("activo", true);
 
       if (data) {

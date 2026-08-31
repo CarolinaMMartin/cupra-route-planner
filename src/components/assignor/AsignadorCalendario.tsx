@@ -26,6 +26,7 @@ import { useToast } from "@/hooks/use-toast";
 import { toTitleCase } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
+import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
   CalendarIcon,
   CalendarClock,
   Plus,
@@ -93,7 +94,7 @@ const AsignadorCalendario = () => {
         .from("profiles")
         .select("user_id, nombre, rol, activo")
         .eq("activo", true)
-        .in("rol", ["vendedor", "asignador", "administrador"]);
+        .or(SALES_PROFILE_OR_FILTER);
 
       const vends = (perfiles || []).map((p: any) => ({
         user_id: p.user_id,

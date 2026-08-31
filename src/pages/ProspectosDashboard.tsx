@@ -154,7 +154,7 @@ const ProspectosDashboard = () => {
       const { data } = await supabase
         .from("profiles")
         .select("user_id, nombre")
-        .in("rol", ["vendedor", "asignador", "administrador"])
+        .or(SALES_PROFILE_OR_FILTER)
         .eq("activo", true)
         .order("nombre");
       setVendedores(data || []);

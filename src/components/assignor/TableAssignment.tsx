@@ -39,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { toTitleCase } from "@/lib/format";
 import {
+import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -84,7 +85,7 @@ const TableAssignment = ({
       const { data, error } = await supabase
         .from("profiles")
         .select("user_id, nombre, email")
-        .in("rol", ["vendedor", "asignador", "administrador"])
+        .or(SALES_PROFILE_OR_FILTER)
         .eq("activo", true);
 
       if (error) throw error;
