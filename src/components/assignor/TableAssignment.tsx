@@ -1,3 +1,4 @@
+import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 import { useState, useEffect, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { toTitleCase } from "@/lib/format";
 import {
-import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
   Tooltip,
   TooltipContent,
   TooltipProvider,

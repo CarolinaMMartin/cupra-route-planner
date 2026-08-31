@@ -1,3 +1,4 @@
+import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 import { useState, useEffect } from "react";
 import {
   DndContext,
@@ -20,7 +21,6 @@ import { useToast } from "@/hooks/use-toast";
 import ClientDetailCard from "./ClientDetailCard";
 import { toTitleCase } from "@/lib/format";
 import {
-import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,

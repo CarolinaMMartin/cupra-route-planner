@@ -1,3 +1,4 @@
+import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +27,6 @@ import { useToast } from "@/hooks/use-toast";
 import { toTitleCase } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
-import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
   CalendarIcon,
   CalendarClock,
   Plus,
