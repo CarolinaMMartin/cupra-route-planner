@@ -403,7 +403,7 @@ const Profiles = () => {
           <div>
             <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Gestión de Perfiles</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {perfiles.length} {perfiles.length === 1 ? "usuario" : "usuarios"} · administración de accesos
+              {profiles.length} {profiles.length === 1 ? "usuario" : "usuarios"} · administración de accesos
             </p>
           </div>
           <Button className="wine-button gap-2" onClick={() => setIsCreateOpen(true)}>
