@@ -719,8 +719,12 @@ const Profiles = () => {
               <div className="space-y-2">
                 <Label htmlFor="rol">Rol</Label>
                 <Select
-                  value={formData.rol}
-                  onValueChange={(value) => setFormData({ ...formData, rol: value as AppRole })}
+                  value={`${formData.rol}${isAssignorLike(formData.rol) && formData.perfil_ventas ? "+ventas" : ""}`}
+                  onValueChange={(value) => {
+                    const doble = value.endsWith("+ventas");
+                    const rol = value.replace("+ventas", "") as AppRole;
+                    setFormData({ ...formData, rol, perfil_ventas: doble });
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -730,37 +734,23 @@ const Profiles = () => {
                     {canManageAssignors(profile?.rol) && (
                       <>
                         <SelectItem value="asignador">Asignador</SelectItem>
+                        <SelectItem value="asignador+ventas">Asignador + Vendedor</SelectItem>
                         <SelectItem value="administrador">Administrador</SelectItem>
+                        <SelectItem value="administrador+ventas">Administrador + Vendedor</SelectItem>
                       </>
                     )}
                   </SelectContent>
                 </Select>
               </div>
-              {isAssignorLike(formData.rol) && (
-                <div className="flex items-start justify-between gap-4 rounded-md border p-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="perfil-ventas">También vende (doble perfil)</Label>
-                    <p className="text-xs text-muted-foreground">
-                      Habilita "Mi perfil de ventas" en su menú: puede alternar entre gestión y su propio Kanban de visitas.
-                    </p>
-                  </div>
-                  <Switch
-                    id="perfil-ventas"
-                    checked={formData.perfil_ventas}
-                    onCheckedChange={(checked) => setFormData({ ...formData, perfil_ventas: checked })}
-                  />
-                </div>
-              )}
-              {formData.rol === 'vendedor' && (
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="activo">Activo</Label>
-                  <Switch
-                    id="activo"
-                    checked={formData.activo}
-                    onCheckedChange={(checked) => setFormData({ ...formData, activo: checked })}
-                  />
-                </div>
-              )}
+              <div className="flex items-center justify-between">
+                <Label htmlFor="activo">Activo</Label>
+                <Switch
+                  id="activo"
+                  checked={formData.activo}
+                  onCheckedChange={(checked) => setFormData({ ...formData, activo: checked })}
+                />
+              </div>
+
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
                   Cancelar
