@@ -398,51 +398,25 @@ const Profiles = () => {
   return (
     <div className="min-h-screen bg-gradient-subtle">
       <AppNav profile={{ nombre: profile.nombre, rol: profile.rol }} />
-      <header className="bg-card shadow-soft border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center gap-3">
-              <img src={cupraLogo} alt="Cupra Wines" className="h-12 w-auto" />
-              <div>
-                <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Gestión de Perfiles</h1>
-                <p className="text-sm text-muted-foreground mt-1">Administración de usuarios</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <div className="text-right">
-                <p className="font-medium flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  {toTitleCase(profile.nombre)}
-                </p>
-                <p className="text-sm text-muted-foreground capitalize">{profile.rol}</p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLogout}
-                className="flex items-center gap-2"
-              >
-                <LogOut className="w-4 h-4" />
-                Salir
-              </Button>
-            </div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">Gestión de Perfiles</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {perfiles.length} {perfiles.length === 1 ? "usuario" : "usuarios"} · administración de accesos
+            </p>
           </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {canManageAssignors(profile?.rol) && <PermisosMatriz />}
-
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <Button className="wine-button gap-2" onClick={() => setIsCreateOpen(true)}>
             <UserPlus className="w-4 h-4" />
             Nuevo perfil
           </Button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-3 py-2">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <Select value={filterRole} onValueChange={(value: any) => setFilterRole(value)}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] h-9">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -453,35 +427,26 @@ const Profiles = () => {
               </SelectContent>
             </Select>
           </div>
+
+          {selectedIds.length > 0 && (
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">{selectedIds.length} seleccionado(s)</span>
+              <Button
+                size="sm"
+                className="wine-button gap-2"
+                disabled={isBulkSaving}
+                onClick={() => aplicarDoblePerfil(true)}
+              >
+                <Briefcase className="w-4 h-4" />
+                Activar doble perfil
+              </Button>
+              <Button size="sm" variant="outline" disabled={isBulkSaving} onClick={() => aplicarDoblePerfil(false)}>
+                Quitar doble perfil
+              </Button>
+            </div>
+          )}
         </div>
 
-        {/* Barra de acciones masivas para el doble perfil */}
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border bg-card p-3">
-          <p className="text-sm text-muted-foreground">
-            {selectedIds.length > 0
-              ? `${selectedIds.length} perfil(es) seleccionado(s)`
-              : "Seleccioná perfiles de gestión para activarles el doble perfil (gestión + ventas)."}
-          </p>
-          <div className="ml-auto flex gap-2">
-            <Button
-              size="sm"
-              className="wine-button gap-2"
-              disabled={selectedIds.length === 0 || isBulkSaving}
-              onClick={() => aplicarDoblePerfil(true)}
-            >
-              <Briefcase className="w-4 h-4" />
-              Activar doble perfil
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={selectedIds.length === 0 || isBulkSaving}
-              onClick={() => aplicarDoblePerfil(false)}
-            >
-              Quitar doble perfil
-            </Button>
-          </div>
-        </div>
 
         <div className="bg-card rounded-lg shadow-soft border overflow-x-auto">
           <Table>
