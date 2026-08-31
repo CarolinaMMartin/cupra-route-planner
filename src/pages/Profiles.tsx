@@ -554,6 +554,13 @@ const Profiles = () => {
           </Table>
         </div>
 
+        {canManageAssignors(profile?.rol) && (
+          <div className="pt-2">
+            <PermisosMatriz />
+          </div>
+        )}
+
+
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogContent>
             <DialogHeader>
