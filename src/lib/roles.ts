@@ -24,3 +24,10 @@ export const ROLE_LABELS: Record<string, string> = {
   asignador: "Asignador",
   vendedor: "Vendedor",
 };
+
+/**
+ * Filtro PostgREST para listar perfiles que pueden recibir visitas/asignaciones:
+ * vendedores puros + cualquier perfil (asignador/administrador) con doble perfil de ventas.
+ * Usar como: .or(SALES_PROFILE_OR_FILTER).eq("activo", true)
+ */
+export const SALES_PROFILE_OR_FILTER = "rol.eq.vendedor,perfil_ventas.eq.true";

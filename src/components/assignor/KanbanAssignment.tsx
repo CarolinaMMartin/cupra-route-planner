@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import ClientDetailCard from "./ClientDetailCard";
 import { toTitleCase } from "@/lib/format";
 import {
+import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -76,7 +77,7 @@ const KanbanAssignment = ({
       const { data, error } = await supabase
         .from("profiles")
         .select("user_id, nombre, email")
-        .eq("rol", "vendedor")
+        .or(SALES_PROFILE_OR_FILTER)
         .eq("activo", true);
 
       if (error) throw error;

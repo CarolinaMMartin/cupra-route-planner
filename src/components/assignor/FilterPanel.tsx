@@ -12,6 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Badge } from "@/components/ui/badge";
 import { toTitleCase } from "@/lib/format";
 import { GEO_PROVINCIAS, geoComunas, geoBarrios } from "@/data/geoBuenosAires";
+import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 
 
 interface Vendedor { id: string; profileId: string; nombre: string; email: string; }
@@ -108,7 +109,7 @@ const FilterPanel = ({
   const fetchVendedores = async () => {
     setIsLoadingVendedores(true);
     try {
-      const { data, error } = await supabase.from('profiles').select('id, user_id, nombre, email').in('rol', ['vendedor', 'administrador']).eq('activo', true);
+      const { data, error } = await supabase.from('profiles').select('id, user_id, nombre, email').or(SALES_PROFILE_OR_FILTER).eq('activo', true);
       if (error) throw error;
       const mapped = (data || []).map(v => ({ id: v.user_id, profileId: v.id, nombre: toTitleCase(v.nombre), email: v.email }));
       setVendedores(mapped);

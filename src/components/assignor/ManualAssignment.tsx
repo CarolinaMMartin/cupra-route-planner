@@ -36,6 +36,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { toTitleCase } from "@/lib/format";
+import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 
 
 interface Cliente {
@@ -152,7 +153,7 @@ const ManualAssignment = () => {
       const { data } = await supabase
         .from("profiles")
         .select("user_id, nombre")
-        .in("rol", ["vendedor", "asignador", "administrador"])
+        .or(SALES_PROFILE_OR_FILTER)
         .eq("activo", true)
         .order("nombre");
       setVendedores(data || []);
