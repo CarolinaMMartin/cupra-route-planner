@@ -853,8 +853,14 @@ const ProspectosDashboard = () => {
                             />
                           </TableCell>
                           <TableCell className="max-w-[280px]">
-                            <p className="font-medium text-foreground truncate">{p.nombre}</p>
-                            <p className="text-xs text-muted-foreground truncate">{p.direccion || "Sin dirección"}</p>
+                            <button
+                              type="button"
+                              onClick={() => setDetalleProspecto(p)}
+                              className="text-left w-full"
+                            >
+                              <p className="font-medium text-foreground truncate hover:text-accent transition-colors">{p.nombre}</p>
+                              <p className="text-xs text-muted-foreground truncate">{p.direccion || "Sin dirección"}</p>
+                            </button>
                           </TableCell>
                           <TableCell className="text-sm">
                             {p.tipo_principal ? formatTipoNegocio(p.tipo_principal) : "-"}
