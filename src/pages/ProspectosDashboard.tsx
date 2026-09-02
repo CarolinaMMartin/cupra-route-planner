@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import AgregarProspectoForm, { hasProspectoDraft } from "@/components/vendedor/AgregarProspectoForm";
 import { ProspectDiscoveryDialog } from "@/components/prospectos/ProspectDiscoveryDialog";
+import { ProspectoDetalleDialog } from "@/components/prospectos/ProspectoDetalleDialog";
 import { Slider } from "@/components/ui/slider";
 import {
   Table,
@@ -76,6 +77,11 @@ interface Prospecto {
   last_recommendation_at: string | null;
   latitud: number;
   longitud: number;
+  resumen_google?: string | null;
+  es_cliente_cupra?: boolean | null;
+  sirve_vinos?: boolean | null;
+  client_id?: string | null;
+  created_at?: string | null;
 }
 
 const ESTADOS = ["Nuevo", "Contactado", "En negociación", "Descartado"] as const;
@@ -143,6 +149,7 @@ const ProspectosDashboard = () => {
   // Dialogs
   const [showAgregarProspecto, setShowAgregarProspecto] = useState(hasProspectoDraft);
   const [showBuscarProspectos, setShowBuscarProspectos] = useState(false);
+  const [detalleProspecto, setDetalleProspecto] = useState<Prospecto | null>(null);
 
   // Asignación de prospectos
   const [showAsignarDialog, setShowAsignarDialog] = useState(false);
@@ -853,8 +860,14 @@ const ProspectosDashboard = () => {
                             />
                           </TableCell>
                           <TableCell className="max-w-[280px]">
-                            <p className="font-medium text-foreground truncate">{p.nombre}</p>
-                            <p className="text-xs text-muted-foreground truncate">{p.direccion || "Sin dirección"}</p>
+                            <button
+                              type="button"
+                              onClick={() => setDetalleProspecto(p)}
+                              className="text-left w-full"
+                            >
+                              <p className="font-medium text-foreground truncate hover:text-accent transition-colors">{p.nombre}</p>
+                              <p className="text-xs text-muted-foreground truncate">{p.direccion || "Sin dirección"}</p>
+                            </button>
                           </TableCell>
                           <TableCell className="text-sm">
                             {p.tipo_principal ? formatTipoNegocio(p.tipo_principal) : "-"}
@@ -914,10 +927,10 @@ const ProspectosDashboard = () => {
                           onCheckedChange={() => toggleRow(p.id)}
                           aria-label={`Seleccionar ${p.nombre}`}
                         />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-foreground truncate">{p.nombre}</p>
+                        <button type="button" onClick={() => setDetalleProspecto(p)} className="min-w-0 flex-1 text-left">
+                          <p className="font-medium text-foreground truncate hover:text-accent transition-colors">{p.nombre}</p>
                           <p className="text-xs text-muted-foreground truncate">{p.direccion || "Sin dirección"}</p>
-                        </div>
+                        </button>
                         <RowActions p={p} />
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -1024,6 +1037,12 @@ const ProspectosDashboard = () => {
           open={showBuscarProspectos}
           onOpenChange={setShowBuscarProspectos}
           onConverted={fetchProspectosData}
+        />
+
+        <ProspectoDetalleDialog
+          prospecto={detalleProspecto}
+          open={!!detalleProspecto}
+          onOpenChange={(o) => !o && setDetalleProspecto(null)}
         />
       </div>
     </TooltipProvider>
