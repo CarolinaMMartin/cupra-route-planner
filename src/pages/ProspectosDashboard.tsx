@@ -77,6 +77,11 @@ interface Prospecto {
   last_recommendation_at: string | null;
   latitud: number;
   longitud: number;
+  resumen_google?: string | null;
+  es_cliente_cupra?: boolean | null;
+  sirve_vinos?: boolean | null;
+  client_id?: string | null;
+  created_at?: string | null;
 }
 
 const ESTADOS = ["Nuevo", "Contactado", "En negociación", "Descartado"] as const;
