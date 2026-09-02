@@ -139,12 +139,26 @@ Deno.serve(async (req) => {
       const mail = pick(row, ["MAIL", "Mail", "Email", "Correo"]);
 
       // Teléfono: columna explícita o cualquier columna sin nombre con formato telefónico
-      let telefono = normalizarTelefono(pick(row, ["TELEFONO", "Teléfono", "Celular", "Tel"]));
+      let telefono = normalizarTelefono(pick(row, ["TELEFONO", "Teléfono", "Celular", "Tel", "Cel", "Movil", "Móvil", "Whatsapp", "WhatsApp"]));
       if (!telefono) {
+        // SheetJS nombra las columnas sin encabezado "__EMPTY", "__EMPTY_1"…; pandas usa "Unnamed: 8"
         for (const [k, v] of Object.entries(row)) {
-          if (/^unnamed/i.test(k) || norm(k) === "") {
+          if (/^(unnamed|__empty)/i.test(k) || norm(k) === "") {
             const t = normalizarTelefono(clean(v));
             if (t) { telefono = t; break; }
+          }
+        }
+      }
+      if (!telefono) {
+        // Último recurso: cualquier celda que parezca un teléfono argentino
+        for (const [k, v] of Object.entries(row)) {
+          if (["cuit", "cuitdni", "razonsocial", "mail", "email", "correo"].includes(norm(k))) continue;
+          const raw = clean(v);
+          if (!raw) continue;
+          const digits = String(raw).replace(/\D/g, "");
+          if (/^[\d\s()+-]+$/.test(String(raw)) && digits.length >= 8 && digits.length <= 13) {
+            telefono = digits;
+            break;
           }
         }
       }
