@@ -561,8 +561,8 @@ const CargaDatos = () => {
             Carga de Datos
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Subí el archivo de <strong>ventas</strong> o el <strong>maestro de clientes</strong>. El sistema detecta
-            automáticamente el tipo, la hoja y la fila de encabezados.
+            Subí el archivo de <strong>ventas</strong>, el <strong>maestro de clientes</strong> o una planilla de{" "}
+            <strong>prospectos</strong>. El sistema detecta automáticamente el tipo, la hoja y la fila de encabezados.
           </p>
         </div>
 
