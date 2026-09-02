@@ -267,8 +267,8 @@ const ProspectosDashboard = () => {
       const { data: prospectos, error } = await supabase
         .from('prospectos')
         .select('*')
-        .eq('provincia', 'Ciudad Autónoma de Buenos Aires')
         .range(from, to);
+
 
       if (error) {
         console.error('Error fetching prospectos:', error);
