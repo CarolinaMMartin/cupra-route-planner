@@ -28,7 +28,7 @@ import * as XLSX from "xlsx";
 import { toTitleCase } from "@/lib/format";
 
 type Step = "upload" | "preview" | "processing" | "done";
-type FileKind = "ventas" | "maestro";
+type FileKind = "ventas" | "maestro" | "prospectos";
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type SpreadsheetRow = Record<string, unknown>;
 
@@ -44,6 +44,18 @@ interface MaestroResults {
   sin_resolver: number;
   errores: string[];
 }
+
+interface ProspectosResults {
+  filas_recibidas: number;
+  prospectos_cargados: number;
+  duplicados_en_archivo: number;
+  geocodificados: number;
+  sin_coordenadas: number;
+  ya_son_clientes: number;
+  errores: string[];
+}
+
+
 
 
 interface ProcessResults {
@@ -176,6 +188,8 @@ const CargaDatos = () => {
     clientes_unicos: number;
     fusionados_por_identidad: number;
   } | null>(null);
+  const [prospectosResults, setProspectosResults] = useState<ProspectosResults | null>(null);
+  const [geocodificarProspectos, setGeocodificarProspectos] = useState(true);
 
 
   // TAREA 7, 9, 10: Extended ETL response
@@ -246,10 +260,16 @@ const CargaDatos = () => {
     return { headerIdx, rows, keys };
   }, [norm]);
 
-  const classify = useCallback((keys: string[]): "ventas" | "maestro" | "notas" | null => {
+  const classify = useCallback((keys: string[]): "ventas" | "maestro" | "prospectos" | "notas" | null => {
     const has = (...c: string[]) => c.some((k) => keys.includes(norm(k)));
     const esVenta = has("Ticket") && (has("Precio Total Final", "Total Final", "Total Bruto", "Facturación Ar$") || has("CUIT / DNI"));
     if (esVenta) return "ventas";
+    // Planilla de prospectos: comercios con dirección de entrega y canal, sin ventas
+    const esProspecto =
+      has("DIR. ENTREGA", "Dirección de entrega", "Dir Entrega") &&
+      has("CLIENTE", "Comercio", "Nombre Fantasía") &&
+      !has("Vendedor", "Latitud");
+    if (esProspecto) return "prospectos";
     if (has("Razón Social", "RAZON SOCIAL / NOM. FANTASIA") && (has("Vendedor") || has("Categorías", "Categorías Cliente") || has("Latitud"))) {
       return "maestro";
     }
@@ -286,10 +306,11 @@ const CargaDatos = () => {
       .filter((s) => s.rows.length > 0 && !/nota/i.test(s.name))
       .map((s) => ({ ...s, tipo: classify(s.keys) }));
 
-    // Prioridad: hoja de ventas > maestro > la más grande
+    // Prioridad: hoja de ventas > maestro > prospectos > la más grande
     const ventas = candidatos.find((s) => s.tipo === "ventas");
     const maestro = candidatos.filter((s) => s.tipo === "maestro").sort((a, b) => b.rows.length - a.rows.length)[0];
-    const elegido = ventas || maestro || candidatos.sort((a, b) => b.rows.length - a.rows.length)[0];
+    const prospectos = candidatos.filter((s) => s.tipo === "prospectos").sort((a, b) => b.rows.length - a.rows.length)[0];
+    const elegido = ventas || maestro || prospectos || candidatos.sort((a, b) => b.rows.length - a.rows.length)[0];
 
     if (!elegido || elegido.rows.length === 0) {
       toast({ title: "Archivo vacío", description: "No se detectaron filas con datos", variant: "destructive" });
@@ -350,6 +371,23 @@ const CargaDatos = () => {
         sheetName,
         headerRow,
       };
+
+      if (fileKind === "prospectos") {
+        const { data, error } = await supabase.functions.invoke("process-prospectos-excel", {
+          body: { rows, geocodificar: geocodificarProspectos },
+        });
+        setProgress(90);
+        if (error) throw new Error(error.message || "Error al procesar");
+        if (!data?.success) throw new Error(data?.error || "Error desconocido");
+        setProspectosResults(data.results);
+        setProgress(100);
+        setStep("done");
+        toast({
+          title: "Prospectos cargados",
+          description: `${data.results.prospectos_cargados} prospectos · ${data.results.geocodificados} geolocalizados`,
+        });
+        return;
+      }
 
       if (fileKind === "maestro") {
         const { data, error } = await supabase.functions.invoke("process-clientes-maestro", {
@@ -490,6 +528,7 @@ const CargaDatos = () => {
     setNotasCredito([]);
     setMaestroResults(null);
     setMaestroVendedores([]);
+    setProspectosResults(null);
     setSheetName("");
     setHeaderRow(1);
     setFileKind("ventas");
@@ -522,8 +561,8 @@ const CargaDatos = () => {
             Carga de Datos
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Subí el archivo de <strong>ventas</strong> o el <strong>maestro de clientes</strong>. El sistema detecta
-            automáticamente el tipo, la hoja y la fila de encabezados.
+            Subí el archivo de <strong>ventas</strong>, el <strong>maestro de clientes</strong> o una planilla de{" "}
+            <strong>prospectos</strong>. El sistema detecta automáticamente el tipo, la hoja y la fila de encabezados.
           </p>
         </div>
 
@@ -566,8 +605,8 @@ const CargaDatos = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-base font-sans">{file?.name}</CardTitle>
-                      <Badge variant={fileKind === "maestro" ? "outline" : "default"} className="text-[10px]">
-                        {fileKind === "maestro" ? "Maestro de clientes" : "Ventas"}
+                      <Badge variant={fileKind === "ventas" ? "default" : "outline"} className="text-[10px]">
+                        {fileKind === "maestro" ? "Maestro de clientes" : fileKind === "prospectos" ? "Prospectos" : "Ventas"}
                       </Badge>
                     </div>
                     <CardDescription className="text-xs mt-0.5">
@@ -644,6 +683,18 @@ const CargaDatos = () => {
                       </span>
                     </label>
                   </>
+                ) : fileKind === "prospectos" ? (
+                  <div className="flex items-start gap-2 max-w-md">
+                    <Checkbox
+                      id="geoProspectos"
+                      checked={geocodificarProspectos}
+                      onCheckedChange={(checked) => setGeocodificarProspectos(checked === true)}
+                    />
+                    <label htmlFor="geoProspectos" className="text-xs text-muted-foreground cursor-pointer">
+                      Geolocalizar direcciones con Google Maps (recomendado).
+                      Los prospectos se agregan al pool de visitas; si el CUIT ya es cliente, se marcan como tal y no se duplican.
+                    </label>
+                  </div>
                 ) : (
                   <p className="text-xs text-muted-foreground max-w-md">
                     El maestro actualiza cartera, contacto, categorías, vendedor asignado y coordenadas.
@@ -715,7 +766,11 @@ const CargaDatos = () => {
                 <Loader2 className="h-10 w-10 mx-auto animate-spin text-primary" />
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {fileKind === "maestro" ? "Procesando maestro de clientes…" : "Procesando ventas…"}
+                    {fileKind === "maestro"
+                      ? "Procesando maestro de clientes…"
+                      : fileKind === "prospectos"
+                        ? "Cargando prospectos y geolocalizando direcciones…"
+                        : "Procesando ventas…"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">Normalizando datos, calculando métricas y actualizando base de datos</p>
                 </div>
@@ -724,6 +779,49 @@ const CargaDatos = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* STEP: Done — Prospectos */}
+        {step === "done" && prospectosResults && (
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-8">
+                <div className="text-center mb-6">
+                  <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-500" />
+                  <p className="text-lg font-semibold text-foreground">Prospectos cargados</p>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: "Prospectos cargados", value: prospectosResults.prospectos_cargados },
+                    { label: "Geolocalizados", value: prospectosResults.geocodificados },
+                    { label: "Sin coordenadas", value: prospectosResults.sin_coordenadas },
+                    { label: "Ya son clientes", value: prospectosResults.ya_son_clientes },
+                  ].map((m) => (
+                    <div key={m.label} className="text-center p-3 rounded-lg bg-muted/20">
+                      <p className="text-xl font-semibold text-foreground">{m.value.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{m.label}</p>
+                    </div>
+                  ))}
+                </div>
+                {prospectosResults.errores.length > 0 && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      <p className="font-medium mb-1">{prospectosResults.errores.length} filas con problemas</p>
+                      <ul className="list-disc pl-4 space-y-0.5">
+                        {prospectosResults.errores.slice(0, 8).map((e, i) => <li key={i}>{e}</li>)}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <div className="flex justify-center gap-3 mt-6">
+                  <Button variant="outline" onClick={reset}>Cargar otro archivo</Button>
+                  <Button onClick={() => navigate("/prospectos-dashboard")}>Ver prospectos</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
 
         {/* STEP: Done — Maestro de clientes */}
         {step === "done" && maestroResults && (
