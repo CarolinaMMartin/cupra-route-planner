@@ -766,7 +766,11 @@ const CargaDatos = () => {
                 <Loader2 className="h-10 w-10 mx-auto animate-spin text-primary" />
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    {fileKind === "maestro" ? "Procesando maestro de clientes…" : "Procesando ventas…"}
+                    {fileKind === "maestro"
+                      ? "Procesando maestro de clientes…"
+                      : fileKind === "prospectos"
+                        ? "Cargando prospectos y geolocalizando direcciones…"
+                        : "Procesando ventas…"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">Normalizando datos, calculando métricas y actualizando base de datos</p>
                 </div>
@@ -775,6 +779,49 @@ const CargaDatos = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* STEP: Done — Prospectos */}
+        {step === "done" && prospectosResults && (
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-8">
+                <div className="text-center mb-6">
+                  <CheckCircle2 className="h-10 w-10 mx-auto mb-3 text-green-500" />
+                  <p className="text-lg font-semibold text-foreground">Prospectos cargados</p>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {[
+                    { label: "Prospectos cargados", value: prospectosResults.prospectos_cargados },
+                    { label: "Geolocalizados", value: prospectosResults.geocodificados },
+                    { label: "Sin coordenadas", value: prospectosResults.sin_coordenadas },
+                    { label: "Ya son clientes", value: prospectosResults.ya_son_clientes },
+                  ].map((m) => (
+                    <div key={m.label} className="text-center p-3 rounded-lg bg-muted/20">
+                      <p className="text-xl font-semibold text-foreground">{m.value.toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{m.label}</p>
+                    </div>
+                  ))}
+                </div>
+                {prospectosResults.errores.length > 0 && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-xs">
+                      <p className="font-medium mb-1">{prospectosResults.errores.length} filas con problemas</p>
+                      <ul className="list-disc pl-4 space-y-0.5">
+                        {prospectosResults.errores.slice(0, 8).map((e, i) => <li key={i}>{e}</li>)}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <div className="flex justify-center gap-3 mt-6">
+                  <Button variant="outline" onClick={reset}>Cargar otro archivo</Button>
+                  <Button onClick={() => navigate("/prospectos-dashboard")}>Ver prospectos</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
 
         {/* STEP: Done — Maestro de clientes */}
         {step === "done" && maestroResults && (
