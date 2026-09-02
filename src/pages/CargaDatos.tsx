@@ -188,6 +188,8 @@ const CargaDatos = () => {
     clientes_unicos: number;
     fusionados_por_identidad: number;
   } | null>(null);
+  const [prospectosResults, setProspectosResults] = useState<ProspectosResults | null>(null);
+  const [geocodificarProspectos, setGeocodificarProspectos] = useState(true);
 
 
   // TAREA 7, 9, 10: Extended ETL response
@@ -369,6 +371,23 @@ const CargaDatos = () => {
         sheetName,
         headerRow,
       };
+
+      if (fileKind === "prospectos") {
+        const { data, error } = await supabase.functions.invoke("process-prospectos-excel", {
+          body: { rows, geocodificar: geocodificarProspectos },
+        });
+        setProgress(90);
+        if (error) throw new Error(error.message || "Error al procesar");
+        if (!data?.success) throw new Error(data?.error || "Error desconocido");
+        setProspectosResults(data.results);
+        setProgress(100);
+        setStep("done");
+        toast({
+          title: "Prospectos cargados",
+          description: `${data.results.prospectos_cargados} prospectos · ${data.results.geocodificados} geolocalizados`,
+        });
+        return;
+      }
 
       if (fileKind === "maestro") {
         const { data, error } = await supabase.functions.invoke("process-clientes-maestro", {
