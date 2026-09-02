@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,23 +103,60 @@ const riskConfig: Record<RiskLevel, { bg: string; border: string; text: string; 
   bajo: { bg: "bg-blue-500/20", border: "border-blue-500", text: "text-blue-500", label: "Riesgo Bajo" }
 };
 
+const DRAFT_KEY = "prospecto-draft-v1";
+
+const EMPTY_FORM: FormData = {
+  nombre: "",
+  direccion: "",
+  barrio: "",
+  ciudad: "",
+  codigo_postal: "",
+  provincia: "",
+  telefono: "",
+  email: "",
+  instagram: "",
+};
+
+const loadDraft = (): FormData => {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return EMPTY_FORM;
+    return { ...EMPTY_FORM, ...(JSON.parse(raw) as Partial<FormData>) };
+  } catch {
+    return EMPTY_FORM;
+  }
+};
+
 const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps) => {
   const [step, setStep] = useState<FormStep>("form");
-  const [formData, setFormData] = useState<FormData>({
-    nombre: "",
-    direccion: "",
-    barrio: "",
-    ciudad: "",
-    codigo_postal: "",
-    provincia: "",
-    telefono: "",
-    email: "",
-    instagram: "",
-  });
+  const [formData, setFormData] = useState<FormData>(loadDraft);
   const [geocodeResult, setGeocodeResult] = useState<GeocodingResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [duplicatesFound, setDuplicatesFound] = useState<DuplicateMatch[]>([]);
   const { toast } = useToast();
+
+  // Guardar borrador: si el operador cambia de app o se recarga la pestaña, no pierde lo cargado
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+    } catch {
+      /* storage lleno o no disponible */
+    }
+  }, [formData]);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* noop */
+    }
+  };
+
+  const handleCancel = () => {
+    clearDraft();
+    setFormData(EMPTY_FORM);
+    onCancel();
+  };
 
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -553,6 +590,8 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
         description: `"${formData.nombre}" fue agregado correctamente.`,
       });
 
+      clearDraft();
+      setFormData(EMPTY_FORM);
       onSuccess();
 
     } catch (error: any) {
@@ -640,7 +679,7 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
         </div>
 
         <div className="flex gap-2 pt-2 sticky bottom-0 bg-background">
-          <Button variant="outline" onClick={onCancel} className="flex-1 h-10">
+          <Button variant="outline" onClick={handleCancel} className="flex-1 h-10">
             Cancelar
           </Button>
           <Button onClick={handleContinueAnyway} className="flex-1 wine-button h-10 text-sm">
@@ -671,7 +710,7 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
           <p className="text-xs md:text-sm text-muted-foreground">{errorMessage}</p>
         </div>
         <div className="flex gap-2 w-full px-4">
-          <Button variant="outline" onClick={onCancel} className="flex-1 h-10">
+          <Button variant="outline" onClick={handleCancel} className="flex-1 h-10">
             Cancelar
           </Button>
           <Button onClick={handleRetry} className="flex-1 wine-button h-10">
@@ -866,7 +905,7 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
 
       {/* Botones de acción sticky en mobile */}
       <div className="flex gap-3 pt-3 sticky bottom-0 bg-background pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        <Button variant="outline" onClick={onCancel} className="flex-1 h-12 md:h-11">
+        <Button variant="outline" onClick={handleCancel} className="flex-1 h-12 md:h-11">
           Cancelar
         </Button>
         <Button onClick={handleValidateAndSave} className="flex-1 wine-button h-12 md:h-11">

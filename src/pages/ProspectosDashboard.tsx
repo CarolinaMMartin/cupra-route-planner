@@ -965,8 +965,12 @@ const ProspectosDashboard = () => {
         </div>
 
         {/* Dialog para agregar prospecto */}
-        <Dialog open={showAgregarProspecto} onOpenChange={setShowAgregarProspecto}>
-          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <Dialog open={showAgregarProspecto} onOpenChange={(next) => { if (next) setShowAgregarProspecto(true); }}>
+          <DialogContent
+            className="max-w-md max-h-[90vh] overflow-y-auto"
+            onInteractOutside={(e) => e.preventDefault()}
+            onEscapeKeyDown={(e) => e.preventDefault()}
+          >
             <DialogHeader>
               <DialogTitle>Agregar Nuevo Prospecto</DialogTitle>
               <DialogDescription>
