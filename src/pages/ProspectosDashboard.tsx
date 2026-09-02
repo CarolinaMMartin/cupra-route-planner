@@ -1032,6 +1032,12 @@ const ProspectosDashboard = () => {
           onOpenChange={setShowBuscarProspectos}
           onConverted={fetchProspectosData}
         />
+
+        <ProspectoDetalleDialog
+          prospecto={detalleProspecto}
+          open={!!detalleProspecto}
+          onOpenChange={(o) => !o && setDetalleProspecto(null)}
+        />
       </div>
     </TooltipProvider>
   );
