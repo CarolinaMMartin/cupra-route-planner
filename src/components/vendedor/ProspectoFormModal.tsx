@@ -31,10 +31,16 @@ const ProspectoFormModal = ({
 }: ProspectoFormModalProps) => {
   const isMobile = useIsMobile();
 
+  // Solo se cierra con los botones del formulario: evita perder la carga
+  // al tocar fuera, al presionar Escape o al volver desde otra app.
+  const handleOpenChange = (next: boolean) => {
+    if (next) onOpenChange(true);
+  };
+
   // Mobile: Drawer desde abajo con mejor UX táctil
   if (isMobile) {
     return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
+      <Drawer open={open} onOpenChange={handleOpenChange} dismissible={false}>
         <DrawerContent className="max-h-[92vh]">
           <DrawerHeader className="pb-2">
             <DrawerTitle className="text-lg">Agregar Prospecto</DrawerTitle>
