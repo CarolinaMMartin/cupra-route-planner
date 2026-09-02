@@ -462,9 +462,9 @@ const ClientesDashboard = () => {
       <AppNav />
       <div className="max-w-[1920px] mx-auto space-y-7 p-5 md:p-8">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4 min-w-0">
+            <div className="min-w-0">
               <h1 className="text-2xl md:text-3xl font-sans text-foreground tracking-tight">
                 Dashboard de Consultas
               </h1>
@@ -473,11 +473,11 @@ const ClientesDashboard = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 md:gap-4">
             <Button
               variant="outline"
               onClick={() => navigate('/clientes-edicion')}
-              className="gap-2"
+              className="gap-2 flex-1 md:flex-none min-w-0"
             >
               <Pencil className="h-4 w-4" />
               Editar Datos
@@ -485,14 +485,15 @@ const ClientesDashboard = () => {
             <Button
               variant="outline"
               onClick={() => navigate('/supervision-vendedores')}
-              className="gap-2"
+              className="gap-2 flex-1 md:flex-none min-w-0"
             >
               <ClipboardList className="h-4 w-4" />
               Supervisión
             </Button>
-            <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
+            <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12 shrink-0" />
           </div>
         </div>
+
 
         {/* TAREA 13: Indicador de calidad de datos */}
         {dataQuality && (dataQuality.pctSinBarrio > 10 || dataQuality.pctSinVendedor > 5) && (
