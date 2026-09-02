@@ -135,6 +135,29 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
   const [duplicatesFound, setDuplicatesFound] = useState<DuplicateMatch[]>([]);
   const { toast } = useToast();
 
+  // Guardar borrador: si el operador cambia de app o se recarga la pestaña, no pierde lo cargado
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
+    } catch {
+      /* storage lleno o no disponible */
+    }
+  }, [formData]);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* noop */
+    }
+  };
+
+  const handleCancel = () => {
+    clearDraft();
+    setFormData(EMPTY_FORM);
+    onCancel();
+  };
+
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
