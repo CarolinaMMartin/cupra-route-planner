@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import AgregarProspectoForm, { hasProspectoDraft } from "@/components/vendedor/AgregarProspectoForm";
 import { ProspectDiscoveryDialog } from "@/components/prospectos/ProspectDiscoveryDialog";
+import { ProspectoDetalleDialog } from "@/components/prospectos/ProspectoDetalleDialog";
 import { Slider } from "@/components/ui/slider";
 import {
   Table,
