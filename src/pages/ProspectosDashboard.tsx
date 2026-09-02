@@ -922,10 +922,10 @@ const ProspectosDashboard = () => {
                           onCheckedChange={() => toggleRow(p.id)}
                           aria-label={`Seleccionar ${p.nombre}`}
                         />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-foreground truncate">{p.nombre}</p>
+                        <button type="button" onClick={() => setDetalleProspecto(p)} className="min-w-0 flex-1 text-left">
+                          <p className="font-medium text-foreground truncate hover:text-accent transition-colors">{p.nombre}</p>
                           <p className="text-xs text-muted-foreground truncate">{p.direccion || "Sin dirección"}</p>
-                        </div>
+                        </button>
                         <RowActions p={p} />
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-sm">
