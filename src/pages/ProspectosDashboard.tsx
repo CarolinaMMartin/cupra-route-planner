@@ -143,6 +143,7 @@ const ProspectosDashboard = () => {
   // Dialogs
   const [showAgregarProspecto, setShowAgregarProspecto] = useState(hasProspectoDraft);
   const [showBuscarProspectos, setShowBuscarProspectos] = useState(false);
+  const [detalleProspecto, setDetalleProspecto] = useState<Prospecto | null>(null);
 
   // Asignación de prospectos
   const [showAsignarDialog, setShowAsignarDialog] = useState(false);
