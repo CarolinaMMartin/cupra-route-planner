@@ -42,7 +42,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import AgregarProspectoForm from "@/components/vendedor/AgregarProspectoForm";
+import AgregarProspectoForm, { hasProspectoDraft } from "@/components/vendedor/AgregarProspectoForm";
 import { ProspectDiscoveryDialog } from "@/components/prospectos/ProspectDiscoveryDialog";
 import { Slider } from "@/components/ui/slider";
 import {
@@ -141,7 +141,7 @@ const ProspectosDashboard = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Dialogs
-  const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
+  const [showAgregarProspecto, setShowAgregarProspecto] = useState(hasProspectoDraft);
   const [showBuscarProspectos, setShowBuscarProspectos] = useState(false);
 
   // Asignación de prospectos

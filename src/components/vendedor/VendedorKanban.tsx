@@ -55,7 +55,7 @@ import {
 import ExcludeClientButton from "@/components/assignor/ExcludeClientButton";
 import VendedorAssignmentsMap from "./VendedorAssignmentsMap";
 import RecordatoriosCalendario from "./RecordatoriosCalendario";
-import AgregarProspectoForm from "./AgregarProspectoForm";
+import AgregarProspectoForm, { hasProspectoDraft } from "./AgregarProspectoForm";
 import AutoAsignarDialog from "./AutoAsignarDialog";
 import ProspectoFormModal from "./ProspectoFormModal";
 
@@ -251,7 +251,7 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
   const [recordatorioActivo, setRecordatorioActivo] = useState(false);
   const [recordatorioFecha, setRecordatorioFecha] = useState("");
   const [recordatorioNota, setRecordatorioNota] = useState("");
-  const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
+  const [showAgregarProspecto, setShowAgregarProspecto] = useState(hasProspectoDraft);
   const [showAutoAsignar, setShowAutoAsignar] = useState(false);
   const { toast } = useToast();
 
