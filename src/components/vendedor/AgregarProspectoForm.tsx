@@ -103,19 +103,33 @@ const riskConfig: Record<RiskLevel, { bg: string; border: string; text: string; 
   bajo: { bg: "bg-blue-500/20", border: "border-blue-500", text: "text-blue-500", label: "Riesgo Bajo" }
 };
 
+const DRAFT_KEY = "prospecto-draft-v1";
+
+const EMPTY_FORM: FormData = {
+  nombre: "",
+  direccion: "",
+  barrio: "",
+  ciudad: "",
+  codigo_postal: "",
+  provincia: "",
+  telefono: "",
+  email: "",
+  instagram: "",
+};
+
+const loadDraft = (): FormData => {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return EMPTY_FORM;
+    return { ...EMPTY_FORM, ...(JSON.parse(raw) as Partial<FormData>) };
+  } catch {
+    return EMPTY_FORM;
+  }
+};
+
 const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps) => {
   const [step, setStep] = useState<FormStep>("form");
-  const [formData, setFormData] = useState<FormData>({
-    nombre: "",
-    direccion: "",
-    barrio: "",
-    ciudad: "",
-    codigo_postal: "",
-    provincia: "",
-    telefono: "",
-    email: "",
-    instagram: "",
-  });
+  const [formData, setFormData] = useState<FormData>(loadDraft);
   const [geocodeResult, setGeocodeResult] = useState<GeocodingResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [duplicatesFound, setDuplicatesFound] = useState<DuplicateMatch[]>([]);
