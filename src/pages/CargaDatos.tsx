@@ -528,6 +528,7 @@ const CargaDatos = () => {
     setNotasCredito([]);
     setMaestroResults(null);
     setMaestroVendedores([]);
+    setProspectosResults(null);
     setSheetName("");
     setHeaderRow(1);
     setFileKind("ventas");
@@ -604,8 +605,8 @@ const CargaDatos = () => {
                   <div>
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-base font-sans">{file?.name}</CardTitle>
-                      <Badge variant={fileKind === "maestro" ? "outline" : "default"} className="text-[10px]">
-                        {fileKind === "maestro" ? "Maestro de clientes" : "Ventas"}
+                      <Badge variant={fileKind === "ventas" ? "default" : "outline"} className="text-[10px]">
+                        {fileKind === "maestro" ? "Maestro de clientes" : fileKind === "prospectos" ? "Prospectos" : "Ventas"}
                       </Badge>
                     </div>
                     <CardDescription className="text-xs mt-0.5">
@@ -682,6 +683,18 @@ const CargaDatos = () => {
                       </span>
                     </label>
                   </>
+                ) : fileKind === "prospectos" ? (
+                  <div className="flex items-start gap-2 max-w-md">
+                    <Checkbox
+                      id="geoProspectos"
+                      checked={geocodificarProspectos}
+                      onCheckedChange={(checked) => setGeocodificarProspectos(checked === true)}
+                    />
+                    <label htmlFor="geoProspectos" className="text-xs text-muted-foreground cursor-pointer">
+                      Geolocalizar direcciones con Google Maps (recomendado).
+                      Los prospectos se agregan al pool de visitas; si el CUIT ya es cliente, se marcan como tal y no se duplican.
+                    </label>
+                  </div>
                 ) : (
                   <p className="text-xs text-muted-foreground max-w-md">
                     El maestro actualiza cartera, contacto, categorías, vendedor asignado y coordenadas.
