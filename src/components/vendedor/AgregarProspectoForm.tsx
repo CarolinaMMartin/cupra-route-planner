@@ -117,6 +117,18 @@ const EMPTY_FORM: FormData = {
   instagram: "",
 };
 
+// Permite reabrir el formulario automáticamente si quedó carga a medio hacer
+export const hasProspectoDraft = (): boolean => {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as Partial<FormData>;
+    return Object.values(parsed).some((v) => typeof v === "string" && v.trim() !== "");
+  } catch {
+    return false;
+  }
+};
+
 const loadDraft = (): FormData => {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
