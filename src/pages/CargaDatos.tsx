@@ -304,10 +304,11 @@ const CargaDatos = () => {
       .filter((s) => s.rows.length > 0 && !/nota/i.test(s.name))
       .map((s) => ({ ...s, tipo: classify(s.keys) }));
 
-    // Prioridad: hoja de ventas > maestro > la más grande
+    // Prioridad: hoja de ventas > maestro > prospectos > la más grande
     const ventas = candidatos.find((s) => s.tipo === "ventas");
     const maestro = candidatos.filter((s) => s.tipo === "maestro").sort((a, b) => b.rows.length - a.rows.length)[0];
-    const elegido = ventas || maestro || candidatos.sort((a, b) => b.rows.length - a.rows.length)[0];
+    const prospectos = candidatos.filter((s) => s.tipo === "prospectos").sort((a, b) => b.rows.length - a.rows.length)[0];
+    const elegido = ventas || maestro || prospectos || candidatos.sort((a, b) => b.rows.length - a.rows.length)[0];
 
     if (!elegido || elegido.rows.length === 0) {
       toast({ title: "Archivo vacío", description: "No se detectaron filas con datos", variant: "destructive" });
