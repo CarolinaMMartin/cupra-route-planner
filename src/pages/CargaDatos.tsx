@@ -28,7 +28,7 @@ import * as XLSX from "xlsx";
 import { toTitleCase } from "@/lib/format";
 
 type Step = "upload" | "preview" | "processing" | "done";
-type FileKind = "ventas" | "maestro";
+type FileKind = "ventas" | "maestro" | "prospectos";
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type SpreadsheetRow = Record<string, unknown>;
 
@@ -44,6 +44,18 @@ interface MaestroResults {
   sin_resolver: number;
   errores: string[];
 }
+
+interface ProspectosResults {
+  filas_recibidas: number;
+  prospectos_cargados: number;
+  duplicados_en_archivo: number;
+  geocodificados: number;
+  sin_coordenadas: number;
+  ya_son_clientes: number;
+  errores: string[];
+}
+
+
 
 
 interface ProcessResults {
@@ -246,10 +258,16 @@ const CargaDatos = () => {
     return { headerIdx, rows, keys };
   }, [norm]);
 
-  const classify = useCallback((keys: string[]): "ventas" | "maestro" | "notas" | null => {
+  const classify = useCallback((keys: string[]): "ventas" | "maestro" | "prospectos" | "notas" | null => {
     const has = (...c: string[]) => c.some((k) => keys.includes(norm(k)));
     const esVenta = has("Ticket") && (has("Precio Total Final", "Total Final", "Total Bruto", "Facturación Ar$") || has("CUIT / DNI"));
     if (esVenta) return "ventas";
+    // Planilla de prospectos: comercios con dirección de entrega y canal, sin ventas
+    const esProspecto =
+      has("DIR. ENTREGA", "Dirección de entrega", "Dir Entrega") &&
+      has("CLIENTE", "Comercio", "Nombre Fantasía") &&
+      !has("Vendedor", "Latitud");
+    if (esProspecto) return "prospectos";
     if (has("Razón Social", "RAZON SOCIAL / NOM. FANTASIA") && (has("Vendedor") || has("Categorías", "Categorías Cliente") || has("Latitud"))) {
       return "maestro";
     }
