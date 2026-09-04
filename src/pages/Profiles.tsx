@@ -397,7 +397,7 @@ const Profiles = () => {
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
-      <AppNav profile={{ nombre: profile.nombre, rol: profile.rol }} />
+      <AppNav profile={{ nombre: profile.nombre, rol: profile.rol, perfil_ventas: profile.perfil_ventas }} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>

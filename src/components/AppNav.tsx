@@ -46,10 +46,12 @@ export default function AppNav({ profile: profileProp, rightSlot }: AppNavProps)
   const enGestion = mode === "gestion";
 
   useEffect(() => {
-    if (profileProp) {
+    // Si la página ya pasó el perfil completo (incluye perfil_ventas), lo usamos.
+    if (profileProp && profileProp.perfil_ventas !== undefined) {
       setProfile(profileProp);
       return;
     }
+    if (profileProp) setProfile(profileProp);
     let cancelled = false;
     (async () => {
       const { data: sessionData } = await supabase.auth.getSession();
