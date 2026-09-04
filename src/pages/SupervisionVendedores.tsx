@@ -617,214 +617,39 @@ const SupervisionVendedores = () => {
           </CollapsibleContent>
         </Collapsible>
 
-        {/* 4. Resumen por Vendedor */}
+        {/* 4. Trabajo por Vendedor (resumen + detalle unificados) */}
         <Collapsible open={openResumen} onOpenChange={setOpenResumen} className="w-full">
           <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
             <div className="flex items-center gap-2 font-sans text-lg text-foreground">
               <Users className="h-5 w-5 text-primary" />
-              <span>Resumen por Vendedor</span>
-              {vendedorStats.length > 0 &&
-              <span className="text-sm font-normal text-muted-foreground ml-2">({vendedorStats.length} vendedores)</span>
-              }
+              <span>Trabajo por Vendedor</span>
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                ({vendedorStats.length} vendedores · {asignaciones.length} asignaciones)
+              </span>
             </div>
             <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openResumen && "rotate-180")} />
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-3">
-            <Card className="matte-card">
-              <CardContent className="pt-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Vendedor</TableHead>
-                      <TableHead className="text-center">Asignadas</TableHead>
-                      <TableHead className="text-center">Pendientes</TableHead>
-                      <TableHead className="text-center">Visitadas</TableHead>
-                      <TableHead className="text-center">No Visitadas</TableHead>
-                      <TableHead className="text-center">Tasa %</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {vendedorStats.length === 0 ?
-                    <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No hay datos para los filtros seleccionados</TableCell>
-                      </TableRow> :
-
-                    vendedorStats.map((stat) =>
-                    <TableRow key={stat.vendedor_id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleFilterChange("vendedorId", stat.vendedor_id)}>
-                          <TableCell className="font-medium">{stat.nombre}</TableCell>
-                          <TableCell className="text-center">{stat.total}</TableCell>
-                          <TableCell className="text-center text-amber-500">{stat.pendientes}</TableCell>
-                          <TableCell className="text-center text-emerald-500">{stat.visitadas}</TableCell>
-                          <TableCell className="text-center text-rose-500">{stat.noVisitadas}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant={stat.tasa >= 70 ? "default" : stat.tasa >= 40 ? "secondary" : "destructive"}>{stat.tasa.toFixed(1)}%</Badge>
-                          </TableCell>
-                        </TableRow>
-                    )
-                    }
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </CollapsibleContent>
-        </Collapsible>
-
-        {/* 5. Detalle de Asignaciones */}
-        <Collapsible open={openDetalle} onOpenChange={setOpenDetalle} className="w-full">
-          <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
-            <div className="flex items-center gap-2 font-sans text-lg text-foreground">
-              <ClipboardList className="h-5 w-5 text-primary" />
-              <span>Detalle de Asignaciones</span>
-              <span className="text-sm font-normal text-muted-foreground ml-2">({asignaciones.length} registros)</span>
+            <div className="space-y-2">
+              {vendedorStats.length === 0 &&
+              <Card className="matte-card">
+                  <CardContent className="py-8 text-center text-muted-foreground text-sm">
+                    No hay datos para los filtros seleccionados
+                  </CardContent>
+                </Card>
+              }
+              {vendedorStats.map((stat) =>
+              <VendedorCard
+                key={stat.vendedor_id}
+                stat={stat}
+                asignaciones={asignaciones.filter((a) => a.vendedor_id === stat.vendedor_id)}
+                formatDate={formatDate}
+                formatDateTime={formatDateTime} />
+              )}
             </div>
-            <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openDetalle && "rotate-180")} />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3">
-            <Card className="matte-card">
-              <CardContent className="pt-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cliente/Prospecto</TableHead>
-                      <TableHead>Vendedor</TableHead>
-                      <TableHead className="text-center">F. Asignación</TableHead>
-                      <TableHead className="text-center">F. Visita</TableHead>
-                      <TableHead className="text-center">Tipo Cierre</TableHead>
-                      <TableHead>Detalle</TableHead>
-                      <TableHead className="text-center">Estado</TableHead>
-                      <TableHead className="text-center">Activaciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {asignaciones.length === 0 ?
-                    <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No hay asignaciones para los filtros seleccionados</TableCell>
-                      </TableRow> :
-
-                    asignaciones.map((a) =>
-                    <TableRow key={a.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Badge variant={a.es_prospecto ? "outline" : "secondary"} className="text-xs">{a.es_prospecto ? "P" : "C"}</Badge>
-                              <div>
-                                <p className="font-medium text-sm">{a.cliente_nombre}</p>
-                                <p className="text-xs text-muted-foreground truncate max-w-[200px]">{a.direccion}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">{a.vendedor_nombre}</TableCell>
-                          <TableCell className="text-center text-sm">{formatDate(a.created_at)}</TableCell>
-                          <TableCell className="text-center text-sm">{formatDate(a.visited_at)}</TableCell>
-                          <TableCell className="text-center">
-                            {a.tipo_cierre ?
-                        <Badge variant="outline" className={cn(
-                          a.tipo_cierre === 'Visitado' && 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30',
-                          a.tipo_cierre === 'Online' && 'bg-blue-500/20 text-blue-500 border-blue-500/30',
-                          a.tipo_cierre === 'No visitado' && 'bg-amber-500/20 text-amber-600 border-amber-500/30'
-                        )}>{a.tipo_cierre}</Badge> :
-                        <span className="text-muted-foreground text-xs">-</span>}
-                          </TableCell>
-                          <TableCell className="text-sm max-w-[200px]">
-                            {a.tipo_cierre === 'No visitado' ?
-                        <span className="text-amber-600 truncate block" title={a.motivo_no_visita || undefined}>{a.motivo_no_visita || '-'}</span> :
-                        a.tipo_interaccion ?
-                        <span className="text-muted-foreground truncate block" title={a.tipo_interaccion}>{a.tipo_interaccion}</span> :
-                        <span className="text-muted-foreground text-xs">-</span>}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant={a.estado === "Visitado" ? "default" : a.estado === "Por visitar" ? "secondary" : "outline"}
-                        className={a.estado === "Visitado" ? "bg-emerald-500/20 text-emerald-500" : ""}>
-                              {a.estado === "Visitado" ? "✓" : a.estado === "Por visitar" ? "⏳" : "○"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {a.tipo_cierre ?
-                        <Button variant="ghost" size="sm" onClick={() => setFeedbackModal(a)} className="gap-1">
-                                <Eye className="h-4 w-4" />Ver
-                              </Button> :
-                        <span className="text-muted-foreground text-xs">-</span>}
-                          </TableCell>
-                        </TableRow>
-                    )
-                    }
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
           </CollapsibleContent>
         </Collapsible>
       </div>
-
-      {/* Modal Ver Feedback */}
-      <Dialog open={!!feedbackModal} onOpenChange={() => setFeedbackModal(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Detalle del Feedback</DialogTitle>
-            <DialogDescription>
-              {feedbackModal?.cliente_nombre}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-muted-foreground uppercase">Tipo de Cierre</label>
-                <p className="font-medium">
-                  {feedbackModal?.tipo_cierre &&
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      feedbackModal.tipo_cierre === 'Visitado' && 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30',
-                      feedbackModal.tipo_cierre === 'Online' && 'bg-blue-500/20 text-blue-500 border-blue-500/30',
-                      feedbackModal.tipo_cierre === 'No visitado' && 'bg-amber-500/20 text-amber-600 border-amber-500/30'
-                    )}>
-                    
-                      {feedbackModal.tipo_cierre}
-                    </Badge>
-                  }
-                </p>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground uppercase">Vendedor</label>
-                <p className="font-medium">{feedbackModal?.vendedor_nombre || '-'}</p>
-              </div>
-            </div>
-            
-            {feedbackModal?.tipo_interaccion &&
-            <div>
-                <label className="text-xs text-muted-foreground uppercase">Tipo de Interacción</label>
-                <p className="font-medium">{feedbackModal.tipo_interaccion}</p>
-              </div>
-            }
-            
-            {feedbackModal?.motivo_no_visita &&
-            <div>
-                <label className="text-xs text-muted-foreground uppercase">Motivo No Visita</label>
-                <p className="font-medium text-amber-600">{feedbackModal.motivo_no_visita}</p>
-              </div>
-            }
-            
-            {feedbackModal?.feedback_texto &&
-            <div>
-                <label className="text-xs text-muted-foreground uppercase">Comentario</label>
-                <p className="text-sm bg-muted p-3 rounded-lg">{feedbackModal.feedback_texto}</p>
-              </div>
-            }
-            
-            {feedbackModal?.actualizar_etiqueta_wa &&
-            <div>
-                <label className="text-xs text-muted-foreground uppercase">Etiqueta WhatsApp</label>
-                <Badge variant="outline">{feedbackModal.actualizar_etiqueta_wa}</Badge>
-              </div>
-            }
-            
-            {feedbackModal?.feedback_fecha &&
-            <div className="text-xs text-muted-foreground text-right pt-2 border-t">
-                Registrado: {formatDateTime(feedbackModal.feedback_fecha)}
-              </div>
-            }
-          </div>
-        </DialogContent>
-      </Dialog>
       </div>
     </div>);
 
