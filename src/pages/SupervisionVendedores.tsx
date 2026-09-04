@@ -4,7 +4,7 @@ import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import { useNavigate } from "react-router-dom";
 import AppNav from "@/components/AppNav";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
@@ -14,11 +14,11 @@ import {
   TrendingUp,
   Filter,
   RefreshCw,
-  Eye,
   XCircle,
+  MapPin,
+  X,
+  MessageSquare,
   ChevronDown,
-  BarChart3,
-  ClipboardList,
   Activity } from
 "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -26,21 +26,6 @@ import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow } from
-"@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle } from
-"@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { toTitleCase } from "@/lib/format";
@@ -64,6 +49,7 @@ interface AsignacionDetalle {
   visited_at: string | null;
   es_prospecto: boolean;
   origen_asignacion: string;
+  vendedor_id: string;
   vendedor_nombre: string;
   cliente_nombre: string;
   direccion: string;
@@ -97,6 +83,138 @@ interface FeedbackData {
   created_at: string;
 }
 
+
+const cierreClass = (tipo: string | null) =>
+cn(
+  tipo === "Visitado" && "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
+  tipo === "Online" && "bg-primary/15 text-primary border-primary/30",
+  tipo === "No visitado" && "bg-amber-500/15 text-amber-600 border-amber-500/30"
+);
+
+const AsignacionRow = ({
+  a,
+  formatDate,
+  formatDateTime
+
+
+
+
+}: {a: AsignacionDetalle;formatDate: (d: string | null) => string;formatDateTime: (d: string | null) => string;}) => {
+  const [open, setOpen] = useState(false);
+  const tieneDetalle = !!(a.feedback_texto || a.motivo_no_visita || a.tipo_interaccion || a.actualizar_etiqueta_wa);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger className="w-full text-left p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors border border-border/40">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Badge variant={a.es_prospecto ? "outline" : "secondary"} className="text-[10px] px-1.5">
+                {a.es_prospecto ? "Prospecto" : "Cliente"}
+              </Badge>
+              <span className="font-medium text-sm truncate">{toTitleCase(a.cliente_nombre)}</span>
+            </div>
+            {a.direccion &&
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 truncate">
+                <MapPin className="h-3 w-3 shrink-0" />{a.direccion}
+              </p>
+            }
+            <p className="text-xs text-muted-foreground mt-1">
+              Asignado {formatDate(a.created_at)}
+              {a.visited_at ? ` · Cerrado ${formatDate(a.visited_at)}` : ""}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {a.tipo_cierre ?
+            <Badge variant="outline" className={cierreClass(a.tipo_cierre)}>{a.tipo_cierre}</Badge> :
+            <Badge variant="outline" className="text-muted-foreground">{a.estado}</Badge>
+            }
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+          </div>
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="p-3 mx-1 mb-1 rounded-b-lg bg-card/60 border border-t-0 border-border/40 space-y-2 text-sm">
+          {!tieneDetalle &&
+          <p className="text-muted-foreground text-xs">El vendedor todavía no cargó información de esta visita.</p>
+          }
+          {a.tipo_interaccion &&
+          <p><span className="text-xs uppercase text-muted-foreground mr-2">Interacción</span>{a.tipo_interaccion}</p>
+          }
+          {a.motivo_no_visita &&
+          <p><span className="text-xs uppercase text-muted-foreground mr-2">Motivo</span><span className="text-amber-600">{a.motivo_no_visita}</span></p>
+          }
+          {a.feedback_texto &&
+          <div>
+              <p className="text-xs uppercase text-muted-foreground flex items-center gap-1 mb-1">
+                <MessageSquare className="h-3 w-3" />Comentario del vendedor
+              </p>
+              <p className="whitespace-pre-wrap bg-muted/40 p-2.5 rounded-md">{a.feedback_texto}</p>
+            </div>
+          }
+          {a.actualizar_etiqueta_wa &&
+          <p><span className="text-xs uppercase text-muted-foreground mr-2">Etiqueta</span>{a.actualizar_etiqueta_wa}</p>
+          }
+          {a.feedback_fecha &&
+          <p className="text-xs text-muted-foreground pt-1 border-t border-border/40">
+              Registrado: {formatDateTime(a.feedback_fecha)}
+            </p>
+          }
+        </div>
+      </CollapsibleContent>
+    </Collapsible>);
+
+};
+
+const VendedorCard = ({
+  stat,
+  asignaciones,
+  formatDate,
+  formatDateTime
+
+
+
+
+
+
+}: {stat: VendedorStats;asignaciones: AsignacionDetalle[];formatDate: (d: string | null) => string;formatDateTime: (d: string | null) => string;}) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Card className="matte-card overflow-hidden">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger className="w-full text-left p-4 hover:bg-accent/40 transition-colors">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-foreground">{stat.nombre}</p>
+              <p className="text-xs text-muted-foreground">{stat.email}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <span className="text-muted-foreground">{stat.total} asignadas</span>
+              <span className="text-amber-500">{stat.pendientes} pendientes</span>
+              <span className="text-emerald-500">{stat.visitadas} visitadas</span>
+              <span className="text-rose-500">{stat.noVisitadas} no visitadas</span>
+              <Badge variant={stat.tasa >= 70 ? "default" : stat.tasa >= 40 ? "secondary" : "destructive"}>
+                {stat.tasa.toFixed(0)}%
+              </Badge>
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+            </div>
+          </div>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="px-4 pb-4 space-y-2">
+            {asignaciones.length === 0 ?
+            <p className="text-sm text-muted-foreground">Sin asignaciones en el período filtrado.</p> :
+            asignaciones.map((a) =>
+            <AsignacionRow key={a.id} a={a} formatDate={formatDate} formatDateTime={formatDateTime} />
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>);
+
+};
+
 const SupervisionVendedores = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -104,11 +222,9 @@ const SupervisionVendedores = () => {
   const [vendedores, setVendedores] = useState<{id: string;nombre: string;}[]>([]);
   const [vendedorStats, setVendedorStats] = useState<VendedorStats[]>([]);
   const [asignaciones, setAsignaciones] = useState<AsignacionDetalle[]>([]);
-  const [feedbackModal, setFeedbackModal] = useState<AsignacionDetalle | null>(null);
-  const [openFilters, setOpenFilters] = useState(true);
+  const [openFilters, setOpenFilters] = useState(false);
   const [openActividades, setOpenActividades] = useState(false);
-  const [openResumen, setOpenResumen] = useState(false);
-  const [openDetalle, setOpenDetalle] = useState(false);
+  const [openResumen, setOpenResumen] = useState(true);
 
   const [filters, setFilters] = useState<Filters>({
     asignadoDesde: "",
@@ -255,7 +371,7 @@ const SupervisionVendedores = () => {
       const prospectoPlaceIds = [...new Set(asignacionesData?.filter((a) => a.prospecto_place_id).map((a) => a.prospecto_place_id) || [])];
 
       // Query para feedbacks de asignaciones visitadas
-      const asignacionesVisitadas = asignacionesData?.filter((a) => a.estado === 'Visitado') || [];
+      const asignacionesVisitadas = asignacionesData || [];
 
       const [vendedoresRes, clientesRes, prospectosRes] = await Promise.all([
       supabase.from("profiles").select("user_id, nombre, email").in("user_id", vendedorIds),
@@ -392,6 +508,7 @@ const SupervisionVendedores = () => {
         return {
           id: a.id,
           estado: a.estado,
+          vendedor_id: a.vendedor_id,
           created_at: a.created_at,
           visited_at: a.visited_at,
           es_prospecto: a.es_prospecto,
@@ -408,7 +525,7 @@ const SupervisionVendedores = () => {
         };
       });
 
-      setAsignaciones(detalleAsignaciones.slice(0, 100)); // Limitar a 100 resultados
+      setAsignaciones(detalleAsignaciones.slice(0, 500));
     } catch (error) {
       console.error("Error fetching data:", error);
       toast({
@@ -478,6 +595,25 @@ const SupervisionVendedores = () => {
           </div>
           <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
         </div>
+
+        {/* Filtro activo de vendedor, con salida clara */}
+        {filters.vendedorId !== "all" &&
+        <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="gap-2 py-1.5 pl-3 pr-2 text-sm">
+              Viendo: {vendedores.find((v) => v.id === filters.vendedorId)?.nombre || "Vendedor"}
+              <button
+              type="button"
+              aria-label="Ver todos los vendedores"
+              onClick={() => handleFilterChange("vendedorId", "all")}
+              className="rounded-full p-0.5 hover:bg-background/60 transition-colors">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </Badge>
+            <Button variant="ghost" size="sm" onClick={() => handleFilterChange("vendedorId", "all")}>
+              Ver todos los vendedores
+            </Button>
+          </div>
+        }
 
         {/* 1. Indicadores (KPIs) - Siempre visibles */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -615,214 +751,39 @@ const SupervisionVendedores = () => {
           </CollapsibleContent>
         </Collapsible>
 
-        {/* 4. Resumen por Vendedor */}
+        {/* 4. Trabajo por Vendedor (resumen + detalle unificados) */}
         <Collapsible open={openResumen} onOpenChange={setOpenResumen} className="w-full">
           <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
             <div className="flex items-center gap-2 font-sans text-lg text-foreground">
               <Users className="h-5 w-5 text-primary" />
-              <span>Resumen por Vendedor</span>
-              {vendedorStats.length > 0 &&
-              <span className="text-sm font-normal text-muted-foreground ml-2">({vendedorStats.length} vendedores)</span>
-              }
+              <span>Trabajo por Vendedor</span>
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                ({vendedorStats.length} vendedores · {asignaciones.length} asignaciones)
+              </span>
             </div>
             <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openResumen && "rotate-180")} />
           </CollapsibleTrigger>
           <CollapsibleContent className="pt-3">
-            <Card className="matte-card">
-              <CardContent className="pt-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Vendedor</TableHead>
-                      <TableHead className="text-center">Asignadas</TableHead>
-                      <TableHead className="text-center">Pendientes</TableHead>
-                      <TableHead className="text-center">Visitadas</TableHead>
-                      <TableHead className="text-center">No Visitadas</TableHead>
-                      <TableHead className="text-center">Tasa %</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {vendedorStats.length === 0 ?
-                    <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No hay datos para los filtros seleccionados</TableCell>
-                      </TableRow> :
-
-                    vendedorStats.map((stat) =>
-                    <TableRow key={stat.vendedor_id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleFilterChange("vendedorId", stat.vendedor_id)}>
-                          <TableCell className="font-medium">{stat.nombre}</TableCell>
-                          <TableCell className="text-center">{stat.total}</TableCell>
-                          <TableCell className="text-center text-amber-500">{stat.pendientes}</TableCell>
-                          <TableCell className="text-center text-emerald-500">{stat.visitadas}</TableCell>
-                          <TableCell className="text-center text-rose-500">{stat.noVisitadas}</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant={stat.tasa >= 70 ? "default" : stat.tasa >= 40 ? "secondary" : "destructive"}>{stat.tasa.toFixed(1)}%</Badge>
-                          </TableCell>
-                        </TableRow>
-                    )
-                    }
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </CollapsibleContent>
-        </Collapsible>
-
-        {/* 5. Detalle de Asignaciones */}
-        <Collapsible open={openDetalle} onOpenChange={setOpenDetalle} className="w-full">
-          <CollapsibleTrigger className="flex items-center justify-between w-full p-4 bg-card hover:bg-accent/50 transition-colors rounded-lg border border-border/50">
-            <div className="flex items-center gap-2 font-sans text-lg text-foreground">
-              <ClipboardList className="h-5 w-5 text-primary" />
-              <span>Detalle de Asignaciones</span>
-              <span className="text-sm font-normal text-muted-foreground ml-2">({asignaciones.length} registros)</span>
+            <div className="space-y-2">
+              {vendedorStats.length === 0 &&
+              <Card className="matte-card">
+                  <CardContent className="py-8 text-center text-muted-foreground text-sm">
+                    No hay datos para los filtros seleccionados
+                  </CardContent>
+                </Card>
+              }
+              {vendedorStats.map((stat) =>
+              <VendedorCard
+                key={stat.vendedor_id}
+                stat={stat}
+                asignaciones={asignaciones.filter((a) => a.vendedor_id === stat.vendedor_id)}
+                formatDate={formatDate}
+                formatDateTime={formatDateTime} />
+              )}
             </div>
-            <ChevronDown className={cn("h-5 w-5 text-muted-foreground transition-transform duration-200", openDetalle && "rotate-180")} />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="pt-3">
-            <Card className="matte-card">
-              <CardContent className="pt-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cliente/Prospecto</TableHead>
-                      <TableHead>Vendedor</TableHead>
-                      <TableHead className="text-center">F. Asignación</TableHead>
-                      <TableHead className="text-center">F. Visita</TableHead>
-                      <TableHead className="text-center">Tipo Cierre</TableHead>
-                      <TableHead>Detalle</TableHead>
-                      <TableHead className="text-center">Estado</TableHead>
-                      <TableHead className="text-center">Activaciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {asignaciones.length === 0 ?
-                    <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-8">No hay asignaciones para los filtros seleccionados</TableCell>
-                      </TableRow> :
-
-                    asignaciones.map((a) =>
-                    <TableRow key={a.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Badge variant={a.es_prospecto ? "outline" : "secondary"} className="text-xs">{a.es_prospecto ? "P" : "C"}</Badge>
-                              <div>
-                                <p className="font-medium text-sm">{a.cliente_nombre}</p>
-                                <p className="text-xs text-muted-foreground truncate max-w-[200px]">{a.direccion}</p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-sm">{a.vendedor_nombre}</TableCell>
-                          <TableCell className="text-center text-sm">{formatDate(a.created_at)}</TableCell>
-                          <TableCell className="text-center text-sm">{formatDate(a.visited_at)}</TableCell>
-                          <TableCell className="text-center">
-                            {a.tipo_cierre ?
-                        <Badge variant="outline" className={cn(
-                          a.tipo_cierre === 'Visitado' && 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30',
-                          a.tipo_cierre === 'Online' && 'bg-blue-500/20 text-blue-500 border-blue-500/30',
-                          a.tipo_cierre === 'No visitado' && 'bg-amber-500/20 text-amber-600 border-amber-500/30'
-                        )}>{a.tipo_cierre}</Badge> :
-                        <span className="text-muted-foreground text-xs">-</span>}
-                          </TableCell>
-                          <TableCell className="text-sm max-w-[200px]">
-                            {a.tipo_cierre === 'No visitado' ?
-                        <span className="text-amber-600 truncate block" title={a.motivo_no_visita || undefined}>{a.motivo_no_visita || '-'}</span> :
-                        a.tipo_interaccion ?
-                        <span className="text-muted-foreground truncate block" title={a.tipo_interaccion}>{a.tipo_interaccion}</span> :
-                        <span className="text-muted-foreground text-xs">-</span>}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant={a.estado === "Visitado" ? "default" : a.estado === "Por visitar" ? "secondary" : "outline"}
-                        className={a.estado === "Visitado" ? "bg-emerald-500/20 text-emerald-500" : ""}>
-                              {a.estado === "Visitado" ? "✓" : a.estado === "Por visitar" ? "⏳" : "○"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {a.tipo_cierre ?
-                        <Button variant="ghost" size="sm" onClick={() => setFeedbackModal(a)} className="gap-1">
-                                <Eye className="h-4 w-4" />Ver
-                              </Button> :
-                        <span className="text-muted-foreground text-xs">-</span>}
-                          </TableCell>
-                        </TableRow>
-                    )
-                    }
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
           </CollapsibleContent>
         </Collapsible>
       </div>
-
-      {/* Modal Ver Feedback */}
-      <Dialog open={!!feedbackModal} onOpenChange={() => setFeedbackModal(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Detalle del Feedback</DialogTitle>
-            <DialogDescription>
-              {feedbackModal?.cliente_nombre}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-muted-foreground uppercase">Tipo de Cierre</label>
-                <p className="font-medium">
-                  {feedbackModal?.tipo_cierre &&
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      feedbackModal.tipo_cierre === 'Visitado' && 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30',
-                      feedbackModal.tipo_cierre === 'Online' && 'bg-blue-500/20 text-blue-500 border-blue-500/30',
-                      feedbackModal.tipo_cierre === 'No visitado' && 'bg-amber-500/20 text-amber-600 border-amber-500/30'
-                    )}>
-                    
-                      {feedbackModal.tipo_cierre}
-                    </Badge>
-                  }
-                </p>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground uppercase">Vendedor</label>
-                <p className="font-medium">{feedbackModal?.vendedor_nombre || '-'}</p>
-              </div>
-            </div>
-            
-            {feedbackModal?.tipo_interaccion &&
-            <div>
-                <label className="text-xs text-muted-foreground uppercase">Tipo de Interacción</label>
-                <p className="font-medium">{feedbackModal.tipo_interaccion}</p>
-              </div>
-            }
-            
-            {feedbackModal?.motivo_no_visita &&
-            <div>
-                <label className="text-xs text-muted-foreground uppercase">Motivo No Visita</label>
-                <p className="font-medium text-amber-600">{feedbackModal.motivo_no_visita}</p>
-              </div>
-            }
-            
-            {feedbackModal?.feedback_texto &&
-            <div>
-                <label className="text-xs text-muted-foreground uppercase">Comentario</label>
-                <p className="text-sm bg-muted p-3 rounded-lg">{feedbackModal.feedback_texto}</p>
-              </div>
-            }
-            
-            {feedbackModal?.actualizar_etiqueta_wa &&
-            <div>
-                <label className="text-xs text-muted-foreground uppercase">Etiqueta WhatsApp</label>
-                <Badge variant="outline">{feedbackModal.actualizar_etiqueta_wa}</Badge>
-              </div>
-            }
-            
-            {feedbackModal?.feedback_fecha &&
-            <div className="text-xs text-muted-foreground text-right pt-2 border-t">
-                Registrado: {formatDateTime(feedbackModal.feedback_fecha)}
-              </div>
-            }
-          </div>
-        </DialogContent>
-      </Dialog>
       </div>
     </div>);
 
