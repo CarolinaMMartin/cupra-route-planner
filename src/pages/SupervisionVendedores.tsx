@@ -16,6 +16,7 @@ import {
   RefreshCw,
   XCircle,
   MapPin,
+  X,
   MessageSquare,
   ChevronDown,
   Activity } from
@@ -224,7 +225,6 @@ const SupervisionVendedores = () => {
   const [openFilters, setOpenFilters] = useState(true);
   const [openActividades, setOpenActividades] = useState(false);
   const [openResumen, setOpenResumen] = useState(false);
-  const [openDetalle, setOpenDetalle] = useState(false);
 
   const [filters, setFilters] = useState<Filters>({
     asignadoDesde: "",
@@ -595,6 +595,25 @@ const SupervisionVendedores = () => {
           </div>
           <img src={cupraLogo} alt="Cupra Logo" className="h-10 md:h-12" />
         </div>
+
+        {/* Filtro activo de vendedor, con salida clara */}
+        {filters.vendedorId !== "all" &&
+        <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="gap-2 py-1.5 pl-3 pr-2 text-sm">
+              Viendo: {vendedores.find((v) => v.id === filters.vendedorId)?.nombre || "Vendedor"}
+              <button
+              type="button"
+              aria-label="Ver todos los vendedores"
+              onClick={() => handleFilterChange("vendedorId", "all")}
+              className="rounded-full p-0.5 hover:bg-background/60 transition-colors">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </Badge>
+            <Button variant="ghost" size="sm" onClick={() => handleFilterChange("vendedorId", "all")}>
+              Ver todos los vendedores
+            </Button>
+          </div>
+        }
 
         {/* 1. Indicadores (KPIs) - Siempre visibles */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
