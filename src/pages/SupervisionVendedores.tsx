@@ -64,6 +64,7 @@ interface AsignacionDetalle {
   visited_at: string | null;
   es_prospecto: boolean;
   origen_asignacion: string;
+  vendedor_id: string;
   vendedor_nombre: string;
   cliente_nombre: string;
   direccion: string;
