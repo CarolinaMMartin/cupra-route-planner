@@ -50,7 +50,19 @@ const Index = () => {
   };
 
   useEffect(() => {
+    // Si el enlace de recupero de contraseña cae en la raíz, lo mandamos a la
+    // pantalla de nueva contraseña en vez de validar el perfil.
+    const hash = window.location.hash || "";
+    if (hash.includes("type=recovery")) {
+      navigate(`/auth${hash}`, { replace: true });
+      return;
+    }
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        navigate("/auth", { replace: true });
+        return;
+      }
+
       setSession(session);
       if (!session) {
         setProfile(null);
