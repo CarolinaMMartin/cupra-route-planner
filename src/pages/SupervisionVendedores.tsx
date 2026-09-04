@@ -222,9 +222,9 @@ const SupervisionVendedores = () => {
   const [vendedores, setVendedores] = useState<{id: string;nombre: string;}[]>([]);
   const [vendedorStats, setVendedorStats] = useState<VendedorStats[]>([]);
   const [asignaciones, setAsignaciones] = useState<AsignacionDetalle[]>([]);
-  const [openFilters, setOpenFilters] = useState(true);
+  const [openFilters, setOpenFilters] = useState(false);
   const [openActividades, setOpenActividades] = useState(false);
-  const [openResumen, setOpenResumen] = useState(false);
+  const [openResumen, setOpenResumen] = useState(true);
 
   const [filters, setFilters] = useState<Filters>({
     asignadoDesde: "",
