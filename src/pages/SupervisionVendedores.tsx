@@ -4,7 +4,7 @@ import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import { useNavigate } from "react-router-dom";
 import AppNav from "@/components/AppNav";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   ArrowLeft,
@@ -14,11 +14,10 @@ import {
   TrendingUp,
   Filter,
   RefreshCw,
-  Eye,
   XCircle,
+  MapPin,
+  MessageSquare,
   ChevronDown,
-  BarChart3,
-  ClipboardList,
   Activity } from
 "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -26,21 +25,6 @@ import cupraLogo from "@/assets/cupra-logo-new.png";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow } from
-"@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle } from
-"@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { toTitleCase } from "@/lib/format";
@@ -98,6 +82,138 @@ interface FeedbackData {
   created_at: string;
 }
 
+
+const cierreClass = (tipo: string | null) =>
+cn(
+  tipo === "Visitado" && "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
+  tipo === "Online" && "bg-primary/15 text-primary border-primary/30",
+  tipo === "No visitado" && "bg-amber-500/15 text-amber-600 border-amber-500/30"
+);
+
+const AsignacionRow = ({
+  a,
+  formatDate,
+  formatDateTime
+
+
+
+
+}: {a: AsignacionDetalle;formatDate: (d: string | null) => string;formatDateTime: (d: string | null) => string;}) => {
+  const [open, setOpen] = useState(false);
+  const tieneDetalle = !!(a.feedback_texto || a.motivo_no_visita || a.tipo_interaccion || a.actualizar_etiqueta_wa);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger className="w-full text-left p-3 rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors border border-border/40">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Badge variant={a.es_prospecto ? "outline" : "secondary"} className="text-[10px] px-1.5">
+                {a.es_prospecto ? "Prospecto" : "Cliente"}
+              </Badge>
+              <span className="font-medium text-sm truncate">{toTitleCase(a.cliente_nombre)}</span>
+            </div>
+            {a.direccion &&
+            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1 truncate">
+                <MapPin className="h-3 w-3 shrink-0" />{a.direccion}
+              </p>
+            }
+            <p className="text-xs text-muted-foreground mt-1">
+              Asignado {formatDate(a.created_at)}
+              {a.visited_at ? ` · Cerrado ${formatDate(a.visited_at)}` : ""}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {a.tipo_cierre ?
+            <Badge variant="outline" className={cierreClass(a.tipo_cierre)}>{a.tipo_cierre}</Badge> :
+            <Badge variant="outline" className="text-muted-foreground">{a.estado}</Badge>
+            }
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+          </div>
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="p-3 mx-1 mb-1 rounded-b-lg bg-card/60 border border-t-0 border-border/40 space-y-2 text-sm">
+          {!tieneDetalle &&
+          <p className="text-muted-foreground text-xs">El vendedor todavía no cargó información de esta visita.</p>
+          }
+          {a.tipo_interaccion &&
+          <p><span className="text-xs uppercase text-muted-foreground mr-2">Interacción</span>{a.tipo_interaccion}</p>
+          }
+          {a.motivo_no_visita &&
+          <p><span className="text-xs uppercase text-muted-foreground mr-2">Motivo</span><span className="text-amber-600">{a.motivo_no_visita}</span></p>
+          }
+          {a.feedback_texto &&
+          <div>
+              <p className="text-xs uppercase text-muted-foreground flex items-center gap-1 mb-1">
+                <MessageSquare className="h-3 w-3" />Comentario del vendedor
+              </p>
+              <p className="whitespace-pre-wrap bg-muted/40 p-2.5 rounded-md">{a.feedback_texto}</p>
+            </div>
+          }
+          {a.actualizar_etiqueta_wa &&
+          <p><span className="text-xs uppercase text-muted-foreground mr-2">Etiqueta</span>{a.actualizar_etiqueta_wa}</p>
+          }
+          {a.feedback_fecha &&
+          <p className="text-xs text-muted-foreground pt-1 border-t border-border/40">
+              Registrado: {formatDateTime(a.feedback_fecha)}
+            </p>
+          }
+        </div>
+      </CollapsibleContent>
+    </Collapsible>);
+
+};
+
+const VendedorCard = ({
+  stat,
+  asignaciones,
+  formatDate,
+  formatDateTime
+
+
+
+
+
+
+}: {stat: VendedorStats;asignaciones: AsignacionDetalle[];formatDate: (d: string | null) => string;formatDateTime: (d: string | null) => string;}) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Card className="matte-card overflow-hidden">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger className="w-full text-left p-4 hover:bg-accent/40 transition-colors">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium text-foreground">{stat.nombre}</p>
+              <p className="text-xs text-muted-foreground">{stat.email}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-sm">
+              <span className="text-muted-foreground">{stat.total} asignadas</span>
+              <span className="text-amber-500">{stat.pendientes} pendientes</span>
+              <span className="text-emerald-500">{stat.visitadas} visitadas</span>
+              <span className="text-rose-500">{stat.noVisitadas} no visitadas</span>
+              <Badge variant={stat.tasa >= 70 ? "default" : stat.tasa >= 40 ? "secondary" : "destructive"}>
+                {stat.tasa.toFixed(0)}%
+              </Badge>
+              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+            </div>
+          </div>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="px-4 pb-4 space-y-2">
+            {asignaciones.length === 0 ?
+            <p className="text-sm text-muted-foreground">Sin asignaciones en el período filtrado.</p> :
+            asignaciones.map((a) =>
+            <AsignacionRow key={a.id} a={a} formatDate={formatDate} formatDateTime={formatDateTime} />
+            )}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>);
+
+};
+
 const SupervisionVendedores = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -105,7 +221,6 @@ const SupervisionVendedores = () => {
   const [vendedores, setVendedores] = useState<{id: string;nombre: string;}[]>([]);
   const [vendedorStats, setVendedorStats] = useState<VendedorStats[]>([]);
   const [asignaciones, setAsignaciones] = useState<AsignacionDetalle[]>([]);
-  const [feedbackModal, setFeedbackModal] = useState<AsignacionDetalle | null>(null);
   const [openFilters, setOpenFilters] = useState(true);
   const [openActividades, setOpenActividades] = useState(false);
   const [openResumen, setOpenResumen] = useState(false);
