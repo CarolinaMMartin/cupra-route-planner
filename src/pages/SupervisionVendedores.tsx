@@ -256,7 +256,7 @@ const SupervisionVendedores = () => {
       const prospectoPlaceIds = [...new Set(asignacionesData?.filter((a) => a.prospecto_place_id).map((a) => a.prospecto_place_id) || [])];
 
       // Query para feedbacks de asignaciones visitadas
-      const asignacionesVisitadas = asignacionesData?.filter((a) => a.estado === 'Visitado') || [];
+      const asignacionesVisitadas = asignacionesData || [];
 
       const [vendedoresRes, clientesRes, prospectosRes] = await Promise.all([
       supabase.from("profiles").select("user_id, nombre, email").in("user_id", vendedorIds),
@@ -393,6 +393,7 @@ const SupervisionVendedores = () => {
         return {
           id: a.id,
           estado: a.estado,
+          vendedor_id: a.vendedor_id,
           created_at: a.created_at,
           visited_at: a.visited_at,
           es_prospecto: a.es_prospecto,
@@ -409,7 +410,7 @@ const SupervisionVendedores = () => {
         };
       });
 
-      setAsignaciones(detalleAsignaciones.slice(0, 100)); // Limitar a 100 resultados
+      setAsignaciones(detalleAsignaciones.slice(0, 500));
     } catch (error) {
       console.error("Error fetching data:", error);
       toast({
