@@ -40,7 +40,7 @@ const ZONE_FALLBACK_MAX_KM = 3.5;
 // Clientes propios: la cartera lejana NO entra sólo por ser cartera.
 const PORTFOLIO_FALLBACK_MAX_KM = 3.5;
 // Un prospecto NUNCA puede estar más lejos que esto del núcleo del vendedor.
-const MAX_PROSPECT_DISTANCE_KM = 2.5;
+const MAX_PROSPECT_DISTANCE_KM = 3.5;
 // Diámetro máximo tolerado entre dos visitas del mismo vendedor en el día (caminable).
 const MAX_ROUTE_SPREAD_KM = 3.0;
 // Días mínimos entre dos recomendaciones del mismo negocio (regla dura, se relaja sólo si no se llega a 8).
@@ -1035,9 +1035,13 @@ Deno.serve(async (req) => {
     // Compara sin acentos ("San Nicolás" == "San Nicolas") y usa la comuna sólo
     // como respaldo cuando el registro no tiene barrio.
     const areaFilter = buildAreaFilter(barriosFinales, comunasFinales);
-    const belongsToSelectedArea = (place: { barrio?: string | null; comuna?: string | null }): boolean => {
+    const belongsToSelectedArea = (place: { barrio?: string | null; comuna?: string | null; ciudad?: string | null }): boolean => {
       if (!area_id && !areaFilter.activo) return true;
-      return belongsToArea(place, areaFilter);
+      if (belongsToArea(place, areaFilter)) return true;
+      // Google Places suele devolver la localidad GBA en `ciudad` y dejar
+      // `barrio` vacío. Esa localidad representa exactamente el filtro pedido.
+      const ciudadKey = areaKey(place.ciudad);
+      return Boolean(ciudadKey) && areaFilter.barrioKeys.has(ciudadKey);
     };
 
     // Patrón ilike tolerante a acentos: "San Nicolás" -> "%San Nicol_s%".
@@ -1210,6 +1214,7 @@ Deno.serve(async (req) => {
     const geoConditionsP: string[] = [
       ...comunaExactConditions("comuna"),
       ...barrioLikeConditions("barrio"),
+      ...barrioLikeConditions("ciudad"),
     ];
     if (geoConditionsP.length > 0) prospectosQuery = prospectosQuery.or(geoConditionsP.join(","));
 
@@ -1218,7 +1223,7 @@ Deno.serve(async (req) => {
     if (prospectosError) throw prospectosError;
     let prospectos = (prospectosData || [])
       .filter(p => !prospectosAsignadosHoy.has(p.place_id))
-      .filter((p: any) => belongsToSelectedArea({ barrio: p.barrio, comuna: p.comuna }));
+      .filter((p: any) => belongsToSelectedArea({ barrio: p.barrio, comuna: p.comuna, ciudad: p.ciudad }));
 
 
     // ---- 6b. GATE prospecto ↔ cartera ----
@@ -1673,8 +1678,7 @@ Deno.serve(async (req) => {
         const extraFiltered = (geoProspectos || []).filter(p =>
           !prospectosAsignadosHoy.has(p.place_id) &&
           !existingIds.has(p.place_id) &&
-          !p.client_id &&
-          belongsToSelectedArea(p)
+          !p.client_id
         );
 
         extraProspectosLoaded.push(...extraFiltered);
@@ -1710,6 +1714,7 @@ Deno.serve(async (req) => {
         const geoConditionsFallback: string[] = [
           ...comunaExactConditions("comuna"),
           ...barrioLikeConditions("barrio"),
+          ...barrioLikeConditions("ciudad"),
         ];
         if (geoConditionsFallback.length > 0) {
           fallbackQuery = fallbackQuery.or(geoConditionsFallback.join(","));
@@ -1727,7 +1732,7 @@ Deno.serve(async (req) => {
           !prospectosAsignadosHoy.has(p.place_id) &&
           !existingIds.has(p.place_id) &&
           !p.client_id &&
-          belongsToSelectedArea({ barrio: p.barrio, comuna: p.comuna })
+          belongsToSelectedArea({ barrio: p.barrio, comuna: p.comuna, ciudad: p.ciudad })
         );
 
 
@@ -1791,9 +1796,10 @@ Deno.serve(async (req) => {
               existingClientNames,
               vendorHotspot,
             );
-            const newProspects = discovered
-              .filter((prospecto) => belongsToSelectedArea(prospecto))
-              .filter(registrarGate);
+            // En búsquedas centradas en el núcleo manda la distancia real. Google
+            // etiqueta muchas localidades de GBA en `ciudad` o sin `barrio`, por
+            // lo que volver a filtrar por texto descartaba lugares cercanos válidos.
+            const newProspects = discovered.filter(registrarGate);
 
             if (newProspects.length > 0) {
               const { error: liveUpsertError } = await supabaseClient
@@ -2019,9 +2025,9 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           existingClientNames,
           hotspot,
         );
-        const newProspects = discovered
-          .filter((prospecto) => belongsToSelectedArea(prospecto))
-          .filter(registrarGate);
+        // El top-up ya está limitado por coordenadas al núcleo del vendedor.
+        // No se vuelve a excluir por etiquetas administrativas inconsistentes.
+        const newProspects = discovered.filter(registrarGate);
         if (newProspects.length === 0) return [];
 
         const { error: upsertError } = await supabaseClient

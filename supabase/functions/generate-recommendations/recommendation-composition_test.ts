@@ -60,6 +60,22 @@ Deno.test("modo conquista: ocho prospectos cuando no hay cartera", () => {
   assertEquals(result, prospects.map((item) => item.client_id));
 });
 
+Deno.test("un solo cliente se completa con siete prospectos", () => {
+  const clients = [candidate("cliente-1", false, "INACTIVO")];
+  const prospects = Array.from({ length: 7 }, (_, index) =>
+    candidate(`prospecto-${index + 1}`, true, "POTENCIAL")
+  );
+
+  const result = composeRecommendationIds({
+    preferredIds: ["cliente-1"],
+    clients,
+    prospects,
+  });
+
+  assertEquals(result.length, 8);
+  assertEquals(result.filter((id) => id.startsWith("prospecto-")).length, 7);
+});
+
 Deno.test("devuelve un resultado incompleto cuando el inventario no alcanza", () => {
   const result = composeRecommendationIds({
     preferredIds: [],
