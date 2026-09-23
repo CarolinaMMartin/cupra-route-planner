@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { googleMapsFetch, hayGoogleMaps } from "../_shared/google-maps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,20 +7,16 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const GOOGLE_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || "";
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: { ...corsHeaders, "Content-Type": "application/json" },
+});
 
 async function gatewayFetch(path: string, params: string): Promise<any> {
-  const resp = await fetch(`${GATEWAY_URL}${path}?${params}`, {
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "X-Connection-Api-Key": GOOGLE_API_KEY,
-    },
-  });
+  const resp = await googleMapsFetch(`${path}?${params}`);
   if (!resp.ok) {
     const body = await resp.text();
-    throw new Error(`Gateway ${resp.status}: ${body}`);
+    throw new Error(`Google Maps ${resp.status}: ${body}`);
   }
   return await resp.json();
 }
@@ -28,12 +25,10 @@ const geocodeFetch = (params: string) => gatewayFetch("/maps/api/geocode/json", 
 
 /** Búsqueda del local por nombre comercial (Places API v1). */
 async function buscarNegocioPorNombre(textQuery: string): Promise<any | null> {
-  const resp = await fetch("https://connector-gateway.lovable.dev/google_maps/places/v1/places:searchText", {
+  const resp = await googleMapsFetch("/places/v1/places:searchText", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "X-Connection-Api-Key": GOOGLE_API_KEY,
       "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.businessStatus",
     },
     body: JSON.stringify({ textQuery, pageSize: 3, languageCode: "es", regionCode: "AR" }),
@@ -213,25 +208,35 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+  if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
 
   try {
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const token = req.headers.get("Authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+    if (!token) return json({ error: "Sesión requerida" }, 401);
+    const { data: authData, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !authData.user) return json({ error: "Sesión inválida o vencida" }, 401);
+    const { data: profile, error: profileError } = await supabase.from("profiles")
+      .select("rol").eq("user_id", authData.user.id).eq("activo", true).single();
+    if (profileError || (profile?.rol !== "asignador" && profile?.rol !== "administrador")) {
+      return json({ error: "Solo un asignador o administrador activo puede geocodificar la cartera" }, 403);
+    }
+
     let limit = 0;
     try {
       const body = await req.json();
       limit = Number(body?.limit) > 0 ? Number(body.limit) : 0;
     } catch { /* sin body */ }
 
-    if (!GOOGLE_API_KEY || !LOVABLE_API_KEY) {
+    if (!hayGoogleMaps()) {
       return new Response(
-        JSON.stringify({ error: "Credenciales del conector Google Maps no configuradas" }),
+        JSON.stringify({ error: "Falta GOOGLE_MAPS_API_KEY en los secretos de Supabase" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
 
     const { data: allClients, error: clientsError } = await supabase
       .from("clientes")

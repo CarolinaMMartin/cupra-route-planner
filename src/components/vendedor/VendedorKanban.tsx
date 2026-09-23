@@ -820,6 +820,7 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
       const { error } = await supabase
         .from('asignaciones_vendedores_clientes')
         .delete()
+        .neq('estado', 'Visitado')
         .eq('id', asignacion.id);
 
       if (error) throw error;

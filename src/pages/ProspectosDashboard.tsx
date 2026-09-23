@@ -1,4 +1,5 @@
 import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
+import { guardarAsignaciones } from "@/lib/asignaciones";
 import { useEffect, useState, useMemo } from "react";
 import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import AppNav from "@/components/AppNav";
@@ -46,6 +47,8 @@ import AgregarProspectoForm, { hasProspectoDraft } from "@/components/vendedor/A
 import { ProspectDiscoveryDialog } from "@/components/prospectos/ProspectDiscoveryDialog";
 import { ProspectoDetalleDialog } from "@/components/prospectos/ProspectoDetalleDialog";
 import { Slider } from "@/components/ui/slider";
+import { useRubros } from "@/hooks/useRubros";
+import { claveTexto } from "@/lib/segmentos";
 import {
   Table,
   TableBody,
@@ -57,6 +60,7 @@ import {
 
 interface Prospecto {
   id: string;
+  rubro?: string | null;
   place_id: string;
   nombre: string;
   telefono: string | null;
@@ -135,6 +139,9 @@ const ProspectosDashboard = () => {
   const [selectedComuna, setSelectedComuna] = useState<string>("all");
   const [selectedBarrio, setSelectedBarrio] = useState<string>("all");
   const [selectedTipos, setSelectedTipos] = useState<string[]>([]);
+  const [selectedRubros, setSelectedRubros] = useState<string[]>([]);
+  const { rubros: rubrosTodos } = useRubros();
+  const rubrosProspectos = useMemo(() => rubrosTodos.filter((r) => r.prospectos > 0).map((r) => ({ value: r.value, label: `${r.value} (${r.prospectos})` })), [rubrosTodos]);
   const [selectedNivelPrecio, setSelectedNivelPrecio] = useState<string>("all");
   const [minRating, setMinRating] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -178,22 +185,12 @@ const ProspectosDashboard = () => {
       const placeIds = seleccionados.map((p) => p.place_id).filter(Boolean);
       if (placeIds.length === 0) throw new Error("Los prospectos seleccionados no tienen identificador de Maps");
 
-      // Evitar duplicados: limpiar asignaciones previas de esos prospectos para ese vendedor
-      await supabase
-        .from("asignaciones_vendedores_clientes")
-        .delete()
-        .eq("vendedor_id", selectedVendedorId)
-        .in("prospecto_place_id", placeIds);
-
-      const { error } = await supabase.from("asignaciones_vendedores_clientes").insert(
+      await guardarAsignaciones(
         placeIds.map((place_id) => ({
           vendedor_id: selectedVendedorId,
           prospecto_place_id: place_id,
-          es_prospecto: true,
-          origen_asignacion: "asignador",
         }))
       );
-      if (error) throw error;
 
       const vendedor = vendedores.find((v) => v.user_id === selectedVendedorId);
       toast({
@@ -345,6 +342,7 @@ const ProspectosDashboard = () => {
       const matchComuna = selectedComuna === "all" || p.comuna === selectedComuna;
       const matchBarrio = selectedBarrio === "all" || p.barrio === selectedBarrio;
       const matchTipos = selectedTipos.length === 0 || selectedTipos.some((t) => p.tipo_principal === t);
+      const matchRubro = selectedRubros.length === 0 || selectedRubros.some((r) => claveTexto(r) === claveTexto(p.rubro));
       const matchNivelPrecio = selectedNivelPrecio === "all" || p.nivel_precio === selectedNivelPrecio;
       const matchRating = (p.rating || 0) >= minRating;
       const matchSearch = term === "" ||
@@ -352,11 +350,11 @@ const ProspectosDashboard = () => {
         (p.direccion || "").toLowerCase().includes(term) ||
         (p.tipo_principal ? formatTipoNegocio(p.tipo_principal).toLowerCase().includes(term) : false);
 
-      return matchProvincia && matchComuna && matchBarrio && matchTipos &&
+      return matchProvincia && matchComuna && matchBarrio && matchTipos && matchRubro &&
         matchNivelPrecio && matchRating && matchSearch;
     });
   }, [prospectosData, selectedProvincia, selectedComuna, selectedBarrio,
-    selectedTipos, selectedNivelPrecio, minRating, searchTerm]);
+    selectedTipos, selectedRubros, selectedNivelPrecio, minRating, searchTerm]);
 
   const sortedData = useMemo(() => {
     if (!sortBy) return filteredData;
@@ -399,17 +397,23 @@ const ProspectosDashboard = () => {
       label: formatTipoNegocio(tipo),
       clear: () => setSelectedTipos((current) => current.filter((t) => t !== tipo)),
     }));
+    selectedRubros.forEach((rubro) => chips.push({
+      key: `rubro-${rubro}`,
+      label: rubro,
+      clear: () => setSelectedRubros((current) => current.filter((r) => r !== rubro)),
+    }));
     if (selectedNivelPrecio !== "all") chips.push({ key: "precio", label: formatNivelPrecio(selectedNivelPrecio), clear: () => setSelectedNivelPrecio("all") });
     if (minRating > 0) chips.push({ key: "rating", label: `Rating ≥ ${minRating.toFixed(1)}`, clear: () => setMinRating(0) });
     if (searchTerm.trim() !== "") chips.push({ key: "search", label: `"${searchTerm.trim()}"`, clear: () => setSearchTerm("") });
     return chips;
-  }, [selectedProvincia, selectedComuna, selectedBarrio, selectedTipos, selectedNivelPrecio, minRating, searchTerm]);
+  }, [selectedProvincia, selectedComuna, selectedBarrio, selectedTipos, selectedRubros, selectedNivelPrecio, minRating, searchTerm]);
 
   const handleClearFilters = () => {
     setSelectedProvincia("all");
     setSelectedComuna("all");
     setSelectedBarrio("all");
     setSelectedTipos([]);
+    setSelectedRubros([]);
     setSelectedNivelPrecio("all");
     setMinRating(0);
     setSearchTerm("");
@@ -710,6 +714,16 @@ const ProspectosDashboard = () => {
                       placeholder="Seleccionar barrio"
                       searchPlaceholder="Buscar barrio..."
                       emptyMessage="No se encontró el barrio"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rubro</label>
+                    <MultiSelect
+                      options={rubrosProspectos}
+                      selected={selectedRubros}
+                      onChange={(v) => { setSelectedRubros(v); setCurrentPage(1); }}
+                      placeholder="Todos los rubros"
                     />
                   </div>
 

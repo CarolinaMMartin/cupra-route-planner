@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { diasSinComprar } from "@/lib/segmentos";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from "lucide-react";
@@ -75,7 +76,7 @@ const ZonaKPIs = ({ clientesData, ventasData, formatCurrency }: ZonaKPIsProps) =
       const ciudad = cliente.ciudad_principal || 'Sin ciudad';
       const zona = getOrCreate(ciudad);
       zona.total++;
-      const cat = categorizeClient(cliente.dias_desde_ultima_compra);
+      const cat = categorizeClient(diasSinComprar(cliente));
       if (cat === 'activo') zona.activos++;
       else if (cat === 'inactivo') zona.inactivos++;
       else if (cat === 'perdido') zona.perdidos++;
@@ -100,7 +101,7 @@ const ZonaKPIs = ({ clientesData, ventasData, formatCurrency }: ZonaKPIsProps) =
   const globalStats = useMemo(() => {
     let activos = 0, inactivos = 0, perdidos = 0, sin_datos = 0;
     clientesData.forEach(c => {
-      const cat = categorizeClient(c.dias_desde_ultima_compra);
+      const cat = categorizeClient(diasSinComprar(c));
       if (cat === 'activo') activos++;
       else if (cat === 'inactivo') inactivos++;
       else if (cat === 'perdido') perdidos++;

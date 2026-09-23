@@ -1,13 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { googleMapsFetch, hayGoogleMaps } from "../_shared/google-maps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GOOGLE_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || "";
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -59,13 +57,11 @@ function partirDireccion(dir: string) {
 }
 
 async function geocode(direccion: string, ciudad: string, cp: string | null) {
-  if (!GOOGLE_API_KEY || !LOVABLE_API_KEY) return null;
+  if (!hayGoogleMaps()) return null;
   const address = [direccion, cp, ciudad, "Buenos Aires", "Argentina"].filter(Boolean).join(", ");
   const params = new URLSearchParams({ address, language: "es", region: "ar" });
   try {
-    const resp = await fetch(`${GATEWAY_URL}/maps/api/geocode/json?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "X-Connection-Api-Key": GOOGLE_API_KEY },
-    });
+    const resp = await googleMapsFetch(`/maps/api/geocode/json?${params.toString()}`);
     if (!resp.ok) return null;
     const data = await resp.json();
     const r = data?.results?.[0];
@@ -88,6 +84,7 @@ async function geocode(direccion: string, ciudad: string, cp: string | null) {
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ success: false, error: "Método no permitido" }, 405);
 
   try {
     const authHeader = req.headers.get("Authorization") || "";
@@ -98,6 +95,11 @@ Deno.serve(async (req) => {
     if (!userData?.user) return json({ success: false, error: "No autorizado" }, 401);
 
     const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    const { data: profile, error: profileError } = await admin.from("profiles")
+      .select("rol").eq("user_id", userData.user.id).eq("activo", true).single();
+    if (profileError || (profile?.rol !== "asignador" && profile?.rol !== "administrador")) {
+      return json({ success: false, error: "Solo un asignador o administrador activo puede importar prospectos" }, 403);
+    }
 
     const { rows, geocodificar = true } = await req.json();
     if (!Array.isArray(rows) || rows.length === 0) return json({ success: false, error: "Sin filas" }, 400);

@@ -388,6 +388,7 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('rol')
       .eq('user_id', authData.user.id)
+      .eq('activo', true)
       .single();
     // Roles en cascada: administrador ⊇ asignador
     if (profileError || (callerProfile?.rol !== 'asignador' && callerProfile?.rol !== 'administrador')) {
@@ -1237,6 +1238,12 @@ Deno.serve(async (req) => {
       }
     } catch (err) {
       console.error('⚠️ Error recalculando métricas:', err);
+    }
+
+    // Rubro normalizado: clientes sin categorías en el maestro toman las de sus ventas.
+    {
+      const { error: rubroError } = await supabase.rpc('refrescar_rubros');
+      if (rubroError) console.error('⚠️ No se pudo recalcular el rubro:', rubroError.message);
     }
 
     // Regla permanente de calidad geográfica: después de cada carga, completar

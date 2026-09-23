@@ -1,3 +1,4 @@
+import { guardarAsignaciones } from "@/lib/asignaciones";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,9 @@ import { useToast } from "@/hooks/use-toast";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { toTitleCase } from "@/lib/format";
 import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { useRubros } from "@/hooks/useRubros";
+import { colorEstado, DIAS_ACTIVO, DIAS_INACTIVO, ESTADOS, estadoPorDias, hoyArgentina, labelEstado } from "@/lib/segmentos";
 
 
 interface Cliente {
@@ -52,6 +56,7 @@ interface Cliente {
   ultima_compra: string | null;
   dias_desde_ultima_compra: number | null;
   cantidad_ordenes: number | null;
+  rubro?: string | null;
 }
 
 interface Prospecto {
@@ -63,6 +68,7 @@ interface Prospecto {
   telefono: string | null;
   rating: number | null;
   total_ratings: number | null;
+  rubro?: string | null;
 }
 
 /** Fila unificada de la tabla: puede ser un cliente consolidado o un prospecto */
@@ -84,6 +90,7 @@ interface Fila {
   /** datos extra de prospecto */
   rating?: number | null;
   total_ratings?: number | null;
+  rubro?: string | null;
 }
 
 interface Vendedor {
@@ -122,6 +129,9 @@ const ManualAssignment = () => {
   const [filterCiudad, setFilterCiudad] = useState("all");
   const [filterProvincia, setFilterProvincia] = useState("all");
   const [filterVendedor, setFilterVendedor] = useState("all");
+  const [filterEstados, setFilterEstados] = useState<string[]>([]);
+  const [filterRubros, setFilterRubros] = useState<string[]>([]);
+  const { rubros: rubrosOpciones } = useRubros();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [prospectos, setProspectos] = useState<Prospecto[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
@@ -139,7 +149,9 @@ const ManualAssignment = () => {
   const activeFilterCount =
     (filterCiudad !== "all" ? 1 : 0) +
     (filterProvincia !== "all" ? 1 : 0) +
-    (filterVendedor !== "all" ? 1 : 0);
+    (filterVendedor !== "all" ? 1 : 0) +
+    (filterEstados.length > 0 ? 1 : 0) +
+    (filterRubros.length > 0 ? 1 : 0);
 
   // ── Debounce search ──
   useEffect(() => {
@@ -168,7 +180,9 @@ const ManualAssignment = () => {
     ciudad: string,
     provincia: string,
     vendedor: string,
-    suggestion?: SuggestionMode
+    suggestion?: SuggestionMode,
+    estados: string[] = [],
+    rubros: string[] = [],
   ) => {
     setIsSearching(true);
     setHasSearched(true);
@@ -181,7 +195,7 @@ const ManualAssignment = () => {
       if (incluirClientes) {
         let q = supabase
           .from("clientes")
-          .select("client_id, cuit_dni, ultima_compra, razon_social, fantasia, ciudad_principal, provincia_principal, vendedor_actual, vendedor_principal, monto_total_historico, dias_desde_ultima_compra, cantidad_ordenes")
+          .select("client_id, cuit_dni, ultima_compra, razon_social, fantasia, ciudad_principal, provincia_principal, vendedor_actual, vendedor_principal, monto_total_historico, dias_desde_ultima_compra, cantidad_ordenes, rubro")
           .order("monto_total_historico", { ascending: false })
           .limit(200);
 
@@ -191,6 +205,19 @@ const ManualAssignment = () => {
         if (vendedor !== "all") {
           if (vendedor === "__SIN_ASIGNAR__") q = q.is("vendedor_actual", null);
           else q = q.eq("vendedor_actual", vendedor);
+        }
+
+        if (rubros.length > 0) q = q.in("rubro", rubros);
+        // Estado comercial por fecha de última compra (calculado hoy, hora Argentina).
+        if (estados.length > 0) {
+          const hoy = new Date(`${hoyArgentina()}T00:00:00Z`);
+          const hace = (d: number) => new Date(hoy.getTime() - d * 86400000).toISOString().slice(0, 10);
+          const conds: string[] = [];
+          if (estados.includes("ACTIVO")) conds.push(`ultima_compra.gte.${hace(DIAS_ACTIVO)}`);
+          if (estados.includes("INACTIVO")) conds.push(`and(ultima_compra.lt.${hace(DIAS_ACTIVO)},ultima_compra.gte.${hace(DIAS_INACTIVO)})`);
+          if (estados.includes("PERDIDO")) conds.push(`ultima_compra.lt.${hace(DIAS_INACTIVO)}`);
+          if (estados.includes("POTENCIAL")) conds.push("ultima_compra.is.null");
+          if (conds.length > 0) q = q.or(conds.join(","));
         }
 
         if (suggestion === "sin_vendedor") q = q.is("vendedor_actual", null);
@@ -209,18 +236,20 @@ const ManualAssignment = () => {
       const incluirProspectos =
         tipo !== "clientes" &&
         (vendedor === "all" || vendedor === "__SIN_ASIGNAR__") &&
-        (!suggestion || suggestion === "sin_vendedor");
+        (!suggestion || suggestion === "sin_vendedor") &&
+        (estados.length === 0 || estados.includes("POTENCIAL"));
 
       let prospectosData: Prospecto[] = [];
       if (incluirProspectos) {
         let p = supabase
           .from("prospectos")
-          .select("place_id, nombre, ciudad, provincia, barrio, telefono, rating, total_ratings")
+          .select("place_id, nombre, ciudad, provincia, barrio, telefono, rating, total_ratings, rubro")
           .eq("es_cliente_cupra", false)
           .order("total_ratings", { ascending: false, nullsFirst: false })
           .limit(200);
 
         if (sanitized) p = p.ilike("nombre", `%${sanitized}%`);
+        if (rubros.length > 0) p = p.in("rubro", rubros);
         if (ciudad !== "all") p = p.eq("ciudad", ciudad);
         if (provincia !== "all") p = p.eq("provincia", provincia);
 
@@ -242,8 +271,8 @@ const ManualAssignment = () => {
 
   // ── Carga inicial + búsqueda al cambiar query o filtros ──
   useEffect(() => {
-    buscar(debouncedQuery, filterTipo, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined);
-  }, [debouncedQuery, filterTipo, filterCiudad, filterProvincia, filterVendedor, suggestionMode, buscar]);
+    buscar(debouncedQuery, filterTipo, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined, filterEstados, filterRubros);
+  }, [debouncedQuery, filterTipo, filterCiudad, filterProvincia, filterVendedor, suggestionMode, filterEstados, filterRubros, buscar]);
 
 
   // ── Opciones de filtro (catálogo completo, independiente del resultado actual) ──
@@ -293,6 +322,7 @@ const ManualAssignment = () => {
           dias_sin_compra: null,
           cantidad_ordenes: c.cantidad_ordenes || 0,
           registros: 1,
+          rubro: c.rubro ?? null,
         });
       } else {
         existing.clientIds.push(c.client_id);
@@ -302,6 +332,7 @@ const ManualAssignment = () => {
         existing.ciudad ||= c.ciudad_principal;
         existing.provincia ||= c.provincia_principal;
         existing.vendedor_actual ||= c.vendedor_actual || c.vendedor_principal;
+        existing.rubro ||= c.rubro ?? null;
       }
       const prev = ultimaCompraPorGrupo.get(key);
       if (c.ultima_compra && (!prev || c.ultima_compra > prev)) {
@@ -329,6 +360,7 @@ const ManualAssignment = () => {
       registros: 1,
       rating: p.rating,
       total_ratings: p.total_ratings,
+      rubro: p.rubro ?? null,
     }));
 
     return [...filasClientes, ...filasProspectos];
@@ -421,7 +453,6 @@ const ManualAssignment = () => {
 
       const clientIds = selClientes.flatMap(f => f.clientIds);
       const placeIds = selProspectos.map(f => f.placeId!).filter(Boolean);
-      const selectedClientesData = clientes.filter(c => clientIds.includes(c.client_id));
 
       // 1. Crear asignaciones (clientes + prospectos)
       const assignments = [
@@ -441,31 +472,7 @@ const ManualAssignment = () => {
         })),
       ];
 
-      const { error: assignError } = await supabase
-        .from("asignaciones_vendedores_clientes")
-        .insert(assignments);
-      if (assignError) throw assignError;
-
-      // 2. Actualizar vendedor_actual solo en clientes reales
-      for (const clientId of clientIds) {
-        await supabase
-          .from("clientes")
-          .update({ vendedor_actual: selectedVendedor!.nombre })
-          .eq("client_id", clientId);
-      }
-
-      // 3. Auditoría (la tabla exige client_id, aplica solo a clientes)
-      if (selectedClientesData.length > 0) {
-        const auditRecords = selectedClientesData.map(c => ({
-          usuario_id: session.user.id,
-          vendedor_anterior: c.vendedor_actual || c.vendedor_principal || null,
-          vendedor_nuevo_id: selectedVendedorId,
-          vendedor_nuevo_nombre: selectedVendedor!.nombre,
-          client_id: c.client_id,
-          razon_social: c.razon_social,
-        }));
-        await supabase.from("asignaciones_manuales_audit").insert(auditRecords);
-      }
+      await guardarAsignaciones(assignments, true);
 
       const partes = [
         clientIds.length ? `${clientIds.length} cliente(s)` : null,
@@ -478,7 +485,7 @@ const ManualAssignment = () => {
       });
 
       setSelectedRows(new Set());
-      buscar(debouncedQuery, filterTipo, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined);
+      buscar(debouncedQuery, filterTipo, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined, filterEstados, filterRubros);
 
     } catch (err: any) {
       console.error("Assignment error:", err);
@@ -682,12 +689,32 @@ const ManualAssignment = () => {
                   className="h-9"
                 />
               </div>
+              <div className="w-full sm:w-[200px] space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Estado</label>
+                <MultiSelect
+                  options={ESTADOS.map((e) => ({ value: e.value, label: e.plural }))}
+                  selected={filterEstados}
+                  onChange={setFilterEstados}
+                  placeholder="Todos"
+                  className="h-9"
+                />
+              </div>
+              <div className="w-full sm:w-[220px] space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Rubro</label>
+                <MultiSelect
+                  options={rubrosOpciones}
+                  selected={filterRubros}
+                  onChange={setFilterRubros}
+                  placeholder="Todos los rubros"
+                  className="h-9"
+                />
+              </div>
               {activeFilterCount > 0 && (
                 <div className="flex items-end">
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => { setFilterCiudad("all"); setFilterProvincia("all"); setFilterVendedor("all"); }}
+                    onClick={() => { setFilterCiudad("all"); setFilterProvincia("all"); setFilterVendedor("all"); setFilterEstados([]); setFilterRubros([]); }}
                   >
                     Limpiar filtros
                   </Button>
@@ -809,6 +836,19 @@ const ManualAssignment = () => {
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
                             <span>{c.nombre}</span>
+                            {(() => {
+                              const estado = esProspecto ? "POTENCIAL" : estadoPorDias(c.dias_sin_compra);
+                              return (
+                                <span
+                                  className="inline-block h-2.5 w-2.5 rounded-full shrink-0"
+                                  style={{ backgroundColor: colorEstado(estado) }}
+                                  title={labelEstado(estado)}
+                                />
+                              );
+                            })()}
+                            {c.rubro && (
+                              <Badge variant="outline" className="text-[10px] font-normal">{c.rubro}</Badge>
+                            )}
                             {c.registros > 1 && (
                               <Badge variant="outline" className="text-[10px] font-normal">
                                 {c.registros} registros

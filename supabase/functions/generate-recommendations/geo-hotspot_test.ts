@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { ok as assert, deepStrictEqual as assertEquals } from "node:assert/strict";
 import { calcularDistanciaKm, findDensestHotspot } from "./geo-hotspot.ts";
 
 // Cartera real de Pilar: mayoría en CABA/GBA + dos outliers rurales.

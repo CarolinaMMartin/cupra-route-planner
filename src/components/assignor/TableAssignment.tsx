@@ -1,3 +1,4 @@
+import { guardarAsignaciones } from "@/lib/asignaciones";
 import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 import { useState, useEffect, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -254,114 +255,19 @@ const TableAssignment = ({
     return vendedores.find((v) => v.id === id)?.nombre || null;
   };
 
-  // Save logic (preserved from KanbanAssignment)
+  // El mismo guardado transaccional que la preselección y el mapa.
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      const cuitDniMap = new Map<string, string>();
-      const prospectoMap = new Map<string, string>();
-
-      selectedRecommendations.forEach((rec) => {
-        if (rec.es_prospecto && rec.prospecto_place_id) {
-          prospectoMap.set(rec.id, rec.prospecto_place_id);
-        } else if (rec.cuit_dni) {
-          cuitDniMap.set(rec.id, rec.cuit_dni);
-        }
-      });
-
-      const cuitDnis = Array.from(cuitDniMap.values());
-      let clienteIdMap = new Map<string, string>();
-
-      if (cuitDnis.length > 0) {
-        const { data: clientes, error: clientesError } = await supabase
-          .from("clientes")
-          .select("client_id, cuit_dni")
-          .in("cuit_dni", cuitDnis);
-        if (clientesError) throw clientesError;
-        (clientes || []).forEach((c) => clienteIdMap.set(c.cuit_dni, c.client_id));
-      }
-
-      const recomendacionToClienteMap = new Map<string, string>();
-      selectedRecommendations.forEach((rec) => {
-        if (!rec.es_prospecto && rec.cuit_dni) {
-          const cid = clienteIdMap.get(rec.cuit_dni);
-          if (cid) recomendacionToClienteMap.set(rec.id, cid);
-        }
-      });
-
-      const validClienteIds = Array.from(recomendacionToClienteMap.values());
-      const validProspectoIds = Array.from(prospectoMap.values());
-
-      if (validClienteIds.length > 0) {
-        const { error } = await supabase
-          .from("asignaciones_vendedores_clientes")
-          .delete()
-          .in("client_id", validClienteIds);
-        if (error) throw error;
-      }
-
-      if (validProspectoIds.length > 0) {
-        const { error } = await supabase
-          .from("asignaciones_vendedores_clientes")
-          .delete()
-          .in("prospecto_place_id", validProspectoIds);
-        if (error) throw error;
-      }
-
-      const newAssignments: any[] = [];
-      const assignedPairs = new Set<string>();
-
-      for (const [recId, vendedorId] of Object.entries(assignmentMap)) {
-        if (!vendedorId) continue;
-        const rec = selectedRecommendations.find((r) => r.id === recId);
-        if (!rec) continue;
-
-        if (rec.es_prospecto && rec.prospecto_place_id) {
-          const key = `${vendedorId}-prospecto-${rec.prospecto_place_id}`;
-          if (!assignedPairs.has(key)) {
-            assignedPairs.add(key);
-            newAssignments.push({
-              vendedor_id: vendedorId,
-              prospecto_place_id: rec.prospecto_place_id,
-              es_prospecto: true,
-              origen_asignacion: "asignador",
-            });
-          }
-        } else {
-          const clienteId = recomendacionToClienteMap.get(recId);
-          if (clienteId) {
-            const key = `${vendedorId}-cliente-${clienteId}`;
-            if (!assignedPairs.has(key)) {
-              assignedPairs.add(key);
-              newAssignments.push({
-                vendedor_id: vendedorId,
-                client_id: clienteId,
-                es_prospecto: false,
-                origen_asignacion: "asignador",
-              });
-            }
-          }
-        }
-      }
-
-      if (newAssignments.length > 0) {
-        const { error } = await supabase.from("asignaciones_vendedores_clientes").insert(newAssignments);
-        if (error) throw error;
-      }
-
-      if (validClienteIds.length > 0) {
-        await supabase
-          .from("clientes")
-          .update({ last_recommendation_at: new Date().toISOString() })
-          .in("client_id", validClienteIds);
-      }
-
-      if (validProspectoIds.length > 0) {
-        await supabase
-          .from("prospectos")
-          .update({ last_recommendation_at: new Date().toISOString() })
-          .in("place_id", validProspectoIds);
-      }
+      // La cuenta se identifica por client_id: un CUIT puede tener varias sucursales.
+      const newAssignments = selectedRecommendations
+        .filter((rec) => assignmentMap[rec.id])
+        .map((rec) => ({
+          vendedor_id: assignmentMap[rec.id],
+          client_id: rec.es_prospecto ? null : rec.client_id,
+          prospecto_place_id: rec.es_prospecto ? rec.prospecto_place_id : null,
+        }));
+      await guardarAsignaciones(newAssignments);
 
       toast({
         title: "Asignaciones guardadas",

@@ -4,8 +4,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, MapPin, X, ChevronRight, LayoutGrid, Search, Square, Hand } from "lucide-react";
+import { Sparkles, MapPin, X, ChevronRight, LayoutGrid, Search, Square, Hand, Map as MapIcon } from "lucide-react";
 import ManualAssignment from "./ManualAssignment";
+import MapaZonaAsignacion from "./MapaZonaAsignacion";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -13,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { toTitleCase } from "@/lib/format";
 import { GEO_PROVINCIAS, geoComunas, geoBarrios } from "@/data/geoBuenosAires";
 import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
+import { ESTADOS } from "@/lib/segmentos";
+import { useRubros } from "@/hooks/useRubros";
 
 
 interface Vendedor { id: string; profileId: string; nombre: string; email: string; }
@@ -31,7 +34,7 @@ const FilterPanel = ({
   onRequestRecommendations, isLoading, onCancel, placesData,
   instruccionesAdicionales, onInstruccionesChange
 }: FilterPanelProps) => {
-  const [mode, setMode] = useState<'area' | 'custom' | 'manual'>('area');
+  const [mode, setMode] = useState<'area' | 'custom' | 'manual' | 'mapa'>('area');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [selectedVendedores, setSelectedVendedores] = useState<string[]>([]);
   const [isLoadingVendedores, setIsLoadingVendedores] = useState(true);
@@ -42,6 +45,10 @@ const FilterPanel = ({
   const [selectedArea, setSelectedArea] = useState<string>('none');
   const [isLoadingAreas, setIsLoadingAreas] = useState(true);
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
+  // Qué tipo de visitas pedir: vacío = regla 5-2-1 (5 activos + 2 reactivación + 1 potencial).
+  const [selectedEstados, setSelectedEstados] = useState<string[]>([]);
+  const [selectedRubros, setSelectedRubros] = useState<string[]>([]);
+  const { rubros: rubrosOpciones, loading: loadingRubros } = useRubros();
   
   const { toast } = useToast();
 
@@ -140,7 +147,7 @@ const FilterPanel = ({
 
 
     onRequestRecommendations(
-      { area_id: selectedArea, cantidad_vendedores: ids.length },
+      { area_id: selectedArea, cantidad_vendedores: ids.length, estados: selectedEstados, rubros: selectedRubros },
       { ids, nombres },
       { comuna: null, barrio: area.barrios.length > 0 ? area.barrios : null, provincia: null }
     );
@@ -149,8 +156,8 @@ const FilterPanel = ({
   const handleSubmitCustom = (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedVendedores.length === 0) { toast({ variant: "destructive", title: "Error", description: "Seleccioná al menos un vendedor" }); return; }
-    const nombres = vendedores.filter(v => selectedVendedores.includes(v.id)).map(v => v.nombre);
-    onRequestRecommendations({ cantidad_vendedores: selectedVendedores.length }, { ids: selectedVendedores, nombres }, { comuna: selectedComuna.length > 0 ? selectedComuna : null, barrio: selectedBarrio.length > 0 ? selectedBarrio : null, provincia: selectedProvincia !== 'all' ? selectedProvincia : null });
+    const nombres = selectedVendedores.map(id => vendedores.find(v => v.id === id)?.nombre || "Vendedor");
+    onRequestRecommendations({ cantidad_vendedores: selectedVendedores.length, estados: selectedEstados, rubros: selectedRubros }, { ids: selectedVendedores, nombres }, { comuna: selectedComuna.length > 0 ? selectedComuna : null, barrio: selectedBarrio.length > 0 ? selectedBarrio : null, provincia: selectedProvincia !== 'all' ? selectedProvincia : null });
   };
 
   const selectedAreaData = areas.find(a => a.id === selectedArea);
@@ -158,18 +165,18 @@ const FilterPanel = ({
   return (
     <div className="space-y-8">
       {/* Mode selector */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <button
           type="button"
           onClick={() => setMode('area')}
-          className={`group p-6 rounded-xl text-left transition-all duration-200 ${
+          className={`group p-4 sm:p-6 rounded-xl text-left transition-all duration-200 ${
             mode === 'area'
               ? 'bg-primary/8 border border-primary/20'
               : 'bg-secondary/30 border border-transparent hover:bg-secondary/50'
           }`}
         >
           <div className="flex items-center gap-2.5 mb-2">
-            <LayoutGrid className={`w-4 h-4 ${mode === 'area' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <LayoutGrid className={`w-4 h-4 shrink-0 ${mode === 'area' ? 'text-primary' : 'text-muted-foreground'}`} />
             <span className="font-medium text-sm">Por Área</span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">Área predefinida con vendedores y zonas</p>
@@ -178,14 +185,14 @@ const FilterPanel = ({
         <button
           type="button"
           onClick={() => setMode('custom')}
-          className={`group p-6 rounded-xl text-left transition-all duration-200 ${
+          className={`group p-4 sm:p-6 rounded-xl text-left transition-all duration-200 ${
             mode === 'custom'
               ? 'bg-primary/8 border border-primary/20'
               : 'bg-secondary/30 border border-transparent hover:bg-secondary/50'
           }`}
         >
           <div className="flex items-center gap-2.5 mb-2">
-            <Search className={`w-4 h-4 ${mode === 'custom' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <Search className={`w-4 h-4 shrink-0 ${mode === 'custom' ? 'text-primary' : 'text-muted-foreground'}`} />
             <span className="font-medium text-sm">Personalizado</span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">Selección manual de vendedores y zonas</p>
@@ -194,17 +201,33 @@ const FilterPanel = ({
         <button
           type="button"
           onClick={() => setMode('manual')}
-          className={`group p-6 rounded-xl text-left transition-all duration-200 ${
+          className={`group p-4 sm:p-6 rounded-xl text-left transition-all duration-200 ${
             mode === 'manual'
               ? 'bg-primary/8 border border-primary/20'
               : 'bg-secondary/30 border border-transparent hover:bg-secondary/50'
           }`}
         >
           <div className="flex items-center gap-2.5 mb-2">
-            <Hand className={`w-4 h-4 ${mode === 'manual' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <Hand className={`w-4 h-4 shrink-0 ${mode === 'manual' ? 'text-primary' : 'text-muted-foreground'}`} />
             <span className="font-medium text-sm">Asignación Manual</span>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed">Buscar y asignar clientes directamente</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMode('mapa')}
+          className={`group p-4 sm:p-6 rounded-xl text-left transition-all duration-200 ${
+            mode === 'mapa'
+              ? 'bg-primary/8 border border-primary/20'
+              : 'bg-secondary/30 border border-transparent hover:bg-secondary/50'
+          }`}
+        >
+          <div className="flex items-center gap-2.5 mb-2">
+            <MapIcon className={`w-4 h-4 shrink-0 ${mode === 'mapa' ? 'text-primary' : 'text-muted-foreground'}`} />
+            <span className="font-medium text-sm">Mapa de la zona</span>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">Ver clientes y prospectos por estado y asignar desde el mapa</p>
         </button>
       </div>
 
@@ -246,6 +269,15 @@ const FilterPanel = ({
               </div>
             </div>
           )}
+
+          <VisitTypeFilters
+            estados={selectedEstados}
+            onEstadosChange={setSelectedEstados}
+            rubros={selectedRubros}
+            onRubrosChange={setSelectedRubros}
+            rubrosOpciones={rubrosOpciones}
+            loadingRubros={loadingRubros}
+          />
 
           <AIInstructionsCollapsible isOpen={isAIInstructionsOpen} onOpenChange={setIsAIInstructionsOpen} value={instruccionesAdicionales} onChange={onInstruccionesChange} />
 
@@ -321,6 +353,15 @@ const FilterPanel = ({
             </div>
           </div>
 
+          <VisitTypeFilters
+            estados={selectedEstados}
+            onEstadosChange={setSelectedEstados}
+            rubros={selectedRubros}
+            onRubrosChange={setSelectedRubros}
+            rubrosOpciones={rubrosOpciones}
+            loadingRubros={loadingRubros}
+          />
+
           <AIInstructionsCollapsible isOpen={isAIInstructionsOpen} onOpenChange={setIsAIInstructionsOpen} value={instruccionesAdicionales} onChange={onInstruccionesChange} />
 
           {isLoading ? (
@@ -341,9 +382,60 @@ const FilterPanel = ({
       {mode === 'manual' && (
         <ManualAssignment />
       )}
+
+      {mode === 'mapa' && (
+        <MapaZonaAsignacion vendedores={vendedores.map((v) => ({ id: v.id, nombre: v.nombre }))} />
+      )}
     </div>
   );
 };
+
+/**
+ * Tipo de visitas del día. Sin selección rige la regla dura 5-2-1.
+ * Con estados elegidos (ej. solo "Perdidos"), las 8 salen de esos estados y,
+ * si no alcanzan, se completan con prospectos cercanos (siempre 8, avisado).
+ */
+function VisitTypeFilters({ estados, onEstadosChange, rubros, onRubrosChange, rubrosOpciones, loadingRubros }: {
+  estados: string[];
+  onEstadosChange: (v: string[]) => void;
+  rubros: string[];
+  onRubrosChange: (v: string[]) => void;
+  rubrosOpciones: { value: string; label: string }[];
+  loadingRubros: boolean;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border border-border/40 p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Estado de los clientes a visitar</Label>
+          <MultiSelect
+            options={ESTADOS.map((e) => ({ value: e.value, label: e.plural }))}
+            selected={estados}
+            onChange={onEstadosChange}
+            placeholder="Mezcla estándar (5-2-1)"
+            className="w-full"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Rubro</Label>
+          <MultiSelect
+            options={rubrosOpciones}
+            selected={rubros}
+            onChange={onRubrosChange}
+            placeholder={loadingRubros ? "Cargando rubros..." : "Todos los rubros"}
+            className="w-full"
+          />
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        {estados.length === 0
+          ? "Objetivo: 8 visitas por vendedor, con 5 clientes activos, 2 para reactivar y 1 potencial. Si faltan candidatos, se informa cualquier sustitución o ampliación de zona."
+          : `Objetivo: 8 visitas por vendedor, priorizando ${ESTADOS.filter((e) => estados.includes(e.value)).map((e) => e.plural.toLowerCase()).join(" y ")}. Si no alcanzan, se proponen otras visitas disponibles y se informa la sustitución.`}
+        {rubros.length > 0 && " Solo se incluyen clientes y prospectos de los rubros elegidos."}
+      </p>
+    </div>
+  );
+}
 
 function AIInstructionsCollapsible({ isOpen, onOpenChange, value, onChange }: {
   isOpen: boolean; onOpenChange: (open: boolean) => void; value: string; onChange: (value: string) => void;

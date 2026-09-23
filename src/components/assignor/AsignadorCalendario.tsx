@@ -1,3 +1,4 @@
+import { guardarAsignaciones } from "@/lib/asignaciones";
 import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -225,33 +226,13 @@ const AsignadorCalendario = () => {
         dia.getDate(),
       ).padStart(2, "0")}`;
 
-      let existing = supabase
-        .from("asignaciones_vendedores_clientes")
-        .select("id")
-        .eq("vendedor_id", vendedorId);
-      existing = candidato.esProspecto
-        ? existing.eq("prospecto_place_id", candidato.id)
-        : existing.eq("client_id", candidato.id);
-      const { data: yaAsignados } = await existing;
-
-      if (yaAsignados && yaAsignados.length > 0) {
-        const { error: delError } = await supabase
-          .from("asignaciones_vendedores_clientes")
-          .delete()
-          .in("id", yaAsignados.map((a: any) => a.id));
-        if (delError) throw delError;
-      }
-
-      const { error } = await supabase.from("asignaciones_vendedores_clientes").insert({
+      await guardarAsignaciones([{
         vendedor_id: vendedorId,
         client_id: candidato.esProspecto ? null : candidato.id,
         prospecto_place_id: candidato.esProspecto ? candidato.id : null,
-        es_prospecto: candidato.esProspecto,
         estado: "Por visitar",
-        origen_asignacion: "asignador",
         fecha_programada: fecha,
-      });
-      if (error) throw error;
+      }]);
 
       const recordatorio: any = {
         vendedor_id: vendedorId,

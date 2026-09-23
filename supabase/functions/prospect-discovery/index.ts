@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
+import { googleMapsFetch, hayGoogleMaps } from "../_shared/google-maps.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,10 +45,6 @@ const PLACE_DETAIL_FIELD_MASK = [
   'websiteUri',
 ].join(',');
 
-const getKeys = () => ({
-  googleApiKey: Deno.env.get('GOOGLE_MAPS_API_KEY') || Deno.env.get('VITE_GOOGLE_MAPS_API_KEY') || '',
-  lovableApiKey: Deno.env.get('LOVABLE_API_KEY') || '',
-});
 
 interface SearchRequest {
   action: 'search';
@@ -246,8 +243,7 @@ Deno.serve(async (req) => {
       const placeIds = Array.from(new Set((body.placeIds || []).filter(isValidPlaceId))).slice(0, 25);
       if (placeIds.length === 0) return jsonResponse({ success: false, error: 'Lugares requeridos' }, 400);
 
-      const { googleApiKey, lovableApiKey } = getKeys();
-      if (!googleApiKey || !lovableApiKey) {
+      if (!hayGoogleMaps()) {
         return jsonResponse({ success: false, error: 'Google Places no está configurado' }, 503);
       }
 
@@ -255,12 +251,10 @@ Deno.serve(async (req) => {
       const skipped: Array<{ place_id: string; motivo: string }> = [];
 
       for (const placeId of placeIds) {
-        const detailResponse = await fetch(
-          `https://connector-gateway.lovable.dev/google_maps/places/v1/places/${encodeURIComponent(placeId)}?languageCode=es&regionCode=AR`,
+        const detailResponse = await googleMapsFetch(
+          `/places/v1/places/${encodeURIComponent(placeId)}?languageCode=es&regionCode=AR`,
           {
             headers: {
-              Authorization: `Bearer ${lovableApiKey}`,
-              'X-Connection-Api-Key': googleApiKey,
               'X-Goog-FieldMask': PLACE_DETAIL_FIELD_MASK,
             },
           },
@@ -340,14 +334,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ success: false, error: 'Consulta o zona inválida' }, 400);
     }
 
-    const googleApiKey = Deno.env.get('GOOGLE_MAPS_API_KEY')
-      || Deno.env.get('VITE_GOOGLE_MAPS_API_KEY')
-      || '';
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY') || '';
-    if (!googleApiKey || !lovableApiKey) {
+    if (!hayGoogleMaps()) {
       return jsonResponse({
         success: false,
-        error: 'Google Places no está configurado: falta la conexión de Google Maps',
+        error: 'Google Places no está configurado: falta GOOGLE_MAPS_API_KEY',
       }, 503);
     }
 
@@ -372,14 +362,12 @@ Deno.serve(async (req) => {
       }
       if (pageToken) searchBody.pageToken = pageToken;
 
-      const googleResponse = await fetch(
-        'https://connector-gateway.lovable.dev/google_maps/places/v1/places:searchText',
+      const googleResponse = await googleMapsFetch(
+        '/places/v1/places:searchText',
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${lovableApiKey}`,
-            'X-Connection-Api-Key': googleApiKey,
             'X-Goog-FieldMask': `${GOOGLE_FIELD_MASK},nextPageToken`,
           },
           body: JSON.stringify(searchBody),

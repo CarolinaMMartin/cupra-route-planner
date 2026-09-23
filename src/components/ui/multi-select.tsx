@@ -27,6 +27,7 @@ interface MultiSelectProps {
   onChange: (values: string[]) => void;
   placeholder?: string;
   className?: string;
+  ariaLabel?: string;
 }
 
 export function MultiSelect({
@@ -35,6 +36,7 @@ export function MultiSelect({
   onChange,
   placeholder = "Seleccionar...",
   className,
+  ariaLabel,
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -67,6 +69,7 @@ export function MultiSelect({
         <Button
           variant="outline"
           role="combobox"
+          aria-label={ariaLabel || placeholder}
           aria-expanded={open}
           className={cn(
             "w-full justify-between bg-background hover:bg-background h-auto min-h-10 py-2",

@@ -1,3 +1,4 @@
+import { guardarAsignaciones } from "@/lib/asignaciones";
 import { useState, useEffect, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -179,68 +180,15 @@ const EditAssignmentsTable = ({
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      // Separate clients and prospects
-      const clientIds = selectedAssignments
-        .filter((a) => !a.es_prospecto && a.client_id)
-        .map((a) => a.client_id);
-
-      const prospectoPlaceIds = selectedAssignments
-        .filter((a) => a.es_prospecto && a.prospecto_place_id)
-        .map((a) => a.prospecto_place_id!);
-
-      // Delete existing assignments
-      const deletePromises = [];
-      if (clientIds.length > 0) {
-        deletePromises.push(
-          supabase.from("asignaciones_vendedores_clientes").delete().in("client_id", clientIds)
-        );
-      }
-      if (prospectoPlaceIds.length > 0) {
-        deletePromises.push(
-          supabase.from("asignaciones_vendedores_clientes").delete().in("prospecto_place_id", prospectoPlaceIds)
-        );
-      }
-      const deleteResults = await Promise.all(deletePromises);
-      const deleteError = deleteResults.find((r) => r.error);
-      if (deleteError?.error) throw deleteError.error;
-
-      // Create new assignments
-      const newAssignments: any[] = [];
-      const assignedPairs = new Set<string>();
-
-      for (const assignment of selectedAssignments) {
-        const vendedorId = assignmentMap[assignment.id];
-        if (!vendedorId) continue;
-
-        if (assignment.es_prospecto && assignment.prospecto_place_id) {
-          const key = `${vendedorId}-prospecto-${assignment.prospecto_place_id}`;
-          if (!assignedPairs.has(key)) {
-            assignedPairs.add(key);
-            newAssignments.push({
-              vendedor_id: vendedorId,
-              prospecto_place_id: assignment.prospecto_place_id,
-              es_prospecto: true,
-              origen_asignacion: "asignador",
-            });
-          }
-        } else if (assignment.client_id) {
-          const key = `${vendedorId}-cliente-${assignment.client_id}`;
-          if (!assignedPairs.has(key)) {
-            assignedPairs.add(key);
-            newAssignments.push({
-              vendedor_id: vendedorId,
-              client_id: assignment.client_id,
-              es_prospecto: false,
-              origen_asignacion: "asignador",
-            });
-          }
-        }
-      }
-
-      if (newAssignments.length > 0) {
-        const { error } = await supabase.from("asignaciones_vendedores_clientes").insert(newAssignments);
-        if (error) throw error;
-      }
+      const newAssignments = selectedAssignments
+        .filter((assignment) => assignmentMap[assignment.id] && assignmentMap[assignment.id] !== assignment.vendedor_id)
+        .map((assignment) => ({
+          asignacion_id: assignment.id,
+          vendedor_id: assignmentMap[assignment.id],
+          client_id: assignment.es_prospecto ? null : assignment.client_id,
+          prospecto_place_id: assignment.es_prospecto ? assignment.prospecto_place_id : null,
+        }));
+      if (newAssignments.length) await guardarAsignaciones(newAssignments);
 
       toast({
         title: "Asignaciones actualizadas",

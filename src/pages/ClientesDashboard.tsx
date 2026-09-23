@@ -31,6 +31,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import ZonaKPIs from "@/components/clientes/ZonaKPIs";
 import ClienteDetalleDialog from "@/components/clientes/ClienteDetalleDialog";
 import { toTitleCase, vendorKey, sameVendor, dedupeVendors } from "@/lib/format";
+import { SegmentFilters } from "@/components/shared/SegmentFilters";
+import { estadoDe, FILTROS_VACIOS, filtrarPorSegmentos, hayFiltros, type FiltrosSegmento } from "@/lib/segmentos";
 
 
 interface BarrioVentas {
@@ -64,6 +66,8 @@ const ClientesDashboard = () => {
   const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [selectedCanal, setSelectedCanal] = useState<string>("all");
+  // Segmentos: estado, rubro y volumen (selección múltiple)
+  const [segmentos, setSegmentos] = useState<FiltrosSegmento>(FILTROS_VACIOS);
   const [selectedCliente, setSelectedCliente] = useState<any | null>(null);
   const [detalleOpen, setDetalleOpen] = useState(false);
 
@@ -110,10 +114,15 @@ const ClientesDashboard = () => {
 
   const fetchDashboardData = async () => {
     // Fetch clientes (para filtros, segmentación, ZonaKPIs)
-    const { data: clientes } = await supabase
-      .from('clientes')
-      .select('*');
-    if (clientes) setClientesData(clientes);
+    // Paginado: sin esto PostgREST corta en 1000 clientes y los filtros quedan incompletos.
+    let clientes: any[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data: page, error } = await supabase.from('clientes').select('*').order('client_id').range(from, from + 999);
+      if (error) throw error;
+      clientes = clientes.concat(page || []);
+      if (!page || page.length < 1000) break;
+    }
+    setClientesData(clientes);
 
     // FUENTE DE VERDAD: Fetch TODAS las ventas desde ventas_cupra
     // Paginar para superar límite de 1000 filas
@@ -235,7 +244,12 @@ const ClientesDashboard = () => {
   }, [clientesData]);
 
   const filteredData = useMemo(() => {
-    return clientesData.filter(cliente => {
+    const porSegmento = filtrarPorSegmentos(clientesData, segmentos, (c) => ({
+      estado: estadoDe(c),
+      rubro: c.rubro,
+      volumen: c.categoria_volumen,
+    }));
+    return porSegmento.filter(cliente => {
       const matchProvincia = selectedProvincia === "all" || 
         normalize(cliente.provincia_principal) === normalize(selectedProvincia);
       const ciudadesCliente = getClienteCiudades(cliente);
@@ -256,7 +270,7 @@ const ClientesDashboard = () => {
         (cliente.fantasia || "").toLowerCase().includes(searchTerm.toLowerCase());
       return matchProvincia && matchCiudad && matchBarrio && matchVendedor && matchCanal && matchSearch;
     });
-  }, [clientesData, selectedProvincia, selectedCiudad, selectedBarrio, selectedVendedor, selectedCanal, searchTerm]);
+  }, [clientesData, segmentos, selectedProvincia, selectedCiudad, selectedBarrio, selectedVendedor, selectedCanal, searchTerm]);
 
   const hasActiveFilters =
     selectedProvincia !== "all" ||
@@ -264,6 +278,7 @@ const ClientesDashboard = () => {
     selectedBarrio !== "all" ||
     selectedVendedor !== "all" ||
     selectedCanal !== "all" ||
+    hayFiltros(segmentos) ||
     searchTerm.trim() !== "";
 
 
@@ -425,6 +440,7 @@ const ClientesDashboard = () => {
     setSelectedBarrio("all");
     setSelectedVendedor("all");
     setSelectedCanal("all");
+    setSegmentos(FILTROS_VACIOS);
     setSearchTerm("");
   };
 
@@ -636,6 +652,14 @@ const ClientesDashboard = () => {
                 </Select>
               </div>
             </div>
+
+            <SegmentFilters
+              className="mt-5"
+              value={segmentos}
+              onChange={setSegmentos}
+              campos={["estados", "rubros", "volumenes"]}
+              titulo="Segmentos (aplican también a las ventas)"
+            />
 
             <div className="flex gap-2 mt-4">
               <Button

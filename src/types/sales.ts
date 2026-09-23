@@ -41,6 +41,8 @@ export interface Sucursal {
   todos_vendedores?: string[];
   requiere_visita?: string;
   canal?: string;
+  /** Rubro normalizado (Vinoteca, Restaurante, Bar, Hotel...). */
+  rubro?: string | null;
   etiquetas?: string[];
   // Campos de IA
   ai_reasoning?: string;

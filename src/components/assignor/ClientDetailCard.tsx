@@ -24,6 +24,7 @@ import { Sucursal } from "@/types/sales";
 import ExcludeClientButton from "./ExcludeClientButton";
 import { getGoogleMapsUrl } from "@/lib/utils";
 import { toTitleCase } from "@/lib/format";
+import { colorEstado, estadoDe, labelEstado } from "@/lib/segmentos";
 
 interface ClientDetailCardProps {
   cliente: Sucursal;
@@ -143,6 +144,22 @@ const ClientDetailCard = ({
               </div>
             </div>
             <div className="flex flex-col gap-2 items-end">
+              {/* Estado comercial y rubro */}
+              {(() => {
+                const estado = (cliente as any).estado_cliente || estadoDe(cliente);
+                const rubro = cliente.rubro || (cliente.factores_ia as any)?.rubro;
+                const f = (cliente.factores_ia as any) || {};
+                return (
+                  <div className="flex flex-wrap gap-1.5 justify-end">
+                    <Badge style={{ backgroundColor: colorEstado(estado), color: "#fff" }} className="font-semibold">
+                      {labelEstado(estado)}
+                    </Badge>
+                    {rubro && <Badge variant="outline">{rubro}</Badge>}
+                    {f.fuera_de_zona && <Badge variant="outline" className="border-amber-500 text-amber-700">Fuera de la zona</Badge>}
+                    {f.fuera_de_seleccion && <Badge variant="outline" className="border-amber-500 text-amber-700">Completa las 8</Badge>}
+                  </div>
+                );
+              })()}
               {/* Badge especial para prospectos nuevos */}
               {(cliente.es_prospecto || cliente.etiquetas?.includes('NUEVO') || cliente.etiquetas?.includes('PROSPECTO')) ? (
                 <Badge className="bg-blue-500 text-white hover:bg-blue-600 font-semibold">
@@ -256,7 +273,7 @@ const ClientDetailCard = ({
               <div className="flex gap-2 items-start">
                 <Lightbulb className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-card-foreground mb-2">Análisis de IA:</p>
+                  <p className="text-sm font-medium text-card-foreground mb-2">Por qué visitarlo:</p>
                   <p className="text-sm text-card-foreground/80">{cliente.ai_reasoning}</p>
                 </div>
               </div>

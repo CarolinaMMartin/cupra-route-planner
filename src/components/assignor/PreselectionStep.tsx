@@ -26,16 +26,17 @@ const PreselectionStep = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-3">
           <Checkbox
+            id="seleccionar-recomendaciones"
             checked={allSelected}
             onCheckedChange={onToggleAll}
             className="h-4 w-4"
           />
-          <span className="text-sm font-medium">
+          <label htmlFor="seleccionar-recomendaciones" className="text-sm font-medium cursor-pointer">
             {allSelected ? 'Deseleccionar todos' : 'Seleccionar todos'}
-          </span>
+          </label>
           <Badge variant="secondary" className="text-xs">
             {selectedIds.length} de {recommendations.length} seleccionados
           </Badge>

@@ -122,6 +122,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
           vendedor:profiles!asignaciones_vendedores_clientes_vendedor_id_fkey(nombre, email),
           cliente:clientes!asignaciones_vendedores_clientes_client_id_fkey(razon_social, cuit_dni)
         `)
+        .neq("estado", "Visitado")
         .gte("created_at", startOfDayArg.toISOString())
         .order("created_at", { ascending: false });
 
@@ -212,6 +213,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
       const { error } = await supabase
         .from("asignaciones_vendedores_clientes")
         .delete()
+        .neq("estado", "Visitado")
         .gte("created_at", startOfDayArg.toISOString());
 
       if (error) throw error;
@@ -240,6 +242,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
       const { error } = await supabase
         .from("asignaciones_vendedores_clientes")
         .delete()
+        .neq("estado", "Visitado")
         .in("id", ids);
 
       if (error) throw error;

@@ -20,7 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { MapPin, Loader2, ArrowRight, AlertTriangle, Pencil } from "lucide-react";
-import { getVendorColor, createColoredMarkerIcon, resetVendorColors, getVendorColorMap, classifyClientState, getStateColor, calcularDistanciaKmFrontend } from "@/lib/vendorColors";
+import { getVendorColor, createStateMarkerIcon, resetVendorColors, getVendorColorMap, classifyClientState, getStateColor, getStateLabel, getStateLegend, calcularDistanciaKmFrontend } from "@/lib/vendorColors";
 
 interface ResultsMapProps {
   sucursales: Sucursal[];
@@ -40,6 +40,7 @@ interface ClientLocation {
   estado_cliente?: string;
   es_prospecto?: boolean;
   hasOverlap?: boolean;
+  rubro?: string | null;
 }
 
 interface SinUbicacionItem {
@@ -50,6 +51,10 @@ interface SinUbicacionItem {
   es_prospecto: boolean;
 }
 
+
+/** Escapa texto que viene de la base antes de meterlo en el HTML del InfoWindow. */
+const escHtml = (v: unknown) =>
+  String(v ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 
 // Carga centralizada del script de Google Maps
 const loadGoogleMapsScript = (apiKey: string) => loadGoogleMaps(apiKey);
@@ -172,6 +177,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                 vendedor,
                 es_prospecto: !!sucursal.es_prospecto,
                 estado_cliente,
+                rubro: sucursal.rubro ?? null,
               };
             } else {
               console.warn(`[ResultsMap] Coordenadas fuera de rango Argentina:`, { id: sucursal.id, lat, lng });
@@ -202,6 +208,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     vendedor,
                     es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente,
+                    rubro: sucursal.rubro ?? null,
                   };
                 }
               }
@@ -228,6 +235,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     vendedor,
                     es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente,
+                    rubro: sucursal.rubro ?? null,
                   });
                 } else {
                   reject(new Error(`No se pudo obtener ubicación para ${sucursal.nombre}`));
@@ -253,6 +261,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     vendedor,
                     es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
+                    rubro: sucursal.rubro ?? null,
                   });
                 } else {
                   resolve(null);
@@ -287,6 +296,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
                     vendedor,
                     es_prospecto: !!sucursal.es_prospecto,
                     estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
+                    rubro: sucursal.rubro ?? null,
                   });
                 } else {
                   resolve(null);
@@ -395,7 +405,8 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
           position: { lat: location.lat, lng: location.lng },
           map,
           title: location.name,
-          icon: createColoredMarkerIcon(vendorColor),
+          // Relleno = estado comercial (activo/inactivo/perdido/potencial); borde = vendedor.
+          icon: createStateMarkerIcon(location.estado_cliente, vendorColor),
         });
 
         const tipoLabel = location.es_prospecto ? 'Prospecto nuevo' : 'Cliente de cartera';
@@ -403,11 +414,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
         const infoWindow = new google.maps.InfoWindow({
           content: `
             <div style="padding: 8px; max-width: 260px; color: #111827; font-family: system-ui, sans-serif;">
-              <h3 style="margin: 0 0 6px 0; font-weight: 600; font-size: 14px; color: #111827;">${location.name}</h3>
+              <h3 style="margin: 0 0 6px 0; font-weight: 600; font-size: 14px; color: #111827;">${escHtml(location.name)}</h3>
               <span style="display:inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #ffffff; background: ${tipoBg};">${tipoLabel}</span>
-              ${location.estado_cliente ? `<span style="display:inline-block; margin-left:4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; color: #111827; background: #E5E7EB;">${location.estado_cliente}</span>` : ''}
-              <p style="margin: 6px 0 0 0; font-size: 12px; color: #4B5563;">${location.direccion}</p>
-              ${location.vendedor ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #111827;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${vendorColor};margin-right:6px;vertical-align:middle;"></span>${location.vendedor}</p>` : ''}
+              ${location.estado_cliente ? `<span style="display:inline-block; margin-left:4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #ffffff; background: ${getStateColor(location.estado_cliente)};">${getStateLabel(location.estado_cliente)}</span>` : ''}
+              ${location.rubro ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #111827;"><strong>Rubro:</strong> ${escHtml(location.rubro)}</p>` : ''}
+              <p style="margin: 6px 0 0 0; font-size: 12px; color: #4B5563;">${escHtml(location.direccion)}</p>
+              ${location.vendedor ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #111827;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${vendorColor};margin-right:6px;vertical-align:middle;"></span>${escHtml(location.vendedor)}</p>` : ''}
             </div>
           `,
         });
@@ -598,10 +610,19 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
           </div>
         )}
 
-        {/* Vendor color legend */}
+        {/* Leyenda: relleno = estado, borde = vendedor */}
         {!loading && vendorLegend.size > 0 && (
-          <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm p-3 rounded-lg shadow-lg border z-10 max-h-64 overflow-y-auto">
-            <p className="text-xs font-medium mb-2 text-foreground">Vendedores</p>
+          <div className="absolute bottom-4 left-4 bg-background/95 backdrop-blur-sm p-3 rounded-lg shadow-lg border z-10 max-h-72 overflow-y-auto">
+            <p className="text-xs font-medium mb-2 text-foreground">Estado (relleno)</p>
+            <div className="space-y-1 mb-3">
+              {getStateLegend().map((e) => (
+                <div key={e.estado} className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: e.color }} />
+                  <span className="text-xs text-muted-foreground">{e.label}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs font-medium mb-2 text-foreground">Vendedor (borde)</p>
             <div className="space-y-1">
               {Array.from(vendorLegend.entries()).map(([name, color]) => (
                 <div key={name} className="flex items-center gap-2">

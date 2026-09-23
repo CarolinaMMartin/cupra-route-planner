@@ -26,6 +26,7 @@ async function llamar(url: string, key: string, body: AiChatBody): Promise<AiCha
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(20_000),
   });
 
   if (!res.ok) {

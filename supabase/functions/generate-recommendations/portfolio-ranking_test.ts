@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { ok as assert, deepStrictEqual as assertEquals } from "node:assert/strict";
 import {
   alertaNotaCredito,
   dedupeBarrios,
@@ -96,4 +96,27 @@ Deno.test("barrios: dedupe por mayúsculas y acentos", () => {
     dedupeBarrios(["Parque Chas", "VILLA URQUIZA", "Villa Ortúzar", "Villa Urquiza"]),
     ["Parque Chas", "Villa Urquiza", "Villa Ortúzar"],
   );
+});
+
+Deno.test("gate: nombre genérico por prefijo de 1 palabra no marca cliente existente", () => {
+  const gate = evaluarProspectoContraCartera(
+    { nombre: "Bar Palermo", latitud: -34.58, longitud: -58.43, barrio: "Palermo" },
+    [{ name: "Palermo Grill", lat: -34.585, lng: -58.425 }],
+    () => "Palermo",
+  );
+  assertEquals(gate.estado, "nuevo");
+});
+
+Deno.test("gate: prefijo de 2 palabras sí marca posible cliente", () => {
+  const gate = evaluarProspectoContraCartera(
+    { nombre: "La Riojana Sur", latitud: -34.58, longitud: -58.43 },
+    [{ name: "La Riojana Norte Vinos", lat: -34.583, lng: -58.43 }],
+  );
+  // "RIOJANA SUR" vs "RIOJANA NORTE": no comparten prefijo completo → nuevo
+  assertEquals(gate.estado, "nuevo");
+  const gate2 = evaluarProspectoContraCartera(
+    { nombre: "Don Julio", latitud: -34.58, longitud: -58.43 },
+    [{ name: "Don Julio Parrilla Palermo", lat: -34.583, lng: -58.43 }],
+  );
+  assertEquals(gate2.estado, "posible_cliente");
 });

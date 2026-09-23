@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { guardarVisitaPropia } from "@/lib/asignaciones";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -92,45 +93,15 @@ const RecordatoriosCalendario = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      let existing = supabase
-        .from("asignaciones_vendedores_clientes")
-        .select("id, estado")
-        .eq("vendedor_id", user.id);
-      existing = r.client_id
-        ? existing.eq("client_id", r.client_id)
-        : existing.eq("prospecto_place_id", r.prospecto_place_id!);
-
-      const { data: yaAsignado, error: existingError } = await existing.maybeSingle();
-      if (existingError) throw existingError;
-
-      // Ya existe una asignación (única por vendedor+cliente): la reactivamos.
-      if (yaAsignado) {
-        if (yaAsignado.estado !== "Visitado") {
-          toast({ title: "Ya está en tu ruta", description: "Lo vas a encontrar en el tablero Kanban." });
-          return;
-        }
-        const { error: reactivarError } = await supabase
-          .from("asignaciones_vendedores_clientes")
-          .update({ estado: "Por visitar", visited_at: null, fecha_programada: null })
-          .eq("id", yaAsignado.id);
-        if (reactivarError) throw reactivarError;
-        toast({
-          title: "Sumado a tu ruta de hoy",
-          description: "Estaba marcado como visitado: lo reactivé para una nueva visita.",
-        });
-        return;
-      }
-
-      const { error } = await supabase.from("asignaciones_vendedores_clientes").insert({
+      const creada = await guardarVisitaPropia({
         vendedor_id: user.id,
         client_id: r.client_id,
         prospecto_place_id: r.prospecto_place_id,
-        es_prospecto: !!r.prospecto_place_id,
-        estado: "Por visitar",
-        origen_asignacion: "auto",
-        fecha_programada: null,
       });
-      if (error) throw error;
+      if (!creada) {
+        toast({ title: "Ya está en tu ruta", description: "Lo vas a encontrar en el tablero Kanban." });
+        return;
+      }
 
       toast({
         title: "Sumado a tu ruta de hoy",
@@ -202,43 +173,23 @@ const RecordatoriosCalendario = () => {
 
       const fecha = `${dia.getFullYear()}-${String(dia.getMonth() + 1).padStart(2, "0")}-${String(dia.getDate()).padStart(2, "0")}`;
 
-      let existing = supabase
-        .from("asignaciones_vendedores_clientes")
-        .select("id")
-        .eq("vendedor_id", user.id);
-      existing = candidato.esProspecto
-        ? existing.eq("prospecto_place_id", candidato.id)
-        : existing.eq("client_id", candidato.id);
-      const { data: yaAsignado } = await existing.maybeSingle();
-
-      if (yaAsignado) {
-        const { error } = await supabase
-          .from("asignaciones_vendedores_clientes")
-          .update({ estado: "Por visitar", visited_at: null, fecha_programada: fecha })
-          .eq("id", yaAsignado.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("asignaciones_vendedores_clientes").insert({
-          vendedor_id: user.id,
-          client_id: candidato.esProspecto ? null : candidato.id,
-          prospecto_place_id: candidato.esProspecto ? candidato.id : null,
-          es_prospecto: candidato.esProspecto,
-          estado: "Por visitar",
-          origen_asignacion: "auto",
-          fecha_programada: fecha,
-        });
-        if (error) throw error;
-      }
-
-      const recordatorio: any = {
+      await guardarVisitaPropia({
         vendedor_id: user.id,
+        client_id: candidato.esProspecto ? null : candidato.id,
+        prospecto_place_id: candidato.esProspecto ? candidato.id : null,
+        fecha_programada: fecha,
+      });
+
+      const recordatorio = {
+        vendedor_id: user.id,
+        client_id: candidato.esProspecto ? null : candidato.id,
+        prospecto_place_id: candidato.esProspecto ? candidato.id : null,
         titulo: `Visita agendada: ${candidato.nombre}`,
         nota: nota || null,
         fecha_recordatorio: new Date(`${fecha}T${horaAgenda || "09:00"}:00-03:00`).toISOString(),
       };
-      if (candidato.esProspecto) recordatorio.prospecto_place_id = candidato.id;
-      else recordatorio.client_id = candidato.id;
-      await supabase.from("recordatorios").insert(recordatorio);
+      const { error: recordatorioError } = await supabase.from("recordatorios").insert(recordatorio);
+      if (recordatorioError) throw recordatorioError;
 
       toast({
         title: "Visita agendada",

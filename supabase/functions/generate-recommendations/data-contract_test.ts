@@ -1,5 +1,6 @@
 // Contrato de datos del motor: identidad geográfica (OT1) y reglas del importador (OT3/R4).
-import { assert, assertEquals, assertFalse } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { ok as assert, deepStrictEqual as assertEquals } from "node:assert/strict";
+const assertFalse = (value: unknown) => assertEquals(value, false);
 import {
   alertaNotaCredito,
   areaKey,
@@ -65,4 +66,11 @@ Deno.test("prioridad: ESTILO CAMPO (26/26) le gana a una cuenta chica al día", 
     dias_desde_ultima_compra: 5,
   };
   assert(prioridadBase(estiloCampo) > prioridadBase(chicaAlDia) * 5);
+});
+
+Deno.test("identidad: sub-barrios de Google entran en su barrio", () => {
+  const palermo = buildAreaFilter(["Palermo"], []);
+  assert(belongsToArea({ barrio: "Palermo Soho" }, palermo));
+  assert(belongsToArea({ barrio: "PALERMO CHICO" }, palermo));
+  assertFalse(belongsToArea({ barrio: "Villa Crespo" }, palermo));
 });

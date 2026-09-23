@@ -158,6 +158,7 @@ const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) =
       const { error } = await supabase
         .from('asignaciones_vendedores_clientes')
         .delete()
+        .neq('estado', 'Visitado')
         .eq('id', assignmentToDelete.id);
 
       if (error) throw error;

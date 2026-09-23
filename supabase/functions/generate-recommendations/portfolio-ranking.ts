@@ -144,6 +144,17 @@ const RUIDO_NOMBRE = new Set([
   "bar", "resto", "restaurante", "cava", "wine", "store", "shop", "club",
 ]);
 
+/** Palabras que solas no identifican a un negocio (barrios, zonas, adjetivos de marketing). */
+const PALABRAS_NO_DISTINTIVAS = new Set([
+  "PALERMO", "BELGRANO", "RECOLETA", "CABALLITO", "ALMAGRO", "COLEGIALES", "NUNEZ", "SAAVEDRA",
+  "CHACARITA", "BOEDO", "FLORES", "FLORESTA", "LINIERS", "MATADEROS", "BALVANERA", "MONSERRAT",
+  "RETIRO", "CONSTITUCION", "BARRACAS", "BOCA", "COGHLAN", "DEVOTO", "URQUIZA", "ORTUZAR", "CRESPO",
+  "PUEYRREDON", "AGRONOMIA", "PATERNAL", "VERSALLES", "MADERO", "PUERTO", "TELMO", "VILLA", "SAN",
+  "SANTA", "NORTE", "CENTRO", "OESTE", "ESTE", "BUENOS", "AIRES", "ARGENTINA", "PORTENO", "PORTENA",
+  "CASA", "GOURMET", "PREMIUM", "NUEVO", "NUEVA", "VIEJO", "VIEJA", "GRAN", "GRANDE", "PARRILLA",
+  "PIZZERIA", "CAFE", "CERVECERIA", "BODEGON", "MERCADO", "MARKET", "TIENDA", "FOOD", "GRILL",
+]);
+
 /** Nombre de fantasía comparable: sin acentos, sin razón social, sin palabras de rubro. */
 export function normalizeFantasyName(value: string | null | undefined): string {
   return (value || "")
@@ -181,22 +192,34 @@ export function evaluarProspectoContraCartera(
   const lng = Number(prospecto.longitud);
   const tieneCoords = Number.isFinite(lat) && Number.isFinite(lng);
 
+  // Un nombre de 1-3 letras ("EL", "SUR") no identifica a un negocio.
+  const nombreDistintivo = nombre.replace(/\s/g, "").length >= 4;
+
   for (const cliente of clientes) {
     const nombreCliente = normalizeFantasyName(cliente.name);
     if (!nombreCliente) continue;
-    const mismoNombre = nombreCliente === nombre
-      || nombreCliente.startsWith(`${nombre} `)
-      || nombre.startsWith(`${nombreCliente} `);
-    if (!mismoNombre) continue;
+    const exacto = nombreCliente === nombre;
+    // Prefijo ("MASIS" ⊂ "MASIS KINI LITZ"), salvo que el nombre corto sea una sola
+    // palabra genérica o geográfica ("PALERMO" ⊄ "PALERMO GRILL").
+    const corto = nombre.length <= nombreCliente.length ? nombre : nombreCliente;
+    const largo = corto === nombre ? nombreCliente : nombre;
+    const cortoEsGenerico = !corto.includes(" ") && (corto.length < 4 || PALABRAS_NO_DISTINTIVAS.has(corto));
+    const prefijo = !cortoEsGenerico && largo.startsWith(`${corto} `);
+    if (!exacto && !prefijo) continue;
 
-    if (!tieneCoords) return { estado: "posible_cliente", cliente, distanciaKm: 0 };
+    if (!tieneCoords) {
+      if (exacto && nombreDistintivo) return { estado: "posible_cliente", cliente, distanciaKm: 0 };
+      continue;
+    }
     const dist = calcularDistanciaKm(cliente.lat, cliente.lng, lat, lng);
     if (dist < 0.2) return { estado: "duplicado", cliente, distanciaKm: dist };
-    if (dist <= 0.8) return { estado: "posible_cliente", cliente, distanciaKm: dist };
+    if (dist <= 0.8 && (exacto ? nombreDistintivo : true)) {
+      return { estado: "posible_cliente", cliente, distanciaKm: dist };
+    }
 
-    const barrioProspecto = (prospecto.barrio || "").trim().toLowerCase();
-    const barrioCliente = (barrioDeCliente?.(cliente) || "").trim().toLowerCase();
-    if (barrioProspecto && barrioProspecto === barrioCliente) {
+    const barrioProspecto = areaKey(prospecto.barrio);
+    const barrioCliente = areaKey(barrioDeCliente?.(cliente));
+    if (exacto && nombreDistintivo && barrioProspecto && barrioProspecto === barrioCliente) {
       return { estado: "posible_cliente", cliente, distanciaKm: dist };
     }
   }
@@ -317,7 +340,14 @@ export function belongsToArea(
 ): boolean {
   if (!filter.activo) return true;
   const barrio = areaKey(place.barrio);
-  if (barrio) return filter.barrioKeys.has(barrio);
+  if (barrio) {
+    if (filter.barrioKeys.has(barrio)) return true;
+    // Sub-barrios que devuelve Google: "Palermo Soho", "Palermo Chico" → Palermo.
+    for (const key of filter.barrioKeys) {
+      if (barrio.startsWith(`${key} `)) return true;
+    }
+    return false;
+  }
   const comuna = areaKey(place.comuna);
   return Boolean(comuna) && filter.comunaKeys.has(comuna);
 }

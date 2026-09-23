@@ -430,6 +430,7 @@ export type Database = {
           provincia_principal: string | null
           razon_social: string | null
           requiere_visita: string | null
+          rubro: string | null
           score_comercial: number | null
           score_recencia: number | null
           score_volumen: number | null
@@ -481,6 +482,7 @@ export type Database = {
           provincia_principal?: string | null
           razon_social?: string | null
           requiere_visita?: string | null
+          rubro?: string | null
           score_comercial?: number | null
           score_recencia?: number | null
           score_volumen?: number | null
@@ -532,6 +534,7 @@ export type Database = {
           provincia_principal?: string | null
           razon_social?: string | null
           requiere_visita?: string | null
+          rubro?: string | null
           score_comercial?: number | null
           score_recencia?: number | null
           score_volumen?: number | null
@@ -1018,6 +1021,7 @@ export type Database = {
           rating: number | null
           resumen_google: string | null
           sirve_vinos: boolean | null
+          rubro: string | null
           telefono: string | null
           tipo_principal: string | null
           tipos: string[] | null
@@ -1047,6 +1051,7 @@ export type Database = {
           rating?: number | null
           resumen_google?: string | null
           sirve_vinos?: boolean | null
+          rubro?: string | null
           telefono?: string | null
           tipo_principal?: string | null
           tipos?: string[] | null
@@ -1076,6 +1081,7 @@ export type Database = {
           rating?: number | null
           resumen_google?: string | null
           sirve_vinos?: boolean | null
+          rubro?: string | null
           telefono?: string | null
           tipo_principal?: string | null
           tipos?: string[] | null
@@ -1683,6 +1689,15 @@ export type Database = {
       }
     }
     Functions: {
+      guardar_asignaciones: {
+        Args: { p_asignaciones: Json; p_actualizar_cartera?: boolean }
+        Returns: number
+      }
+      refrescar_rubros: { Args: never; Returns: Json }
+      rubros_disponibles: {
+        Args: never
+        Returns: { clientes: number; prospectos: number; rubro: string }[]
+      }
       canonical_vendedor: { Args: { _nombre: string }; Returns: string }
       clean_old_recommendations: { Args: never; Returns: undefined }
       cleanup_expired_import_staging: { Args: never; Returns: number }

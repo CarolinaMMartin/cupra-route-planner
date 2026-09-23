@@ -1,13 +1,11 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { googleMapsFetch, hayGoogleMaps } from "../_shared/google-maps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const GOOGLE_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || "";
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -36,7 +34,7 @@ Deno.serve(async (req) => {
       return json({ status: "ERROR", error_code: "UNAUTHORIZED", message: "Sesión expirada. Iniciá sesión nuevamente." }, 401);
     }
 
-    if (!GOOGLE_API_KEY || !LOVABLE_API_KEY) {
+    if (!hayGoogleMaps()) {
       return json({ status: "ERROR", error_code: "CONFIG_ERROR", message: "El servicio de geocodificación no está configurado." }, 500);
     }
 
@@ -58,12 +56,7 @@ Deno.serve(async (req) => {
     const params = new URLSearchParams({ address, language: "es", region: "ar" });
     if (codigoPostal) params.set("components", `postal_code:${codigoPostal}|country:AR`);
 
-    const resp = await fetch(`${GATEWAY_URL}/maps/api/geocode/json?${params.toString()}`, {
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "X-Connection-Api-Key": GOOGLE_API_KEY,
-      },
-    });
+    const resp = await googleMapsFetch(`/maps/api/geocode/json?${params.toString()}`);
 
     if (resp.status === 403) {
       const details: Array<{ reason?: string }> = (await resp.json().catch(() => ({})))?.error?.details ?? [];
@@ -79,7 +72,7 @@ Deno.serve(async (req) => {
 
     if (!resp.ok) {
       const text = await resp.text();
-      console.error(`[geocode-address] gateway ${resp.status}: ${text}`);
+      console.error(`[geocode-address] google ${resp.status}: ${text}`);
       return json({ status: "ERROR", error_code: "NETWORK_ERROR", message: "No se pudo conectar con Google Maps." }, resp.status);
     }
 
@@ -87,14 +80,8 @@ Deno.serve(async (req) => {
 
     // Si el CP restringe demasiado y no hay resultados, reintenta sin components
     if ((data.status === "ZERO_RESULTS" || !data.results?.length) && codigoPostal) {
-      const retry = await fetch(
-        `${GATEWAY_URL}/maps/api/geocode/json?address=${encodeURIComponent(address)}&language=es&region=ar`,
-        {
-          headers: {
-            Authorization: `Bearer ${LOVABLE_API_KEY}`,
-            "X-Connection-Api-Key": GOOGLE_API_KEY,
-          },
-        },
+      const retry = await googleMapsFetch(
+        `/maps/api/geocode/json?address=${encodeURIComponent(address)}&language=es&region=ar`,
       );
       if (retry.ok) data = await retry.json();
     }

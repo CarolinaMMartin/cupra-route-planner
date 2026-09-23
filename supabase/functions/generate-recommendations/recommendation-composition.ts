@@ -1,7 +1,14 @@
 export interface CompositionCandidate {
   client_id: string;
   es_prospecto: boolean;
+  /** ACTIVO | INACTIVO | PERDIDO | POTENCIAL */
   estado_comercial: string;
+}
+
+export interface Cupos {
+  cartera: number;
+  reactivacion: number;
+  prospectos: number;
 }
 
 interface CompositionInput<T extends CompositionCandidate> {
@@ -10,88 +17,127 @@ interface CompositionInput<T extends CompositionCandidate> {
   prospects: T[];
   unavailableIds?: ReadonlySet<string>;
   limit?: number;
-  cupos?: { cartera: number; reactivacion: number; prospectos: number };
+  cupos?: Cupos;
+  /**
+   * Estados elegidos por el asignador (vacío = mezcla por defecto).
+   * Si eligió, por ejemplo, PERDIDO + INACTIVO, la ruta sale de esos estados
+   * y SOLO si no alcanzan se completa con prospectos (y como último recurso con
+   * el resto de la cartera), para que siempre haya `limit` visitas.
+   */
+  estados?: ReadonlySet<string>;
 }
 
-const DEFAULT_CUPOS = { cartera: 4, reactivacion: 2, prospectos: 2 };
+/** Regla dura del día: 5 cartera activa + 2 reactivación + 1 potencial = 8. */
+export const DEFAULT_CUPOS: Cupos = { cartera: 5, reactivacion: 2, prospectos: 1 };
+
+export interface CompositionResult {
+  ids: string[];
+  /** Visitas que entraron para completar y NO pertenecen a los estados elegidos. */
+  fueraDeSeleccion: string[];
+}
 
 /**
- * Owns the non-negotiable route composition: 4 cartera activa + 2 reactivación
- * + 2 prospectos. Model preferences only affect ordering inside each block.
- * Substitution chain when a block cannot be filled:
- *   falta cartera → reactivación → prospectos (y viceversa para reactivación).
+ * Dueño de la composición de la ruta. El modelo de IA solo ordena dentro de cada bloque.
+ *
+ * Bloques:
+ *   cartera      = clientes propios ACTIVOS
+ *   reactivación = clientes propios INACTIVOS o PERDIDOS
+ *   potencial    = clientes propios que nunca compraron + prospectos (en ese orden)
+ *
+ * Cadena de sustitución (siempre hasta `limit`):
+ *   cupos → cartera → reactivación → potencial → (si hay filtro) prospectos fuera
+ *   del filtro → resto de la cartera fuera del filtro.
  */
-export function composeRecommendationIds<T extends CompositionCandidate>({
+export function composeRoute<T extends CompositionCandidate>({
   preferredIds,
   clients,
   prospects,
   unavailableIds = new Set<string>(),
   limit = 8,
   cupos = DEFAULT_CUPOS,
-}: CompositionInput<T>): string[] {
+  estados = new Set<string>(),
+}: CompositionInput<T>): CompositionResult {
   const candidatesById = new Map<string, T>();
-  [...clients, ...prospects].forEach((candidate) =>
-    candidatesById.set(candidate.client_id, candidate)
-  );
+  [...clients, ...prospects].forEach((candidate) => {
+    if (!candidatesById.has(candidate.client_id)) candidatesById.set(candidate.client_id, candidate);
+  });
+
+  const hayFiltro = estados.size > 0;
+  const permitido = (c: T): boolean => {
+    if (!hayFiltro) return true;
+    return estados.has(c.es_prospecto ? "POTENCIAL" : c.estado_comercial);
+  };
 
   const pickedIds = new Set<string>();
   const result: string[] = [];
-  const append = (candidateId: string) => {
-    if (
-      result.length >= limit || pickedIds.has(candidateId) ||
-      unavailableIds.has(candidateId)
-    ) return;
-    if (!candidatesById.has(candidateId)) return;
+  const fueraDeSeleccion: string[] = [];
+  const append = (candidateId: string, fuera = false): boolean => {
+    if (result.length >= limit || pickedIds.has(candidateId) || unavailableIds.has(candidateId)) return false;
+    if (!candidatesById.has(candidateId)) return false;
     result.push(candidateId);
     pickedIds.add(candidateId);
+    if (fuera) fueraDeSeleccion.push(candidateId);
+    return true;
   };
 
   const preferredCandidates = preferredIds
     .map((candidateId) => candidatesById.get(candidateId))
     .filter((candidate): candidate is T => Boolean(candidate));
 
-  const isCarteraActiva = (candidate: T) =>
-    !candidate.es_prospecto && candidate.estado_comercial === "ACTIVO";
-  const isReactivacion = (candidate: T) =>
-    !candidate.es_prospecto && candidate.estado_comercial !== "ACTIVO";
+  const isCartera = (c: T) => !c.es_prospecto && c.estado_comercial === "ACTIVO";
+  const isReactivacion = (c: T) => !c.es_prospecto && (c.estado_comercial === "INACTIVO" || c.estado_comercial === "PERDIDO");
+  const isPotencialPropio = (c: T) => !c.es_prospecto && c.estado_comercial === "POTENCIAL";
+  const isProspecto = (c: T) => c.es_prospecto;
 
   // Orden dentro de cada bloque: primero lo que prefirió el modelo, después el pool.
-  const orderedBlock = (predicate: (candidate: T) => boolean): string[] => {
+  const orderedBlock = (predicate: (c: T) => boolean): string[] => {
     const ids: string[] = [];
     const seen = new Set<string>();
-    const push = (candidate: T) => {
-      if (seen.has(candidate.client_id)) return;
-      seen.add(candidate.client_id);
-      ids.push(candidate.client_id);
+    const push = (c: T) => {
+      if (seen.has(c.client_id)) return;
+      seen.add(c.client_id);
+      ids.push(c.client_id);
     };
     preferredCandidates.filter(predicate).forEach(push);
     [...clients, ...prospects].filter(predicate).forEach(push);
     return ids;
   };
 
-  const bloqueCartera = orderedBlock(isCarteraActiva);
-  const bloqueReactivacion = orderedBlock(isReactivacion);
-  const bloqueProspectos = orderedBlock((candidate) => candidate.es_prospecto);
+  const bloqueCartera = orderedBlock((c) => isCartera(c) && permitido(c));
+  const bloqueReactivacion = orderedBlock((c) => isReactivacion(c) && permitido(c));
+  const bloquePotencial = [
+    ...orderedBlock((c) => isPotencialPropio(c) && permitido(c)),
+    ...orderedBlock((c) => isProspecto(c) && permitido(c)),
+  ];
 
-  const take = (ids: string[], cantidad: number) => {
+  const take = (ids: string[], cantidad: number, fuera = false) => {
     let tomados = 0;
     for (const id of ids) {
-      if (tomados >= cantidad) break;
-      const before = result.length;
-      append(id);
-      if (result.length > before) tomados++;
+      if (tomados >= cantidad || result.length >= limit) break;
+      if (append(id, fuera)) tomados++;
     }
   };
 
-  // 1) Cupos objetivo.
+  // 1) Cupos objetivo (los bloques ya vienen recortados por el filtro de estados).
   take(bloqueCartera, cupos.cartera);
   take(bloqueReactivacion, cupos.reactivacion);
-  take(bloqueProspectos, cupos.prospectos);
+  take(bloquePotencial, cupos.prospectos);
 
-  // 2) Cadena de sustitución: clientes propios primero, prospectos al final.
+  // 2) Sustitución dentro de lo elegido: cartera propia primero, potencial al final.
   take(bloqueCartera, limit);
   take(bloqueReactivacion, limit);
-  take(bloqueProspectos, limit);
+  take(bloquePotencial, limit);
 
-  return result;
+  // 3) Siempre `limit`: si el filtro no alcanza, prospectos y después el resto de la cartera.
+  if (hayFiltro && result.length < limit) {
+    take(orderedBlock(isProspecto), limit, true);
+    take(orderedBlock((c) => isCartera(c) || isReactivacion(c) || isPotencialPropio(c)), limit, true);
+  }
+
+  return { ids: result, fueraDeSeleccion };
+}
+
+/** Compatibilidad: devuelve solo los IDs. */
+export function composeRecommendationIds<T extends CompositionCandidate>(input: CompositionInput<T>): string[] {
+  return composeRoute(input).ids;
 }

@@ -1,4 +1,7 @@
 import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
+import { SegmentFilters } from "@/components/shared/SegmentFilters";
+import { estadoDe, FILTROS_VACIOS, filtrarPorSegmentos, type FiltrosSegmento } from "@/lib/segmentos";
+import { fetchInChunks, fetchInPages } from "@/lib/supabaseQuery";
 import { useEffect, useState, useMemo } from "react";
 import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import { useNavigate } from "react-router-dom";
@@ -226,6 +229,9 @@ const SupervisionVendedores = () => {
   const [openActividades, setOpenActividades] = useState(false);
   const [openResumen, setOpenResumen] = useState(true);
 
+  // Segmentos del cliente asignado: estado comercial, rubro, canal, volumen.
+  const [segmentos, setSegmentos] = useState<FiltrosSegmento>(FILTROS_VACIOS);
+
   const [filters, setFilters] = useState<Filters>({
     asignadoDesde: "",
     asignadoHasta: "",
@@ -307,6 +313,7 @@ const SupervisionVendedores = () => {
       vendedorId: "all",
       estado: "all"
     });
+    setSegmentos(FILTROS_VACIOS);
   };
 
   // Helper para crear key de feedback
@@ -361,9 +368,32 @@ const SupervisionVendedores = () => {
         query = query.eq("estado", filters.estado as "Asignado" | "Por visitar" | "Visitado");
       }
 
-      const { data: asignacionesData, error } = await query.order("created_at", { ascending: false });
+      // PostgREST devuelve hasta 1000 filas por pedido: se pagina.
+      const asignacionesRaw: any[] = [];
+      const ordenada = query.order("created_at", { ascending: false }).order("id");
+      for (let from = 0; from < 50000; from += 1000) {
+        const { data: page, error } = await ordenada.range(from, from + 999);
+        if (error) throw error;
+        asignacionesRaw.push(...(page || []));
+        if (!page || page.length < 1000) break;
+      }
 
-      if (error) throw error;
+      // Segmento de cada asignación (estado comercial y rubro del cliente o prospecto).
+      const segClientes = await fetchInChunks(
+        (asignacionesRaw || []).filter((a) => a.client_id).map((a) => a.client_id as string),
+        (chunk) => supabase.from("clientes").select("client_id, rubro, canal, categoria_volumen, ultima_compra, dias_desde_ultima_compra").in("client_id", chunk),
+      );
+      const segProspectos = await fetchInChunks(
+        (asignacionesRaw || []).filter((a) => a.prospecto_place_id).map((a) => a.prospecto_place_id as string),
+        (chunk) => supabase.from("prospectos").select("place_id, rubro").in("place_id", chunk),
+      );
+      const segCli = new Map(segClientes.map((c) => [c.client_id, c]));
+      const segPro = new Map(segProspectos.map((p) => [p.place_id, p]));
+      const asignacionesData = filtrarPorSegmentos(asignacionesRaw || [], segmentos, (a) => {
+        if (a.es_prospecto || !a.client_id) return { estado: "POTENCIAL", rubro: segPro.get(a.prospecto_place_id as string)?.rubro };
+        const c: any = segCli.get(a.client_id) || {};
+        return { estado: estadoDe(c), rubro: c.rubro, canal: c.canal, volumen: c.categoria_volumen };
+      });
 
       // Obtener datos de vendedores, clientes y prospectos
       const vendedorIds = [...new Set(asignacionesData?.map((a) => a.vendedor_id) || [])];
@@ -376,46 +406,45 @@ const SupervisionVendedores = () => {
       const [vendedoresRes, clientesRes, prospectosRes] = await Promise.all([
       supabase.from("profiles").select("user_id, nombre, email").in("user_id", vendedorIds),
       clientIds.length > 0 ?
-      supabase.from("clientes").select("client_id, razon_social, direccion_principal").in("client_id", clientIds) :
+      fetchInChunks(clientIds, (chunk) => supabase.from("clientes").select("client_id, razon_social, direccion_principal").in("client_id", chunk)).then((data) => ({ data })) :
       Promise.resolve({ data: [] as {client_id: string;razon_social: string | null;direccion_principal: string | null;}[] }),
       prospectoPlaceIds.length > 0 ?
-      supabase.from("prospectos").select("place_id, nombre, direccion").in("place_id", prospectoPlaceIds) :
+      fetchInChunks(prospectoPlaceIds, (chunk) => supabase.from("prospectos").select("place_id, nombre, direccion").in("place_id", chunk)).then((data) => ({ data })) :
       Promise.resolve({ data: [] as {place_id: string;nombre: string;direccion: string;}[] })]
       );
 
       // Obtener feedbacks para las asignaciones visitadas
-      let feedbacksMap = new Map<string, FeedbackData>();
+      const feedbacksMap = new Map<string, FeedbackData>();
 
       if (asignacionesVisitadas.length > 0) {
         const feedbackClientIds = asignacionesVisitadas.filter((a) => a.client_id).map((a) => a.client_id!);
         const feedbackProspectoIds = asignacionesVisitadas.filter((a) => a.prospecto_place_id).map((a) => a.prospecto_place_id!);
 
-        // Construir query de feedbacks
-        let feedbackQuery = supabase.
-        from('cliente_feedbacks').
-        select('client_id, prospecto_place_id, vendedor_id, visita_realizada, tipo_interaccion, motivo_no_visita, feedback, actualizar_etiqueta_wa, created_at').
-        order('created_at', { ascending: false });
+        // Feedbacks en tandas (una lista larga de IDs en la URL puede fallar).
+        const campos = 'client_id, prospecto_place_id, vendedor_id, visita_realizada, tipo_interaccion, motivo_no_visita, feedback, actualizar_etiqueta_wa, created_at';
+        const [fbClientes, fbProspectos] = await Promise.all([
+          fetchInPages(feedbackClientIds, (chunk, from, to) => supabase.from('cliente_feedbacks').select(campos).in('client_id', chunk).order('created_at', { ascending: false }).order('id').range(from, to)),
+          fetchInPages(feedbackProspectoIds, (chunk, from, to) => supabase.from('cliente_feedbacks').select(campos).in('prospecto_place_id', chunk).order('created_at', { ascending: false }).order('id').range(from, to)),
+        ]);
+        const feedbacksData = [...fbClientes, ...fbProspectos]
+          .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
 
-        // Filtrar por client_ids o prospecto_place_ids
-        if (feedbackClientIds.length > 0 && feedbackProspectoIds.length > 0) {
-          feedbackQuery = feedbackQuery.or(`client_id.in.(${feedbackClientIds.join(',')}),prospecto_place_id.in.(${feedbackProspectoIds.join(',')})`);
-        } else if (feedbackClientIds.length > 0) {
-          feedbackQuery = feedbackQuery.in('client_id', feedbackClientIds);
-        } else if (feedbackProspectoIds.length > 0) {
-          feedbackQuery = feedbackQuery.in('prospecto_place_id', feedbackProspectoIds);
-        }
-
-        const { data: feedbacksData } = await feedbackQuery;
-
-        // Mapear feedbacks - usar el más reciente por client/prospecto + vendedor
-        (feedbacksData || []).forEach((f) => {
-          const key = f.client_id ?
-          `client:${f.client_id}:${f.vendedor_id}` :
-          `prospecto:${f.prospecto_place_id}:${f.vendedor_id}`;
-          if (!feedbacksMap.has(key)) {
-            feedbacksMap.set(key, f);
-          }
+        const porCuenta = new Map<string, typeof feedbacksData>();
+        feedbacksData.forEach((feedback) => {
+          const key = getFeedbackKey(feedback);
+          const lista = porCuenta.get(key) || [];
+          lista.push(feedback);
+          porCuenta.set(key, lista);
         });
+        for (const asignacion of asignacionesVisitadas) {
+          const desde = Date.parse(asignacion.created_at);
+          const hasta = Date.parse(asignacion.visited_at || "");
+          const feedback = (porCuenta.get(getFeedbackKey(asignacion)) || []).find((f) => {
+            const fecha = Date.parse(f.created_at);
+            return Number.isFinite(hasta) && fecha >= desde && fecha <= hasta;
+          });
+          if (feedback) feedbacksMap.set(asignacion.id, feedback);
+        }
       }
 
       const vendedoresMap = new Map(vendedoresRes.data?.map((v) => [v.user_id, v] as const) || []);
@@ -447,7 +476,7 @@ const SupervisionVendedores = () => {
 
         if (a.estado === "Visitado") {
           // Buscar feedback para determinar tipo de cierre real
-          const feedbackKey = getFeedbackKey(a);
+          const feedbackKey = a.id;
           const feedback = feedbacksMap.get(feedbackKey);
 
           if (feedback) {
@@ -491,7 +520,7 @@ const SupervisionVendedores = () => {
         }
 
         // Determinar tipo de cierre basado en feedback
-        const feedbackKey = getFeedbackKey(a);
+        const feedbackKey = a.id;
         const feedback = feedbacksMap.get(feedbackKey);
         let tipoCierre: 'Visitado' | 'Online' | 'No visitado' | null = null;
 
@@ -525,7 +554,7 @@ const SupervisionVendedores = () => {
         };
       });
 
-      setAsignaciones(detalleAsignaciones.slice(0, 500));
+      setAsignaciones(detalleAsignaciones);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast({
@@ -540,7 +569,7 @@ const SupervisionVendedores = () => {
 
   useEffect(() => {
     fetchData();
-  }, [filters]);
+  }, [filters, segmentos]);
 
   // KPIs globales
   const kpis = useMemo(() => {
@@ -714,7 +743,7 @@ const SupervisionVendedores = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Estado</label>
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Estado de la visita</label>
                     <Select value={filters.estado} onValueChange={(value) => handleFilterChange("estado", value)}>
                       <SelectTrigger className="bg-card"><SelectValue placeholder="Todos los estados" /></SelectTrigger>
                       <SelectContent>
@@ -732,6 +761,13 @@ const SupervisionVendedores = () => {
                     </Button>
                   </div>
                 </div>
+                <SegmentFilters
+                  className="mt-6"
+                  value={segmentos}
+                  onChange={setSegmentos}
+                  campos={["estados", "rubros", "canales", "volumenes"]}
+                  titulo="Segmento del cliente visitado"
+                />
               </CardContent>
             </Card>
           </CollapsibleContent>

@@ -1,3 +1,4 @@
+import { guardarAsignaciones } from "@/lib/asignaciones";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -183,6 +184,8 @@ const AssignorDashboard = () => {
         barrio: placesFilters.barrio,
         area_id: filters.area_id,
         max_recomendaciones: 8,
+        estados: Array.isArray(filters.estados) ? filters.estados : [],
+        rubros: Array.isArray(filters.rubros) ? filters.rubros : [],
         instrucciones_adicionales: instruccionesAdicionales || null,
       };
 
@@ -265,6 +268,7 @@ const AssignorDashboard = () => {
           vendedor_recomendado_id: rec.vendedor_recomendado_id,
           vendedor_actual: vendedorNombre || rec.vendedor_actual,
           estado_cliente: rec.estado_comercial || (rec.es_prospecto ? 'POTENCIAL' : undefined),
+          rubro: rec.rubro ?? rec.factores_ia?.rubro ?? null,
         });
       });
 
@@ -281,6 +285,11 @@ const AssignorDashboard = () => {
       let errorMessage = "Error al solicitar recomendaciones";
       if (error.message?.includes("429")) errorMessage = "Límite de consultas alcanzado. Reintenta en unos minutos.";
       else if (error.message?.includes("402")) errorMessage = "Créditos agotados.";
+      else {
+        // Mensaje del servidor (ej. sesión vencida o sin permiso), si vino en JSON.
+        const detalle = String(error.message || "").match(/"error"\s*:\s*"([^"]+)"/)?.[1];
+        if (detalle) errorMessage = detalle;
+      }
       toast({ variant: "destructive", title: "Error", description: errorMessage });
     } finally {
       setIsLoading(false);
@@ -315,28 +324,6 @@ const AssignorDashboard = () => {
 
     setIsSavingAssignments(true);
     try {
-      const clientIds = selected
-        .filter((rec) => !rec.es_prospecto && rec.client_id)
-        .map((rec) => rec.client_id as string);
-      const prospectIds = selected
-        .filter((rec) => rec.es_prospecto && rec.prospecto_place_id)
-        .map((rec) => rec.prospecto_place_id as string);
-
-      if (clientIds.length > 0) {
-        const { error } = await supabase
-          .from("asignaciones_vendedores_clientes")
-          .delete()
-          .in("client_id", clientIds);
-        if (error) throw error;
-      }
-      if (prospectIds.length > 0) {
-        const { error } = await supabase
-          .from("asignaciones_vendedores_clientes")
-          .delete()
-          .in("prospecto_place_id", prospectIds);
-        if (error) throw error;
-      }
-
       const assignments: Array<{
         vendedor_id: string;
         client_id?: string;
@@ -369,18 +356,7 @@ const AssignorDashboard = () => {
       if (assignments.length !== selected.length) {
         throw new Error("Hay recomendaciones sin identificador de cliente o prospecto.");
       }
-      const { error: insertError } = await supabase
-        .from("asignaciones_vendedores_clientes")
-        .insert(assignments);
-      if (insertError) throw insertError;
-
-      const timestamp = new Date().toISOString();
-      if (clientIds.length > 0) {
-        await supabase.from("clientes").update({ last_recommendation_at: timestamp }).in("client_id", clientIds);
-      }
-      if (prospectIds.length > 0) {
-        await supabase.from("prospectos").update({ last_recommendation_at: timestamp }).in("place_id", prospectIds);
-      }
+      await guardarAsignaciones(assignments);
 
       toast({
         title: "Asignaciones guardadas",
@@ -532,16 +508,16 @@ const AssignorDashboard = () => {
 
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="w-full max-w-2xl">
-              <TabsTrigger value="nueva" className="flex-1 gap-2">
+            <TabsList className="grid h-auto w-full max-w-2xl grid-cols-3">
+              <TabsTrigger value="nueva" className="min-w-0 gap-1 whitespace-normal px-2 py-2 text-xs sm:gap-2 sm:text-sm">
                 <Plus className="w-4 h-4" />
                 Nueva Asignación
               </TabsTrigger>
-              <TabsTrigger value="hoy" className="flex-1 gap-2">
+              <TabsTrigger value="hoy" className="min-w-0 gap-1 whitespace-normal px-2 py-2 text-xs sm:gap-2 sm:text-sm">
                 <Calendar className="w-4 h-4" />
                 Asignaciones de Hoy
               </TabsTrigger>
-              <TabsTrigger value="calendario" className="flex-1 gap-2">
+              <TabsTrigger value="calendario" className="min-w-0 gap-1 whitespace-normal px-2 py-2 text-xs sm:gap-2 sm:text-sm">
                 <Calendar className="w-4 h-4" />
                 Calendario
               </TabsTrigger>
@@ -549,7 +525,7 @@ const AssignorDashboard = () => {
 
             <TabsContent value="nueva">
               <Card>
-                <CardContent className="p-8">
+                <CardContent className="p-4 sm:p-8">
                   <FilterPanel
                     onRequestRecommendations={handleRequestRecommendations}
                     isLoading={isLoading}

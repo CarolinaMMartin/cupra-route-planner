@@ -277,6 +277,7 @@ Deno.serve(async (req) => {
       .from('profiles')
       .select('rol')
       .eq('user_id', authData.user.id)
+      .eq('activo', true)
       .single();
     // Roles en cascada: administrador ⊇ asignador
     if (profileError || (callerProfile?.rol !== 'asignador' && callerProfile?.rol !== 'administrador')) {
@@ -600,6 +601,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Rubro normalizado desde las Categorías del maestro (y de ventas si no hay).
+    {
+      const { error: rubroError } = await supabase.rpc('refrescar_rubros');
+      if (rubroError) console.error('⚠️ No se pudo recalcular el rubro:', rubroError.message);
+    }
+
     // R7: un solo primario por cliente, con la fuente más confiable ganando
     {
       const { error: reconError } = await supabase.rpc('reconciliar_places_primarios');
@@ -669,7 +676,6 @@ Deno.serve(async (req) => {
         resultado: results,
         reconciliacion: {
           filas_origen: rawRows.length,
-          clientes_unicos: clientes.length,
           filas_sin_identificador: sinIdentificador,
           filas_sin_resolver: sinResolver,
           ...conciliacion_entidades,

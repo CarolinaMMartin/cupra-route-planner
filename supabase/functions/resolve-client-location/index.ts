@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { googleMapsFetch, hayGoogleMaps } from "../_shared/google-maps.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,22 +7,14 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-const GOOGLE_API_KEY = Deno.env.get("GOOGLE_MAPS_API_KEY") || "";
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY") || "";
-const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 
 const LAT_MIN = -56, LAT_MAX = -21, LNG_MIN = -74, LNG_MAX = -53;
 const isValidArgentina = (lat: number, lng: number) =>
   lat >= LAT_MIN && lat <= LAT_MAX && lng >= LNG_MIN && lng <= LNG_MAX;
 
 async function geocode(params: string) {
-  const resp = await fetch(`${GATEWAY_URL}/maps/api/geocode/json?${params}`, {
-    headers: {
-      Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      "X-Connection-Api-Key": GOOGLE_API_KEY,
-    },
-  });
-  if (!resp.ok) throw new Error(`Gateway ${resp.status}`);
+  const resp = await googleMapsFetch(`/maps/api/geocode/json?${params}`);
+  if (!resp.ok) throw new Error(`Google Maps ${resp.status}`);
   return await resp.json();
 }
 
@@ -80,7 +73,7 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (!GOOGLE_API_KEY || !LOVABLE_API_KEY) {
+      if (!hayGoogleMaps()) {
         return new Response(JSON.stringify({ error: "Conector de Google Maps no configurado" }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -115,7 +108,7 @@ Deno.serve(async (req) => {
     // Toda coordenada guardada debe resolver su barrio. Esto también cubre las
     // correcciones manuales que llegan con lat/lng en vez de una dirección.
     if (!barrio) {
-      if (!GOOGLE_API_KEY || !LOVABLE_API_KEY) {
+      if (!hayGoogleMaps()) {
         return new Response(JSON.stringify({ error: "No se puede validar el barrio sin Google Maps" }), {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

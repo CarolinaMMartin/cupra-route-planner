@@ -1,3 +1,5 @@
+import { ESTADOS, colorEstado, labelEstado, estadoPorDias, type EstadoComercial } from "@/lib/segmentos";
+
 /**
  * Paleta de colores para diferenciar vendedores en mapas.
  * Cada color tiene buen contraste sobre mapas claros.
@@ -47,60 +49,34 @@ export function getVendorColorMap(): Map<string, string> {
 }
 
 // ============================================================
-// ESTADO COMERCIAL — Colores por estado del cliente
+// ESTADO COMERCIAL — una sola fuente de verdad en src/lib/segmentos.ts
 // ============================================================
 
-const STATE_COLORS: Record<string, string> = {
-  ACTIVO: '#22c55e',     // verde
-  INACTIVO: '#eab308',   // amarillo
-  PERDIDO: '#ef4444',    // rojo
-  POTENCIAL: '#3b82f6',  // azul
-};
-
-const STATE_LABELS: Record<string, string> = {
-  ACTIVO: 'Activo',
-  INACTIVO: 'Inactivo',
-  PERDIDO: 'Perdido',
-  POTENCIAL: 'Potencial',
-};
-
-/**
- * Devuelve el color asociado a un estado comercial.
- */
+/** Color asociado a un estado comercial. */
 export function getStateColor(estado: string | undefined | null): string {
-  return STATE_COLORS[(estado || '').toUpperCase()] || '#9ca3af'; // gris por defecto
+  return colorEstado(estado);
 }
 
-/**
- * Devuelve el label legible para un estado comercial.
- */
+/** Label legible para un estado comercial. */
 export function getStateLabel(estado: string | undefined | null): string {
-  return STATE_LABELS[(estado || '').toUpperCase()] || 'Sin estado';
+  return labelEstado(estado);
 }
 
-/**
- * Devuelve todos los estados y sus colores para leyendas.
- */
+/** Estados y colores para leyendas. */
 export function getStateLegend(): Array<{ estado: string; color: string; label: string }> {
-  return Object.entries(STATE_COLORS).map(([estado, color]) => ({
-    estado,
-    color,
-    label: STATE_LABELS[estado] || estado,
-  }));
+  return ESTADOS.map((e) => ({ estado: e.value, color: e.color, label: e.label }));
 }
 
 /**
- * Clasifica un cliente por su estado comercial basado en dias_desde_ultima_compra.
+ * Estado comercial por días sin comprar. Sin compras registradas = POTENCIAL
+ * (mismo criterio que el motor de recomendaciones).
  */
 export function classifyClientState(
   diasDesdeUltimaCompra: number | null | undefined,
   esProspecto: boolean | undefined,
-): 'ACTIVO' | 'INACTIVO' | 'PERDIDO' | 'POTENCIAL' {
+): EstadoComercial {
   if (esProspecto) return 'POTENCIAL';
-  if (diasDesdeUltimaCompra === null || diasDesdeUltimaCompra === undefined) return 'PERDIDO';
-  if (diasDesdeUltimaCompra <= 30) return 'ACTIVO';
-  if (diasDesdeUltimaCompra <= 90) return 'INACTIVO';
-  return 'PERDIDO';
+  return estadoPorDias(diasDesdeUltimaCompra ?? null);
 }
 
 /**
