@@ -1678,8 +1678,7 @@ Deno.serve(async (req) => {
         const extraFiltered = (geoProspectos || []).filter(p =>
           !prospectosAsignadosHoy.has(p.place_id) &&
           !existingIds.has(p.place_id) &&
-          !p.client_id &&
-          belongsToSelectedArea({ barrio: p.barrio, comuna: p.comuna, ciudad: p.ciudad })
+          !p.client_id
         );
 
         extraProspectosLoaded.push(...extraFiltered);
@@ -1797,9 +1796,10 @@ Deno.serve(async (req) => {
               existingClientNames,
               vendorHotspot,
             );
-            const newProspects = discovered
-              .filter((prospecto) => belongsToSelectedArea(prospecto))
-              .filter(registrarGate);
+            // En búsquedas centradas en el núcleo manda la distancia real. Google
+            // etiqueta muchas localidades de GBA en `ciudad` o sin `barrio`, por
+            // lo que volver a filtrar por texto descartaba lugares cercanos válidos.
+            const newProspects = discovered.filter(registrarGate);
 
             if (newProspects.length > 0) {
               const { error: liveUpsertError } = await supabaseClient
@@ -2025,9 +2025,9 @@ La justificación es para un asignador comercial: explicá en una o dos frases P
           existingClientNames,
           hotspot,
         );
-        const newProspects = discovered
-          .filter((prospecto) => belongsToSelectedArea(prospecto))
-          .filter(registrarGate);
+        // El top-up ya está limitado por coordenadas al núcleo del vendedor.
+        // No se vuelve a excluir por etiquetas administrativas inconsistentes.
+        const newProspects = discovered.filter(registrarGate);
         if (newProspects.length === 0) return [];
 
         const { error: upsertError } = await supabaseClient
