@@ -715,6 +715,7 @@ export type Database = {
       }
       import_batches: {
         Row: {
+          aplicado_at: string | null
           archivo_nombre: string
           archivo_sha256: string | null
           archivo_tamano: number | null
@@ -738,6 +739,7 @@ export type Database = {
           modo_carga: string
           reconciliacion: Json | null
           reemplaza_existentes: boolean
+          respuesta: Json | null
           resultado: Json
           revertido_at: string | null
           started_at: string
@@ -748,6 +750,7 @@ export type Database = {
           version_etl: string
         }
         Insert: {
+          aplicado_at?: string | null
           archivo_nombre: string
           archivo_sha256?: string | null
           archivo_tamano?: number | null
@@ -771,6 +774,7 @@ export type Database = {
           modo_carga?: string
           reconciliacion?: Json | null
           reemplaza_existentes?: boolean
+          respuesta?: Json | null
           resultado?: Json
           revertido_at?: string | null
           started_at?: string
@@ -781,6 +785,7 @@ export type Database = {
           version_etl: string
         }
         Update: {
+          aplicado_at?: string | null
           archivo_nombre?: string
           archivo_sha256?: string | null
           archivo_tamano?: number | null
@@ -804,6 +809,7 @@ export type Database = {
           modo_carga?: string
           reconciliacion?: Json | null
           reemplaza_existentes?: boolean
+          respuesta?: Json | null
           resultado?: Json
           revertido_at?: string | null
           started_at?: string
@@ -814,6 +820,36 @@ export type Database = {
           version_etl?: string
         }
         Relationships: []
+      }
+      import_prospectos_filas: {
+        Row: {
+          batch_id: string
+          place_id: string
+        }
+        Insert: {
+          batch_id: string
+          place_id: string
+        }
+        Update: {
+          batch_id?: string
+          place_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_prospectos_filas_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_prospectos_filas_place_id_fkey"
+            columns: ["place_id"]
+            isOneToOne: false
+            referencedRelation: "prospectos"
+            referencedColumns: ["place_id"]
+          },
+        ]
       }
       import_staging_rows: {
         Row: {
@@ -1009,7 +1045,9 @@ export type Database = {
           email: string | null
           es_cliente_cupra: boolean | null
           estado_negocio: string | null
+          google_place_id: string | null
           id: string
+          import_key: string | null
           instagram: string | null
           last_recommendation_at: string | null
           latitud: number
@@ -1039,7 +1077,9 @@ export type Database = {
           email?: string | null
           es_cliente_cupra?: boolean | null
           estado_negocio?: string | null
+          google_place_id?: string | null
           id?: string
+          import_key?: string | null
           instagram?: string | null
           last_recommendation_at?: string | null
           latitud: number
@@ -1069,7 +1109,9 @@ export type Database = {
           email?: string | null
           es_cliente_cupra?: boolean | null
           estado_negocio?: string | null
+          google_place_id?: string | null
           id?: string
+          import_key?: string | null
           instagram?: string | null
           last_recommendation_at?: string | null
           latitud?: number
@@ -1689,6 +1731,15 @@ export type Database = {
       }
     }
     Functions: {
+      aplicar_ventas_import: {
+        Args: {
+          p_batch_id: string
+          p_confirmar_eliminaciones: boolean
+          p_reemplazar: boolean
+          p_rows: Json
+        }
+        Returns: Json
+      }
       canonical_vendedor: { Args: { _nombre: string }; Returns: string }
       clean_old_recommendations: { Args: never; Returns: undefined }
       cleanup_expired_import_staging: { Args: never; Returns: number }
@@ -1699,6 +1750,16 @@ export type Database = {
           p_rows: Json
         }
         Returns: Json
+      }
+      completar_barrio_ubicacion: {
+        Args: {
+          p_barrio: string
+          p_comuna: string
+          p_id: string
+          p_lat: number
+          p_lng: number
+        }
+        Returns: undefined
       }
       get_user_role: {
         Args: { _user_id: string }
@@ -1712,11 +1773,44 @@ export type Database = {
         Args: { p_actualizar_cartera?: boolean; p_asignaciones: Json }
         Returns: number
       }
+      guardar_clientes_import: {
+        Args: { p_rows: Json; p_tipo: string }
+        Returns: Json
+      }
+      guardar_importacion: {
+        Args: {
+          p_batch_id: string
+          p_clientes: Json
+          p_confirmar?: boolean
+          p_places: Json
+          p_reemplazar?: boolean
+          p_ventas?: Json
+        }
+        Returns: Json
+      }
+      guardar_prospectos_import: {
+        Args: { p_batch_id: string; p_resultados: Json; p_rows: Json }
+        Returns: Json
+      }
+      guardar_ubicacion_cliente: {
+        Args: { p_client_id: string; p_datos: Json; p_manual?: boolean }
+        Returns: Json
+      }
+      import_identity: { Args: { p_text: string }; Returns: string }
       is_active_admin: { Args: { _user_id: string }; Returns: boolean }
       is_active_assignor: { Args: { _user_id: string }; Returns: boolean }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
       is_assignor_like: { Args: { _user_id: string }; Returns: boolean }
       normalizar_rubro: { Args: { p_textos: string[] }; Returns: string }
+      pendientes_geocodificacion: {
+        Args: {
+          p_batch?: string
+          p_despues?: string
+          p_limite?: number
+          p_tipo?: string
+        }
+        Returns: Json
+      }
       preview_ventas_import: { Args: { p_rows: Json }; Returns: Json }
       rank_fuente_ubicacion: {
         Args: { _fuente: string; _verificada: boolean }
@@ -1729,6 +1823,7 @@ export type Database = {
       recompute_client_metrics: { Args: never; Returns: number }
       reconciliar_places_primarios: { Args: never; Returns: number }
       refrescar_rubros: { Args: never; Returns: Json }
+      resumen_ubicaciones: { Args: never; Returns: Json }
       resumen_ventas: { Args: { p_filtros?: Json }; Returns: Json }
       revertir_import_ventas: { Args: { p_batch_id: string }; Returns: Json }
       rubro_prospecto: {
