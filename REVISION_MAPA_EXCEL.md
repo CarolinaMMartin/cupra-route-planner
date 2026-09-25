@@ -7,6 +7,7 @@ Fecha: 25/09/2026. Continuación de la revisión de recomendaciones. Se conserva
 - Los mapas de vendedor, asignaciones del día y resultados usan las coordenadas guardadas. Se eliminaron las consultas a Places Legacy y las escrituras automáticas que ocurrían al abrir el mapa.
 - Un cliente con GPS válido aparece aunque no tenga un enlace de Google. Los prospectos de Google usan también su GPS registrado.
 - Se muestra qué asignaciones carecen de ubicación; los puntos conservan colores por estado y muestran rubro. Los textos de los comercios se insertan sin ejecutar HTML.
+- Los enlaces externos usan el GPS guardado o una búsqueda de dirección: no envían IDs internos `excel-`/`manual-` a Google ni abren el punto 0,0.
 - Los mapas limpian sus marcadores y ventanas al cambiar datos o desmontarse. La carga común informa errores de red, tiempo de espera y rechazo de la clave.
 - La corrección de dirección requiere un asignador o administrador activo. La ficha y su ubicación se actualizan juntas. Una carga de Excel no pisa direcciones verificadas.
 - La geocodificación exige Argentina, precisión de puerta y una coincidencia única sin `partial_match`. No transforma el centro de una ciudad en la ubicación de un comercio.
@@ -29,7 +30,7 @@ Fecha: 25/09/2026. Continuación de la revisión de recomendaciones. Se conserva
 
 ## Verificación
 
-- `npm run check`: tipos, regresiones del motor de recomendaciones, pruebas de asignaciones/ventas en PostgreSQL embebido, 27 pruebas nuevas de importación/geocodificación y compilación de producción.
+- `npm run check`: tipos, regresiones del motor de recomendaciones, pruebas de asignaciones/ventas en PostgreSQL embebido, 28 pruebas nuevas de importación/geocodificación y compilación de producción.
 - `npm run test:imports`: casos de filas vacías, múltiples hojas, calendario 1904, fechas inválidas, importes, lectura de más de 1.000 clientes, guardas, rollback, reintentos, modo agregar, reversión, permisos y conservación de prospectos/ubicaciones.
 - Prueba de interfaz en Chromium con servicios simulados: selección de hoja, modo agregar, error y reintento con el mismo UUID, geocodificación por lote/cursor, vista móvil, cliente sin enlace de Google, prospecto con GPS y limpieza del mapa. Sin errores de ejecución.
 - Validación de tipos de las 10 funciones de servidor modificadas, con las declaraciones locales del SDK de Supabase para evitar dependencias de red durante la comprobación.

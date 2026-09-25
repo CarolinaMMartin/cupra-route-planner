@@ -246,9 +246,9 @@ const ClientDetailCard = ({
           </div>
 
           {/* Botón para Google Maps */}
-          {getGoogleMapsUrl(cliente.place_id || cliente.prospecto_place_id) && (
+          {getGoogleMapsUrl(cliente.place_id || cliente.prospecto_place_id, cliente.latitud, cliente.longitud) && (
             <a
-              href={getGoogleMapsUrl(cliente.place_id || cliente.prospecto_place_id)!}
+              href={getGoogleMapsUrl(cliente.place_id || cliente.prospecto_place_id, cliente.latitud, cliente.longitud)!}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}

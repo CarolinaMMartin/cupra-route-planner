@@ -68,3 +68,14 @@ test('reintento recibe el resultado confirmado sin volver a importar', async () 
   const db={from(){return {async insert(){return {error:{code:'23505'}}},select(){return this},eq(){return this},async single(){return {data:{...record,respuesta:response}}}}}};
   const r=await beginImport(db,'11111111-1111-4111-8111-111111111111',record);assert.deepEqual(r.response,response);
 });
+
+const { getGoogleMapsUrl } = await import('../src/lib/googleMapsLinks.ts');
+test('los enlaces de Google nunca envían IDs internos de Excel ni coordenadas 0,0', () => {
+  const saved = new URL(getGoogleMapsUrl('excel-123',-34.6,-58.4));
+  assert.equal(saved.searchParams.get('query'),'-34.6,-58.4');assert.equal(saved.searchParams.has('query_place_id'),false);
+  const pending = new URL(getGoogleMapsUrl('excel-123',0,0,'Calle 100, CABA, Argentina'));
+  assert.equal(pending.searchParams.get('query'),'Calle 100, CABA, Argentina');assert.equal(pending.searchParams.has('query_place_id'),false);
+  assert.equal(getGoogleMapsUrl('manual-abc',0,0),null);
+  const real = new URL(getGoogleMapsUrl('ChIJ&x=1'));
+  assert.equal(real.searchParams.get('query_place_id'),'ChIJ&x=1');assert.equal(real.searchParams.has('x'),false);
+});

@@ -1,3 +1,4 @@
+import { getGoogleMapsUrl } from "@/lib/googleMapsLinks";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -135,14 +136,8 @@ export function ProspectoDetalleDialog({ prospecto, open, onOpenChange }: Props)
   if (!prospecto) return null;
 
   const p = prospecto;
-  const mapsUrl =
-    p.latitud && p.longitud
-      ? `https://www.google.com/maps/search/?api=1&query=${p.latitud},${p.longitud}${
-          p.place_id && !p.place_id.startsWith("excel-") ? `&query_place_id=${p.place_id}` : ""
-        }`
-      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-          [p.nombre, p.direccion, p.ciudad].filter(Boolean).join(" ")
-        )}`;
+  const mapsUrl = getGoogleMapsUrl(p.place_id, p.latitud, p.longitud,
+    [p.nombre, p.direccion, p.ciudad, "Argentina"].filter(Boolean).join(", ")) || undefined;
   const waNumero = p.telefono ? p.telefono.replace(/\D/g, "") : "";
 
   return (

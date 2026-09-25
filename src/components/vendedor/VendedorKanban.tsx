@@ -1263,12 +1263,12 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
             <div className="space-y-6">
               {/* Botones de acción rápida */}
               <div className="flex flex-wrap gap-2">
-                {getGoogleMapsUrl(selectedCliente.prospecto_place_id) && (
+                {getGoogleMapsUrl(selectedCliente.prospecto_place_id, selectedCliente.prospecto_latitud, selectedCliente.prospecto_longitud, [selectedCliente.direccion_principal, selectedCliente.ciudad_principal, "Argentina"].filter(Boolean).join(", ")) && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const url = getGoogleMapsUrl(selectedCliente.prospecto_place_id);
+                      const url = getGoogleMapsUrl(selectedCliente.prospecto_place_id, selectedCliente.prospecto_latitud, selectedCliente.prospecto_longitud, [selectedCliente.direccion_principal, selectedCliente.ciudad_principal, "Argentina"].filter(Boolean).join(", "));
                       if (url) window.open(url, '_blank');
                     }}
                   >

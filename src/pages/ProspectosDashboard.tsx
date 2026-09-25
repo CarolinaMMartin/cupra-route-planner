@@ -1,3 +1,4 @@
+import { getGoogleMapsUrl } from "@/lib/googleMapsLinks";
 import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 import { guardarAsignaciones } from "@/lib/asignaciones";
 import { useEffect, useState, useMemo } from "react";
@@ -487,9 +488,8 @@ const ProspectosDashboard = () => {
     }
   };
 
-  const mapsUrl = (p: Prospecto) => (
-    `https://www.google.com/maps/search/?api=1&query=${p.latitud},${p.longitud}&query_place_id=${encodeURIComponent(p.place_id)}`
-  );
+  const mapsUrl = (p: Prospecto) => getGoogleMapsUrl(p.place_id, p.latitud, p.longitud,
+    [p.nombre, p.direccion, p.ciudad, p.provincia, "Argentina"].filter(Boolean).join(", ")) || undefined;
 
   if (loading) {
     return (
