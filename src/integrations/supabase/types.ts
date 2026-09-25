@@ -1020,8 +1020,8 @@ export type Database = {
           provincia: string
           rating: number | null
           resumen_google: string | null
-          sirve_vinos: boolean | null
           rubro: string | null
+          sirve_vinos: boolean | null
           telefono: string | null
           tipo_principal: string | null
           tipos: string[] | null
@@ -1050,8 +1050,8 @@ export type Database = {
           provincia: string
           rating?: number | null
           resumen_google?: string | null
-          sirve_vinos?: boolean | null
           rubro?: string | null
+          sirve_vinos?: boolean | null
           telefono?: string | null
           tipo_principal?: string | null
           tipos?: string[] | null
@@ -1080,8 +1080,8 @@ export type Database = {
           provincia?: string
           rating?: number | null
           resumen_google?: string | null
-          sirve_vinos?: boolean | null
           rubro?: string | null
+          sirve_vinos?: boolean | null
           telefono?: string | null
           tipo_principal?: string | null
           tipos?: string[] | null
@@ -1689,15 +1689,6 @@ export type Database = {
       }
     }
     Functions: {
-      guardar_asignaciones: {
-        Args: { p_asignaciones: Json; p_actualizar_cartera?: boolean }
-        Returns: number
-      }
-      refrescar_rubros: { Args: never; Returns: Json }
-      rubros_disponibles: {
-        Args: never
-        Returns: { clientes: number; prospectos: number; rubro: string }[]
-      }
       canonical_vendedor: { Args: { _nombre: string }; Returns: string }
       clean_old_recommendations: { Args: never; Returns: undefined }
       cleanup_expired_import_staging: { Args: never; Returns: number }
@@ -1717,10 +1708,15 @@ export type Database = {
         Args: { top_n?: number; vendedor_user_id: string }
         Returns: string[]
       }
+      guardar_asignaciones: {
+        Args: { p_actualizar_cartera?: boolean; p_asignaciones: Json }
+        Returns: number
+      }
       is_active_admin: { Args: { _user_id: string }; Returns: boolean }
       is_active_assignor: { Args: { _user_id: string }; Returns: boolean }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
       is_assignor_like: { Args: { _user_id: string }; Returns: boolean }
+      normalizar_rubro: { Args: { p_textos: string[] }; Returns: string }
       preview_ventas_import: { Args: { p_rows: Json }; Returns: Json }
       rank_fuente_ubicacion: {
         Args: { _fuente: string; _verificada: boolean }
@@ -1732,7 +1728,21 @@ export type Database = {
       }
       recompute_client_metrics: { Args: never; Returns: number }
       reconciliar_places_primarios: { Args: never; Returns: number }
+      refrescar_rubros: { Args: never; Returns: Json }
+      resumen_ventas: { Args: { p_filtros?: Json }; Returns: Json }
       revertir_import_ventas: { Args: { p_batch_id: string }; Returns: Json }
+      rubro_prospecto: {
+        Args: { p_tipo: string; p_tipos: string[] }
+        Returns: string
+      }
+      rubros_disponibles: {
+        Args: never
+        Returns: {
+          clientes: number
+          prospectos: number
+          rubro: string
+        }[]
+      }
       sync_clientes_barrio_from_places: { Args: never; Returns: number }
       sync_places_catalog: { Args: never; Returns: number }
       titlecase_nombre: { Args: { _texto: string }; Returns: string }
