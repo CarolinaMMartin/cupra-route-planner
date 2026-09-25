@@ -213,6 +213,7 @@ const CargaDatos = () => {
   // Geocoding state
   const [pendingGeocount, setPendingGeocount] = useState<number | null>(null);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeType, setGeocodeType] = useState<"clientes" | "prospectos">("clientes");
   const [geocodeResults, setGeocodeResults] = useState<GeocodeResults | null>(null);
 
   useEffect(() => () => { stopGeocoding.current = true; parsingVersion.current++; }, []);
@@ -413,7 +414,7 @@ const CargaDatos = () => {
 
 
   const handleBatchGeocode = async (tipo: "clientes" | "prospectos" = "clientes", importBatch?: string) => {
-    setIsGeocoding(true); setGeocodeResults(null); setGeocodeProgress(0); stopGeocoding.current = false;
+    setIsGeocoding(true); setGeocodeType(tipo); setGeocodeResults(null); setGeocodeProgress(0); stopGeocoding.current = false;
     let cursor = "";
     const total: GeocodeResults = { total: 0, geocoded: 0, errors: 0, skipped: 0, error_details: [], reverse: { total: 0, resueltos: 0, errores: 0 } };
     try {
@@ -764,6 +765,13 @@ const CargaDatos = () => {
                     </AlertDescription>
                   </Alert>
                 )}
+                {geocodeType === "prospectos" && geocodeResults && geocodeResults.errors > 0 && <Alert className="mt-4">
+                  <AlertDescription>
+                    <p>{geocodeResults.errors} prospectos requieren revisar su dirección.</p>
+                    <ul className="mt-2 list-disc pl-4 text-xs">{geocodeResults.error_details.slice(0, 5).map((message, index) => <li key={index}>{message}</li>)}</ul>
+                    {batchId && <Button className="mt-3" variant="outline" disabled={isGeocoding} onClick={() => handleBatchGeocode("prospectos", batchId)}>Reintentar ubicaciones del lote</Button>}
+                  </AlertDescription>
+                </Alert>}
                 <div className="flex justify-center gap-3 mt-6">
                   <Button variant="outline" onClick={reset} disabled={isGeocoding}>Cargar otro archivo</Button>
                   <Button onClick={() => navigate("/prospectos-dashboard")}>Ver prospectos</Button>
@@ -1198,7 +1206,7 @@ const CargaDatos = () => {
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm">Calculando clientes pendientes…</span>
               </div>
-            ) : pendingGeocount === 0 && !geocodeResults ? (
+            ) : pendingGeocount === 0 && (!geocodeResults || geocodeType !== "clientes") ? (
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle2 className="h-5 w-5" />
                 <span className="text-sm font-medium">Todos los clientes tienen coordenadas y barrio</span>
@@ -1206,7 +1214,7 @@ const CargaDatos = () => {
             ) : (
               <div className="space-y-4">
                 {!isGeocoding && (
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
                         <MapPin className="h-5 w-5 text-amber-500" />
@@ -1227,7 +1235,7 @@ const CargaDatos = () => {
                   </div>
                 )}
 
-                {isGeocoding && (
+                {isGeocoding && geocodeType === "clientes" && (
                   <div className="text-center space-y-3 py-4">
                     <Loader2 className="h-8 w-8 mx-auto animate-spin text-primary" />
                     <div>
@@ -1239,7 +1247,7 @@ const CargaDatos = () => {
                   </div>
                 )}
 
-                {geocodeResults && (
+                {geocodeResults && geocodeType === "clientes" && (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 mb-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
