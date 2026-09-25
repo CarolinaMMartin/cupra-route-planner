@@ -1,3 +1,4 @@
+import AnalisisVentas from "@/components/clientes/AnalisisVentas";
 /**
  * Dashboard de Clientes y Ventas
  * 
@@ -50,6 +51,9 @@ interface VendedorVentas {
   ventas: number;
 }
 
+const claveComprobante = (v: {tipo_comprobante?: string; fecha_emision?: string; letra?: string; ticket?: string; client_id?: string}) =>
+  JSON.stringify([v.tipo_comprobante ?? null,v.fecha_emision ?? null,v.letra ?? null,v.ticket ?? null,v.client_id ?? null]);
+
 const ClientesDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -57,9 +61,10 @@ const ClientesDashboard = () => {
   const [clientesData, setClientesData] = useState<any[]>([]);
   // KPIs 100% desde ventas_cupra
   const [ventasRaw, setVentasRaw] = useState<any[]>([]);
-  const [ventasVendedorData, setVentasVendedorData] = useState<{ vendedor: string; ventas: number; tickets: number }[]>([]);
   
   // Filtros
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
   const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
   const [selectedCiudad, setSelectedCiudad] = useState<string>("all");
   const [selectedBarrio, setSelectedBarrio] = useState<string>("all");
@@ -130,10 +135,12 @@ const ClientesDashboard = () => {
     let offset = 0;
     const pageSize = 1000;
     while (true) {
-      const { data: batch } = await supabase
+      const { data: batch, error } = await supabase
         .from('ventas_cupra')
-        .select('vendedor, facturacion_ars, ticket, client_id, razon_social, ciudad')
+        .select('id, vendedor, facturacion_ars, ticket, client_id, razon_social, ciudad, fecha_emision, letra, tipo_comprobante')
+        .order('id')
         .range(offset, offset + pageSize - 1);
+      if (error) throw error;
       if (!batch || batch.length === 0) break;
       allVentas = allVentas.concat(batch);
       if (batch.length < pageSize) break;
@@ -141,24 +148,7 @@ const ClientesDashboard = () => {
     }
     setVentasRaw(allVentas);
 
-    // Top Vendedores: GROUP BY vendedor, SUM(facturacion_ars)
-    if (allVentas.length > 0) {
-      const vendedorMap = new Map<string, { nombre: string; ventas: number; tickets: Set<string> }>();
-      for (const v of allVentas) {
-        if (!v.vendedor) continue;
-        const key = vendorKey(v.vendedor);
-        if (!vendedorMap.has(key)) {
-          vendedorMap.set(key, { nombre: v.vendedor, ventas: 0, tickets: new Set() });
-        }
-        const entry = vendedorMap.get(key)!;
-        entry.ventas += Number(v.facturacion_ars || 0);
-        if (v.ticket) entry.tickets.add(v.ticket);
-      }
-      const vendedorArr = Array.from(vendedorMap.values())
-        .map((data) => ({ vendedor: data.nombre, ventas: data.ventas, tickets: data.tickets.size }))
-        .sort((a, b) => b.ventas - a.ventas);
-      setVentasVendedorData(vendedorArr);
-    }
+
   };
 
   const normalize = (str: string | null | undefined): string => {
@@ -285,36 +275,27 @@ const ClientesDashboard = () => {
   /**
    * KPIs calculados 100% desde ventas_cupra (transaccional).
    * • totalVentas: SUM(facturacion_ars). Columna Excel: "Precio Total Final".
-   * • totalTickets: COUNT(DISTINCT ticket).
+   * • totalTickets: comprobantes únicos por tipo, fecha, letra, ticket y cliente.
    * • totalClientes: COUNT(DISTINCT client_id).
    * • ticketPromedio: totalVentas / totalTickets.
    */
-  const normalizeRS = (rs: string) => rs.trim().toUpperCase().replace(/\s+/g, ' ');
 
   // Ventas restringidas a los clientes que pasan los filtros activos
   const filteredVentas = useMemo(() => {
-    if (!hasActiveFilters) return ventasRaw;
-    const idSet = new Set<string>();
-    const rsSet = new Set<string>();
-    for (const c of filteredData) {
-      if (c.client_id) idSet.add(String(c.client_id));
-      if (c.razon_social) rsSet.add(normalizeRS(c.razon_social));
-      if (c.fantasia) rsSet.add(normalizeRS(c.fantasia));
-    }
-    return ventasRaw.filter(v =>
-      (v.client_id && idSet.has(String(v.client_id))) ||
-      (v.razon_social && rsSet.has(normalizeRS(v.razon_social)))
-    );
-  }, [ventasRaw, filteredData, hasActiveFilters]);
+    const enPeriodo = ventasRaw.filter(v => (!fechaDesde || v.fecha_emision >= fechaDesde) && (!fechaHasta || v.fecha_emision <= fechaHasta)
+      && (selectedVendedor === "all" || sameVendor(v.vendedor, selectedVendedor)));
+    if (!hasActiveFilters) return enPeriodo;
+    const idSet = new Set(filteredData.map(c=>String(c.client_id)));
+    return enPeriodo.filter(v => v.client_id && idSet.has(String(v.client_id)));
+  }, [ventasRaw, filteredData, hasActiveFilters, fechaDesde, fechaHasta, selectedVendedor]);
 
   const kpis = useMemo(() => {
     const totalVentas = filteredVentas.reduce((sum, v) => sum + Number(v.facturacion_ars || 0), 0);
     const ticketsSet = new Set<string>();
     const clientesSet = new Set<string>();
     for (const v of filteredVentas) {
-      if (v.ticket) ticketsSet.add(v.ticket);
-      // Fix 4: Count clients by normalized razon_social, not client_id
-      if (v.razon_social) clientesSet.add(normalizeRS(v.razon_social));
+      if (v.ticket != null) ticketsSet.add(claveComprobante(v));
+      if (v.client_id != null) clientesSet.add(String(v.client_id));
     }
     const totalTickets = ticketsSet.size;
     const totalClientes = clientesSet.size;
@@ -377,7 +358,7 @@ const ClientesDashboard = () => {
       if (!clienteMap.has(rs)) clienteMap.set(rs, { razon_social: rs, monto_total: 0, tickets: new Set() });
       const entry = clienteMap.get(rs)!;
       entry.monto_total += Number(v.facturacion_ars || 0);
-      if (v.ticket) entry.tickets.add(v.ticket);
+      if (v.ticket != null) entry.tickets.add(claveComprobante(v));
     }
     return Array.from(clienteMap.values())
       .map(c => ({ razon_social: c.razon_social, monto_total: c.monto_total, ordenes: c.tickets.size }))
@@ -387,7 +368,6 @@ const ClientesDashboard = () => {
 
   // TAREA 4: Top vendedores desde ventas_cupra (fuente transaccional)
   const topVendedores = useMemo(() => {
-    if (!hasActiveFilters) return ventasVendedorData.slice(0, 10);
     const map = new Map<string, { nombre: string; ventas: number; tickets: Set<string> }>();
     for (const v of filteredVentas) {
       if (!v.vendedor) continue;
@@ -395,44 +375,27 @@ const ClientesDashboard = () => {
       if (!map.has(key)) map.set(key, { nombre: v.vendedor, ventas: 0, tickets: new Set() });
       const e = map.get(key)!;
       e.ventas += Number(v.facturacion_ars || 0);
-      if (v.ticket) e.tickets.add(v.ticket);
+      if (v.ticket != null) e.tickets.add(claveComprobante(v));
     }
     return Array.from(map.values())
       .map((d) => ({ vendedor: d.nombre, ventas: d.ventas, tickets: d.tickets.size }))
       .sort((a, b) => b.ventas - a.ventas)
       .slice(0, 10);
-  }, [ventasVendedorData, filteredVentas, hasActiveFilters]);
+  }, [filteredVentas]);
 
   // Resumen por cliente (para la pestaña de listado + ficha)
   const clientesResumen = useMemo(() => {
     const byId = new Map<string, { ventas: number; tickets: Set<string> }>();
-    const byRs = new Map<string, { ventas: number; tickets: Set<string> }>();
-    for (const v of ventasRaw) {
-      const monto = Number(v.facturacion_ars || 0);
-      if (v.client_id) {
-        const k = String(v.client_id);
-        if (!byId.has(k)) byId.set(k, { ventas: 0, tickets: new Set() });
-        const e = byId.get(k)!; e.ventas += monto; if (v.ticket) e.tickets.add(v.ticket);
-      }
-      if (v.razon_social) {
-        const k = normalizeRS(v.razon_social);
-        if (!byRs.has(k)) byRs.set(k, { ventas: 0, tickets: new Set() });
-        const e = byRs.get(k)!; e.ventas += monto; if (v.ticket) e.tickets.add(v.ticket);
-      }
+    for (const v of filteredVentas) {
+      if (!v.client_id) continue;
+      const key = String(v.client_id);
+      if (!byId.has(key)) byId.set(key,{ventas:0,tickets:new Set()});
+      const e=byId.get(key)!; e.ventas+=Number(v.facturacion_ars || 0);
+      if(v.ticket != null)e.tickets.add(claveComprobante(v));
     }
-    return filteredData
-      .map(c => {
-        const stats = (c.client_id && byId.get(String(c.client_id)))
-          || (c.razon_social && byRs.get(normalizeRS(c.razon_social)))
-          || null;
-        return {
-          cliente: c,
-          ventas: stats?.ventas ?? Number(c.monto_total_historico || 0),
-          tickets: stats?.tickets.size ?? Number(c.cantidad_ordenes || 0),
-        };
-      })
-      .sort((a, b) => b.ventas - a.ventas);
-  }, [filteredData, ventasRaw]);
+    return filteredData.map(c=>({cliente:c,ventas:byId.get(String(c.client_id))?.ventas ?? 0,
+      tickets:byId.get(String(c.client_id))?.tickets.size ?? 0})).sort((a,b)=>b.ventas-a.ventas);
+  }, [filteredData, filteredVentas]);
 
   const handleClearFilters = () => {
     setSelectedProvincia("all");
@@ -441,6 +404,7 @@ const ClientesDashboard = () => {
     setSelectedVendedor("all");
     setSelectedCanal("all");
     setSegmentos(FILTROS_VACIOS);
+    setFechaDesde(""); setFechaHasta("");
     setSearchTerm("");
   };
 
@@ -653,6 +617,10 @@ const ClientesDashboard = () => {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div><label htmlFor="ventas-desde" className="text-xs text-muted-foreground">Ventas desde</label><Input id="ventas-desde" type="date" value={fechaDesde} max={fechaHasta || undefined} onChange={e=>setFechaDesde(e.target.value)}/></div>
+              <div><label htmlFor="ventas-hasta" className="text-xs text-muted-foreground">Ventas hasta</label><Input id="ventas-hasta" type="date" value={fechaHasta} min={fechaDesde || undefined} onChange={e=>setFechaHasta(e.target.value)}/></div>
+            </div>
             <SegmentFilters
               className="mt-5"
               value={segmentos}
@@ -752,12 +720,18 @@ const ClientesDashboard = () => {
 
         {/* Tabs: Clientes / Rankings / KPIs por Zona */}
         <Tabs defaultValue="clientes" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-6">
+          <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4 mb-6">
             <TabsTrigger value="clientes">Clientes</TabsTrigger>
             <TabsTrigger value="rankings">Top Rankings</TabsTrigger>
             <TabsTrigger value="zonas">KPIs por Zona</TabsTrigger>
+            <TabsTrigger value="analisis">Análisis de ventas</TabsTrigger>
           </TabsList>
 
+          <TabsContent value="analisis">
+            <AnalisisVentas filtros={{ ...(hasActiveFilters ? { client_ids: filteredData.map(c=>c.client_id).filter(Boolean) } : {}),
+              vendedor: selectedVendedor !== "all" ? selectedVendedor : undefined,
+              desde: fechaDesde || undefined, hasta: fechaHasta || undefined }} />
+          </TabsContent>
           <TabsContent value="clientes">
             <Card className="matte-card">
               <CardHeader className="pb-4">
@@ -922,7 +896,7 @@ const ClientesDashboard = () => {
                   <TooltipTrigger><Info className="h-3 w-3 text-foreground/30" /></TooltipTrigger>
                   <TooltipContent className="max-w-[240px] text-xs">
                     <p className="font-medium">SUM(facturacion_ars) desde ventas_cupra</p>
-                    <p>Fuente transaccional · No afectado por filtros</p>
+                    <p>Fuente transaccional · Filtros aplicados</p>
                   </TooltipContent>
                 </Tooltip>
               </CardTitle>

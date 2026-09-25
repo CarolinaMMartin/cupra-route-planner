@@ -32,3 +32,6 @@ verify_jwt = false
 
 [functions.extract-feedback]
 verify_jwt = false
+
+[functions.analyze-sales]
+verify_jwt = false

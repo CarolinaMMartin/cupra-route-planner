@@ -24,7 +24,9 @@ before(async () => {
       vendedor_principal text, etiquetas text[], last_recommendation_at timestamptz);
     CREATE TABLE prospectos (place_id text PRIMARY KEY, client_id text, es_cliente_cupra boolean DEFAULT false,
       estado_negocio text, tipo_principal text, tipos text[], latitud float, longitud float, last_recommendation_at timestamptz);
-    CREATE TABLE ventas_cupra (client_id text, categorias text);
+    CREATE TABLE ventas_cupra (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, client_id text, categorias text,
+      ticket text, letra text, fecha_emision date, tipo_comprobante text, vendedor text, nombre text, codigo_producto text,
+      facturacion_ars numeric, cajas integer, import_batch_id uuid);
     CREATE TABLE asignaciones_vendedores_clientes (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), vendedor_id uuid REFERENCES profiles(user_id),
       client_id text REFERENCES clientes(client_id), prospecto_place_id text REFERENCES prospectos(place_id),
@@ -41,14 +43,14 @@ before(async () => {
     CREATE TABLE asignaciones_manuales_audit (
       usuario_id uuid, vendedor_anterior text, vendedor_nuevo_id uuid, vendedor_nuevo_nombre text, client_id text, razon_social text);
   `);
-  for (const migration of ["20260923120000_rubro_normalizado.sql", "20260923130000_asignaciones_atomicas.sql"]) {
+  for (const migration of ["20260923120000_rubro_normalizado.sql", "20260923130000_asignaciones_atomicas.sql", "20260925120000_analisis_ventas.sql"]) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${migration}`, import.meta.url), "utf8"));
   }
 });
 after(async () => { await db?.close(); });
 beforeEach(async () => {
   await db.exec(`
-    TRUNCATE asignaciones_vendedores_clientes, asignaciones_manuales_audit, clientes, prospectos, profiles CASCADE;
+    TRUNCATE ventas_cupra, asignaciones_vendedores_clientes, asignaciones_manuales_audit, clientes, prospectos, profiles CASCADE;
     INSERT INTO profiles VALUES ('${admin}', 'Admin', 'administrador', true, false),
       ('${vendedor}', 'Vendedora', 'vendedor', true, false), ('${otro}', 'Otro', 'vendedor', true, false);
     INSERT INTO clientes(client_id, razon_social, vendedor_actual) VALUES ('c1', 'Cuenta 1', 'Otro'), ('c2', 'Cuenta 2', 'Otro');
@@ -144,4 +146,33 @@ test("la migración normaliza rubros y los triggers actualizan clientes y prospe
   assert.equal((await db.query("select rubro from clientes where client_id='c1'")).rows[0].rubro, "Vinoteca");
   assert.equal((await db.query("select rubro from prospectos")).rows[0].rubro, "Bar");
   assert.equal((await db.query("select count(*)::int as n from rubros_disponibles()")).rows[0].n, 2);
+});
+
+const resumen = async filtros => (await db.query("select resumen_ventas($1::jsonb) as r", [JSON.stringify(filtros)])).rows[0].r;
+test("análisis suma todas las filas del Excel, incluso más de 1000, y separa notas de crédito", async () => {
+  await db.exec(`INSERT INTO ventas_cupra(client_id,ticket,letra,fecha_emision,tipo_comprobante,vendedor,nombre,facturacion_ars,cajas)
+    SELECT 'c1', n::text, 'A', '2026-01-15', 'factura', 'Vendedora', 'Vino', 100, 1 FROM generate_series(1,2505) n;
+    INSERT INTO ventas_cupra(client_id,ticket,letra,fecha_emision,tipo_comprobante,vendedor,nombre,facturacion_ars,cajas)
+    VALUES ('c2','1','A','2026-02-01','nota_credito','Otro','Vino',-500,-5);`);
+  const r = await resumen({});
+  assert.equal(r.filas,2506); assert.equal(r.neto,250000); assert.equal(r.ventas,250500); assert.equal(r.notas_credito,500);
+  assert.equal(r.comprobantes,2506); assert.equal(r.meses.length,2);
+  assert.equal(r.rubros.reduce((s,x)=>s+x.neto,0),r.neto);
+});
+test("análisis respeta archivo, fechas, vendedor y clientes sin confundir selección vacía con todo", async () => {
+  await db.exec(`INSERT INTO ventas_cupra(client_id,ticket,fecha_emision,vendedor,facturacion_ars,import_batch_id)
+    VALUES ('c1','1','2026-01-01','Micaela Rocha',100,'${admin}'), ('c2','2','2026-02-01','Otro',200,'${vendedor}'),
+      ('c1','3','2026-02-01','Micaela Rocha',300,'${admin}');`);
+  assert.equal((await resumen({lote_id:admin,desde:'2026-02-01',hasta:'2026-02-01',vendedor:'  MICAELA   ROCHA ',client_ids:['c1']})).neto,300);
+  assert.equal((await resumen({client_ids:[]})).filas,0);
+  assert.equal((await resumen({client_ids:['c2']})).neto,200);
+});
+test("análisis rechaza usuarios sin permiso y filtros inválidos", async () => {
+  await db.query("select set_config('test.uid',$1,false)",[vendedor]);
+  await assert.rejects(resumen({}),/administrador activo/);
+  await db.query("select set_config('test.uid',$1,false)",[admin]);
+  await assert.rejects(resumen([]),/Filtros inválidos/);
+  await assert.rejects(resumen({client_ids:12}));
+  await db.query("update profiles set activo=false where user_id=$1",[admin]);
+  await assert.rejects(resumen({}),/administrador activo/);
 });

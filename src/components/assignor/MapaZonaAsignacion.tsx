@@ -1,3 +1,4 @@
+import { distanciaKm, errorRuta, RADIO_RUTA_KM, VISITAS_POR_DIA, type Coordenada } from "../../../supabase/functions/_shared/ruta";
 import { guardarAsignaciones } from "@/lib/asignaciones";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, MapPin, Search, UserCheck, X } from "lucide-react";
@@ -85,6 +86,9 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
   const [puntos, setPuntos] = useState<Punto[]>([]);
   const [cargando, setCargando] = useState(false);
   const [errorMapa, setErrorMapa] = useState<string | null>(null);
+  const [centroRuta, setCentroRuta] = useState<Coordenada | null>(null);
+  const centroRef = useRef<Coordenada | null>(null);
+  const seleccionRef = useRef<string[]>([]);
   const [seleccion, setSeleccion] = useState<string[]>([]);
   const [vendedorId, setVendedorId] = useState<string>("");
   const [asignando, setAsignando] = useState(false);
@@ -124,7 +128,7 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
     }
     setCargando(true);
     setAviso(null);
-    setSeleccion([]);
+    limpiarSeleccion();
     setPuntos([]);
     // Los marcadores guardan los datos del punto en su click: se recrean con cada carga.
     markersRef.current.forEach((m) => m.setMap(null));
@@ -226,8 +230,37 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
     return [...set.values()].sort().map((v) => ({ value: v, label: toTitleCase(v) }));
   }, [puntos]);
 
-  const toggle = (key: string) =>
-    setSeleccion((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  const limpiarSeleccion = () => {
+    seleccionRef.current = []; centroRef.current = null;
+    setSeleccion([]); setCentroRuta(null); infoRef.current?.close();
+  };
+  const toggle = (key: string) => {
+    if (asignando) return;
+    const prev = seleccionRef.current;
+    if (prev.includes(key)) {
+      const siguiente = prev.filter(k=>k!==key);
+      seleccionRef.current = siguiente; setSeleccion(siguiente);
+      if (!siguiente.length) limpiarSeleccion();
+      return;
+    }
+    const punto = puntos.find(p=>p.key===key);
+    if (!punto) return;
+    const error = prev.length >= VISITAS_POR_DIA ? "La ruta ya tiene ocho visitas. Quitá una antes de agregar otra."
+      : centroRef.current && distanciaKm(centroRef.current,punto)>RADIO_RUTA_KM ? "Este destino supera el radio máximo de 1,5 km." : null;
+    if (error) { toast({variant:"destructive",title:"No se puede agregar",description:error}); return; }
+    if (!centroRef.current) {
+      centroRef.current = {lat:punto.lat,lng:punto.lng}; setCentroRuta(centroRef.current);
+    }
+    seleccionRef.current = [...prev,key]; setSeleccion(seleccionRef.current);
+  };
+  const toggleRef = useRef(toggle);
+  toggleRef.current = toggle;
+  useEffect(() => {
+    if (!map || !centroRuta) return;
+    const circulo = new google.maps.Circle({map,center:centroRuta,radius:RADIO_RUTA_KM*1000,
+      strokeColor:"#2563eb",strokeOpacity:0.8,strokeWeight:2,fillColor:"#2563eb",fillOpacity:0.06,clickable:false});
+    return ()=>circulo.setMap(null);
+  },[map,centroRuta]);
 
   // ---- Marcadores ----
   useEffect(() => {
@@ -273,7 +306,7 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
       boton.style.cssText = `margin-top:8px;padding:6px 10px;border-radius:6px;border:0;cursor:pointer;font-size:12px;font-weight:600;color:#fff;background:${elegido ? "#6b7280" : "#111827"}`;
     };
     boton.addEventListener("click", () => {
-      toggle(p.key);
+      toggleRef.current(p.key);
       window.setTimeout(actualizar, 0);
     });
     actualizar();
@@ -281,10 +314,6 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
     infoRef.current?.setContent(div);
     infoRef.current?.open({ map: map!, anchor: marker });
   };
-
-  // Referencia viva de la selección para el botón dentro de la ficha.
-  const seleccionRef = useRef<string[]>([]);
-  useEffect(() => { seleccionRef.current = seleccion; }, [seleccion]);
 
   const elegidos = useMemo(() => {
     const porKey = new Map(puntos.map((p) => [p.key, p]));
@@ -295,6 +324,8 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
   const asignar = async () => {
     const vendedor = vendedores.find((v) => v.id === vendedorId);
     if (!vendedor || elegidos.length === 0) return;
+    const error = errorRuta(elegidos.map(p=>({...p,id:p.key})),centroRef.current);
+    if (error) { toast({variant:"destructive",title:"Ruta incompleta",description:error}); return; }
     setAsignando(true);
     try {
       const clientIds = elegidos.filter((p) => p.tipo === "cliente").map((p) => p.id);
@@ -307,7 +338,7 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
       await guardarAsignaciones(filas);
 
       toast({ title: "Visitas asignadas", description: `${filas.length} visita${filas.length === 1 ? "" : "s"} para ${vendedor.nombre}.` });
-      setSeleccion([]);
+      limpiarSeleccion();
     } catch (e: unknown) {
       console.error(e);
       toast({ variant: "destructive", title: "No se pudo asignar", description: e instanceof Error ? e.message : "Error al guardar las asignaciones" });
@@ -366,9 +397,10 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
           <div className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-medium">Ruta en armado</span>
-            <Badge variant="secondary" className="ml-auto">{elegidos.length}</Badge>
+            <Badge variant="secondary" className="ml-auto">{elegidos.length}/{VISITAS_POR_DIA}</Badge>
           </div>
-          <p className="text-xs text-muted-foreground">Tocá un punto del mapa y elegí “Agregar a la ruta”.</p>
+          <p className="text-xs text-muted-foreground">Elegí ocho visitas. El primer punto fija el centro del radio de 1,5 km; el círculo indica el límite.</p>
+          {elegidos.length > 0 && <Button variant="ghost" size="sm" disabled={asignando} onClick={limpiarSeleccion}>Vaciar ruta y cambiar centro</Button>}
           <div className="space-y-1.5 max-h-64 overflow-y-auto">
             {elegidos.map((p) => (
               <div key={p.key} className="flex items-center gap-2 text-sm">
@@ -392,9 +424,9 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
             />
           </div>
           {elegidos.length > 0 && elegidos.length !== 8 && (
-            <p className="text-xs text-muted-foreground">La ruta estándar es de 8 visitas ({elegidos.length} elegidas).</p>
+            <p className="text-xs text-muted-foreground">La ruta debe tener 8 visitas ({elegidos.length} elegidas).</p>
           )}
-          <Button className="w-full gap-2" disabled={!vendedorId || elegidos.length === 0 || asignando} onClick={asignar}>
+          <Button className="w-full gap-2" disabled={!vendedorId || elegidos.length !== VISITAS_POR_DIA || asignando} onClick={asignar}>
             {asignando ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
             Asignar {elegidos.length || ""} visita{elegidos.length === 1 ? "" : "s"}
           </Button>

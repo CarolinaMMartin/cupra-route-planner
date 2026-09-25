@@ -1,4 +1,7 @@
-import { useState, useEffect } from "react";
+import { SegmentFilters } from "@/components/shared/SegmentFilters";
+import { estadoDe, FILTROS_VACIOS, filtrarPorSegmentos, type FiltrosSegmento } from "@/lib/segmentos";
+import { fetchAllRows, fetchInChunks } from "@/lib/supabaseQuery";
+import { useState, useEffect, useMemo } from "react";
 import AppNav from "@/components/AppNav";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -48,6 +51,9 @@ interface AsignacionHistorial {
   es_prospecto: boolean;
   cliente_info?: {
     razon_social: string;
+    rubro?: string;
+    canal?: string;
+    ultima_compra?: string;
     barrio_principal?: string;
     provincia_principal?: string;
     telefonos?: string[];
@@ -58,6 +64,7 @@ interface AsignacionHistorial {
   };
   prospecto_info?: {
     nombre: string;
+    rubro?: string;
     barrio?: string;
     provincia?: string;
     telefono?: string;
@@ -78,13 +85,20 @@ interface Estadisticas {
 const VendedorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [historial, setHistorial] = useState<AsignacionHistorial[]>([]);
-  const [estadisticas, setEstadisticas] = useState<Estadisticas>({
-    totalAsignaciones: 0,
-    asignacionesActivas: 0,
-    visitasRealizadas: 0,
-    porVisitar: 0,
-    tasaConversion: 0,
-  });
+  const [segmentos, setSegmentos] = useState<FiltrosSegmento>(FILTROS_VACIOS);
+  const historialFiltrado = useMemo(() => filtrarPorSegmentos(historial, segmentos, a => ({
+    estado: estadoDe({ ...a.cliente_info, es_prospecto: a.es_prospecto }),
+    rubro: a.es_prospecto ? a.prospecto_info?.rubro : a.cliente_info?.rubro,
+    canal: a.cliente_info?.canal, volumen: a.cliente_info?.categoria_volumen,
+    barrio: a.cliente_info?.barrio_principal || a.prospecto_info?.barrio,
+  })), [historial, segmentos]);
+  const estadisticas: Estadisticas = useMemo(() => {
+    const realizadas = historialFiltrado.filter(h=>h.estado === "Visitado").length;
+    return { totalAsignaciones: historialFiltrado.length, visitasRealizadas: realizadas,
+      asignacionesActivas: historialFiltrado.filter(h=>h.estado !== "Visitado").length,
+      porVisitar: historialFiltrado.filter(h=>h.estado === "Por visitar").length,
+      tasaConversion: historialFiltrado.length ? Math.round(realizadas / historialFiltrado.length * 100) : 0 };
+  }, [historialFiltrado]);
   const [selectedAsignacion, setSelectedAsignacion] = useState<AsignacionHistorial | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
   const { toast } = useToast();
@@ -101,13 +115,8 @@ const VendedorDashboard = () => {
       if (!user) throw new Error("Usuario no autenticado");
 
       // Obtener todas las asignaciones del vendedor
-      const { data: asignaciones, error: asignacionesError } = await supabase
-        .from("asignaciones_vendedores_clientes")
-        .select("*")
-        .eq("vendedor_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (asignacionesError) throw asignacionesError;
+      const asignaciones = await fetchAllRows((from,to) => supabase.from("asignaciones_vendedores_clientes")
+        .select("*").eq("vendedor_id", user.id).order("created_at", { ascending: false }).order("id").range(from,to));
 
       // Obtener información de clientes y prospectos
       const clientIds = asignaciones
@@ -118,52 +127,26 @@ const VendedorDashboard = () => {
         ?.filter(a => a.prospecto_place_id)
         .map(a => a.prospecto_place_id) || [];
 
-      const [clientesRes, prospectosRes, feedbacksRes, allFeedbacksRaw] = await Promise.all([
-        clientIds.length > 0 
-          ? supabase.from("clientes").select("client_id, razon_social, barrio_principal, provincia_principal, telefonos, emails, vendedor_principal, categoria_volumen, dias_desde_ultima_compra").in("client_id", clientIds)
-          : Promise.resolve({ data: [] }),
-        prospectoIds.length > 0
-          ? supabase.from("prospectos").select("place_id, nombre, barrio, provincia, telefono, direccion").in("place_id", prospectoIds)
-          : Promise.resolve({ data: [] }),
-        supabase.from("cliente_feedbacks").select("*").eq("vendedor_id", user.id),
-        // Obtener TODOS los feedbacks (de todos los vendedores) para mostrar historial completo
-        supabase.from("cliente_feedbacks").select("*")
+      const [clientesData, prospectosData, allFeedbacksRaw] = await Promise.all([
+        fetchInChunks(clientIds, chunk => supabase.from("clientes").select("client_id, razon_social, barrio_principal, provincia_principal, telefonos, emails, vendedor_principal, categoria_volumen, dias_desde_ultima_compra, ultima_compra, rubro, canal").in("client_id", chunk)),
+        fetchInChunks(prospectoIds, chunk => supabase.from("prospectos").select("place_id, nombre, barrio, provincia, telefono, direccion, rubro").in("place_id", chunk)),
+        fetchAllRows((from,to) => supabase.from("cliente_feedbacks").select("*").order("created_at").order("id").range(from,to)),
       ]);
-
-      // Obtener vendedor_ids únicos de todos los feedbacks para hacer join manual
-      const vendedorIds = [...new Set(
-        allFeedbacksRaw.data?.map(f => f.vendedor_id).filter(Boolean) || []
-      )];
-
-      // Query separado para profiles (ya que no hay FK definida)
-      const profilesRes = vendedorIds.length > 0
-        ? await supabase
-            .from("profiles")
-            .select("user_id, nombre")
-            .in("user_id", vendedorIds)
-        : { data: [] };
-
-      // Crear mapa de profiles para merge manual
-      const profilesMap = new Map<string, string>();
-      profilesRes.data?.forEach(p => profilesMap.set(p.user_id, p.nombre));
-
-      // Mapear feedbacks con info del vendedor
-      const allFeedbacksData = allFeedbacksRaw.data?.map(f => ({
-        ...f,
-        vendedor: profilesMap.has(f.vendedor_id) 
-          ? { nombre: profilesMap.get(f.vendedor_id) }
-          : undefined
-      })) || [];
+      const vendedorIds = [...new Set(allFeedbacksRaw.map(f=>f.vendedor_id).filter(Boolean))];
+      const profilesData = await fetchInChunks(vendedorIds, chunk => supabase.from("profiles").select("user_id, nombre").in("user_id", chunk));
+      const profilesMap = new Map(profilesData.map(p=>[p.user_id, p.nombre]));
+      const allFeedbacksData = allFeedbacksRaw.map(f=>({ ...f,
+        vendedor: profilesMap.has(f.vendedor_id) ? { nombre: profilesMap.get(f.vendedor_id) } : undefined }));
 
       // Mapear información
       const clientesMap = new Map<string, any>();
-      clientesRes.data?.forEach(c => clientesMap.set(c.client_id, c));
+      clientesData.forEach(c => clientesMap.set(c.client_id, c));
       
       const prospectosMap = new Map<string, any>();
-      prospectosRes.data?.forEach(p => prospectosMap.set(p.place_id, p));
+      prospectosData.forEach(p => prospectosMap.set(p.place_id, p));
       
       const feedbacksMap = new Map<string, any>();
-      feedbacksRes.data?.forEach(f => {
+      allFeedbacksRaw.filter(f=>f.vendedor_id === user.id).forEach(f => {
         const key = f.client_id || f.prospecto_place_id || '';
         if (key) feedbacksMap.set(key, f);
       });
@@ -198,20 +181,6 @@ const VendedorDashboard = () => {
 
       setHistorial(historialCompleto);
 
-      // Calcular estadísticas
-      const activas = historialCompleto.filter(h => h.estado === "Asignado" || h.estado === "Por visitar");
-      const visitadas = historialCompleto.filter(h => h.estado === "Visitado");
-      const porVisitar = historialCompleto.filter(h => h.estado === "Por visitar");
-
-      setEstadisticas({
-        totalAsignaciones: historialCompleto.length,
-        asignacionesActivas: activas.length,
-        visitasRealizadas: visitadas.length,
-        porVisitar: porVisitar.length,
-        tasaConversion: historialCompleto.length > 0 
-          ? Math.round((visitadas.length / historialCompleto.length) * 100)
-          : 0,
-      });
 
     } catch (error) {
       console.error("Error al cargar dashboard:", error);
@@ -274,6 +243,7 @@ const VendedorDashboard = () => {
       {/* Activaciones del mes */}
       <ActividadesPanel />
 
+      <SegmentFilters value={segmentos} onChange={setSegmentos} campos={["estados","rubros","canales","volumenes"]} titulo="Segmentos de las visitas" />
       {/* Estadísticas principales */}
       <div className="grid grid-cols-2 gap-2 md:gap-4 lg:grid-cols-4">
         <Card className="p-2 md:p-0">
@@ -336,11 +306,11 @@ const VendedorDashboard = () => {
 
             <TabsContent value="todas" className="mt-3 md:mt-4">
               <ScrollArea className="h-[400px] md:h-[500px] w-full pr-2 md:pr-4">
-                {historial.length === 0 ? (
+                {historialFiltrado.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No hay asignaciones</p>
                 ) : (
                   <div className="space-y-3">
-                    {historial.map((asig) => (
+                    {historialFiltrado.map((asig) => (
                       <Card 
                         key={asig.id} 
                         className="p-4 cursor-pointer hover:shadow-md transition-shadow"
@@ -395,7 +365,7 @@ const VendedorDashboard = () => {
 
             <TabsContent value="activas" className="mt-3 md:mt-4">
               <ScrollArea className="h-[400px] md:h-[500px] w-full pr-2 md:pr-4">
-                {historial.filter(h => h.estado === "Asignado" || h.estado === "Por visitar").length === 0 ? (
+                {historialFiltrado.filter(h => h.estado === "Asignado" || h.estado === "Por visitar").length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No hay asignaciones activas</p>
                 ) : (
                   <div className="space-y-3">
@@ -440,7 +410,7 @@ const VendedorDashboard = () => {
 
             <TabsContent value="visitadas" className="mt-3 md:mt-4">
               <ScrollArea className="h-[400px] md:h-[500px] w-full pr-2 md:pr-4">
-                {historial.filter(h => h.estado === "Visitado").length === 0 ? (
+                {historialFiltrado.filter(h => h.estado === "Visitado").length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No hay visitas completadas</p>
                 ) : (
                   <div className="space-y-3">

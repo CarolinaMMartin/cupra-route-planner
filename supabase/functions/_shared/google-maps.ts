@@ -150,13 +150,17 @@ export async function buscarLugaresCercanos(opts: NearbyOptions): Promise<Google
         if (encontrados.size > 0) return [...encontrados.values()];
         throw error;
       }
-      const res = await googleMapsFetch("/places/v1/places:searchNearby", {
+      let res: Response | undefined;
+      for (let intento = 0; intento < 2; intento++) {
+        try {
+          if (intento > 0) opts.consumirConsulta?.();
+          res = await googleMapsFetch("/places/v1/places:searchNearby", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Goog-FieldMask": PLACES_FIELD_MASK },
         body: JSON.stringify({
           includedTypes: [tipo],
           maxResultCount: 20,
-          rankPreference: "POPULARITY",
+          rankPreference: "DISTANCE",
           languageCode: "es",
           regionCode: "AR",
           locationRestriction: {
@@ -164,11 +168,25 @@ export async function buscarLugaresCercanos(opts: NearbyOptions): Promise<Google
           },
         }),
       });
+          if (intento === 0 && (res.status === 429 || res.status >= 500)) {
+            await res.body?.cancel();
+            res = undefined;
+            await new Promise(resolve => setTimeout(resolve, 150));
+            continue;
+          }
+          break;
+        } catch (error) {
+          errores.push(error instanceof Error ? error.message : String(error));
+          if (intento === 1) res = undefined;
+        }
+      }
+      if (!res) continue;
       const payload = await res.json().catch(() => ({})) as { places?: GooglePlace[]; error?: { message?: string } };
       if (!res.ok) {
         errores.push(`${res.status} ${payload.error?.message || ""}`.trim());
         // Clave inválida o sin cuota: no tiene sentido seguir pidiendo.
         if (res.status === 401 || res.status === 403 || res.status === 429 || esClaveInvalida(res.status, payload)) {
+          if (encontrados.size) return [...encontrados.values()];
           throw new Error(`Google Places rechazó la búsqueda (${errores[errores.length - 1]})`);
         }
         continue;
@@ -176,7 +194,7 @@ export async function buscarLugaresCercanos(opts: NearbyOptions): Promise<Google
       respuestasOk++;
       for (const place of payload.places || []) {
         if (!place.id || excluir.has(place.id) || encontrados.has(place.id)) continue;
-        if (place.businessStatus === "CLOSED_PERMANENTLY") continue;
+        if (place.businessStatus === "CLOSED_PERMANENTLY" || place.businessStatus === "CLOSED_TEMPORARILY") continue;
         encontrados.set(place.id, place);
       }
     }

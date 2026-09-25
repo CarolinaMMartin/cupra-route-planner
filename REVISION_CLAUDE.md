@@ -7,7 +7,7 @@ contenidos tanto en el bundle como en los parches adjuntos. Fecha: 23/09/2026.
 ## Evaluación
 
 La separación del motor en reglas y un planificador comprobable mejora la
-estructura anterior. Se conservan la composición 5-2-1, los filtros, el mapa de
+estructura anterior. Se conservan los filtros, el mapa de
 zona, la geocodificación directa y las explicaciones determinísticas cuando
 falla la IA. La propuesta necesitaba correcciones antes de publicarse.
 
@@ -19,7 +19,7 @@ falla la IA. La propuesta necesitaba correcciones antes de publicarse.
 | Estado duplicado en frontend y backend | El centinela 9999 era potencial en pantalla y perdido en el motor | Módulo compartido con validación de fechas y valores ausentes |
 | Cuentas cerradas sin reseñas | Podían entrar como prospectos manuales | Exclusión por estado del negocio independientemente del origen |
 | Consulta de Google aunque ya había ocho clientes del estado elegido | Consumo innecesario de llamadas | Búsqueda solo ante déficit; presupuesto de consultas y tiempo máximo |
-| Último recurso sin límite de distancia | Ocho visitas nominales podían implicar un recorrido impracticable | Límite de 15 km y déficit informado |
+| Último recurso sin límite de distancia | Ocho visitas nominales podían implicar un recorrido impracticable | Radio estricto de 1,5 km, centros alternativos y error explícito si faltan visitas |
 | Exclusión de lo asignado basada solo en la fecha de creación | Una visita programada antes para hoy podía volver a recomendarse | Consulta por fecha programada, fecha operativa y visitas realizadas hoy |
 | Gate de duplicados limitado a clientes con vendedor y no excluidos | Clientes existentes podían reaparecer como prospectos | Se compara contra toda la cartera, incluido el identificador de Google |
 | Inserción de prospectos con carrera entre solicitudes | Una búsqueda podía fallar por una inserción simultánea | Inserción con conflicto ignorado; nunca sobrescribe prospectos existentes |
@@ -34,12 +34,17 @@ falla la IA. La propuesta necesitaba correcciones antes de publicarse.
 
 ## Validación
 
-Se ejecutaron instalación limpia con `npm ci`, comprobación de tipos, 62 pruebas
-del motor, 11 pruebas de base de datos y compilación de producción. Las pruebas
-de base ejecutan ambas migraciones sobre PostgreSQL embebido y verifican
-historial, rollback del lote, permisos, repetición, agenda futura y auditoría de
-transferencia de cartera. Los datos del caso de Micaela son sintéticos, como en
-las pruebas recibidas; no son una validación de su cartera real de producción.
+La validación incluye tipos de interfaz y de las nueve funciones del servidor,
+69 pruebas del motor, 14 pruebas de PostgreSQL embebido y compilación de producción.
+Las pruebas cubren centros alternativos, límite de 1,5 km, ocho únicos por vendedor,
+Google transitorio, cierres, revisitas, rollback, historial y análisis de 2506 filas.
+
+El 25/09/2026 se reprodujo además la cartera real de Micaela con una lectura de
+producción, sin escribir visitas: 8 destinos (1 cliente + 7 prospectos registrados),
+máximo 1,469 km desde el centro. Se incluyeron los 14 feedbacks, las fechas de revisita,
+los negocios cerrados/convertidos, la comparación con cartera y asignaciones del día.
+Esto valida esa captura de datos; no garantiza inventario futuro ni disponibilidad de Google.
+Los datos personales de la captura no se incorporan al repositorio.
 
 En navegador local se comprobó el flujo de filtros, generación, selección y
 confirmación de ocho visitas, incluido el envío único al RPC y la ausencia de
@@ -53,16 +58,22 @@ del lint y sí forman parte de la validación automatizada de esta entrega.
 
 ## Decisiones y límites
 
-La regla 5-2-1 y los umbrales móviles 30/90 días son decisiones de producto
-conservadas del código recibido. El manual adjunto describe frecuencia por
-prioridad de zona y estados por meses; no documenta esa composición diaria.
-No se atribuye la regla 5-2-1 al manual ni se cambian esos criterios sin una
-definición comercial adicional.
-
+La indicación comercial del 25/09/2026 elimina la cuota 5-2-1 y fija un radio
+máximo de 1,5 km. Los umbrales móviles de estado 30/90 días se mantienen.
 El rubro es un filtro estricto; los estados elegidos son una prioridad con
-sustitución avisada. La distancia usa coordenadas en línea recta, no tiempos
-reales de caminata o tránsito. El límite de 15 km evita la ampliación ilimitada,
-pero no garantiza por sí mismo que toda ruta sea caminable.
+sustitución avisada. Se comparan centros de la cartera y, si no alcanza, núcleos
+de prospectos de la zona. Se reintentan fallos transitorios de Google con presupuesto.
+
+Servidor e interfaz validan ocho destinos únicos por vendedor y el radio antes de
+aceptar una generación. Un faltante produce 422 y no guarda recomendaciones parciales.
+La confirmación de recomendaciones y la ruta armada desde el mapa exigen ocho visitas.
+Las visitas manuales individuales de agenda conservan su propósito independiente.
+La distancia se mide en línea recta desde el centro: no son 1,5 km de recorrido total.
+
+El análisis IA se ubica en Ventas. Las métricas se calculan en PostgreSQL sobre todas
+las filas importadas, con filtros de archivo, fechas, vendedor y segmento de clientes.
+La IA recibe agregados; no calcula los totales ni recibe una muestra de 1000 filas.
+Los administradores activos pueden usarlo; una falla de IA mantiene los datos visibles.
 
 Los registros históricos sin fecha de cierre confiable no reciben un comentario
 por mera coincidencia de cliente. El origen de prospectos antiguos todavía se

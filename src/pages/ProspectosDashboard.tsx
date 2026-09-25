@@ -48,7 +48,8 @@ import { ProspectDiscoveryDialog } from "@/components/prospectos/ProspectDiscove
 import { ProspectoDetalleDialog } from "@/components/prospectos/ProspectoDetalleDialog";
 import { Slider } from "@/components/ui/slider";
 import { useRubros } from "@/hooks/useRubros";
-import { claveTexto } from "@/lib/segmentos";
+import { fetchAllRows, fetchInChunks } from "@/lib/supabaseQuery";
+import { claveTexto, estadoDe, ESTADOS as ESTADOS_COMERCIALES } from "@/lib/segmentos";
 import {
   Table,
   TableBody,
@@ -139,6 +140,8 @@ const ProspectosDashboard = () => {
   const [selectedComuna, setSelectedComuna] = useState<string>("all");
   const [selectedBarrio, setSelectedBarrio] = useState<string>("all");
   const [selectedTipos, setSelectedTipos] = useState<string[]>([]);
+  const [selectedEstados, setSelectedEstados] = useState<string[]>([]);
+  const [estadosClientes, setEstadosClientes] = useState<Record<string, string>>({});
   const [selectedRubros, setSelectedRubros] = useState<string[]>([]);
   const { rubros: rubrosTodos } = useRubros();
   const rubrosProspectos = useMemo(() => rubrosTodos.filter((r) => r.prospectos > 0).map((r) => ({ value: r.value, label: `${r.value} (${r.prospectos})` })), [rubrosTodos]);
@@ -259,35 +262,10 @@ const ProspectosDashboard = () => {
   };
 
   const fetchProspectosData = async () => {
-    const pageSize = 1000;
-    let allProspectos: Prospecto[] = [];
-    let page = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      const from = page * pageSize;
-      const to = from + pageSize - 1;
-
-      const { data: prospectos, error } = await supabase
-        .from('prospectos')
-        .select('*')
-        .range(from, to);
-
-
-      if (error) {
-        console.error('Error fetching prospectos:', error);
-        return;
-      }
-
-      if (prospectos && prospectos.length > 0) {
-        allProspectos = [...allProspectos, ...prospectos];
-        hasMore = prospectos.length === pageSize;
-        page++;
-      } else {
-        hasMore = false;
-      }
-    }
-
+    const allProspectos = await fetchAllRows((from,to) => supabase.from("prospectos").select("*").order("place_id").range(from,to));
+    const clientes = await fetchInChunks(allProspectos.map(p=>p.client_id).filter(Boolean), chunk =>
+      supabase.from("clientes").select("client_id, ultima_compra, dias_desde_ultima_compra").in("client_id", chunk));
+    setEstadosClientes(Object.fromEntries(clientes.map(c=>[c.client_id, estadoDe(c)])));
     setProspectosData(allProspectos);
   };
 
@@ -342,6 +320,8 @@ const ProspectosDashboard = () => {
       const matchComuna = selectedComuna === "all" || p.comuna === selectedComuna;
       const matchBarrio = selectedBarrio === "all" || p.barrio === selectedBarrio;
       const matchTipos = selectedTipos.length === 0 || selectedTipos.some((t) => p.tipo_principal === t);
+      const estado = p.client_id ? estadosClientes[p.client_id] : "POTENCIAL";
+      const matchEstado = selectedEstados.length === 0 || selectedEstados.includes(estado);
       const matchRubro = selectedRubros.length === 0 || selectedRubros.some((r) => claveTexto(r) === claveTexto(p.rubro));
       const matchNivelPrecio = selectedNivelPrecio === "all" || p.nivel_precio === selectedNivelPrecio;
       const matchRating = (p.rating || 0) >= minRating;
@@ -350,11 +330,11 @@ const ProspectosDashboard = () => {
         (p.direccion || "").toLowerCase().includes(term) ||
         (p.tipo_principal ? formatTipoNegocio(p.tipo_principal).toLowerCase().includes(term) : false);
 
-      return matchProvincia && matchComuna && matchBarrio && matchTipos && matchRubro &&
+      return matchProvincia && matchComuna && matchBarrio && matchTipos && matchRubro && matchEstado &&
         matchNivelPrecio && matchRating && matchSearch;
     });
   }, [prospectosData, selectedProvincia, selectedComuna, selectedBarrio,
-    selectedTipos, selectedRubros, selectedNivelPrecio, minRating, searchTerm]);
+    selectedTipos, selectedRubros, selectedEstados, estadosClientes, selectedNivelPrecio, minRating, searchTerm]);
 
   const sortedData = useMemo(() => {
     if (!sortBy) return filteredData;
@@ -397,6 +377,8 @@ const ProspectosDashboard = () => {
       label: formatTipoNegocio(tipo),
       clear: () => setSelectedTipos((current) => current.filter((t) => t !== tipo)),
     }));
+    selectedEstados.forEach(estado=>chips.push({key:`estado-${estado}`, label:ESTADOS_COMERCIALES.find(e=>e.value===estado)?.plural || estado,
+      clear:()=>setSelectedEstados(current=>current.filter(e=>e!==estado))}));
     selectedRubros.forEach((rubro) => chips.push({
       key: `rubro-${rubro}`,
       label: rubro,
@@ -406,7 +388,7 @@ const ProspectosDashboard = () => {
     if (minRating > 0) chips.push({ key: "rating", label: `Rating ≥ ${minRating.toFixed(1)}`, clear: () => setMinRating(0) });
     if (searchTerm.trim() !== "") chips.push({ key: "search", label: `"${searchTerm.trim()}"`, clear: () => setSearchTerm("") });
     return chips;
-  }, [selectedProvincia, selectedComuna, selectedBarrio, selectedTipos, selectedRubros, selectedNivelPrecio, minRating, searchTerm]);
+  }, [selectedProvincia, selectedComuna, selectedBarrio, selectedTipos, selectedRubros, selectedEstados, estadosClientes, selectedNivelPrecio, minRating, searchTerm]);
 
   const handleClearFilters = () => {
     setSelectedProvincia("all");
@@ -414,6 +396,7 @@ const ProspectosDashboard = () => {
     setSelectedBarrio("all");
     setSelectedTipos([]);
     setSelectedRubros([]);
+    setSelectedEstados([]);
     setSelectedNivelPrecio("all");
     setMinRating(0);
     setSearchTerm("");
@@ -717,6 +700,11 @@ const ProspectosDashboard = () => {
                     />
                   </div>
 
+                  <div className="space-y-2">
+                    <label className="text-xs text-muted-foreground">Estado comercial</label>
+                    <MultiSelect options={ESTADOS_COMERCIALES.map(e=>({value:e.value,label:e.plural}))} selected={selectedEstados}
+                      onChange={v=>{setSelectedEstados(v);setCurrentPage(1);}} placeholder="Todos los estados" />
+                  </div>
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rubro</label>
                     <MultiSelect

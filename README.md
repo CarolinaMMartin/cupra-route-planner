@@ -6,11 +6,21 @@ revisión y asignación humana antes de generar la jornada del vendedor.
 
 ## Planificación
 
-El objetivo es ocho visitas por vendedor: cinco clientes activos, dos para
-reactivar y un potencial. El asignador puede priorizar estados comerciales y
-filtrar por rubro. Las sustituciones y ampliaciones de zona se explican en el
-resultado. El radio máximo de búsqueda es 15 km; si faltan destinos elegibles,
-se informa la cantidad disponible.
+Cada generación exitosa entrega ocho visitas por vendedor dentro de un radio
+máximo de **1,5 km desde el centro de su ruta**. No hay una cuota fija 5-2-1:
+se priorizan clientes del estado elegido y se completa con prospectos. Se comparan
+centros alternativos de la zona antes de buscar nuevos negocios en Google.
+
+El rubro es estricto. Si no existen ocho destinos elegibles, la generación falla
+con un mensaje por vendedor; no presenta una ruta parcial como terminada ni
+amplía el radio. Una nueva búsqueda permite reintentar sin asignar visitas.
+El radio es geográfico, no la longitud total del recorrido por calles.
+
+Los dashboards ofrecen filtros comerciales y por rubro. El mapa muestra colores
+por estado y permite asignar una ruta completa dentro del círculo de 1,5 km.
+En Ventas → Análisis IA se procesan todas las filas importadas de un archivo o
+selección: PostgreSQL calcula las métricas y la IA explica los resultados. Si la
+IA falla, las cifras siguen disponibles con un aviso.
 
 El motor decide mediante reglas explícitas. La IA redacta explicaciones y
 puede fallar sin impedir la planificación. Los estados se calculan con la

@@ -113,7 +113,7 @@ Deno.test("sin prospectos en la base: Google Maps completa", async () => {
   assertEquals(r.porVendedor[0].cobertura.prospectos_de_maps, 6);
 });
 
-Deno.test("Google caído y zona vacía: garantía de 8 con cartera y prospectos más lejos, avisado", async () => {
+Deno.test("Google caído: nunca completa con destinos fuera de 1,5 km", async () => {
   const clientes = [cliente("v", 10, 0, 0)];
   const clientesFuera = Array.from({ length: 4 }, (_, i) => cliente("v", 50, 4 + i * 0.3, 0, "Belgrano"));
   const lejanos = Array.from({ length: 5 }, (_, i) => ({ ...prospecto(-4.5, 0.3 * i), barrio: "Villa Crespo" }));
@@ -122,12 +122,13 @@ Deno.test("Google caído y zona vacía: garantía de 8 con cartera y prospectos 
     deps({ baseCercana: lejanos, descubrirEnGoogle: async () => { throw new Error("403 API key not valid"); } }),
   );
   const v = r.porVendedor[0];
-  assertEquals(v.elegidos.length, 8);
-  assert(v.cobertura.fuera_de_zona >= 7, `fuera de zona: ${v.cobertura.fuera_de_zona}`);
+  assertEquals(v.elegidos.length, 1);
+  assertEquals(v.cobertura.completa, false);
+  assert(v.cobertura.radio_final_km <= 1.5);
   assertEquals(v.cobertura.error_google, "403 API key not valid");
 });
 
-Deno.test("regla 5-2-1 con cartera completa", async () => {
+Deno.test("cartera completa: ocho sin cupos ni prospectos obligatorios", async () => {
   const clientes = [
     ...Array.from({ length: 7 }, (_, i) => cliente("v", 5 + i, 0.2 * i, 0)),
     ...Array.from({ length: 3 }, (_, i) => cliente("v", 60, 0, 0.2 * (i + 1))),
@@ -137,9 +138,8 @@ Deno.test("regla 5-2-1 con cartera completa", async () => {
   const r = await planificarRutas(armarInput({ vendedores: ["v"], clientes, prospectos }), deps());
   const cob = r.porVendedor[0].cobertura;
   assertEquals(r.porVendedor[0].elegidos.length, 8);
-  assertEquals(cob.obtenido.cartera_activa, 5);
-  assertEquals(cob.obtenido.reactivacion, 2);
-  assertEquals(cob.obtenido.potencial + cob.obtenido.prospectos, 1);
+  assertEquals(cob.obtenido.cartera_activa + cob.obtenido.reactivacion, 8);
+  assertEquals(cob.obtenido.prospectos, 0);
 });
 
 Deno.test("filtro 'perdidos': 8 perdidos si hay", async () => {
@@ -247,4 +247,42 @@ Deno.test("visitas ocupadas hoy no reaparecen aunque se relaje la pausa", async 
   const r = await planificarRutas(input, deps());
   assertEquals(r.porVendedor[0].elegidos.length, 8);
   assert(r.porVendedor[0].elegidos.every((c) => !input.asignadosHoy.has(c.client_id)));
+});
+
+Deno.test("dos núcleos de cartera: elige el que permite completar con siete prospectos", async () => {
+  const clientes = [cliente("micaela",45,0,0),cliente("micaela",45,5,0)];
+  const prospectos = [prospecto(0.1,0),prospecto(0.2,0),...Array.from({length:8},(_,i)=>prospecto(5+i*0.08,0.1))];
+  const r = await planificarRutas(armarInput({vendedores:["micaela"],clientes,prospectos}),deps());
+  assertEquals(r.porVendedor[0].cobertura.completa,true);
+  assert(ids(r).includes(clientes[1].row.client_id));
+  assertEquals(r.porVendedor[0].cobertura.obtenido.prospectos,7);
+  assert(r.porVendedor[0].cobertura.radio_final_km<=1.5);
+});
+
+Deno.test("si ningún cliente tiene vecinos suficientes, completa ocho prospectos en otro núcleo de la zona", async () => {
+  const clientes = [cliente("v",45,0,0)];
+  const prospectos = Array.from({length:8},(_,i)=>prospecto(5+i*0.08,0.1));
+  const r = await planificarRutas(armarInput({vendedores:["v"],clientes,prospectos}),deps());
+  assertEquals(r.porVendedor[0].cobertura.completa,true);
+  assertEquals(r.porVendedor[0].cobertura.obtenido.prospectos,8);
+});
+
+Deno.test("Google no puede completar con un octavo destino a más de 1,5 km", async () => {
+  const clientes = [cliente("v",10,0,0)];
+  const encontrados = [...Array.from({length:6},(_,i)=>prospecto(0.1*i,0)),prospecto(1.51,0)];
+  const radios: number[] = [];
+  const r = await planificarRutas(armarInput({vendedores:["v"],clientes,prospectos:[]}),deps({descubrirEnGoogle: async (_lat,_lng,radio)=>{radios.push(radio);return encontrados;}}));
+  assertEquals(r.porVendedor[0].elegidos.length,7);
+  assertEquals(r.porVendedor[0].cobertura.completa,false);
+  assert(radios.every(r=>r===1.5));
+});
+
+Deno.test("un error de Google para un vendedor no impide buscar para los demás", async () => {
+  const clientes = [cliente("a",10,0,0),cliente("b",10,5,0)];
+  const encontrados = Array.from({length:8},(_,i)=>prospecto(5+0.1*i,0));
+  const r=await planificarRutas(armarInput({vendedores:["a","b"],clientes,prospectos:[]}),deps({
+    descubrirEnGoogle:async (_lat,_lng,_radio,_objetivo,_excluir,id)=>{if(id==='a') throw Error('503 temporal');return encontrados;}
+  }));
+  assertEquals(r.porVendedor[0].cobertura.completa,false);
+  assertEquals(r.porVendedor[1].cobertura.completa,true);
 });

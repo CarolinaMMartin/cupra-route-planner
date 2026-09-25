@@ -45,7 +45,7 @@ const FilterPanel = ({
   const [selectedArea, setSelectedArea] = useState<string>('none');
   const [isLoadingAreas, setIsLoadingAreas] = useState(true);
   const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
-  // Qué tipo de visitas pedir: vacío = regla 5-2-1 (5 activos + 2 reactivación + 1 potencial).
+  // Qué tipo de visitas pedir: vacío = todos los estados, sin cupos.
   const [selectedEstados, setSelectedEstados] = useState<string[]>([]);
   const [selectedRubros, setSelectedRubros] = useState<string[]>([]);
   const { rubros: rubrosOpciones, loading: loadingRubros } = useRubros();
@@ -391,7 +391,7 @@ const FilterPanel = ({
 };
 
 /**
- * Tipo de visitas del día. Sin selección rige la regla dura 5-2-1.
+ * Tipo de visitas del día. Sin selección se prioriza la cartera y se completa con prospectos.
  * Con estados elegidos (ej. solo "Perdidos"), las 8 salen de esos estados y,
  * si no alcanzan, se completan con prospectos cercanos (siempre 8, avisado).
  */
@@ -412,7 +412,7 @@ function VisitTypeFilters({ estados, onEstadosChange, rubros, onRubrosChange, ru
             options={ESTADOS.map((e) => ({ value: e.value, label: e.plural }))}
             selected={estados}
             onChange={onEstadosChange}
-            placeholder="Mezcla estándar (5-2-1)"
+            placeholder="Todos los estados"
             className="w-full"
           />
         </div>
@@ -429,7 +429,7 @@ function VisitTypeFilters({ estados, onEstadosChange, rubros, onRubrosChange, ru
       </div>
       <p className="text-xs text-muted-foreground leading-relaxed">
         {estados.length === 0
-          ? "Objetivo: 8 visitas por vendedor, con 5 clientes activos, 2 para reactivar y 1 potencial. Si faltan candidatos, se informa cualquier sustitución o ampliación de zona."
+          ? "8 visitas por vendedor dentro de 1,5 km. Se prioriza la cartera y se completa con prospectos, sin cupos por estado."
           : `Objetivo: 8 visitas por vendedor, priorizando ${ESTADOS.filter((e) => estados.includes(e.value)).map((e) => e.plural.toLowerCase()).join(" y ")}. Si no alcanzan, se proponen otras visitas disponibles y se informa la sustitución.`}
         {rubros.length > 0 && " Solo se incluyen clientes y prospectos de los rubros elegidos."}
       </p>

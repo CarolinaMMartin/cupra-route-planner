@@ -1,12 +1,12 @@
 // ============================================================
-// generate-recommendations — v12 "siempre-8"
+// generate-recommendations — v13 "ocho-en-1500m"
 //
 // Esta función solo CARGA datos, llama al planificador y guarda el resultado.
 // Las decisiones viven en módulos puros con tests:
 //   reglas.ts                   estados, feedback, dueño de cuenta, origen
 //   candidatos.ts               puntaje de clientes y prospectos
-//   recommendation-composition  regla 5-2-1 y filtro por estados
-//   planificador.ts             núcleo de ruta, ampliaciones y garantía de 8
+//   recommendation-composition  prioridad por estados y prospectos para completar
+//   planificador.ts             núcleo de ruta y validación de ocho visitas a 1,5 km
 // ============================================================
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.47.10";
@@ -32,7 +32,7 @@ import {
   type ScoredCandidate,
 } from "./candidatos.ts";
 import { type PlanVendedor, planificarRutas, VISITAS_POR_DIA } from "./planificador.ts";
-import { DEFAULT_CUPOS } from "./recommendation-composition.ts";
+import { RADIO_RUTA_KM, errorRuta } from "../_shared/ruta.ts";
 import { SolicitudInvalida, validarSolicitud } from "./solicitud.ts";
 import {
   crearResolvedorVendedores,
@@ -42,7 +42,7 @@ import {
   tiposGoogleParaRubros,
 } from "./reglas.ts";
 
-const VERSION = "v12-siempre-8";
+const VERSION = "v13-ocho-visitas-radio-1500m";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -283,6 +283,9 @@ Deno.serve(async (req) => {
     if (!vendedoresData?.length) {
       return json({ recomendaciones: [], resumen: { total_recomendaciones: 0, descripcion: "No se encontraron vendedores.", distribucion_por_vendedor: {}, zonas_priorizadas: [] } });
     }
+    if (vendedoresFinales.some(id => !vendedoresData.some(v => v.user_id === id || v.id === id))) {
+      return json({ error: "Hay vendedores inactivos o sin perfil de ventas. Actualizá la selección." }, 400);
+    }
     const perfilesActivos = await fetchAll((from, to) => db.from("profiles").select("user_id, nombre").order("user_id").range(from, to));
     const perfiles = new Map<string, any>();
     [...(perfilesActivos || []), ...vendedoresData].forEach((p: any) => p?.user_id && perfiles.set(p.user_id, p));
@@ -409,7 +412,7 @@ Deno.serve(async (req) => {
 
     // ---- 6. Prospectos del área ----
     let prospectosZona: any[] = [];
-    if (areaActiva || provinciaFiltro) {
+    {
       const or = geoOr("barrio", "comuna", ["ciudad"]);
       prospectosZona = await fetchAll((from, to) => {
         let q = db.from("prospectos").select("*").eq("es_cliente_cupra", false).is("client_id", null);
@@ -426,14 +429,14 @@ Deno.serve(async (req) => {
       ...[...carteraEnZona.values()].flat().map((c) => placesMap.get(c.client_id)).filter(Boolean).map((p: any) => ({ lat: Number(p.lat), lng: Number(p.long) })),
       ...prospectosZona.map((p) => ({ lat: Number(p.latitud), lng: Number(p.longitud) })),
     ].filter((p) => isValidCoord(p.lat, p.lng));
-    let centroZona: AnchorPoint | null = findDensestHotspot(puntosArea, 2.5) || calculateCentroid(puntosArea);
+    let centroZona: AnchorPoint | null = findDensestHotspot(puntosArea, RADIO_RUTA_KM) || calculateCentroid(puntosArea);
     if (!centroZona && areaActiva) {
       // Área sin clientes ni prospectos cargados: se ubica con cualquier cliente de la base en esos barrios.
       const or = geoOr("barrio_principal", "comuna");
       const { data: refPlaces } = await db.from("client_places").select("lat, long, barrio_principal, comuna").eq("is_primary", true).or(or).limit(500);
       const pts = (refPlaces || []).filter((p: any) => enArea({ barrio: p.barrio_principal, comuna: p.comuna }))
         .map((p: any) => ({ lat: Number(p.lat), lng: Number(p.long) })).filter((p: AnchorPoint) => isValidCoord(p.lat, p.lng));
-      centroZona = findDensestHotspot(pts, 2.5) || calculateCentroid(pts);
+      centroZona = findDensestHotspot(pts, RADIO_RUTA_KM) || calculateCentroid(pts);
     }
 
     // ---- 7. Feedback de los vendedores ----
@@ -464,12 +467,12 @@ Deno.serve(async (req) => {
 
     // ---- 8. Planificar ----
     const tiposGoogle = tiposGoogleParaRubros(rubros);
-    let consultasGoogle = 0;
-    const limiteGoogle = 24;
-    const plazoGoogle = Date.now() + 45_000;
-    const consumirConsulta = () => {
-      if (consultasGoogle >= limiteGoogle || Date.now() >= plazoGoogle) throw new Error("Se alcanzó el límite de búsquedas de esta generación");
-      consultasGoogle++;
+    const consultasPorVendedor = new Map<string, number>();
+    const plazoGoogle = Date.now() + 70_000;
+    const consumirConsulta = (vendedorId: string) => {
+      const usadas = consultasPorVendedor.get(vendedorId) || 0;
+      if (usadas >= 24 || Date.now() >= plazoGoogle) throw new Error("Se agotó el tiempo o presupuesto de búsqueda; reintentá este vendedor.");
+      consultasPorVendedor.set(vendedorId, usadas + 1);
     };
     const plan = await planificarRutas({
       vendedores: vendedoresData.map((v: any) => ({ user_id: v.user_id, nombre: v.nombre })),
@@ -501,8 +504,8 @@ Deno.serve(async (req) => {
             .order("place_id").range(from, to), 1000, 5000);
       },
       descubrirEnGoogle: hayGoogleMaps()
-        ? async (lat, lng, radioKm, objetivo, excluir) => {
-          const lugares = await buscarLugaresCercanos({ lat, lng, radioKm, tipos: tiposGoogle, objetivo: objetivo * 2, excluir, consumirConsulta });
+        ? async (lat, lng, radioKm, objetivo, excluir, vendedorId = "ruta") => {
+          const lugares = await buscarLugaresCercanos({ lat, lng, radioKm, tipos: tiposGoogle, objetivo: objetivo * 2, excluir, consumirConsulta: () => consumirConsulta(vendedorId) });
           const candidatas = lugares
             .map(placeAProspecto)
             .filter((p): p is NonNullable<ReturnType<typeof placeAProspecto>> => Boolean(p))
@@ -513,13 +516,15 @@ Deno.serve(async (req) => {
           if (candidatas.length === 0) return [];
           // Solo lugares NUEVOS: los que ya están en la base no se tocan (pueden tener
           // datos editados a mano o estar marcados como cliente).
-          const existentes = new Set((await fetchIn(candidatas.map((f) => f.place_id), (chunk) =>
-            db.from("prospectos").select("place_id").in("place_id", chunk))).map((r: any) => r.place_id));
-          const nuevas = candidatas.filter((f) => !existentes.has(f.place_id));
-          if (nuevas.length === 0) return [];
-          const { data, error } = await db.from("prospectos").upsert(nuevas, { onConflict: "place_id", ignoreDuplicates: true }).select("*");
-          if (error) throw new Error(`No se pudieron guardar los prospectos de Google: ${error.message}`);
-          return data || [];
+          const existentes = await fetchIn(candidatas.map(f => f.place_id), chunk =>
+            db.from("prospectos").select("*").in("place_id", chunk));
+          const idsExistentes = new Set(existentes.map(p => p.place_id));
+          const nuevas = candidatas.filter(f => !idsExistentes.has(f.place_id));
+          if (nuevas.length) {
+            const { error } = await db.from("prospectos").upsert(nuevas, { onConflict: "place_id", ignoreDuplicates: true });
+            if (error) throw new Error(`No se pudieron guardar los prospectos: ${error.message}`);
+          }
+          return await fetchIn(candidatas.map(f => f.place_id), chunk => db.from("prospectos").select("*").in("place_id", chunk));
         }
         : undefined,
       pasaGate,
@@ -528,6 +533,20 @@ Deno.serve(async (req) => {
 
     if (!hayGoogleMaps()) {
       console.warn("GOOGLE_MAPS_API_KEY no configurada: no se buscan prospectos nuevos.");
+    }
+
+    // Una respuesta exitosa SIEMPRE contiene ocho destinos por vendedor y respeta el radio.
+    const incompletas = plan.porVendedor.filter(p => errorRuta(p.elegidos.map(c => ({
+      id: c.client_id, lat: Number(c.lat), lng: Number(c.long),
+    })), p.hotspot));
+    if (incompletas.length) {
+      const detalle = incompletas.map(p => `${p.vendedor.nombre}: ${p.elegidos.length}/8`).join("; ");
+      console.warn("RUTAS_INCOMPLETAS", JSON.stringify(incompletas.map(p => p.cobertura)));
+      return json({ code: "RUTAS_INCOMPLETAS", recomendaciones: [],
+        error: `No se pudo completar la búsqueda dentro de 1,5 km (${detalle}). Revisá los rubros o las direcciones de la zona y reintentá.`,
+        cobertura: plan.porVendedor.map(p => p.cobertura),
+        reintentable: incompletas.some(p => p.cobertura.error_google || p.cobertura.error_base),
+      }, 422);
     }
 
     // ---- 9. Textos (IA opcional) ----
@@ -548,7 +567,8 @@ Deno.serve(async (req) => {
     for (const pv of plan.porVendedor) {
       for (const c of pv.elegidos) {
         const fallback = justificacionComercial(c);
-        const justificacion = limpiarJustificacion(textos.get(c.client_id), fallback);
+        const cuerpo = limpiarJustificacion(textos.get(c.client_id), fallback);
+        const justificacion = c.rubro && !cuerpo.toLowerCase().includes(c.rubro.toLowerCase()) ? `${c.rubro} · ${cuerpo}` : cuerpo;
         const factores = {
           score_comercial: c.score_comercial,
           score_recencia: c.score_rotacion,
@@ -650,15 +670,11 @@ Deno.serve(async (req) => {
     for (const pv of plan.porVendedor) {
       const cob = pv.cobertura;
       const partes: string[] = [];
-      if (cob.total < VISITAS_POR_DIA) {
-        const delRubro = rubros.size > 0 ? ` del rubro ${[...rubros].map((r) => r.toLowerCase()).join(" / ")}` : "";
-        partes.push(`${pv.vendedor.nombre}: solo ${cob.total} de ${VISITAS_POR_DIA} visitas. No hay más clientes ni prospectos${delRubro} cargados en 15 km a la redonda${hayGoogleMaps() && !errorGoogle ? " ni en Google Maps" : ""}.${delRubro ? " Probá sin filtro de rubro." : ""}`);
-      }
       if (cob.fuera_de_seleccion > 0) {
         partes.push(`${pv.vendedor.nombre}: no alcanzaron los ${cob.estados_elegidos.map((e) => estadosTexto[e] || e).join(" y ")}; se completó con ${cob.fuera_de_seleccion} visita${cob.fuera_de_seleccion === 1 ? "" : "s"} de otro tipo.`);
       }
       if (cob.fuera_de_zona > 0) {
-        partes.push(`${pv.vendedor.nombre}: ${cob.fuera_de_zona} visita${cob.fuera_de_zona === 1 ? " queda" : "s quedan"} fuera de ${zonaTexto} o lejos del resto de la ruta; se sumaron para llegar a 8.`);
+        partes.push(`${pv.vendedor.nombre}: ${cob.fuera_de_zona} visita${cob.fuera_de_zona === 1 ? " queda" : "s quedan"} fuera de ${zonaTexto} pero dentro del radio de 1,5 km; se sumaron para llegar a 8.`);
       }
       if (cob.prospectos_de_maps > 0) {
         partes.push(`${pv.vendedor.nombre}: ${cob.prospectos_de_maps} lugar${cob.prospectos_de_maps === 1 ? "" : "es"} nuevo${cob.prospectos_de_maps === 1 ? "" : "s"} encontrado${cob.prospectos_de_maps === 1 ? "" : "s"} en Google Maps.`);
@@ -683,19 +699,6 @@ Deno.serve(async (req) => {
       console.warn(`Vendedores del Excel sin perfil: ${lista}`);
     }
 
-    if (recomendaciones.length === 0) {
-      return json({
-        recomendaciones: [],
-        resumen: {
-          total_recomendaciones: 0,
-          descripcion: "No hay clientes ni prospectos cargados cerca de los vendedores elegidos. Cargá prospectos o revisá la configuración de Google Maps.",
-          distribucion_por_vendedor: {},
-          zonas_priorizadas: [],
-          avisos_cobertura: avisos,
-        },
-      });
-    }
-
     const paraDb = recomendaciones.map(({ lat, long, estado_comercial, vendedor_recomendado_nombre, rubro, ...rest }) => rest);
     const { error: insertError } = await db.from("recomendaciones_ia").insert(paraDb);
     if (insertError) throw insertError;
@@ -708,7 +711,7 @@ Deno.serve(async (req) => {
     });
     const totalEsperado = plan.porVendedor.length * VISITAS_POR_DIA;
     const descripcionBase = `Se armaron ${recomendaciones.length} de ${totalEsperado} visitas`
-      + (estados.size > 0 ? ` priorizando ${[...estados].map((e) => estadosTexto[e]).join(" y ")}` : ` con la regla ${DEFAULT_CUPOS.cartera}-${DEFAULT_CUPOS.reactivacion}-${DEFAULT_CUPOS.prospectos}`)
+      + (estados.size > 0 ? ` priorizando ${[...estados].map((e) => estadosTexto[e]).join(" y ")}` : ` dentro de un radio máximo de 1,5 km, completando con prospectos`)
       + (rubros.size > 0 ? ` del rubro ${[...rubros].map((r) => r.toLowerCase()).join(", ")}` : "")
       + ".";
 

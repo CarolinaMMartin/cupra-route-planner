@@ -1,3 +1,4 @@
+import { errorRuta, VISITAS_POR_DIA } from "../../supabase/functions/_shared/ruta";
 import { guardarAsignaciones } from "@/lib/asignaciones";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -117,6 +118,7 @@ const AssignorDashboard = () => {
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [isSavingAssignments, setIsSavingAssignments] = useState(false);
+  const [falloGeneracion, setFalloGeneracion] = useState<string | null>(null);
   const [showConfirmAssign, setShowConfirmAssign] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -166,6 +168,7 @@ const AssignorDashboard = () => {
     placesFilters: any,
   ) => {
     setIsLoading(true);
+    setFalloGeneracion(null);
     setSelectedVendedoresIds(selectedVendedoresData.ids);
     setVendedoresData(
       selectedVendedoresData.ids.map((id, idx) => ({
@@ -215,11 +218,16 @@ const AssignorDashboard = () => {
 
       const data = await response.json();
       abortControllerRef.current = null;
-
-      if (!data.recomendaciones || data.recomendaciones.length === 0) {
-        toast({ variant: "destructive", title: "Sin recomendaciones", description: data.resumen?.descripcion || "No se encontraron recomendaciones para los filtros seleccionados.", duration: 5000 });
-        setIsLoading(false);
-        return;
+      const todas = data.recomendaciones || [];
+      const idsUnicos = new Set(todas.map(r => r.es_prospecto ? r.prospecto_place_id : r.client_id));
+      if (todas.length !== selectedVendedoresData.ids.length * VISITAS_POR_DIA || idsUnicos.size !== todas.length) {
+        throw new Error('"error":"La generación recibida está incompleta o contiene repetidos. Reintentá; no se guardó ninguna asignación."');
+      }
+      for (const id of selectedVendedoresData.ids) {
+        const filas = todas.filter(r => r.vendedor_recomendado_id === id);
+        const centro = data.resumen?.cobertura?.find(c => c.vendedor_id === id)?.centro;
+        const fallo = errorRuta(filas.map(r=>({id:r.client_id || r.prospecto_place_id,lat:Number(r.lat),lng:Number(r.long)})),centro);
+        if(fallo) throw new Error(`"error":"${fallo} Reintentá la generación."`);
       }
 
       // Build local vendedor ID→name lookup for fallback
@@ -286,18 +294,34 @@ const AssignorDashboard = () => {
       if (error.message?.includes("429")) errorMessage = "Límite de consultas alcanzado. Reintenta en unos minutos.";
       else if (error.message?.includes("402")) errorMessage = "Créditos agotados.";
       else {
+        errorMessage = error.message || errorMessage;
         // Mensaje del servidor (ej. sesión vencida o sin permiso), si vino en JSON.
         const detalle = String(error.message || "").match(/"error"\s*:\s*"([^"]+)"/)?.[1];
         if (detalle) errorMessage = detalle;
       }
-      toast({ variant: "destructive", title: "Error", description: errorMessage });
+      setFalloGeneracion(errorMessage);
+      toast({ variant: "destructive", title: "No se completaron las rutas", description: errorMessage });
     } finally {
       setIsLoading(false);
     }
   };
 
+  const validarRutasSeleccionadas = () => {
+    const filas = recommendations.filter(r=>selectedSucursales.includes(r.id));
+    for (const vendedorId of new Set(filas.map(r=>r.vendedor_recomendado_id))) {
+      const grupo = filas.filter(r=>r.vendedor_recomendado_id===vendedorId);
+      const centro = aiInsights?.cobertura?.find(c=>c.vendedor_id===vendedorId)?.centro;
+      const fallo = errorRuta(grupo.map(r=>({id:r.client_id || r.prospecto_place_id,lat:Number(r.latitud),lng:Number(r.longitud)})),centro);
+      if (fallo) {
+        toast({variant:"destructive",title:"Seleccioná una ruta completa",description:`${grupo[0]?.vendedor_actual || "Vendedor"}: ${fallo}`});
+        return false;
+      }
+    }
+    return filas.length > 0;
+  };
+
   const handleRequestAssignmentConfirm = () => {
-    if (selectedSucursales.length === 0) return;
+    if (!validarRutasSeleccionadas()) return;
     setShowConfirmAssign(true);
   };
 
@@ -307,6 +331,7 @@ const AssignorDashboard = () => {
   };
 
   const handleContinueToAssignment = async () => {
+    if (!validarRutasSeleccionadas()) return;
     setShowConfirmAssign(false);
     const selected = recommendations.filter((rec) => selectedSucursales.includes(rec.id));
     if (selected.length === 0) return;
@@ -526,6 +551,7 @@ const AssignorDashboard = () => {
             <TabsContent value="nueva">
               <Card>
                 <CardContent className="p-4 sm:p-8">
+                  {falloGeneracion && <p role="alert" className="mb-4 border border-destructive/30 rounded-md p-3 text-sm text-destructive">{falloGeneracion}</p>}
                   <FilterPanel
                     onRequestRecommendations={handleRequestRecommendations}
                     isLoading={isLoading}

@@ -23,16 +23,16 @@ const inactivos = (n: number) => Array.from({ length: n }, (_, i) => candidate(`
 const perdidos = (n: number) => Array.from({ length: n }, (_, i) => candidate(`r${i + 1}`, false, "PERDIDO"));
 const prospectos = (n: number) => Array.from({ length: n }, (_, i) => candidate(`p${i + 1}`, true));
 
-Deno.test("regla dura 5 cartera + 2 reactivación + 1 potencial", () => {
+Deno.test("sin cupos: prioriza la cartera ordenada y llega a ocho", () => {
   const result = composeRecommendationIds({
     preferredIds: [],
     clients: [...activos(7), ...perdidos(3)],
     prospects: prospectos(5),
   });
-  assertEquals(result, ["a1", "a2", "a3", "a4", "a5", "r1", "r2", "p1"]);
+  assertEquals(result, ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "r1"]);
 });
 
-Deno.test("cliente propio sin compras ocupa el cupo potencial antes que un prospecto frío", () => {
+Deno.test("cliente propio sin compras se prioriza antes que un prospecto frío", () => {
   const result = composeRecommendationIds({
     preferredIds: [],
     clients: [...activos(5), ...perdidos(2), candidate("s1", false, "POTENCIAL")],
@@ -47,7 +47,7 @@ Deno.test("si falta reactivación completa con cartera activa", () => {
     clients: activos(8),
     prospects: prospectos(8),
   });
-  assertEquals(result, ["a1", "a2", "a3", "a4", "a5", "p1", "a6", "a7"]);
+  assertEquals(result, ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"]);
 });
 
 Deno.test("si falta cartera activa completa con reactivación y después potencial", () => {
@@ -56,7 +56,7 @@ Deno.test("si falta cartera activa completa con reactivación y después potenci
     clients: [candidate("a1", false, "ACTIVO"), ...inactivos(4)],
     prospects: prospectos(6),
   });
-  assertEquals(result, ["a1", "i1", "i2", "p1", "i3", "i4", "p2", "p3"]);
+  assertEquals(result, ["a1", "i1", "i2", "i3", "i4", "p1", "p2", "p3"]);
 });
 
 Deno.test("sin cartera: ocho prospectos", () => {
@@ -103,20 +103,21 @@ Deno.test("filtro que no alcanza: completa con prospectos y luego con el resto d
     preferredIds: [],
     clients: [...activos(6), ...perdidos(2)],
     prospects: prospectos(3),
+    permitirOtrosEstados: true,
     estados: new Set(["PERDIDO"]),
   });
   assertEquals(r.ids, ["r1", "r2", "p1", "p2", "p3", "a1", "a2", "a3"]);
   assertEquals(r.fueraDeSeleccion, ["p1", "p2", "p3", "a1", "a2", "a3"]);
 });
 
-Deno.test("filtro ACTIVOS + POTENCIALES respeta 5 + 1 y completa dentro de la selección", () => {
+Deno.test("filtro ACTIVOS + POTENCIALES respeta la selección sin imponer cupos", () => {
   const r = composeRoute({
     preferredIds: [],
     clients: [...activos(9), ...perdidos(5)],
     prospects: prospectos(5),
     estados: new Set(["ACTIVO", "POTENCIAL"]),
   });
-  assertEquals(r.ids, ["a1", "a2", "a3", "a4", "a5", "p1", "a6", "a7"]);
+  assertEquals(r.ids, ["a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8"]);
   assertEquals(r.fueraDeSeleccion, []);
 });
 
