@@ -1,3 +1,4 @@
+import { claveComprobante } from "@/lib/ventas";
 import AnalisisVentas from "@/components/clientes/AnalisisVentas";
 /**
  * Dashboard de Clientes y Ventas
@@ -50,9 +51,6 @@ interface VendedorVentas {
   vendedor: string;
   ventas: number;
 }
-
-const claveComprobante = (v: {tipo_comprobante?: string; fecha_emision?: string; letra?: string; ticket?: string; client_id?: string}) =>
-  JSON.stringify([v.tipo_comprobante ?? null,v.fecha_emision ?? null,v.letra ?? null,v.ticket ?? null,v.client_id ?? null]);
 
 const ClientesDashboard = () => {
   const navigate = useNavigate();
