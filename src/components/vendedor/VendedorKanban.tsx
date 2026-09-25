@@ -110,6 +110,7 @@ export interface ClienteAsignado {
   // Fecha de creación de la asignación (para alertas)
   created_at?: string;
   // Coordenadas directas para prospectos manuales
+  rubro?: string | null;
   prospecto_latitud?: number;
   prospecto_longitud?: number;
 }
@@ -461,6 +462,7 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
           origen_asignacion: asig.origen_asignacion || 'asignador',
           created_at: asig.created_at,
           // Coordenadas directas para prospectos manuales
+          rubro: prospectoData.rubro,
           prospecto_latitud: prospectoData.latitud,
           prospecto_longitud: prospectoData.longitud,
         };

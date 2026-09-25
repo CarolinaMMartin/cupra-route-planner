@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { authorize, failure } from "../_shared/location-service.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.74.0";
 
 const corsHeaders = {
@@ -139,10 +139,13 @@ async function processBatch(supabase: any, prospectos: any[], batchSize: number 
   return { results, errors };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  if (req.method !== "POST") return new Response(JSON.stringify({ error: "Método no permitido" }), { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  try { await authorize(req, true); } catch (error) { return failure(error); }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;

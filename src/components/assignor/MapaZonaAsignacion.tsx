@@ -11,7 +11,7 @@ import { SegmentFilters } from "@/components/shared/SegmentFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { geoBarrios, geoComunas } from "@/data/geoBuenosAires";
-import { GOOGLE_MAPS_BROWSER_KEY, loadGoogleMaps } from "@/lib/googleMaps";
+import { useGoogleMap } from "@/hooks/useGoogleMap";
 import { createStateMarkerIcon } from "@/lib/vendorColors";
 import {
   claveTexto,
@@ -51,7 +51,7 @@ const MAX_PUNTOS = 3000;
 const coordenadasValidas = (lat: unknown, lng: unknown) =>
   lat !== null && lat !== undefined && lat !== "" && lng !== null && lng !== undefined && lng !== "" &&
   Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) &&
-  Number(lat) >= -60 && Number(lat) <= -20 && Number(lng) >= -80 && Number(lng) <= -40;
+  Number(lat) >= -56 && Number(lat) <= -21 && Number(lng) >= -74 && Number(lng) <= -53;
 
 const esc = (v: unknown) =>
   String(v ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
@@ -75,8 +75,7 @@ const enAreaTexto = (valor: string | null | undefined, elegidos: string[]) => {
  */
 export default function MapaZonaAsignacion({ vendedores }: { vendedores: VendedorOpcion[] }) {
   const { toast } = useToast();
-  const mapRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const { mapRef, map, error: errorMapa } = useGoogleMap();
   const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
   const infoRef = useRef<google.maps.InfoWindow | null>(null);
 
@@ -85,7 +84,6 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
   const [segmentos, setSegmentos] = useState<FiltrosSegmento>(FILTROS_VACIOS);
   const [puntos, setPuntos] = useState<Punto[]>([]);
   const [cargando, setCargando] = useState(false);
-  const [errorMapa, setErrorMapa] = useState<string | null>(null);
   const [centroRuta, setCentroRuta] = useState<Coordenada | null>(null);
   const centroRef = useRef<Coordenada | null>(null);
   const seleccionRef = useRef<string[]>([]);
@@ -103,22 +101,11 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
     markersRef.current.clear();
   }, []);
 
-  // ---- Mapa ----
   useEffect(() => {
-    loadGoogleMaps(GOOGLE_MAPS_BROWSER_KEY)
-      .then(() => {
-        if (!mapRef.current) return;
-        setMap(new google.maps.Map(mapRef.current, {
-          zoom: 12,
-          center: { lat: -34.6037, lng: -58.3816 },
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: true,
-        }));
-        infoRef.current = new google.maps.InfoWindow();
-      })
-      .catch((e) => setErrorMapa(`No se pudo cargar Google Maps: ${e.message}`));
-  }, []);
+    if (!map) return;
+    infoRef.current = new google.maps.InfoWindow();
+    return () => { infoRef.current?.close(); };
+  }, [map]);
 
   // ---- Datos de la zona ----
   const cargarZona = async () => {

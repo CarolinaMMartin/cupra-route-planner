@@ -1,3 +1,4 @@
+import { authorize, failure } from "../_shared/location-service.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
 
 const corsHeaders = {
@@ -89,6 +90,9 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  if (req.method !== "POST") return new Response(JSON.stringify({ error: "Método no permitido" }), { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  try { await authorize(req, true); } catch (error) { return failure(error); }
 
   try {
     console.log('🚀 Iniciando carga de ventas CUPRA');

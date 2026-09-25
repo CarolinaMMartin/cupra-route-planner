@@ -1,206 +1,30 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { googleMapsFetch, hayGoogleMaps } from "../_shared/google-maps.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-
-const LAT_MIN = -56, LAT_MAX = -21, LNG_MIN = -74, LNG_MAX = -53;
-const isValidArgentina = (lat: number, lng: number) =>
-  lat >= LAT_MIN && lat <= LAT_MAX && lng >= LNG_MIN && lng <= LNG_MAX;
-
-async function geocode(params: string) {
-  const resp = await googleMapsFetch(`/maps/api/geocode/json?${params}`);
-  if (!resp.ok) throw new Error(`Google Maps ${resp.status}`);
-  return await resp.json();
-}
-
-function extractComponent(components: any[], type: string): string | null {
-  const c = (components || []).find((c: any) => c.types?.includes(type));
-  return c?.long_name || null;
-}
-
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
+import { authorize, corsHeaders, failure, geocodeAddress, reverseGeocode, json, RequestError } from "../_shared/location-service.ts";
+import { coordinateNumber } from "../_shared/import-values.ts";
+Deno.serve(async req => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    const anonClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: userData } = await anonClient.auth.getUser();
-    if (!userData?.user) {
-      return new Response(JSON.stringify({ error: "No autorizado" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const body = await req.json().catch(() => ({}));
-    const clientId = String(body?.client_id || "").trim();
-    if (!clientId) {
-      return new Response(JSON.stringify({ error: "client_id requerido" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const manual = body?.manual === true;
-    let lat = Number(body?.lat);
-    let lng = Number(body?.lng);
-    let direccion = typeof body?.direccion === "string" ? body.direccion.trim() : "";
-    let barrio: string | null = null;
-    let provincia: string | null = null;
-    let placeId: string | null = null;
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-
-    // Si no vienen coordenadas, geocodificamos la dirección
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      if (!direccion) {
-        return new Response(JSON.stringify({ error: "Falta dirección o coordenadas" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (!hayGoogleMaps()) {
-        return new Response(JSON.stringify({ error: "Conector de Google Maps no configurado" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const query = /argentina/i.test(direccion) ? direccion : `${direccion}, Argentina`;
-      const data = await geocode(`address=${encodeURIComponent(query)}&language=es&region=ar`);
-      if (data.status !== "OK" || !data.results?.length) {
-        return new Response(
-          JSON.stringify({ error: "No se pudo ubicar esa dirección en el mapa" }),
-          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-      const result = data.results[0];
-      lat = result.geometry.location.lat;
-      lng = result.geometry.location.lng;
-      direccion = result.formatted_address || direccion;
-      barrio =
-        extractComponent(result.address_components, "sublocality_level_1") ||
-        extractComponent(result.address_components, "neighborhood");
-      provincia = extractComponent(result.address_components, "administrative_area_level_1");
-      placeId = result.place_id || null;
-    }
-
-    if (!isValidArgentina(lat, lng)) {
-      return new Response(
-        JSON.stringify({ error: "Las coordenadas quedan fuera de Argentina" }),
-        { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
-
-    // Toda coordenada guardada debe resolver su barrio. Esto también cubre las
-    // correcciones manuales que llegan con lat/lng en vez de una dirección.
-    if (!barrio) {
-      if (!hayGoogleMaps()) {
-        return new Response(JSON.stringify({ error: "No se puede validar el barrio sin Google Maps" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const data = await geocode(`latlng=${lat},${lng}&language=es`);
-      if (data.status !== "OK" || !data.results?.length) {
-        return new Response(JSON.stringify({ error: "Las coordenadas no permitieron identificar un barrio" }), {
-          status: 422,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const result = data.results[0];
-      barrio =
-        extractComponent(result.address_components, "sublocality_level_1") ||
-        extractComponent(result.address_components, "sublocality") ||
-        extractComponent(result.address_components, "neighborhood") ||
-        extractComponent(result.address_components, "locality") ||
-        extractComponent(result.address_components, "postal_town") ||
-        extractComponent(result.address_components, "administrative_area_level_3");
-      provincia = provincia || extractComponent(result.address_components, "administrative_area_level_1");
-      direccion = direccion || result.formatted_address || "";
-      placeId = placeId || result.place_id || null;
-      if (!barrio) {
-        return new Response(JSON.stringify({ error: "Google Maps no devolvió un barrio para esas coordenadas" }), {
-          status: 422,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    }
-
-    const { data: existing } = await supabase
-      .from("client_places")
-      .select("id, direccion_verificada, fuente_geocoding")
-      .eq("client_id", clientId)
-      .order("is_primary", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    // R7 (OT7): manual > coordenadas del ERP > geocoding. Un guardado automático
-    // nunca degrada una corrección manual ni una ubicación que vino del ERP.
-    const esConfiable =
-      existing?.direccion_verificada === true ||
-      ["excel", "erp", "correccion_manual"].includes(existing?.fuente_geocoding || "");
-    if (esConfiable && !manual) {
-      return new Response(JSON.stringify({ ok: true, skipped: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const payload: Record<string, any> = {
-      lat,
-      long: lng,
-      direccion_verificada: manual,
-      fuente_geocoding: manual ? "correccion_manual" : "geocoding_auto",
-    };
-    if (direccion) payload.direccion_principal = direccion;
-    if (barrio) payload.barrio_principal = barrio;
-    if (provincia) payload.provincia_principal = provincia;
-    if (placeId) {
-      payload.place_id = placeId;
-      payload.google_maps_link = `https://www.google.com/maps/place/?q=place_id:${placeId}`;
-    }
-
-    const { error } = existing
-      ? await supabase.from("client_places").update(payload).eq("id", existing.id)
-      : await supabase.from("client_places").insert({ client_id: clientId, ...payload, is_primary: false });
-
-    if (error) throw new Error(error.message);
-
-    // Deja un único primario por cliente respetando la prioridad de fuentes
-    await supabase.rpc("reconciliar_places_primarios");
-
-    await supabase
-      .from("clientes")
-      .update({
-        barrio_principal: barrio,
-        ...(provincia ? { provincia_principal: provincia } : {}),
-        ...(manual && direccion ? { direccion_principal: direccion } : {}),
-      })
-      .eq("client_id", clientId);
-
-
-    return new Response(
-      JSON.stringify({ ok: true, lat, lng, direccion, barrio, provincia }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  } catch (e: any) {
-    console.error("[resolve-client-location]", e?.message || e);
-    return new Response(JSON.stringify({ error: e?.message || "Error inesperado" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const { db } = await authorize(req, true);
+    const body = await req.json();
+    if (typeof body.client_id !== "string" || !body.client_id.trim()) throw new RequestError("Falta el cliente", 400, "BAD_REQUEST");
+    if (body.manual !== true) throw new RequestError("Confirmá la corrección de la ubicación", 400, "CONFIRM_LOCATION");
+    const { data: client, error } = await db.from("clientes").select("client_id").eq("client_id", body.client_id).maybeSingle();
+    if (error || !client) throw new RequestError("Cliente inexistente", 404, "NOT_FOUND");
+    const lat = coordinateNumber(body.lat), lng = coordinateNumber(body.lng);
+    const address = typeof body.direccion === "string" ? body.direccion.trim().slice(0, 700) : "";
+    if ((lat === null) !== (lng === null)) throw new RequestError("Completá ambas coordenadas", 422, "INVALID_COORDINATES");
+    if (lat === null && !address) throw new RequestError("Falta dirección o coordenadas", 400, "BAD_REQUEST");
+    let location = lat !== null && lng !== null ? await reverseGeocode(lat, lng) : await geocodeAddress(`${address}, Argentina`);
+    if (!location.barrio) location = { ...location, ...await reverseGeocode(location.lat, location.lng) };
+    const { data: saved, error: saveError } = await db.rpc("guardar_ubicacion_cliente", {
+      p_client_id: body.client_id, p_manual: true,
+      p_datos: {
+        lat: location.lat, long: location.lng, direccion_principal: location.formatted_address || address,
+        barrio_principal: location.barrio, provincia_principal: location.provincia, comuna: location.comuna,
+        codigo_postal: location.postal_code, place_id: location.place_id, precision_geocoding: location.location_type,
+      },
     });
-  }
+    if (saveError) throw new Error(saveError.message);
+    return json({ ok: true, ...saved, ...location, direccion: location.formatted_address });
+  } catch (error) { return failure(error); }
 });

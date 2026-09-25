@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Sucursal } from "@/types/sales";
-import { isManualPlaceId } from "@/lib/utils";
-import { GOOGLE_MAPS_BROWSER_KEY, loadGoogleMaps } from "@/lib/googleMaps";
+import { useGoogleMap } from "@/hooks/useGoogleMap";
+import { validMapCoordinates } from "@/lib/mapLocations";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -56,17 +56,14 @@ interface SinUbicacionItem {
 const escHtml = (v: unknown) =>
   String(v ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 
-// Carga centralizada del script de Google Maps
-const loadGoogleMapsScript = (apiKey: string) => loadGoogleMaps(apiKey);
-
 const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue }: ResultsMapProps) => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<google.maps.Map | null>(null);
+  const { mapRef, map, error } = useGoogleMap();
+  const corrections = useRef(new Map<string, { lat: number; lng: number; direccion: string }>());
+  const [locationRevision, setLocationRevision] = useState(0);
   const [markers, setMarkers] = useState<Map<string, google.maps.Marker>>(new Map());
   const [locations, setLocations] = useState<ClientLocation[]>([]);
   const [vendorLegend, setVendorLegend] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [sinUbicacion, setSinUbicacion] = useState<SinUbicacionItem[]>([]);
   const [correccion, setCorreccion] = useState<SinUbicacionItem | null>(null);
   const [direccionEditada, setDireccionEditada] = useState("");
@@ -96,248 +93,34 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       title: "Dirección corregida",
       description: "Queda verificada y no se pisa con las próximas cargas de Excel.",
     });
-    setSinUbicacion((prev) => prev.filter((s) => s.id !== correccion.id));
+    if (validMapCoordinates(data?.lat, data?.lng)) {
+      corrections.current.set(correccion.id, { lat: data.lat, lng: data.lng, direccion: direccionEditada.trim() });
+      setLocationRevision(v => v + 1);
+    }
     setCorreccion(null);
   };
 
 
-  // Initialize Google Maps
-  useEffect(() => {
-    const apiKey = GOOGLE_MAPS_BROWSER_KEY;
-
-    if (!apiKey) {
-      setError("El mapa no está configurado. Contactá al administrador.");
-      setLoading(false);
-      return;
-    }
-
-    loadGoogleMapsScript(apiKey)
-      .then(() => {
-        if (!mapRef.current) return;
-
-        const mapInstance = new google.maps.Map(mapRef.current, {
-          zoom: 12,
-          center: { lat: -34.6037, lng: -58.3816 }, // Buenos Aires default
-          mapTypeControl: true,
-          streetViewControl: false,
-          fullscreenControl: true,
-        });
-
-        setMap(mapInstance);
-      })
-      .catch((err) => {
-        setError("Error al cargar Google Maps: " + err.message);
-        setLoading(false);
-      });
-  }, []);
-
-  // Fetch locations from sucursales
+  // Display the saved coordinates; no Google lookups or writes on map render.
   useEffect(() => {
     if (!map) return;
-
-    const fetchLocations = async () => {
-      setLoading(true);
-      resetVendorColors();
-      const service = new google.maps.places.PlacesService(map);
-      const geocoder = new google.maps.Geocoder();
-      const fetchedLocations: ClientLocation[] = [];
-
-      const resolveRecommendedVendor = (sucursal: Sucursal) => {
-        // Prefer vendedor_actual (already resolved to name in AssignorDashboard)
-        // Never show a UUID — skip vendedor_recomendado_id (it's a UUID)
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}/i;
-        const candidates = [
-          sucursal.vendedor_actual,
-          sucursal.vendedor_principal,
-        ].filter(Boolean).filter(v => !uuidRegex.test(v!));
-        return candidates[0] || "Sin vendedor";
-      };
-
-      const promises = sucursales.map(async (sucursal) => {
-        try {
-          // If we have lat/lng, validate and use them directly
-          if (sucursal.latitud && sucursal.longitud) {
-            const lat = sucursal.latitud;
-            const lng = sucursal.longitud;
-            
-            // Validate coordinates are within Argentina's range
-            const isValidLat = lat >= -60 && lat <= -20;
-            const isValidLng = lng >= -80 && lng <= -40;
-            
-            if (isValidLat && isValidLng) {
-              const vendedor = resolveRecommendedVendor(sucursal);
-              if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
-              const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
-              return {
-                id: sucursal.id,
-                name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
-                lat: lat,
-                lng: lng,
-                direccion: sucursal.direccion || sucursal.direccion_principal || "",
-                vendedor,
-                es_prospecto: !!sucursal.es_prospecto,
-                estado_cliente,
-                rubro: sucursal.rubro ?? null,
-              };
-            } else {
-              console.warn(`[ResultsMap] Coordenadas fuera de rango Argentina:`, { id: sucursal.id, lat, lng });
-            }
-          }
-
-          // If we have place_id, check if it's manual or Google
-          if (sucursal.prospecto_place_id) {
-            // Si es un place_id manual, ya tenemos las coordenadas en latitud/longitud
-            if (isManualPlaceId(sucursal.prospecto_place_id)) {
-              const lat = sucursal.latitud;
-              const lng = sucursal.longitud;
-              
-              if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
-                const isValidLat = lat >= -60 && lat <= -20;
-                const isValidLng = lng >= -80 && lng <= -40;
-                
-                if (isValidLat && isValidLng) {
-                  const vendedor = resolveRecommendedVendor(sucursal);
-                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
-                  const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
-                  return {
-                    id: sucursal.id,
-                    name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
-                    lat: lat,
-                    lng: lng,
-                    direccion: sucursal.direccion || sucursal.direccion_principal || "",
-                    vendedor,
-                    es_prospecto: !!sucursal.es_prospecto,
-                    estado_cliente,
-                    rubro: sucursal.rubro ?? null,
-                  };
-                }
-              }
-              console.warn(`[ResultsMap] Prospecto manual sin coordenadas válidas:`, {
-                id: sucursal.id,
-                place_id: sucursal.prospecto_place_id
-              });
-              return null;
-            }
-            
-            // Para place_id de Google, usar Places API
-            return new Promise<ClientLocation>((resolve, reject) => {
-              service.getDetails({ placeId: sucursal.prospecto_place_id! }, (place, status) => {
-                if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-                  const vendedor = resolveRecommendedVendor(sucursal);
-                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
-                  const estado_cliente = sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto);
-                  resolve({
-                    id: sucursal.id,
-                    name: place.name || sucursal.nombre || "Sin nombre",
-                    lat: place.geometry.location.lat(),
-                    lng: place.geometry.location.lng(),
-                    direccion: place.formatted_address || sucursal.direccion || "",
-                    vendedor,
-                    es_prospecto: !!sucursal.es_prospecto,
-                    estado_cliente,
-                    rubro: sucursal.rubro ?? null,
-                  });
-                } else {
-                  reject(new Error(`No se pudo obtener ubicación para ${sucursal.nombre}`));
-                }
-              });
-            });
-          }
-
-          // Fallback 1: place_id extraído del link de Google Maps
-          const linkPlaceId = (sucursal as any).place_id as string | undefined;
-          if (linkPlaceId && !isManualPlaceId(linkPlaceId)) {
-            const fromPlace = await new Promise<ClientLocation | null>((resolve) => {
-              service.getDetails({ placeId: linkPlaceId }, (place, status) => {
-                if (status === google.maps.places.PlacesServiceStatus.OK && place?.geometry?.location) {
-                  const vendedor = resolveRecommendedVendor(sucursal);
-                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
-                  resolve({
-                    id: sucursal.id,
-                    name: sucursal.nombre || place.name || "Sin nombre",
-                    lat: place.geometry.location.lat(),
-                    lng: place.geometry.location.lng(),
-                    direccion: place.formatted_address || sucursal.direccion_principal || sucursal.direccion || "",
-                    vendedor,
-                    es_prospecto: !!sucursal.es_prospecto,
-                    estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
-                    rubro: sucursal.rubro ?? null,
-                  });
-                } else {
-                  resolve(null);
-                }
-              });
-            });
-            if (fromPlace) return fromPlace;
-          }
-
-          // Fallback 2: geocodificar la dirección textual
-          const direccionTexto = [
-            sucursal.direccion_principal || sucursal.direccion,
-            sucursal.barrio_principal,
-            (sucursal as any).ciudad_principa || sucursal.todas_ciudades?.[0],
-            sucursal.provincia_principal,
-            "Argentina",
-          ].filter(Boolean).join(", ");
-
-          if (direccionTexto && direccionTexto !== "Argentina") {
-            const geocoded = await new Promise<ClientLocation | null>((resolve) => {
-              geocoder.geocode({ address: direccionTexto }, (res, status) => {
-                if (status === "OK" && res?.[0]?.geometry?.location) {
-                  const loc = res[0].geometry.location;
-                  const vendedor = resolveRecommendedVendor(sucursal);
-                  if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
-                  resolve({
-                    id: sucursal.id,
-                    name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
-                    lat: loc.lat(),
-                    lng: loc.lng(),
-                    direccion: res[0].formatted_address,
-                    vendedor,
-                    es_prospecto: !!sucursal.es_prospecto,
-                    estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
-                    rubro: sucursal.rubro ?? null,
-                  });
-                } else {
-                  resolve(null);
-                }
-              });
-            });
-            if (geocoded) {
-              // Persistimos la geocodificación para que el cliente quede ubicado a futuro
-              const clientId = (sucursal as any).client_id as string | undefined;
-              if (clientId && !sucursal.es_prospecto) {
-                supabase.functions
-                  .invoke("resolve-client-location", {
-                    body: {
-                      client_id: clientId,
-                      lat: geocoded.lat,
-                      lng: geocoded.lng,
-                      direccion: geocoded.direccion,
-                    },
-                  })
-                  .catch(() => undefined);
-              }
-              return geocoded;
-            }
-          }
-
-
-          console.warn(`[ResultsMap] Sin ubicación resoluble:`, sucursal.nombre);
-          return null;
-        } catch (err) {
-          console.error(`Error fetching location for ${sucursal.nombre}:`, err);
-          return null;
-        }
+    resetVendorColors();
+    const fetchedLocations: ClientLocation[] = [];
+    for (const sucursal of sucursales) {
+      const correction = corrections.current.get(sucursal.id);
+      const lat = correction?.lat ?? sucursal.latitud;
+      const lng = correction?.lng ?? sucursal.longitud;
+      if (!validMapCoordinates(lat, lng)) continue;
+      const vendedor = [sucursal.vendedor_actual, sucursal.vendedor_principal]
+        .find(v => v && !/^[0-9a-f]{8}-[0-9a-f]{4}/i.test(v)) || "Sin vendedor";
+      if (vendedor !== "Sin vendedor") getVendorColor(vendedor);
+      fetchedLocations.push({
+        id: sucursal.id, name: sucursal.nombre || sucursal.fantasia || "Sin nombre",
+        lat: lat!, lng: lng!, direccion: correction?.direccion || sucursal.direccion || sucursal.direccion_principal || "",
+        vendedor, es_prospecto: !!sucursal.es_prospecto, rubro: sucursal.rubro,
+        estado_cliente: sucursal.estado_cliente || classifyClientState(sucursal.dias_desde_ultima_compra, sucursal.es_prospecto),
       });
-
-      const results = await Promise.allSettled(promises);
-
-      results.forEach((result) => {
-        if (result.status === "fulfilled" && result.value) {
-          fetchedLocations.push(result.value);
-        }
-      });
+    }
 
       // Detect overlaps: markers from different vendors within 200m
       for (let i = 0; i < fetchedLocations.length; i++) {
@@ -373,16 +156,14 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       setLocations(fetchedLocations);
       setVendorLegend(getVendorColorMap());
       setLoading(false);
-    };
-
-    fetchLocations();
-  }, [sucursales, map]);
+  }, [sucursales, map, locationRevision]);
 
   // Render every resolved location; selection only changes emphasis
   useEffect(() => {
-    if (!map || locations.length === 0) return;
+    if (!map) return;
 
-    const nextMarkers = new Map(markers);
+    const nextMarkers = new Map<string, google.maps.Marker>();
+    const popups: google.maps.InfoWindow[] = [];
     const validIds = new Set(locations.map((l) => l.id));
 
     nextMarkers.forEach((marker, id) => {
@@ -430,6 +211,7 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
         });
 
         nextMarkers.set(location.id, marker);
+        popups.push(infoWindow);
       }
 
       marker.setOpacity(isSelected ? 1 : 0.4);
@@ -443,8 +225,20 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
 
     if (hasValidBounds) {
       map.fitBounds(bounds);
+      if ((map.getZoom() || 0) > 16) map.setZoom(16);
     }
-  }, [map, locations, selectedIds]);
+    return () => {
+      popups.forEach(p => p.close());
+      nextMarkers.forEach(m => { google.maps.event.clearInstanceListeners(m); m.setMap(null); });
+    };
+  }, [map, locations]);
+
+  useEffect(() => {
+    markers.forEach((marker, id) => {
+      marker.setOpacity(selectedIds.includes(id) ? 1 : 0.4);
+      marker.setZIndex(selectedIds.includes(id) ? 2 : 1);
+    });
+  }, [markers, selectedIds]);
 
   const handleToggle = (id: string) => {
     onToggle(id);

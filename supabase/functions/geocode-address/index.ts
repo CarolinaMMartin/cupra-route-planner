@@ -1,121 +1,14 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { googleMapsFetch, hayGoogleMaps } from "../_shared/google-maps.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
-
-function extractComponent(components: any[], type: string): string | null {
-  const c = (components || []).find((comp: any) => comp.types?.includes(type));
-  return c?.long_name || null;
-}
-
-Deno.serve(async (req) => {
+import { authorize, corsHeaders, failure, geocodeAddress, json, RequestError } from "../_shared/location-service.ts";
+Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-
+  if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
   try {
-    // Solo usuarios autenticados: evita exponer un proxy público de Google Maps
-    const authHeader = req.headers.get("Authorization") || "";
-    const anonClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: userData } = await anonClient.auth.getUser();
-    if (!userData?.user) {
-      return json({ status: "ERROR", error_code: "UNAUTHORIZED", message: "Sesión expirada. Iniciá sesión nuevamente." }, 401);
-    }
-
-    if (!hayGoogleMaps()) {
-      return json({ status: "ERROR", error_code: "CONFIG_ERROR", message: "El servicio de geocodificación no está configurado." }, 500);
-    }
-
-    const body = await req.json().catch(() => ({}));
-    const direccion = String(body?.direccion || "").trim().slice(0, 300);
-    const barrio = String(body?.barrio || "").trim().slice(0, 120);
-    const ciudad = String(body?.ciudad || "").trim().slice(0, 120);
-    const provincia = String(body?.provincia || "").trim().slice(0, 120);
-    const codigoPostal = String(body?.codigo_postal || "").trim().slice(0, 12);
-
-    if (!direccion) {
-      return json({ status: "ERROR", error_code: "BAD_REQUEST", message: "Falta la dirección." }, 400);
-    }
-
-    // El CP va antes de la ciudad, como en el formato postal argentino
-    const partes = [direccion, barrio, codigoPostal, ciudad, provincia, "Argentina"].filter(Boolean);
-    const address = partes.join(", ");
-
-    const params = new URLSearchParams({ address, language: "es", region: "ar" });
-    if (codigoPostal) params.set("components", `postal_code:${codigoPostal}|country:AR`);
-
-    const resp = await googleMapsFetch(`/maps/api/geocode/json?${params.toString()}`);
-
-    if (resp.status === 403) {
-      const details: Array<{ reason?: string }> = (await resp.json().catch(() => ({})))?.error?.details ?? [];
-      const reason = details.find((d) => d.reason)?.reason;
-      if (reason === "API_KEY_HTTP_REFERRER_BLOCKED") {
-        return json({ status: "ERROR", error_code: "KEY_REFERRER", message: 'La clave de Google tiene restricción por dominio. Configurala como "None" o por IP.' }, 403);
-      }
-      if (reason === "API_KEY_SERVICE_BLOCKED") {
-        return json({ status: "ERROR", error_code: "KEY_SERVICE", message: "La clave de Google no tiene habilitada la API de Geocoding." }, 403);
-      }
-      return json({ status: "ERROR", error_code: "DENIED", message: "Google rechazó la consulta (403)." }, 403);
-    }
-
-    if (!resp.ok) {
-      const text = await resp.text();
-      console.error(`[geocode-address] google ${resp.status}: ${text}`);
-      return json({ status: "ERROR", error_code: "NETWORK_ERROR", message: "No se pudo conectar con Google Maps." }, resp.status);
-    }
-
-    let data = await resp.json();
-
-    // Si el CP restringe demasiado y no hay resultados, reintenta sin components
-    if ((data.status === "ZERO_RESULTS" || !data.results?.length) && codigoPostal) {
-      const retry = await googleMapsFetch(
-        `/maps/api/geocode/json?address=${encodeURIComponent(address)}&language=es&region=ar`,
-      );
-      if (retry.ok) data = await retry.json();
-    }
-
-    if (data.status !== "OK" || !data.results?.length) {
-      return json({ status: "ERROR", error_code: "NO_RESULTS", message: "No se encontraron resultados para esa dirección." });
-    }
-
-    const result = data.results[0];
-    const components: any[] = result.address_components || [];
-
-    const barrioGoogle =
-      extractComponent(components, "sublocality_level_1") ||
-      extractComponent(components, "sublocality") ||
-      extractComponent(components, "neighborhood");
-    const adminArea2 = extractComponent(components, "administrative_area_level_2");
-
-    return json({
-      status: "OK",
-      lat: result.geometry.location.lat,
-      lng: result.geometry.location.lng,
-      formatted_address: result.formatted_address,
-      location_type: result.geometry.location_type,
-      barrio: barrioGoogle,
-      comuna: adminArea2?.toLowerCase().startsWith("comuna") ? adminArea2 : null,
-      ciudad: extractComponent(components, "locality"),
-      provincia: extractComponent(components, "administrative_area_level_1"),
-      postal_code: extractComponent(components, "postal_code"),
-      admin_area_level_2: adminArea2,
-      barrio_fallback_admin2: barrioGoogle || adminArea2,
-      place_id: result.place_id,
-    });
-  } catch (e: any) {
-    console.error("[geocode-address]", e?.message || e);
-    return json({ status: "ERROR", error_code: "NETWORK_ERROR", message: "Error inesperado al geocodificar." }, 500);
-  }
+    await authorize(req, false);
+    const body = await req.json();
+    if (typeof body.direccion !== "string" || !body.direccion.trim()) throw new RequestError("Falta la dirección", 400, "BAD_REQUEST");
+    const parts = [body.direccion, body.barrio, body.codigo_postal, body.ciudad, body.provincia, "Argentina"];
+    const address = parts.filter(p => typeof p === "string" && p.trim()).join(", ");
+    if (address.length > 700) throw new RequestError("La dirección es demasiado extensa", 400, "BAD_REQUEST");
+    return json({ status: "OK", ...await geocodeAddress(address) });
+  } catch (error) { return failure(error); }
 });

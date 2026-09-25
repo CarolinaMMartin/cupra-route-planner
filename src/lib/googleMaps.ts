@@ -1,12 +1,13 @@
 // Clave pública de navegador para Google Maps.
-// Se resuelve desde el conector de Lovable, con fallback embebido para que un
-// build sin variables de entorno no rompa los mapas en producción.
+// Solo claves de navegador, restringidas por dominio en Google Cloud.
 export const GOOGLE_MAPS_BROWSER_KEY: string =
   import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY ||
   import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
   "";
 
 let loaderPromise: Promise<void> | null = null;
+export const MAP_ERROR_EVENT = "cupra-google-maps-error";
+let authenticationError: Error | null = null;
 
 const CALLBACK_NAME = "__cupraGoogleMapsReady";
 const SCRIPT_SELECTOR = 'script[data-google-maps="true"]';
@@ -20,6 +21,7 @@ function isGoogleMapsReady(): boolean {
  * Carga el script de Google Maps una sola vez para toda la app.
  */
 export function loadGoogleMaps(apiKey: string = GOOGLE_MAPS_BROWSER_KEY): Promise<void> {
+  if (authenticationError) return Promise.reject(authenticationError);
   if (isGoogleMapsReady()) return Promise.resolve();
   if (!apiKey) {
     return Promise.reject(
@@ -48,6 +50,13 @@ export function loadGoogleMaps(apiKey: string = GOOGLE_MAPS_BROWSER_KEY): Promis
       finish(new Error("Google Maps demoró demasiado en responder"));
     }, LOAD_TIMEOUT_MS);
 
+    // Google can report authentication failure after its ready callback.
+    (window as unknown as Record<string, unknown>).gm_authFailure = () => {
+      authenticationError = new Error("Google Maps rechazó la configuración del mapa. Contactá al administrador.");
+      window.dispatchEvent(new CustomEvent(MAP_ERROR_EVENT, { detail: authenticationError.message }));
+      finish(authenticationError);
+    };
+
     (window as unknown as Record<string, unknown>)[CALLBACK_NAME] = () => {
       if (isGoogleMapsReady()) {
         finish();
@@ -64,7 +73,8 @@ export function loadGoogleMaps(apiKey: string = GOOGLE_MAPS_BROWSER_KEY): Promis
     const script = document.createElement("script");
     const params = new URLSearchParams({
       key: apiKey,
-      libraries: "places",
+      language: "es",
+      region: "AR",
       loading: "async",
       callback: CALLBACK_NAME,
       v: "weekly",

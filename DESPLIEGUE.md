@@ -98,3 +98,13 @@ Las nuevas columnas pueden permanecer al revertir código. La migración de
 asignaciones permite historial repetido: no restaurar a ciegas índices únicos
 antiguos, porque rechazarían visitas históricas legítimas. Tampoco volver a
 publicar los handlers anteriores que borraban esas visitas.
+
+
+## Revisión de mapas e importación — 25/09/2026
+
+1. Aplicar `20260925140000_importaciones_seguras.sql` y registrar la versión. No requiere un backfill ni modifica ventas existentes.
+2. Desplegar `process-ventas-excel`, `process-clientes-maestro`, `process-prospectos-excel`, `geocode-address`, `geocode-clients`, `resolve-client-location`, `upsert-client-places`, `upsert-clientes`, `upsert-ventas-cupra` y `upsert-prospectos`, incluyendo sus módulos compartidos. Cada endpoint verifica la sesión y el rol en su código; `verify_jwt = false` evita incompatibilidades del gateway con JWT modernos.
+3. Publicar el frontend de `main`; confirmar que la vista previa permite elegir la hoja y el modo agregar/reemplazar.
+4. Verificar respuesta 401 sin sesión en los endpoints de escritura y ejecución restringida de los RPC internos.
+
+Pruebas y alcance: `REVISION_MAPA_EXCEL.md`. Una consulta de solo lectura a la conexión Google Maps de Lovable devolvió HTTP 200, `OK`, país Argentina y precisión `ROOFTOP` para Av. Santa Fe 1860, CABA. Esto comprueba la conexión de geocodificación; no sustituye una prueba de importación con un Excel comercial real.

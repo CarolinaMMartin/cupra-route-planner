@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import AppNav from "@/components/AppNav";
 import type { Session } from "@supabase/supabase-js";
@@ -24,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import cupraLogo from "@/assets/cupra-logo-new.png";
-import * as XLSX from "xlsx";
+import { parseImportWorkbook, type ImportSheet } from "@/lib/excelImport";
 import { toTitleCase } from "@/lib/format";
 
 type Step = "upload" | "preview" | "processing" | "done";
@@ -169,6 +169,15 @@ const CargaDatos = () => {
   const [file, setFile] = useState<File | null>(null);
   const [fileHash, setFileHash] = useState<string | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
+  const [availableSheets, setAvailableSheets] = useState<ImportSheet[]>([]);
+  const [ignoredSheets, setIgnoredSheets] = useState<string[]>([]);
+  const [sheetsReviewed, setSheetsReviewed] = useState(true);
+  const [creditSheet, setCreditSheet] = useState("");
+  const requestId = useRef(crypto.randomUUID());
+  const processing = useRef(false);
+  const parsingVersion = useRef(0);
+  const stopGeocoding = useRef(false);
+  const [geocodeProgress, setGeocodeProgress] = useState(0);
   const [rows, setRows] = useState<SpreadsheetRow[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [results, setResults] = useState<ProcessResults | null>(null);
@@ -206,6 +215,8 @@ const CargaDatos = () => {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [geocodeResults, setGeocodeResults] = useState<GeocodeResults | null>(null);
 
+  useEffect(() => () => { stopGeocoding.current = true; parsingVersion.current++; }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -224,125 +235,49 @@ const CargaDatos = () => {
   }, [session, navigate]);
 
   const fetchPendingGeocount = useCallback(async () => {
-    const { count, error } = await supabase
-      .from("clientes")
-      .select("client_id", { count: "exact", head: true })
-      .or("barrio_principal.is.null,barrio_principal.eq.");
+    const { data, error } = await supabase.rpc("resumen_ubicaciones" as never);
     if (error) {
       console.error("No se pudo contar clientes sin barrio:", error);
       setPendingGeocount(null);
       return;
     }
-    setPendingGeocount(count ?? 0);
+    setPendingGeocount(Number((data as { pendientes?: number } | null)?.pendientes ?? 0));
   }, []);
 
   useEffect(() => {
     if (profile) fetchPendingGeocount();
   }, [profile, fetchPendingGeocount]);
 
-  // ── Detección automática de hoja, fila de encabezados y tipo de archivo ──
-  const norm = useCallback((s: unknown) =>
-    String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, ""), []);
+  const chooseSheet = (sheet: ImportSheet, all = availableSheets) => {
+    if (sheet.kind === "notas") return;
+    setFileKind(sheet.kind); setSheetName(sheet.name); setHeaderRow(sheet.headerRow);
+    setRows(sheet.rows); setColumns(sheet.columns);
+    const nc = all.filter(s => s.kind === "notas");
+    const chosen = sheet.kind === "ventas" && nc.length === 1 ? nc[0] : null;
+    setCreditSheet(chosen?.name || ""); setNotasCredito(chosen?.rows || []);
+    requestId.current = crypto.randomUUID();
+    setSheetsReviewed(all.length <= 1);
+  };
 
-  const parseSheet = useCallback((sheet: XLSX.WorkSheet) => {
-    const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, blankrows: false });
-    let headerIdx = -1;
-    for (let i = 0; i < Math.min(aoa.length, 15); i++) {
-      const cells = (aoa[i] || []).filter((c) => c !== null && String(c).trim() !== "");
-      const texto = cells.filter((c) => typeof c === "string" && String(c).trim().length > 1);
-      if (cells.length >= 3 && texto.length >= 3) { headerIdx = i; break; }
-    }
-    if (headerIdx === -1) return { headerIdx: -1, rows: [] as SpreadsheetRow[], keys: [] as string[] };
-    const rows = XLSX.utils
-      .sheet_to_json<SpreadsheetRow>(sheet, { range: headerIdx, defval: null })
-      .filter((r) => Object.values(r).some((v) => v !== null && String(v).trim() !== ""));
-    const keys = rows.length > 0 ? Object.keys(rows[0]).map(norm) : [];
-    return { headerIdx, rows, keys };
-  }, [norm]);
-
-  const classify = useCallback((keys: string[]): "ventas" | "maestro" | "prospectos" | "notas" | null => {
-    const has = (...c: string[]) => c.some((k) => keys.includes(norm(k)));
-    const esVenta = has("Ticket") && (has("Precio Total Final", "Total Final", "Total Bruto", "Facturación Ar$") || has("CUIT / DNI"));
-    if (esVenta) return "ventas";
-    // Planilla de prospectos: comercios con dirección de entrega y canal, sin ventas
-    const esProspecto =
-      has("DIR. ENTREGA", "Dirección de entrega", "Dir Entrega") &&
-      has("CLIENTE", "Comercio", "Nombre Fantasía") &&
-      !has("Vendedor", "Latitud");
-    if (esProspecto) return "prospectos";
-    if (has("Razón Social", "RAZON SOCIAL / NOM. FANTASIA") && (has("Vendedor") || has("Categorías", "Categorías Cliente") || has("Latitud"))) {
-      return "maestro";
-    }
-    return null;
-  }, [norm]);
-
-  const parseExcel = useCallback(async (f: File) => {
-    const maxFileSize = 15 * 1024 * 1024;
-    if (f.size > maxFileSize) {
-      toast({
-        title: "Archivo demasiado grande",
-        description: "El límite de carga es 15 MB.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+  const parseExcel = async (f: File) => {
+    const version = ++parsingVersion.current;
+    setRows([]); setColumns([]); setFile(null); setStep("upload");
     try {
-    const buffer = await f.arrayBuffer();
-    const digest = await crypto.subtle.digest("SHA-256", buffer);
-    const sha256 = Array.from(new Uint8Array(digest))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
-    const workbook = XLSX.read(buffer, { type: "array" });
-
-    const parsedSheets = workbook.SheetNames.map((name) => ({ name, ...parseSheet(workbook.Sheets[name]) }));
-
-    // Hojas de notas de crédito (sólo acompañan a un archivo de ventas)
-    const ncSheet =
-      parsedSheets.find((s) => /nota/i.test(s.name) && /detall/i.test(s.name)) ||
-      parsedSheets.find((s) => /nota/i.test(s.name));
-
-    const candidatos = parsedSheets
-      .filter((s) => s.rows.length > 0 && !/nota/i.test(s.name))
-      .map((s) => ({ ...s, tipo: classify(s.keys) }));
-
-    // Prioridad: hoja de ventas > maestro > prospectos > la más grande
-    const ventas = candidatos.find((s) => s.tipo === "ventas");
-    const maestro = candidatos.filter((s) => s.tipo === "maestro").sort((a, b) => b.rows.length - a.rows.length)[0];
-    const prospectos = candidatos.filter((s) => s.tipo === "prospectos").sort((a, b) => b.rows.length - a.rows.length)[0];
-    const elegido = ventas || maestro || prospectos || candidatos.sort((a, b) => b.rows.length - a.rows.length)[0];
-
-    if (!elegido || elegido.rows.length === 0) {
-      toast({ title: "Archivo vacío", description: "No se detectaron filas con datos", variant: "destructive" });
-      return;
-    }
-    if (elegido.rows.length > 50_000 || (ncSheet?.rows.length || 0) > 50_000) {
-      toast({
-        title: "Archivo demasiado extenso",
-        description: "Cada hoja puede contener hasta 50.000 filas.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const tipo: FileKind = (elegido.tipo as FileKind) || "ventas";
-    setFile(f);
-    setFileHash(sha256);
-    setFileKind(tipo);
-    setSheetName(elegido.name);
-    setHeaderRow(elegido.headerIdx + 1);
-    setRows(elegido.rows);
-    setColumns(Object.keys(elegido.rows[0]));
-    setNotasCredito(tipo === "ventas" && ncSheet ? ncSheet.rows : []);
-    setStep("preview");
+      if (!/\.xlsx?$/i.test(f.name)) throw new Error("Solo se admiten archivos .xlsx o .xls");
+      if (f.size > 15 * 1024 * 1024) throw new Error("El límite de carga es 15 MB.");
+      const buffer = await f.arrayBuffer();
+      const digest = await crypto.subtle.digest("SHA-256", buffer);
+      const parsed = parseImportWorkbook(buffer);
+      if (version !== parsingVersion.current) return;
+      setAvailableSheets(parsed.sheets); setIgnoredSheets(parsed.ignored);
+      const chosen = parsed.sheets.find(s => s.kind === "ventas") || parsed.sheets.find(s => s.kind !== "notas")!;
+      chooseSheet(chosen, parsed.sheets);
+      setFile(f); setFileHash([...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join(""));
+      setStep("preview");
     } catch (error) {
-      toast({
-        title: "No se pudo leer el archivo",
-        description: error instanceof Error ? error.message : "El archivo no tiene un formato válido.",
-        variant: "destructive",
-      });
+      if (version === parsingVersion.current) toast({ title: "No se pudo leer el archivo", description: getErrorMessage(error), variant: "destructive" });
     }
-  }, [classify, parseSheet, toast]);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -353,11 +288,13 @@ const CargaDatos = () => {
     e.preventDefault();
     setIsDragging(false);
     const f = e.dataTransfer.files[0];
-    if (f && (f.name.endsWith(".xlsx") || f.name.endsWith(".xls"))) parseExcel(f);
+    if (f && (/\.xlsx?$/i.test(f.name))) parseExcel(f);
     else toast({ title: "Formato inválido", description: "Solo archivos .xlsx o .xls", variant: "destructive" });
   };
 
   const handleProcess = async (opts?: { confirmarEliminaciones?: boolean }) => {
+    if (processing.current || !sheetsReviewed || !rows.length) return;
+    processing.current = true;
     setStep("processing");
     setProgress(10);
     setGuardaCarga(null);
@@ -374,27 +311,29 @@ const CargaDatos = () => {
 
       if (fileKind === "prospectos") {
         const { data, error } = await supabase.functions.invoke("process-prospectos-excel", {
-          body: { rows, geocodificar: geocodificarProspectos },
+          body: { rows, fileMetadata, requestId: requestId.current },
         });
         setProgress(90);
-        if (error) throw new Error(error.message || "Error al procesar");
+        if (error) { const details = await error.context?.json?.().catch(() => null); throw new Error(details?.error || error.message || "Error al procesar"); }
         if (!data?.success) throw new Error(data?.error || "Error desconocido");
         setProspectosResults(data.results);
+        setBatchId(data.batch_id || null);
         setProgress(100);
         setStep("done");
         toast({
           title: "Prospectos cargados",
-          description: `${data.results.prospectos_cargados} prospectos · ${data.results.geocodificados} geolocalizados`,
+          description: `${data.results.prospectos_cargados} nuevos · ${data.results.prospectos_existentes || 0} ya existentes`,
         });
+        if (geocodificarProspectos) await handleBatchGeocode("prospectos", data.batch_id);
         return;
       }
 
       if (fileKind === "maestro") {
         const { data, error } = await supabase.functions.invoke("process-clientes-maestro", {
-          body: { rows, fileMetadata },
+          body: { rows, fileMetadata, requestId: requestId.current },
         });
         setProgress(90);
-        if (error) throw new Error(error.message || "Error al procesar");
+        if (error) { const details = await error.context?.json?.().catch(() => null); throw new Error(details?.error || error.message || "Error al procesar"); }
         if (!data?.success) throw new Error(data?.error || "Error desconocido");
         setMaestroResults(data.results);
         setMaestroVendedores(data.vendedor_breakdown || []);
@@ -413,6 +352,7 @@ const CargaDatos = () => {
       const { data, error } = await supabase.functions.invoke("process-ventas-excel", {
         body: {
           rows,
+          requestId: requestId.current,
           replaceExisting,
           notasCredito: notasCredito.length ? notasCredito : undefined,
           fileMetadata,
@@ -433,7 +373,7 @@ const CargaDatos = () => {
       }
 
       setProgress(90);
-      if (error) throw new Error(error.message || "Error al procesar");
+      if (error) { const details = await error.context?.json?.().catch(() => null); throw new Error(details?.error || error.message || "Error al procesar"); }
       if (!data?.success) throw new Error(data?.error || "Error desconocido");
       setResults(data.results);
       setBatchId(data.batch_id || null);
@@ -449,7 +389,7 @@ const CargaDatos = () => {
     } catch (err: unknown) {
       toast({ title: "Error en la carga", description: getErrorMessage(err), variant: "destructive" });
       setStep("preview");
-    }
+    } finally { processing.current = false; }
   };
 
   const handleRevertirCarga = async () => {
@@ -472,45 +412,40 @@ const CargaDatos = () => {
   };
 
 
-  const handleBatchGeocode = async () => {
-    setIsGeocoding(true);
-    setGeocodeResults(null);
+  const handleBatchGeocode = async (tipo: "clientes" | "prospectos" = "clientes", importBatch?: string) => {
+    setIsGeocoding(true); setGeocodeResults(null); setGeocodeProgress(0); stopGeocoding.current = false;
+    let cursor = "";
+    const total: GeocodeResults = { total: 0, geocoded: 0, errors: 0, skipped: 0, error_details: [], reverse: { total: 0, resueltos: 0, errores: 0 } };
     try {
-      const { data, error } = await supabase.functions.invoke("geocode-clients");
-      if (error) throw new Error(error.message || "Error al geocodificar");
-      if (!data?.success) throw new Error(data?.error || "Error desconocido");
-      const mergedResults: GeocodeResults = {
-        ...data.results,
-        reverse: data.reverse,
-        pendientes_barrio: data.pendientes_barrio,
-      };
-      setGeocodeResults(mergedResults);
-      if (typeof data.pendientes_barrio === "number") {
-        setPendingGeocount(data.pendientes_barrio);
-        if (calidad && typeof data.total_clientes === "number" && data.total_clientes > 0) {
-          const pctSinBarrio = Math.round((data.pendientes_barrio / data.total_clientes) * 100);
-          setCalidad({
-            ...calidad,
-            clientes_sin_barrio: data.pendientes_barrio,
-            pct_sin_barrio: pctSinBarrio,
-            alerta: pctSinBarrio > 10 || calidad.pct_sin_vendedor > 5,
-          });
-        }
-      }
-      const barriosResueltos = data.reverse?.resueltos ?? 0;
-      toast({
-        title: data.pendientes_barrio === 0 ? "Ubicaciones completadas" : "Proceso de ubicación finalizado",
-        description: `${barriosResueltos} barrios completados · ${data.pendientes_barrio ?? 0} pendientes`,
-      });
-      fetchPendingGeocount();
-    } catch (err: unknown) {
-      toast({ title: "Error en geocodificación", description: getErrorMessage(err), variant: "destructive" });
+      do {
+        const { data, error } = await supabase.functions.invoke("geocode-clients", { body: { tipo, after: cursor, batch_id: importBatch } });
+        if (error || !data?.success) throw new Error(data?.error || error?.message || "No se pudo completar la ubicación");
+        for (const key of ["total", "geocoded", "errors", "skipped"] as const) total[key] += data.results[key] || 0;
+        total.error_details.push(...data.results.error_details || []);
+        total.reverse!.total += data.reverse?.total || 0; total.reverse!.resueltos += data.reverse?.resueltos || 0;
+        total.reverse!.errores += data.reverse?.errores || 0;
+        total.pendientes_barrio = data.pendientes_barrio;
+        setGeocodeProgress(total.total); setGeocodeResults({ ...total, error_details: [...total.error_details] });
+        if (!data.next_cursor || data.next_cursor === cursor) break;
+        cursor = data.next_cursor;
+        if (data.service_error) throw new Error(data.service_error);
+      } while (!stopGeocoding.current);
+      toast({ title: stopGeocoding.current ? "Ubicación detenida" : "Ubicaciones procesadas", description: `${total.geocoded} resueltas · ${total.errors} requieren revisión` });
+    } catch (error) {
+      toast({ title: "Quedaron ubicaciones pendientes", description: getErrorMessage(error), variant: "destructive" });
     } finally {
-      setIsGeocoding(false);
+      if (tipo === "prospectos") setProspectosResults(previous => previous ? {
+        ...previous, geocodificados: previous.geocodificados + total.geocoded,
+        sin_coordenadas: Math.max(0, previous.sin_coordenadas - total.geocoded),
+      } : previous);
+      setIsGeocoding(false); fetchPendingGeocount();
     }
   };
 
   const reset = () => {
+    parsingVersion.current++;
+    requestId.current = crypto.randomUUID();
+    setAvailableSheets([]); setIgnoredSheets([]); setCreditSheet("");
     setStep("upload");
     setFile(null);
     setFileHash(null);
@@ -568,6 +503,7 @@ const CargaDatos = () => {
 
 
         {/* STEP: Upload */}
+        {isGeocoding && <Alert className="mb-4"><AlertDescription>Ubicando registros: {geocodeProgress} revisados. Los datos del Excel ya están guardados. <Button variant="outline" size="sm" onClick={() => { stopGeocoding.current = true; }}>Detener al terminar este bloque</Button></AlertDescription></Alert>}
         {step === "upload" && (
           <Card>
             <CardContent className="p-8">
@@ -615,12 +551,28 @@ const CargaDatos = () => {
                     </CardDescription>
                   </div>
 
-                  <Button variant="ghost" size="icon" onClick={reset} className="h-8 w-8">
+                  <Button variant="ghost" size="icon" onClick={reset} disabled={isGeocoding} className="h-8 w-8">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
+                <div className="grid gap-3 mb-4">
+                  <label className="text-sm">Hoja a importar
+                    <select aria-label="Hoja a importar" className="block w-full border rounded p-2 bg-background mt-1" value={sheetName}
+                      onChange={e => chooseSheet(availableSheets.find(s => s.name === e.target.value)!)}>
+                      {availableSheets.filter(s => s.kind !== "notas").map(s => <option key={s.name} value={s.name}>{s.name} · {s.kind} · {s.rows.length} filas</option>)}
+                    </select>
+                  </label>
+                  {fileKind === "ventas" && availableSheets.some(s => s.kind === "notas") && <label className="text-sm">Notas de crédito que acompañan esta carga
+                    <select aria-label="Hoja de notas de crédito" className="block w-full border rounded p-2 bg-background mt-1" value={creditSheet} onChange={e => {
+                      setCreditSheet(e.target.value); setNotasCredito(availableSheets.find(s => s.name === e.target.value)?.rows || []);
+                      requestId.current = crypto.randomUUID(); setSheetsReviewed(false);
+                    }}><option value="">No incluir una hoja de notas de crédito</option>{availableSheets.filter(s => s.kind === "notas").map(s => <option key={s.name} value={s.name}>{s.name} · {s.rows.length} filas</option>)}</select>
+                  </label>}
+                  {ignoredSheets.length > 0 && <p className="text-xs text-muted-foreground">Hojas no reconocidas o vacías: {ignoredSheets.join(", ")}.</p>}
+                  {availableSheets.length > 1 && <label className="flex items-center gap-2 text-sm"><Checkbox checked={sheetsReviewed} onCheckedChange={v => setSheetsReviewed(v === true)} />Confirmo las hojas seleccionadas. Las demás hojas no se importan.</label>}
+                </div>
                 <div className="mb-3">
                   <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
                     <Eye className="h-3 w-3" /> Columnas detectadas
@@ -666,20 +618,19 @@ const CargaDatos = () => {
                 </div>
               </CardContent>
             </Card>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 {fileKind === "ventas" ? (
                   <>
                     <Checkbox
                       id="replaceExisting"
                       checked={replaceExisting}
-                      onCheckedChange={(checked) => setReplaceExisting(checked === true)}
+                      onCheckedChange={(checked) => { setReplaceExisting(checked === true); requestId.current = crypto.randomUUID(); }}
                     />
                     <label htmlFor="replaceExisting" className="text-sm text-muted-foreground cursor-pointer">
-                      Validación estricta{" "}
+                      Reemplazar las ventas del período del archivo{" "}
                       <span className="text-xs">
-                        (frena la carga si hay filas sin cliente, sin importe o notas de crédito sin conciliar).
-                        El archivo solo reemplaza su propio período de fechas: nunca se borra el histórico completo.
+                        Desmarcado: agrega o actualiza comprobantes y conserva los demás. Siempre se validan todas las filas antes de guardar.
                       </span>
                     </label>
                   </>
@@ -703,8 +654,8 @@ const CargaDatos = () => {
                 )}
               </div>
               <div className="flex gap-3">
-                <Button variant="outline" onClick={reset}>Cancelar</Button>
-                <Button onClick={() => handleProcess()}>
+                <Button variant="outline" onClick={reset} disabled={isGeocoding}>Cancelar</Button>
+                <Button onClick={() => handleProcess()} disabled={!sheetsReviewed || !rows.length}>
                   <Upload className="h-4 w-4 mr-1.5" />
                   Procesar {rows.length.toLocaleString()} filas
                 </Button>
@@ -792,7 +743,7 @@ const CargaDatos = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {[
                     { label: "Prospectos cargados", value: prospectosResults.prospectos_cargados },
-                    { label: "Geolocalizados", value: prospectosResults.geocodificados },
+                    { label: "Con coordenadas", value: prospectosResults.geocodificados },
                     { label: "Sin coordenadas", value: prospectosResults.sin_coordenadas },
                     { label: "Ya son clientes", value: prospectosResults.ya_son_clientes },
                   ].map((m) => (
@@ -814,7 +765,7 @@ const CargaDatos = () => {
                   </Alert>
                 )}
                 <div className="flex justify-center gap-3 mt-6">
-                  <Button variant="outline" onClick={reset}>Cargar otro archivo</Button>
+                  <Button variant="outline" onClick={reset} disabled={isGeocoding}>Cargar otro archivo</Button>
                   <Button onClick={() => navigate("/prospectos-dashboard")}>Ver prospectos</Button>
                 </div>
               </CardContent>
@@ -882,7 +833,7 @@ const CargaDatos = () => {
             )}
 
             <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={reset}>Cargar otro archivo</Button>
+              <Button variant="outline" onClick={reset} disabled={isGeocoding}>Cargar otro archivo</Button>
               <Button onClick={() => navigate("/")}>Ir al panel</Button>
             </div>
           </div>
@@ -1224,7 +1175,7 @@ const CargaDatos = () => {
             )}
 
             <div className="flex gap-3 justify-end">
-              <Button variant="outline" onClick={reset}>Cargar otro archivo</Button>
+              <Button variant="outline" onClick={reset} disabled={isGeocoding}>Cargar otro archivo</Button>
               <Button onClick={() => navigate("/")}>Volver al inicio</Button>
             </div>
           </div>
@@ -1250,11 +1201,11 @@ const CargaDatos = () => {
             ) : pendingGeocount === 0 && !geocodeResults ? (
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle2 className="h-5 w-5" />
-                <span className="text-sm font-medium">Todos los clientes tienen barrio asignado</span>
+                <span className="text-sm font-medium">Todos los clientes tienen coordenadas y barrio</span>
               </div>
             ) : (
               <div className="space-y-4">
-                {!isGeocoding && !geocodeResults && (
+                {!isGeocoding && (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
@@ -1262,14 +1213,14 @@ const CargaDatos = () => {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-foreground">
-                          {pendingGeocount} cliente{pendingGeocount !== 1 ? "s" : ""} sin barrio
+                          {pendingGeocount} cliente{pendingGeocount !== 1 ? "s" : ""} con ubicación pendiente
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Se resolverán primero por dirección completa y luego por coordenadas como respaldo.
+                          Se conservan las coordenadas guardadas y se completan los datos geográficos que faltan.
                         </p>
                       </div>
                     </div>
-                    <Button onClick={handleBatchGeocode} size="sm">
+                    <Button onClick={() => handleBatchGeocode()} size="sm">
                       <MapPin className="h-3.5 w-3.5 mr-1.5" />
                       Completar ubicaciones
                     </Button>
@@ -1292,15 +1243,15 @@ const CargaDatos = () => {
                   <div className="space-y-3">
                     <div className="flex items-center gap-2 mb-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
-                      <span className="text-sm font-medium text-foreground">Verificación de ubicaciones completada</span>
+                      <span className="text-sm font-medium text-foreground">Resultado de la geocodificación</span>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       <div className="text-center p-2.5 rounded-lg bg-muted/30">
-                        <p className="text-xl font-bold text-foreground">{geocodeResults.reverse?.total ?? geocodeResults.total}</p>
-                        <p className="text-xs text-muted-foreground">Sin barrio revisados</p>
+                        <p className="text-xl font-bold text-foreground">{geocodeResults.total}</p>
+                        <p className="text-xs text-muted-foreground">Registros revisados</p>
                       </div>
                       <div className="text-center p-2.5 rounded-lg bg-green-500/10">
-                        <p className="text-xl font-bold text-green-600">{geocodeResults.reverse?.resueltos ?? 0}</p>
+                        <p className="text-xl font-bold text-green-600">{geocodeResults.geocoded}</p>
                         <p className="text-xs text-muted-foreground">Barrios completados</p>
                       </div>
                       <div className="text-center p-2.5 rounded-lg bg-destructive/10">

@@ -100,45 +100,11 @@ export const GeocodificarClienteForm = ({
     setError(null);
 
     try {
-      // 1. Preparar datos para client_places
-      const placeData = {
-        client_id: clientId,
-        lat: geocodeResult.lat,
-        lng: geocodeResult.lng,
-        direccion: geocodeResult.formatted_address || direccion,
-        barrio: geocodeResult.barrio || geocodeResult.barrio_fallback_admin2 || null,
-        comuna_distrito: geocodeResult.comuna || null,
-        provincia: geocodeResult.provincia || provincia,
-        place_id: geocodeResult.place_id || generateManualPlaceId(),
-        is_primary: true,
-      };
-
-      // 2. Llamar al Edge Function para insertar en client_places
-      const { data: edgeResponse, error: edgeError } = await supabase.functions.invoke(
-        'upsert-client-places',
-        {
-          body: { places: [placeData] }
-        }
-      );
-
-      if (edgeError) throw new Error(edgeError.message);
-      if (!edgeResponse?.success) throw new Error(edgeResponse?.error || "Error al guardar ubicación");
-
-      // 3. Sincronizar datos geográficos a tabla clientes
-      const { error: updateError } = await supabase
-        .from('clientes')
-        .update({
-          provincia_principal: geocodeResult.provincia || provincia,
-          barrio_principal: geocodeResult.barrio || geocodeResult.barrio_fallback_admin2 || null,
-          direccion_principal: geocodeResult.formatted_address || direccion,
-          ciudad_principal: geocodeResult.ciudad || ciudad,
-        })
-        .eq('client_id', clientId);
-
-      if (updateError) {
-        console.error("Error syncing to clientes:", updateError);
-        // No es crítico, continuamos
-      }
+      const { data, error } = await supabase.functions.invoke("resolve-client-location", {
+        body: { client_id: clientId, manual: true, lat: geocodeResult.lat, lng: geocodeResult.lng,
+          direccion: geocodeResult.formatted_address || direccion },
+      });
+      if (error || !data?.ok) throw new Error(data?.error || error?.message || "No se pudo guardar la ubicación");
 
       toast({
         title: "Ubicación agregada",

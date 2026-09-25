@@ -1,3 +1,5 @@
+import { allClients, beginImport } from "../_shared/import-batch.ts";
+import { currencyNumber, coordinateNumber, importDate, joinStreet, argentinaCoordinates } from "../_shared/import-values.ts";
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
 
 /**
@@ -29,7 +31,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const ETL_VERSION = 'maestro-v1.1';
+const ETL_VERSION = 'maestro-v2.0';
 
 interface FileMetadata {
   name?: string;
@@ -92,12 +94,7 @@ const isEmpty = (v: any): boolean => {
 
 const toStr = (v: any): string | null => (isEmpty(v) ? null : String(v).trim());
 
-const toFloatCoord = (v: any): number | null => {
-  if (isEmpty(v)) return null;
-  const n = typeof v === 'number' ? v : Number(String(v).trim().replace(',', '.'));
-  if (!Number.isFinite(n) || n === 0) return null;
-  return n;
-};
+const toFloatCoord = coordinateNumber;
 
 /** Normaliza CUIT aunque venga como número o en notación científica (2.713382e+10). */
 const normalizeCuit = (v: any): string | null => {
@@ -167,7 +164,7 @@ function normalizarGeografia(ciudadRaw: string | null): GeoResult {
   if (['CITY BELL', 'GONNET', 'ABASTO'].includes(u)) {
     return { barrio: u, comuna: null, ciudad: 'LA PLATA', provincia: 'Provincia de Buenos Aires' };
   }
-  return { barrio: null, comuna: null, ciudad: u, provincia: 'Provincia de Buenos Aires' };
+  return { barrio: null, comuna: null, ciudad: u, provincia: null };
 }
 
 const splitCategorias = (v: any): string[] => {
@@ -215,11 +212,7 @@ function parseRow(row: Record<string, any>): MaestroRow {
   const numero = toStr(getFieldValue(row, ['Número', 'Numero', 'numero', 'Altura', 'Nro', 'N°']));
   const direccionUnica = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion']));
   const baseDireccion = direccionUnica || calle;
-  let direccion: string | null = null;
-  if (baseDireccion) {
-    const yaTieneAltura = numero ? new RegExp(`(^|\\s)${numero}(\\s|$)`).test(baseDireccion) : false;
-    direccion = (yaTieneAltura ? baseDireccion : [baseDireccion, numero].filter(Boolean).join(' ')).trim() || null;
-  }
+  const direccion = joinStreet(baseDireccion, numero);
   const codigo_postal = toStr(getFieldValue(row, ['Código Postal', 'Codigo Postal', 'CP', 'cp', 'codigo_postal']));
 
   const telefonos = [
@@ -252,6 +245,7 @@ Deno.serve(async (req) => {
 
   let supabase: SupabaseAdminClient | null = null;
   let batchId: string | null = null;
+  let committedResponse: any = null;
   try {
     supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -286,7 +280,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const body = await req.json() as { rows: Record<string, any>[]; fileMetadata?: FileMetadata };
+    const body = await req.json() as { rows: Record<string, any>[]; requestId?: string; fileMetadata?: FileMetadata };
     const rawRows = body?.rows;
     if (!Array.isArray(rawRows) || rawRows.length === 0) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
@@ -303,9 +297,7 @@ Deno.serve(async (req) => {
     const lastModified = typeof fileMetadata.lastModified === 'number' && fileMetadata.lastModified > 0
       ? new Date(fileMetadata.lastModified).toISOString()
       : null;
-    const { data: batch, error: batchError } = await supabase
-      .from('import_batches')
-      .insert({
+    const started = await beginImport(supabase, body.requestId, {
         tipo: 'maestro',
         version_etl: ETL_VERSION,
         archivo_nombre: fileMetadata.name || 'archivo_sin_nombre',
@@ -318,11 +310,9 @@ Deno.serve(async (req) => {
         reemplaza_existentes: false,
         usuario_id: authData.user.id,
         usuario_email: authData.user.email || null,
-      })
-      .select('id')
-      .single();
-    if (batchError || !batch) throw new Error(`No se pudo crear el lote de importación: ${batchError?.message || 'sin detalle'}`);
-    batchId = batch.id;
+      });
+    if (started.response) return new Response(JSON.stringify(started.response), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    batchId = started.id;
 
     for (let i = 0; i < rawRows.length; i += 500) {
       const stagingRows = rawRows.slice(i, i + 500).map((payload, offset) => ({
@@ -331,7 +321,7 @@ Deno.serve(async (req) => {
         numero_fila: i + offset + 1,
         payload,
       }));
-      const { error: stagingError } = await supabase.from('import_staging_rows').insert(stagingRows);
+      const { error: stagingError } = await supabase.from('import_staging_rows').upsert(stagingRows, { onConflict: 'batch_id,tipo_fila,numero_fila' });
       if (stagingError) throw new Error(`No se pudo preparar el lote: ${stagingError.message}`);
     }
 
@@ -342,6 +332,7 @@ Deno.serve(async (req) => {
     let sinIdentificador = 0;
     for (const row of rawRows) {
       const p = parseRow(row);
+      if (p.lat === 0 && p.long === 0) { p.lat = null; p.long = null; }
       if (!p.razon_social && !p.cuit_dni && !p.client_id) { sinIdentificador++; continue; }
       parsed.push(p);
     }
@@ -350,25 +341,15 @@ Deno.serve(async (req) => {
     // IMPORTANTE: el CUIT manda sobre el "Id" del archivo. El Id que traen los
     // informes suele ser por comprobante, no por empresa: usarlo primero genera
     // un cliente nuevo por cada factura (duplicados masivos).
-    const cuits = Array.from(new Set(parsed.map((p) => p.cuit_dni).filter(Boolean))) as string[];
-    const cuitToClientId = new Map<string, string>();
-    const nameToClientId = new Map<string, string>();
-
-    for (let i = 0; i < cuits.length; i += 400) {
-      const batch = cuits.slice(i, i + 400);
-      const { data } = await supabase.from('clientes').select('client_id, cuit_dni').in('cuit_dni', batch);
-      for (const c of data || []) if (c.cuit_dni) cuitToClientId.set(c.cuit_dni, c.client_id);
+    const existingClients = await allClients(supabase);
+    const existingIds = new Map(existingClients.map(c => [c.client_id, c]));
+    const cuitToIds = new Map<string, string[]>();
+    const nameToIds = new Map<string, string[]>();
+    for (const c of existingClients) {
+      if (c.cuit_dni) cuitToIds.set(c.cuit_dni, [...(cuitToIds.get(c.cuit_dni) || []), c.client_id]);
+      const name = normalizeName(c.razon_social);
+      if (name) nameToIds.set(name, [...(nameToIds.get(name) || []), c.client_id]);
     }
-
-    // Mapa por razón social normalizada (fallback para filas sin Id ni CUIT en DB)
-    {
-      const { data } = await supabase.from('clientes').select('client_id, razon_social');
-      for (const c of data || []) {
-        const n = normalizeName(c.razon_social);
-        if (n && !nameToClientId.has(n)) nameToClientId.set(n, c.client_id);
-      }
-    }
-
     const byClientId = new Map<string, MaestroRow>();
     let sinResolver = 0;
     const noResueltos: { razon_social: string | null; cuit_dni: string | null }[] = [];
@@ -380,15 +361,15 @@ Deno.serve(async (req) => {
 
     for (const p of parsed) {
       const nameKey = p.razon_social ? normalizeName(p.razon_social) : null;
-      const resolved =
-        (p.cuit_dni ? cuitToClientId.get(p.cuit_dni) : undefined) ||
-        (p.cuit_dni ? localCuitToId.get(p.cuit_dni) : undefined) ||
-        (nameKey && !p.cuit_dni ? nameToClientId.get(nameKey) : undefined) ||
-        (nameKey && !p.cuit_dni ? localNameToId.get(nameKey) : undefined) ||
-        p.client_id ||
-        p.cuit_dni ||
-        null;
-
+      const matches = p.cuit_dni ? cuitToIds.get(p.cuit_dni) || [] : [];
+      const names = nameKey ? nameToIds.get(nameKey) || [] : [];
+      const explicit = p.client_id ? existingIds.get(p.client_id) : undefined;
+      if (explicit && p.cuit_dni && explicit.cuit_dni && p.cuit_dni !== explicit.cuit_dni) throw new Error(`El ID ${p.client_id} pertenece a otro CUIT. No se modificó nada.`);
+      // Existing official ID disambiguates branches. New IDs require review when CUIT is shared.
+      const resolved = explicit?.client_id ||
+        (matches.length === 1 ? matches[0] : undefined) ||
+        (names.length === 1 && (!matches.length || matches.includes(names[0])) ? names[0] : undefined) ||
+        (matches.length === 0 ? p.client_id || (p.cuit_dni ? localCuitToId.get(p.cuit_dni) || p.cuit_dni : nameKey ? localNameToId.get(nameKey) : null) : null);
       if (resolved) {
         if (p.cuit_dni && !localCuitToId.has(p.cuit_dni)) localCuitToId.set(p.cuit_dni, resolved);
         if (nameKey && !p.cuit_dni && !localNameToId.has(nameKey)) localNameToId.set(nameKey, resolved);
@@ -402,6 +383,9 @@ Deno.serve(async (req) => {
       }
 
       const existing = byClientId.get(resolved);
+      if (existing && existing.client_id === resolved && existing.direccion && p.direccion && normalizeName(existing.direccion) !== normalizeName(p.direccion)) {
+        throw new Error(`El cliente ${resolved} tiene domicilios diferentes en el archivo. Identificá cada sucursal antes de importar; no se modificó nada.`);
+      }
       if (!existing) {
         byClientId.set(resolved, { ...p, client_id: resolved });
       } else {
@@ -428,15 +412,6 @@ Deno.serve(async (req) => {
     const clientes = Array.from(byClientId.values());
     console.log(`🧮 ${clientes.length} clientes únicos | ${sinResolver} sin identificador resoluble`);
 
-    // ── FASE 3: Separar nuevos vs existentes ──
-    const allIds = clientes.map((c) => String(c.client_id));
-    const existingSet = new Set<string>();
-    for (let i = 0; i < allIds.length; i += 400) {
-      const batch = allIds.slice(i, i + 400);
-      const { data } = await supabase.from('clientes').select('client_id').in('client_id', batch);
-      for (const c of data || []) existingSet.add(c.client_id);
-    }
-
     const results = {
       clientes_nuevos: 0,
       clientes_actualizados: 0,
@@ -449,6 +424,7 @@ Deno.serve(async (req) => {
 
     const buildCommonFields = (c: MaestroRow) => {
       const geo = normalizarGeografia(c.ciudad);
+      if (c.provincia && normalizeProvincia(c.provincia) !== "CABA" && geo.provincia === "CABA") { geo.ciudad = c.ciudad; geo.barrio = null; geo.comuna = null; geo.provincia = normalizeProvincia(c.provincia); }
       const provincia = normalizeProvincia(c.provincia) || geo.provincia;
       const etiquetas = c.etiquetas;
       const data: Record<string, any> = {
@@ -473,175 +449,21 @@ Deno.serve(async (req) => {
       return data;
     };
 
-    // ── FASE 4: Insertar nuevos (métricas en cero, sin compras) ──
-    const nuevos = clientes.filter((c) => !existingSet.has(String(c.client_id)));
-    const insertPayload = nuevos.map((c) => ({
-      client_id: String(c.client_id),
-      ...buildCommonFields(c),
-      cantidad_ordenes: 0,
-      monto_total_historico: 0,
-      ticket_promedio: 0,
-      categoria_recencia: 'SIN_COMPRAS',
-      categoria_volumen: 'BAJO',
-      score_recencia: 0,
-      score_volumen: 0,
-      score_comercial: 0,
-      participacion_mercado: 0,
-      requiere_visita: 'SI',
-      excluir_recomendaciones: false,
-      last_recommendation_at: null,
-      ultima_visita: null,
+    if (sinResolver || sinIdentificador) throw new Error(`${sinResolver + sinIdentificador} filas no tienen una identidad de cliente inequívoca. No se modificó nada.`);
+    const payload: Record<string, any>[] = clientes.map(c => ({ client_id: String(c.client_id), ...buildCommonFields(c) }));
+    const places = clientes.filter(c => argentinaCoordinates(c.lat, c.long)).map(c => ({
+      client_id: String(c.client_id), lat: c.lat, long: c.long, direccion_principal: c.direccion,
+      codigo_postal: c.codigo_postal, provincia_principal: normalizeProvincia(c.provincia),
+      barrio_principal: payload.find(p => p.client_id === c.client_id)?.barrio_principal || null,
     }));
-
-    for (let i = 0; i < insertPayload.length; i += 200) {
-      const batch = insertPayload.slice(i, i + 200);
-      const { error } = await supabase.from('clientes').insert(batch);
-      if (error) {
-        console.error(`❌ Insert batch ${i}:`, error.message);
-        results.clientes_errores += batch.length;
-        results.errores.push(`Insert batch ${i}: ${error.message}`);
-      } else {
-        results.clientes_nuevos += batch.length;
-      }
-    }
-
-    // ── FASE 5: Actualizar existentes (solo campos del maestro) ──
-    // El vendedor de cartera del maestro NO pisa al último que vendió:
-    // si el cliente ya tiene ventas registradas, manda vendedor_actual de ventas.
-    const conVentas = new Set<string>();
-    {
-      const { data: ventasIds } = await supabase
-        .from('ventas_cupra')
-        .select('client_id')
-        .not('client_id', 'is', null)
-        .not('vendedor', 'is', null)
-        .limit(200000);
-      for (const v of ventasIds || []) if (v.client_id) conVentas.add(String(v.client_id));
-    }
-
-    const existentes = clientes.filter((c) => existingSet.has(String(c.client_id)));
-    for (const c of existentes) {
-      const updateData = buildCommonFields(c);
-      if (conVentas.has(String(c.client_id))) delete updateData.vendedor_actual;
-      if (Object.keys(updateData).length === 0) continue;
-      updateData.updated_at = new Date().toISOString();
-
-      const { error } = await supabase.from('clientes').update(updateData).eq('client_id', String(c.client_id));
-      if (error) {
-        results.clientes_errores++;
-        results.errores.push(`Update ${c.client_id}: ${error.message}`);
-      } else {
-        results.clientes_actualizados++;
-      }
-    }
-
-    // ── FASE 6: Coordenadas del ERP → client_places (R7 / OT7) ──
-    // Prioridad de ubicación: corrección manual > coordenadas del ERP > geocoding.
-    // Se escriben sin marcar primario y al final `reconciliar_places_primarios()`
-    // deja exactamente un primario por cliente, eligiendo la fuente más confiable.
-    const conCoords = clientes.filter((c) => c.lat !== null && c.long !== null);
-    if (conCoords.length > 0) {
-      const geoRows = conCoords.map((c) => {
-        const geo = normalizarGeografia(c.ciudad);
-        return {
-          client_id: String(c.client_id),
-          lat: c.lat as number,
-          long: c.long as number,
-          direccion_principal: c.direccion,
-          codigo_postal: c.codigo_postal,
-          // Nunca usar la ciudad como barrio. Si el archivo no trae un barrio
-          // real, geocode-clients debe resolverlo desde las coordenadas del ERP.
-          barrio_principal: geo.barrio || null,
-          provincia_principal: normalizeProvincia(c.provincia) || geo.provincia,
-          comuna: geo.comuna,
-        };
-      });
-
-      // Direcciones corregidas manualmente: nunca se pisan desde el Excel
-      const verificadosSet = new Set<string>();
-      const idsConCoords = Array.from(new Set(geoRows.map((g) => g.client_id)));
-      for (let i = 0; i < idsConCoords.length; i += 200) {
-        const batch = idsConCoords.slice(i, i + 200);
-        const { data: verificados } = await supabase
-          .from('client_places')
-          .select('client_id')
-          .in('client_id', batch)
-          .eq('direccion_verificada', true);
-        (verificados || []).forEach((v: any) => verificadosSet.add(String(v.client_id)));
-      }
-
-      const geoRowsAplicables = geoRows.filter((g) => !verificadosSet.has(g.client_id));
-
-      // Fila por fila: client_places tiene 2 constraints únicos
-      // (client_id, lat, long) y (client_id, direccion_principal)
-      for (const g of geoRowsAplicables) {
-        const { data: existingPlaces } = await supabase
-          .from('client_places')
-          .select('id, lat, long, direccion_principal')
-          .eq('client_id', g.client_id)
-          .eq('direccion_verificada', false);
-
-        const match = (existingPlaces || []).find(
-          (p) => Number(p.lat) === g.lat && Number(p.long) === g.long
-        ) || (g.direccion_principal
-          ? (existingPlaces || []).find((p) => p.direccion_principal === g.direccion_principal)
-          : undefined);
-
-        const payload = { ...g, fuente_geocoding: 'excel' };
-        const { error } = match
-          ? await supabase.from('client_places').update(payload).eq('id', match.id)
-          : await supabase.from('client_places').insert({ ...payload, is_primary: false });
-
-        if (error) {
-          console.error(`❌ Place ${g.client_id}:`, error.message);
-          results.errores.push(`Place ${g.client_id}: ${error.message}`);
-        } else {
-          results.coordenadas_actualizadas++;
-        }
-      }
-    }
-
-    // Rubro normalizado desde las Categorías del maestro (y de ventas si no hay).
-    {
-      const { error: rubroError } = await supabase.rpc('refrescar_rubros');
-      if (rubroError) console.error('⚠️ No se pudo recalcular el rubro:', rubroError.message);
-    }
-
-    // R7: un solo primario por cliente, con la fuente más confiable ganando
-    {
-      const { error: reconError } = await supabase.rpc('reconciliar_places_primarios');
-      if (reconError) {
-        console.error('⚠️ No se pudo reconciliar ubicaciones primarias:', reconError.message);
-        results.errores.push(`Ubicaciones primarias: ${reconError.message}`);
-      }
-    }
-
-    // Regla permanente de calidad geográfica: cada carga dispara la resolución
-    // inversa de barrios para toda ubicación con coordenadas. Se espera la
-    // respuesta para que el resultado de la carga refleje el estado real.
-    try {
-      const geocodeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocode-clients`, {
-        method: 'POST',
-        headers: {
-          Authorization: req.headers.get('Authorization') || '',
-          apikey: Deno.env.get('SUPABASE_ANON_KEY') || '',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ limit: 600 }),
-      });
-      const geocodeResult = await geocodeResponse.json();
-      if (!geocodeResponse.ok) {
-        throw new Error(geocodeResult?.error || `HTTP ${geocodeResponse.status}`);
-      }
-      (results as any).ubicaciones = {
-        barrios_resueltos: Number(geocodeResult?.reverse?.resueltos || 0),
-        pendientes_barrio: Number(geocodeResult?.pendientes_barrio || 0),
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      results.errores.push(`No se pudo completar el barrio desde las coordenadas: ${message}`);
-    }
-
+    const invalidCoordinates = clientes.filter(c => (c.lat !== null || c.long !== null) && !argentinaCoordinates(c.lat, c.long));
+    if (invalidCoordinates.length) throw new Error(`${invalidCoordinates.length} clientes tienen coordenadas inválidas. Corregí ambas coordenadas o dejá ambas celdas vacías.`);
+    const { data: saved, error: saveError } = await supabase.rpc('guardar_importacion', {
+      p_batch_id: batchId, p_clientes: payload, p_places: places,
+    });
+    if (saveError) throw new Error(saveError.message);
+    committedResponse = saved;
+    Object.assign(results, saved.results);
 
     // ── Resumen por vendedor ──
     const vendedorAgg = new Map<string, number>();
@@ -691,7 +513,7 @@ Deno.serve(async (req) => {
       .eq('batch_id', batchId);
     if (cleanupError) console.error('No se pudo limpiar staging:', cleanupError.message);
 
-    return new Response(JSON.stringify({
+    const responseBody = {
       success: true,
       batch_id: batchId,
       results,
@@ -705,17 +527,23 @@ Deno.serve(async (req) => {
       conciliacion_entidades,
       vendedor_breakdown,
       no_resueltos: noResueltos.slice(0, 20),
-    }), {
+    };
+    const { error: responseError } = await supabase.from('import_batches').update({ respuesta: responseBody }).eq('id', batchId);
+    if (responseError) console.error('No se pudo completar el resumen del lote:', responseError.message);
+    return new Response(JSON.stringify(responseBody), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200,
     });
   } catch (error) {
     console.error('💥 Error:', error);
     const message = error instanceof Error ? error.message : 'Error desconocido';
+    if (committedResponse) return new Response(JSON.stringify({ ...committedResponse, aviso: 'Los datos se guardaron. No se pudo completar el resumen; no vuelvas a cargar el archivo.' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200,
+    });
     if (supabase && batchId) {
       const { error: auditError } = await supabase
         .from('import_batches')
         .update({ estado: 'fallido', error_message: message, completed_at: new Date().toISOString() })
-        .eq('id', batchId);
+        .eq('id', batchId).is('aplicado_at', null);
       if (auditError) console.error('No se pudo registrar el fallo del lote:', auditError.message);
     }
     return new Response(JSON.stringify({

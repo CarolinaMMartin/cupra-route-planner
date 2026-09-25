@@ -1,3 +1,5 @@
+import { allClients, beginImport } from "../_shared/import-batch.ts";
+import { currencyNumber, coordinateNumber, importDate, joinStreet, argentinaCoordinates } from "../_shared/import-values.ts";
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
 
 /**
@@ -44,7 +46,7 @@ const corsHeaders = {
 const DIAS_ACTIVO = 30;
 const DIAS_INTERMITENTE = 90;
 const DIAS_INACTIVO = 180;
-const ETL_VERSION = 'v3.2';
+const ETL_VERSION = 'v4.0';
 
 interface FileMetadata {
   name?: string;
@@ -90,36 +92,6 @@ const BARRIOS_A_COMUNA: Record<string, string> = {
 // === HELPERS ===
 const isEmpty = (v: any): boolean => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
 const toStr = (v: any): string | null => isEmpty(v) ? null : String(v).trim();
-const toInt = (v: any): number | null => {
-  if (isEmpty(v)) return null;
-  const n = parseInt(String(v).replace(/[^\d-]/g, ''), 10);
-  return Number.isNaN(n) ? null : n;
-};
-const toFloat = (v: any): number | null => {
-  if (isEmpty(v)) return null;
-  const cleaned = String(v).replace(/[^\d,.\-]/g, '').replace(/\./g, '').replace(/,/g, '.');
-  const n = parseFloat(cleaned);
-  return isNaN(n) ? null : n;
-};
-const toNumberCurrency = (v: any): number | null => {
-  if (isEmpty(v)) return null;
-  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-  const s = String(v).trim();
-  const directParse = Number(s);
-  if (Number.isFinite(directParse)) return directParse;
-  const cleaned = s.replace(/[^\d,.\-]/g, '').replace(/\s+/g, '');
-  if (/,\d{1,2}$/.test(cleaned)) {
-    const n = Number(cleaned.replace(/\./g, '').replace(',', '.'));
-    return Number.isFinite(n) ? n : null;
-  }
-  if (/\.\d{1,2}$/.test(cleaned)) {
-    const n = Number(cleaned.replace(/,/g, ''));
-    return Number.isFinite(n) ? n : null;
-  }
-  const n = Number(cleaned.replace(/[.,]/g, ''));
-  return Number.isFinite(n) ? n : null;
-};
-
 const normalizeClientId = (v: any): string | null => {
   if (isEmpty(v)) return null;
   const raw = String(v).trim();
@@ -222,30 +194,8 @@ const mode = (iterable: Set<string>): string | null => {
   return Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
 };
 
-const toYmdFromExcelOrText = (v: any): string | null => {
-  if (isEmpty(v)) return null;
-  if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString().split('T')[0];
-  const maybeNum = Number(v);
-  if (Number.isFinite(maybeNum) && String(v).trim() === String(maybeNum)) {
-    const ms = (maybeNum - 25569) * 86400 * 1000;
-    const d = new Date(ms);
-    if (!isNaN(d.getTime()) && d.getFullYear() >= 1900 && d.getFullYear() <= 2100) return d.toISOString().split('T')[0];
-  }
-  const txt = String(v).trim();
-  const m = txt.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
-  if (m) {
-    const [, dd, mm, yyyyRaw] = m;
-    const yyyy = Number(yyyyRaw.length === 2 ? (Number(yyyyRaw) + 2000) : yyyyRaw);
-    const d = new Date(yyyy, Number(mm) - 1, Number(dd));
-    if (!isNaN(d.getTime()) && d.getFullYear() >= 1900 && d.getFullYear() <= 2100) return d.toISOString().split('T')[0];
-  }
-  const d2 = new Date(txt);
-  return isNaN(d2.getTime()) ? null : d2.toISOString().split('T')[0];
-};
-
-// Compat helpers: mantienen nombres usados en el pipeline
-const parseDate = (v: any): string | null => toYmdFromExcelOrText(v);
-const parseNumericValue = (v: any): number | null => toNumberCurrency(v);
+const parseDate = importDate;
+const parseNumericValue = currencyNumber;
 
 interface GeoResult { barrio: string | null; comuna: string | null; ciudad: string | null; provincia: string | null; }
 
@@ -361,9 +311,11 @@ const BONIFICACION_FIELD_NAMES = [
 // === MAIN ===
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'Método no permitido' }), { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   let supabase: SupabaseAdminClient | null = null;
   let batchId: string | null = null;
+  let committedResponse: any = null;
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -401,7 +353,7 @@ Deno.serve(async (req) => {
       rows: Record<string, any>[];
       replaceExisting?: boolean;
       notasCredito?: Record<string, any>[];
-      fileMetadata?: FileMetadata;
+      requestId?: string; fileMetadata?: FileMetadata;
       modoCarga?: 'rango' | 'rebase';
       confirmarEliminaciones?: boolean;
       confirmacionRebase?: string;
@@ -410,15 +362,9 @@ Deno.serve(async (req) => {
     const rawNotasCredito = Array.isArray(body.notasCredito) ? body.notasCredito : [];
     const replaceExisting = body.replaceExisting !== false; // default true
     const modoCarga: 'rango' | 'rebase' = body.modoCarga === 'rebase' ? 'rebase' : 'rango';
+    if (modoCarga === 'rebase') throw new Error('La carga de Excel permite reemplazar el período o agregar ventas. El reemplazo total no está disponible en este módulo.');
     const confirmarEliminaciones = body.confirmarEliminaciones === true;
     const confirmacionRebase = typeof body.confirmacionRebase === 'string' ? body.confirmacionRebase : '';
-
-    if (modoCarga === 'rebase' && callerProfile?.rol !== 'administrador' && callerProfile?.rol !== 'asignador') {
-      return new Response(JSON.stringify({ success: false, error: 'El reemplazo total solo lo puede ejecutar un administrador' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 403,
-      });
-    }
-
 
     if (!Array.isArray(rawRows) || rawRows.length === 0) {
       return new Response(JSON.stringify({ success: false, error: 'No rows provided' }), {
@@ -435,9 +381,7 @@ Deno.serve(async (req) => {
     const lastModified = typeof fileMetadata.lastModified === 'number' && fileMetadata.lastModified > 0
       ? new Date(fileMetadata.lastModified).toISOString()
       : null;
-    const { data: batch, error: batchError } = await supabase
-      .from('import_batches')
-      .insert({
+    const started = await beginImport(supabase, body.requestId, {
         tipo: 'ventas',
         version_etl: ETL_VERSION,
         archivo_nombre: fileMetadata.name || 'archivo_sin_nombre',
@@ -451,11 +395,9 @@ Deno.serve(async (req) => {
         reemplaza_existentes: replaceExisting,
         usuario_id: authData.user.id,
         usuario_email: authData.user.email || null,
-      })
-      .select('id')
-      .single();
-    if (batchError || !batch) throw new Error(`No se pudo crear el lote de importación: ${batchError?.message || 'sin detalle'}`);
-    batchId = batch.id;
+      });
+    if (started.response) return new Response(JSON.stringify(started.response), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    batchId = started.id;
 
     const stageRows = async (sourceRows: Record<string, any>[], tipoFila: 'principal' | 'nota_credito') => {
       for (let i = 0; i < sourceRows.length; i += 500) {
@@ -465,7 +407,7 @@ Deno.serve(async (req) => {
           numero_fila: i + offset + 1,
           payload,
         }));
-        const { error: stagingError } = await supabase!.from('import_staging_rows').insert(stagingRows);
+        const { error: stagingError } = await supabase!.from('import_staging_rows').upsert(stagingRows, { onConflict: 'batch_id,tipo_fila,numero_fila' });
         if (stagingError) throw new Error(`No se pudo preparar el lote: ${stagingError.message}`);
       }
     };
@@ -494,13 +436,7 @@ Deno.serve(async (req) => {
     // El campo "ID" del informe de ventas NO es el Id oficial del maestro.
     // La identidad se resuelve por CUIT y nombre; "Número Externo" sólo se usa
     // cuando coincide con un client_id ya existente.
-    const { data: clientesPersistidosData, error: clientesPersistidosError } = await supabase
-      .from('clientes')
-      .select('client_id, cuit_dni, razon_social, fantasia, telefonos, emails, direccion_principal, ciudad_principal, provincia_principal, vendedor_actual, vendedor_principal, etiquetas');
-    if (clientesPersistidosError) {
-      throw new Error(`No se pudo cargar el maestro para resolver clientes: ${clientesPersistidosError.message}`);
-    }
-    const clientesPersistidos = clientesPersistidosData || [];
+    const clientesPersistidos = await allClients(supabase);
     const existingClientIds = new Set<string>();
     const cuitToClientIds = new Map<string, string[]>();
     const nameToClientId = new Map<string, string>();
@@ -561,12 +497,13 @@ Deno.serve(async (req) => {
       // usarlo primero crea un cliente nuevo por cada factura.
       if (cuitMatches.length === 1) {
         client_id = cuitMatches[0];
-      } else if (cuit_dni && localCuitToId.has(cuit_dni)) {
+      } else if (cuitMatches.length <= 1 && cuit_dni && localCuitToId.has(cuit_dni)) {
         client_id = localCuitToId.get(cuit_dni)!;
       } else if (nameMatch && (cuitMatches.length === 0 || cuitMatches.includes(nameMatch))) {
         client_id = nameMatch;
       } else if (cuitMatches.length > 1) {
-        cuitAmbiguo = true;
+        if (externalClientId && cuitMatches.includes(externalClientId)) client_id = externalClientId;
+        else cuitAmbiguo = true;
       } else if (nameMatch) {
         client_id = nameMatch;
       } else if (!cuit_dni && nameKey && localNameToId.has(nameKey)) {
@@ -578,7 +515,7 @@ Deno.serve(async (req) => {
       }
 
       // Fix 1: identidad sintética desde la razón social cuando no hay Id ni CUIT
-      if (!client_id && razon_social) {
+      if (!client_id && razon_social && !cuitAmbiguo) {
         client_id = `RS_${razon_social.trim().toUpperCase().replace(/\s+/g, ' ')}`;
       }
 
@@ -615,11 +552,7 @@ Deno.serve(async (req) => {
       const calleRaw = toStr(getFieldValue(row, ['Dirección', 'Direccion', 'direccion', 'Calle']));
       const numeroCalleRaw = toStr(getFieldValue(row, ['Número', 'Numero', 'numero', 'Altura', 'Nro', 'N°']));
       const codigoPostalRaw = toStr(getFieldValue(row, ['Código Postal', 'Codigo Postal', 'CP', 'cp', 'codigo_postal']));
-      const direccion = calleRaw
-        ? ((numeroCalleRaw && new RegExp(`(^|\\s)${numeroCalleRaw}(\\s|$)`).test(calleRaw)
-            ? calleRaw
-            : [calleRaw, numeroCalleRaw].filter(Boolean).join(' ')).trim() || null)
-        : null;
+      const direccion = joinStreet(calleRaw, numeroCalleRaw);
       const ciudad_raw = toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad', 'localidad']));
       const provincia_raw = toStr(getFieldValue(row, ['Provincia', 'provincia']));
       const pais = toStr(getFieldValue(row, ['País', 'Pais', 'pais']));
@@ -649,8 +582,8 @@ Deno.serve(async (req) => {
 
 
       // Coordenadas del informe (si vienen y son válidas para Argentina)
-      const latRaw = parseNumericValue(getFieldValue(row, ['Latitud', 'latitud', 'Lat', 'lat']));
-      const lngRaw = parseNumericValue(getFieldValue(row, ['Longitud', 'longitud', 'Lng', 'lng', 'Long', 'long']));
+      const latRaw = coordinateNumber(getFieldValue(row, ['Latitud', 'latitud', 'Lat', 'lat']));
+      const lngRaw = coordinateNumber(getFieldValue(row, ['Longitud', 'longitud', 'Lng', 'lng', 'Long', 'long']));
       if (
         latRaw !== null && lngRaw !== null &&
         Number.isFinite(latRaw) && Number.isFinite(lngRaw) &&
@@ -697,15 +630,21 @@ Deno.serve(async (req) => {
       const rsToClient = new Map<string, any>();
       const looseToClient = new Map<string, any>();
       const cuitToClient = new Map<string, any>();
+      const ambiguousIdx = new Set<string>();
+      const addUnique = (map: Map<string, any>, prefix: string, key: string | null, base: any) => {
+        if (!key || ambiguousIdx.has(prefix + key)) return;
+        if (map.has(key) && map.get(key).client_id !== base.client_id) { map.delete(key); ambiguousIdx.add(prefix + key); }
+        else map.set(key, base);
+      };
       const addIdx = (nombres: any[], cuit: any, base: any) => {
         for (const nombre of nombres) {
           const key = normalizeBusinessName(nombre);
-          if (key && !rsToClient.has(key)) rsToClient.set(key, base);
+          addUnique(rsToClient, 'rs:', key, base);
           const lk = looseKey(nombre);
-          if (lk && !looseToClient.has(lk)) looseToClient.set(lk, base);
+          addUnique(looseToClient, 'loose:', lk, base);
         }
         const c = normalizeCuit(cuit);
-        if (c && !cuitToClient.has(c)) cuitToClient.set(c, base);
+        addUnique(cuitToClient, 'cuit:', c, base);
       };
 
       for (const v of ventasRaw) addIdx([v.razon_social, v.fantasia], v.cuit_dni, v);
@@ -770,9 +709,9 @@ Deno.serve(async (req) => {
 
         ventasRaw.push({
           client_id: base.client_id,
-          ticket: toStr(getFieldValue(row, ['Ticket', 'ticket'])),
+          ticket: toStr(getFieldValue(row, ['Ticket', 'ticket', 'Comprobante'])),
           letra: 'NC',
-          fecha_emision: parseDate(getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision'])),
+          fecha_emision: parseDate(getFieldValue(row, ['Fecha Emisión', 'Fecha Emision', 'fecha_emision', 'Fecha'])),
           cuit_dni: base.cuit_dni,
           razon_social,
           fantasia: base.fantasia,
@@ -799,24 +738,13 @@ Deno.serve(async (req) => {
       console.log(`⚠️ ${facturacionNullCount} filas con facturación null (columna: ${facturacionColumnResolved})`);
     }
 
-    // Guarda de integridad (contrato ERP §3.4): solo bloquean los datos PRIMARIOS de
-    // venta corruptos (filas sin cliente o sin facturación). Las NC sin conciliar
-    // JAMÁS bloquean la carga — son un hecho del negocio (NC de ventas anteriores al
-    // período del export, emitidas para clientes sin ventas en el archivo). Quedan en
-    // staging con motivo y se informan en el resumen y en el panel de NC.
-    const ncTotal = notasCreditoAplicadas + notasCreditoSinMatch + notasCreditoSinImporte;
-    const ncSinMatchRatio = ncTotal > 0 ? notasCreditoSinMatch / ncTotal : 0;
-    if (replaceExisting && (ventasSinClientId > 0 || facturacionNullCount > 0)) {
-      throw new Error(
-        `Carga completa rechazada por integridad: ${ventasSinClientId} filas sin cliente y ` +
-        `${facturacionNullCount} sin facturación. No se modificaron las ventas existentes.`
-      );
-    }
-    if (notasCreditoSinMatch > 0) {
-      console.log(`ℹ️ ${notasCreditoSinMatch}/${ncTotal} notas de crédito sin conciliar (${Math.round(ncSinMatchRatio * 100)}%) — legítimas (períodos anteriores); van a staging y las ventas se cargan igual`);
+    // La revisión debe poder corregir cualquier fila inválida antes de aplicar el lote.
+    if (ventasSinClientId || facturacionNullCount || notasCreditoSinMatch || notasCreditoSinImporte) {
+      throw new Error(`Carga rechazada: ${ventasSinClientId} ventas sin cliente inequívoco, ${facturacionNullCount} sin importe, ${notasCreditoSinMatch} notas de crédito sin cliente y ${notasCreditoSinImporte} sin importe. No se modificó nada.`);
     }
 
-
+    const invalidRows = ventasRaw.filter(v => !v.ticket || !v.fecha_emision || v.cajas !== null && !Number.isInteger(v.cajas));
+    if (invalidRows.length) throw new Error(`${invalidRows.length} filas tienen fecha, comprobante o cantidad de cajas inválidos. No se modificó nada.`);
 
     // ============ FASE 1b: Numerar renglones (OT8-fix, ya NO se fusiona nada) ============
     const renglonStats = asignarRenglones(ventasRaw);
@@ -1026,193 +954,21 @@ Deno.serve(async (req) => {
       results.errores.push(`Filas con CUIT duplicado en el maestro y nombre sin coincidencia: ${ventasCuitAmbiguo}`);
     }
 
-    const allClientIds = clientesEnriquecidos.map(c => String(c.client_id));
-    let existingSet = new Set<string>();
-
-    if (allClientIds.length > 0) {
-      const { data: existingClients } = await supabase
-        .from('clientes')
-        .select('client_id')
-        .in('client_id', allClientIds);
-      existingSet = new Set((existingClients || []).map(c => c.client_id));
-    }
-
-    const newClients = clientesEnriquecidos.filter(c => !existingSet.has(String(c.client_id)));
-    const updateClients = clientesEnriquecidos.filter(c => existingSet.has(String(c.client_id)));
-
-    if (newClients.length > 0) {
-      const { error } = await supabase.from('clientes').insert(
-        newClients.map(c => ({
-          ...c, client_id: String(c.client_id),
-          excluir_recomendaciones: false, last_recommendation_at: null, ultima_visita: null,
-        }))
-      );
-      if (error) {
-        console.error('❌ New clients:', error.message);
-        results.clientes_errores += newClients.length;
-        results.errores.push(`New clients: ${error.message}`);
-      } else {
-        results.clientes_actualizados += newClients.length;
-      }
-    }
-
-    // Update existing clients (protect internal fields)
-    const camposVentas = [
-      'cuit_dni', 'razon_social', 'fantasia', 'telefonos', 'emails',
-      'primera_compra', 'ultima_compra', 'dias_desde_ultima_compra',
-      'cantidad_ordenes', 'monto_total_historico', 'monto_total_cupra', 'share_cupra', 'fuente_monto', 'ticket_promedio',
-      'categoria_recencia', 'categoria_volumen', 'score_recencia', 'score_volumen', 'score_comercial',
-      'participacion_mercado', 'vendedor_principal', 'vendedor_actual', 'productos_comprados',
-      'todos_barrios', 'todas_ciudades', 'todas_direcciones', 'todos_vendedores',
-      'requiere_visita', 'canal', 'etiquetas',
-      'barrio_principal', 'ciudad_principal', 'provincia_principal', 'direccion_principal',
-    ];
-
-    // El maestro de clientes manda sobre el vendedor de cartera y las etiquetas:
-    // si ya hay valor cargado desde el maestro, las ventas no lo pisan.
-    const maestroPorCliente = new Map<string, { vendedor_actual: string | null; etiquetas: string[] | null }>();
-    {
-      const idsUpdate = updateClients.map((c: any) => String(c.client_id));
-      for (let i = 0; i < idsUpdate.length; i += 400) {
-        const batch = idsUpdate.slice(i, i + 400);
-        const { data } = await supabase
-          .from('clientes')
-          .select('client_id, vendedor_actual, etiquetas')
-          .in('client_id', batch);
-        for (const c of data || []) {
-          maestroPorCliente.set(c.client_id, {
-            vendedor_actual: c.vendedor_actual,
-            etiquetas: c.etiquetas as string[] | null,
-          });
-        }
-      }
-    }
-
-    for (const c of updateClients) {
-      const updateData: Record<string, any> = {};
-      for (const campo of camposVentas) {
-        updateData[campo] = (c as any)[campo];
-      }
-      const prev = maestroPorCliente.get(String(c.client_id));
-      // Regla de negocio: manda el ÚLTIMO que vendió. Sólo se conserva el
-      // vendedor del maestro cuando las ventas no permiten determinarlo.
-      if (!updateData.vendedor_actual && prev?.vendedor_actual) delete updateData.vendedor_actual;
-
-      // No borrar etiquetas/categorías del maestro con un array vacío
-      if (!updateData.etiquetas || updateData.etiquetas.length === 0) {
-        if (prev?.etiquetas && prev.etiquetas.length > 0) delete updateData.etiquetas;
-      }
-      const { error } = await supabase.from('clientes').update(updateData).eq('client_id', String(c.client_id));
-      if (error) {
-        results.clientes_errores++;
-        results.errores.push(`Update ${c.client_id}: ${error.message}`);
-      } else {
-        results.clientes_actualizados++;
-      }
-    }
-
-    // ============ FASE 4b: Coordenadas del ERP → client_places (R7 / OT7) ============
-    // Prioridad: corrección manual > coordenadas del ERP > geocoding por texto.
-    // No se marca primario acá: al final `reconciliar_places_primarios()` deja
-    // un único primario por cliente eligiendo la fuente más confiable.
-    let coordenadasGuardadas = 0;
-    if (coordsPorCliente.size > 0) {
-      const idsValidos = new Set(clientesEnriquecidos.map(c => String(c.client_id)));
-      const candidatos = Array.from(coordsPorCliente.entries())
-        .filter(([cid]) => idsValidos.has(String(cid)));
-
-      // Nunca pisar una corrección manual con el Excel
-      const verificadosSet = new Set<string>();
-      const idsCandidatos = candidatos.map(([cid]) => String(cid));
-      for (let i = 0; i < idsCandidatos.length; i += 200) {
-        const batch = idsCandidatos.slice(i, i + 200);
-        const { data: verificados } = await supabase
-          .from('client_places')
-          .select('client_id')
-          .in('client_id', batch)
-          .eq('direccion_verificada', true);
-        (verificados || []).forEach((v: any) => verificadosSet.add(String(v.client_id)));
-      }
-
-      const places = candidatos
-        .filter(([cid]) => !verificadosSet.has(String(cid)))
-        .map(([cid, p]) => ({
-          client_id: String(cid),
-          lat: p.lat,
-          long: p.long,
-          direccion_principal: p.direccion,
-          codigo_postal: p.codigo_postal,
-          provincia_principal: p.provincia,
-          fuente_geocoding: 'excel',
-          is_primary: false,
-        }));
-
-      for (let i = 0; i < places.length; i += 300) {
-        const batch = places.slice(i, i + 300);
-        const { error } = await supabase
-          .from('client_places')
-          .upsert(batch, { onConflict: 'client_id,lat,long', ignoreDuplicates: false });
-        if (error) {
-          console.error(`❌ client_places batch ${i}:`, error.message);
-          results.errores.push(`Coordenadas batch ${i}: ${error.message}`);
-        } else {
-          coordenadasGuardadas += batch.length;
-        }
-      }
-      console.log(`📍 Coordenadas del informe guardadas: ${coordenadasGuardadas}/${places.length}`);
-    }
-    (results as any).coordenadas_guardadas = coordenadasGuardadas;
-
-    {
-      const { error: reconError } = await supabase.rpc('reconciliar_places_primarios');
-      if (reconError) {
-        console.error('⚠️ No se pudo reconciliar ubicaciones primarias:', reconError.message);
-        results.errores.push(`Ubicaciones primarias: ${reconError.message}`);
-      }
-    }
-
-
-    console.log(`👥 Clientes procesados: ${results.clientes_actualizados} ok, ${results.clientes_errores} errores`);
-
-    if (results.clientes_errores > 0) {
-      throw new Error(
-        `La carga se detuvo porque ${results.clientes_errores} clientes no pudieron actualizarse. No se modificaron las ventas existentes.`
-      );
-    }
-
-    // ============ FASE 5: Insert/Upsert ventas (R8: reemplazo por rango) ============
-    // El archivo es la verdad SOLO para su propio rango de fechas.
-    // Nunca se borra el histórico completo desde acá: eso es una acción de admin (rebase_ventas_cupra).
-    const { data: previaRango } = await supabase.rpc('preview_ventas_import', {
-      p_rows: ventasDeduplicadas,
+    const places = [...coordsPorCliente.entries()].map(([cid, p]) => ({
+      client_id: cid, lat: p.lat, long: p.long, direccion_principal: p.direccion,
+      codigo_postal: p.codigo_postal, provincia_principal: p.provincia,
+    }));
+    const { data: previaRango, error: previewError } = await supabase.rpc('preview_ventas_import', { p_rows: ventasDeduplicadas });
+    if (previewError) throw new Error(previewError.message);
+    const { data: saved, error: saveError } = await supabase.rpc('guardar_importacion', {
+      p_batch_id: batchId, p_clientes: clientesEnriquecidos, p_places: places,
+      p_ventas: ventasDeduplicadas, p_reemplazar: replaceExisting, p_confirmar: confirmarEliminaciones,
     });
-
-    let rangoCarga: Record<string, any> | null = null;
-
-    if (modoCarga === 'rebase') {
-      const { data: rebased, error: rebaseError } = await supabase.rpc('rebase_ventas_cupra', {
-        p_rows: ventasDeduplicadas,
-        p_batch_id: batchId,
-        p_confirmacion: confirmacionRebase || '',
-      });
-      if (rebaseError) throw new Error(rebaseError.message);
-      rangoCarga = { ...(previaRango || {}), ...(rebased || {}), modo: 'rebase' };
-      results.ventas_procesadas = Number((rebased as any)?.filas_insertadas || 0);
-    } else {
-      const { data: committed, error: commitError } = await supabase.rpc('commit_ventas_import_rango', {
-        p_rows: ventasDeduplicadas,
-        p_batch_id: batchId,
-        p_confirmar_eliminaciones: confirmarEliminaciones,
-      });
-      if (commitError) {
-        const err: any = new Error(commitError.message);
-        err.previa = previaRango || null;
-        throw err;
-      }
-      rangoCarga = { ...(previaRango || {}), ...((committed as any) || {}), modo: 'rango' };
-      results.ventas_procesadas = Number((committed as any)?.total_procesadas || 0);
-    }
-
+    if (saveError) { const err: any = new Error(saveError.message); err.previa = previaRango; throw err; }
+    committedResponse = saved;
+    Object.assign(results, saved.results);
+    const coordenadasGuardadas = saved.results.coordenadas_actualizadas;
+    const rangoCarga = { ...(previaRango || {}), ...(saved.rango || {}), modo: replaceExisting ? 'rango' : 'agregar' };
 
     // ── TAREA 11: Consistencia clientes ↔ ventas_cupra (post-carga check) ──
     // Solo reportamos las discrepancias, no corregimos aquí
@@ -1226,51 +982,7 @@ Deno.serve(async (req) => {
     // ── TAREA 10, 12: Metadata y descartados ──
     // OT3: única fuente de verdad de cadencia, precio por caja y notas de crédito.
     // Se recalcula al final de CADA importación, no en un backfill manual.
-    let metricasRecalculadas = 0;
-    try {
-      const { data: recomputed, error: recomputeError } = await supabase.rpc('recompute_client_metrics');
-      if (recomputeError) {
-        console.error('⚠️ No se pudieron recalcular las métricas de clientes:', recomputeError.message);
-        results.errores.push(`No se pudieron recalcular métricas de clientes: ${recomputeError.message}`);
-      } else {
-        metricasRecalculadas = Number(recomputed) || 0;
-        console.log(`📐 Métricas recalculadas para ${metricasRecalculadas} clientes.`);
-      }
-    } catch (err) {
-      console.error('⚠️ Error recalculando métricas:', err);
-    }
-
-    // Rubro normalizado: clientes sin categorías en el maestro toman las de sus ventas.
-    {
-      const { error: rubroError } = await supabase.rpc('refrescar_rubros');
-      if (rubroError) console.error('⚠️ No se pudo recalcular el rubro:', rubroError.message);
-    }
-
-    // Regla permanente de calidad geográfica: después de cada carga, completar
-    // barrio por geocodificación inversa para las coordenadas recién importadas.
-    // La carga informa pendientes reales; tener GPS ya no equivale a estar listo.
-    try {
-      const geocodeResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/geocode-clients`, {
-        method: 'POST',
-        headers: {
-          Authorization: req.headers.get('Authorization') || '',
-          apikey: Deno.env.get('SUPABASE_ANON_KEY') || '',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ limit: 600 }),
-      });
-      const geocodeResult = await geocodeResponse.json();
-      if (!geocodeResponse.ok) {
-        throw new Error(geocodeResult?.error || `HTTP ${geocodeResponse.status}`);
-      }
-      (results as any).ubicaciones = {
-        barrios_resueltos: Number(geocodeResult?.reverse?.resueltos || 0),
-        pendientes_barrio: Number(geocodeResult?.pendientes_barrio || 0),
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      results.errores.push(`No se pudo completar el barrio desde las coordenadas: ${message}`);
-    }
+    const metricasRecalculadas = clientesEnriquecidos.length;
 
     const metadata = {
       fecha_carga: new Date().toISOString(),
@@ -1383,7 +1095,7 @@ Deno.serve(async (req) => {
     if (cleanupError) console.error('No se pudo limpiar staging:', cleanupError.message);
 
 
-    return new Response(JSON.stringify({
+    const responseBody = {
       success: true,
       batch_id: batchId,
       results,
@@ -1391,17 +1103,23 @@ Deno.serve(async (req) => {
       reconciliacion,
       metadata,
       integridad,
-    }), {
+    };
+    const { error: responseError } = await supabase.from('import_batches').update({ respuesta: responseBody }).eq('id', batchId);
+    if (responseError) console.error('No se pudo completar el resumen del lote:', responseError.message);
+    return new Response(JSON.stringify(responseBody), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200,
     });
   } catch (error) {
     console.error('💥 Error:', error);
     const message = error instanceof Error ? error.message : 'Error desconocido';
+    if (committedResponse) return new Response(JSON.stringify({ ...committedResponse, aviso: 'Los datos se guardaron. No se pudo completar el resumen; no vuelvas a cargar el archivo.' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200,
+    });
     if (supabase && batchId) {
       const { error: auditError } = await supabase
         .from('import_batches')
         .update({ estado: 'fallido', error_message: message, completed_at: new Date().toISOString() })
-        .eq('id', batchId);
+        .eq('id', batchId).is('aplicado_at', null);
       if (auditError) console.error('No se pudo registrar el fallo del lote:', auditError.message);
     }
     const previa = (error as any)?.previa ?? null;

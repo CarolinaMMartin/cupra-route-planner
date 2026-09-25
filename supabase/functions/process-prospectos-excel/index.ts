@@ -1,256 +1,85 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { googleMapsFetch, hayGoogleMaps } from "../_shared/google-maps.ts";
+import { authorize, corsHeaders, failure, json, RequestError } from "../_shared/location-service.ts";
+import { allClients, beginImport } from "../_shared/import-batch.ts";
+import { argentinaCoordinates, coordinateNumber } from "../_shared/import-values.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
-
-
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-const norm = (s: unknown) =>
-  String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
-
-const clean = (v: unknown) => {
-  const s = String(v ?? "").trim();
-  return s === "" || s.toLowerCase() === "null" || s.toLowerCase() === "nan" ? null : s;
-};
-
-const titleCase = (s: string) =>
-  s.toLowerCase().replace(/\b([a-záéíóúñ])/g, (m) => m.toUpperCase());
-
-function pick(row: Record<string, unknown>, candidates: string[]): string | null {
-  const wanted = candidates.map(norm);
-  for (const key of Object.keys(row)) {
-    if (wanted.includes(norm(key))) {
-      const v = clean(row[key]);
-      if (v) return v;
-    }
+const norm = (s: unknown) => String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+const pick = (row: Record<string, unknown>, ...names: string[]) => {
+  for (const name of names) {
+    const key = Object.keys(row).find(k => norm(k) === norm(name));
+    const value = key ? row[key] : null;
+    if (value !== null && value !== undefined && String(value).trim()) return String(value).trim();
   }
   return null;
-}
-
-function normalizarCuit(raw: string | null): string | null {
-  if (!raw) return null;
-  let s = raw.trim();
-  if (/e\+/i.test(s)) {
-    const n = Number(s);
-    if (Number.isFinite(n)) s = n.toFixed(0);
-  }
-  const digits = s.replace(/\D/g, "");
-  return digits.length >= 8 ? digits : null;
-}
-
-function normalizarTelefono(raw: string | null): string | null {
-  if (!raw) return null;
-  const digits = String(raw).replace(/\D/g, "");
-  return digits.length >= 8 ? digits : null;
-}
-
-// Extrae CP y localidad de textos tipo "Av. Yrigoyen 9287, CP1832 L. de Zamora"
-function partirDireccion(dir: string) {
-  const cpMatch = dir.match(/CP\s*([0-9]{4})/i) || dir.match(/\b([0-9]{4})\b(?=\s+[A-Za-zÁ-ú])/);
-  const cp = cpMatch ? cpMatch[1] : null;
-  return { cp };
-}
-
-async function geocode(direccion: string, ciudad: string, cp: string | null) {
-  if (!hayGoogleMaps()) return null;
-  const address = [direccion, cp, ciudad, "Buenos Aires", "Argentina"].filter(Boolean).join(", ");
-  const params = new URLSearchParams({ address, language: "es", region: "ar" });
-  try {
-    const resp = await googleMapsFetch(`/maps/api/geocode/json?${params.toString()}`);
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const r = data?.results?.[0];
-    if (!r) return null;
-    const comp = (t: string) =>
-      (r.address_components || []).find((c: any) => c.types?.includes(t))?.long_name || null;
-    return {
-      lat: r.geometry?.location?.lat as number,
-      lng: r.geometry?.location?.lng as number,
-      formatted: r.formatted_address as string,
-      barrio: comp("sublocality") || comp("neighborhood"),
-      ciudad: comp("locality") || comp("administrative_area_level_2"),
-      provincia: comp("administrative_area_level_1"),
-      place_id: r.place_id as string | undefined,
-    };
-  } catch (_e) {
-    return null;
-  }
-}
-
-Deno.serve(async (req) => {
+};
+Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  if (req.method !== "POST") return json({ success: false, error: "Método no permitido" }, 405);
-
+  if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
+  let batchId: string | undefined;
+  let db: Awaited<ReturnType<typeof authorize>>["db"] | undefined;
   try {
-    const authHeader = req.headers.get("Authorization") || "";
-    const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
+    const auth = await authorize(req, true); db = auth.db;
+    const body = await req.json();
+    const { rows, fileMetadata = {} } = body;
+    if (!Array.isArray(rows) || !rows.length || rows.length > 5000) throw new RequestError("Cargá entre 1 y 5.000 filas de prospectos", 400, "BAD_REQUEST");
+    const started = await beginImport(db, body.requestId, {
+      tipo: "prospectos", version_etl: "prospectos-v2.0", archivo_nombre: fileMetadata.name || "prospectos.xlsx",
+      archivo_sha256: fileMetadata.sha256 || null, hoja: fileMetadata.sheetName || null, filas_origen: rows.length,
+      usuario_id: auth.user.id, usuario_email: auth.user.email || null,
     });
-    const { data: userData } = await anon.auth.getUser();
-    if (!userData?.user) return json({ success: false, error: "No autorizado" }, 401);
-
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { data: profile, error: profileError } = await admin.from("profiles")
-      .select("rol").eq("user_id", userData.user.id).eq("activo", true).single();
-    if (profileError || (profile?.rol !== "asignador" && profile?.rol !== "administrador")) {
-      return json({ success: false, error: "Solo un asignador o administrador activo puede importar prospectos" }, 403);
+    if (started.response) return json(started.response);
+    batchId = started.id;
+    const clients = await allClients(db);
+    const cuits = new Map<string, string[]>();
+    for (const c of clients) {
+      const key = String(c.cuit_dni || "").replace(/\D/g, "");
+      if (key) cuits.set(key, [...(cuits.get(key) || []), c.client_id]);
     }
-
-    const { rows, geocodificar = true } = await req.json();
-    if (!Array.isArray(rows) || rows.length === 0) return json({ success: false, error: "Sin filas" }, 400);
-    if (rows.length > 5000) return json({ success: false, error: "Máximo 5.000 filas por carga" }, 400);
-
-    // CUITs de clientes existentes para marcar es_cliente_cupra
-    const { data: clientesExistentes } = await admin.from("clientes").select("client_id, cuit_dni").limit(5000);
-    const cuitToClient = new Map<string, string>();
-    for (const c of clientesExistentes || []) {
-      const k = normalizarCuit(c.cuit_dni as string | null);
-      if (k) cuitToClient.set(k, c.client_id as string);
-    }
-
-    const registros: any[] = [];
-    const errores: string[] = [];
-    let zonaActual: string | null = null;
-    let geocodificados = 0;
-    let sinCoordenadas = 0;
-    let yaClientes = 0;
-
+    const records = new Map<string, Record<string, unknown>>();
+    const errors: string[] = [];
+    let zone: string | null = null;
+    let duplicate = 0;
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i] as Record<string, unknown>;
-      const zona = pick(row, ["ZONA", "Zona", "Localidad", "Área", "Area"]);
-      if (zona) zonaActual = zona;
-
-      const nombre = pick(row, ["CLIENTE", "Nombre", "Nombre Fantasía", "FANTASIA", "Fantasía", "Comercio"]);
-      const direccionRaw = pick(row, ["DIR. ENTREGA", "Dirección", "DIRECCION", "Domicilio", "Dir Entrega", "Dirección de entrega"]);
-
-      if (!nombre || !direccionRaw) {
-        errores.push(`Fila ${i + 2}: falta nombre o dirección`);
-        continue;
-      }
-
-      const cuit = normalizarCuit(pick(row, ["CUIT", "CUIT / DNI", "Cuit"]));
-      const razonSocial = pick(row, ["RAZON SOCIAL", "Razón Social"]);
-      const canal = pick(row, ["CANAL", "Canal", "Tipo", "Rubro"]);
-      const contacto = pick(row, ["CONTACTO", "Contacto", "Referente"]);
-      const horarios = pick(row, ["DIAS/HORARIOS", "Días/Horarios", "Horarios"]);
-      const mail = pick(row, ["MAIL", "Mail", "Email", "Correo"]);
-
-      // Teléfono: columna explícita o cualquier columna sin nombre con formato telefónico
-      let telefono = normalizarTelefono(pick(row, ["TELEFONO", "Teléfono", "Celular", "Tel", "Cel", "Movil", "Móvil", "Whatsapp", "WhatsApp"]));
-      if (!telefono) {
-        // SheetJS nombra las columnas sin encabezado "__EMPTY", "__EMPTY_1"…; pandas usa "Unnamed: 8"
-        for (const [k, v] of Object.entries(row)) {
-          if (/^(unnamed|__empty)/i.test(k) || norm(k) === "") {
-            const t = normalizarTelefono(clean(v));
-            if (t) { telefono = t; break; }
-          }
-        }
-      }
-      if (!telefono) {
-        // Último recurso: cualquier celda que parezca un teléfono argentino
-        for (const [k, v] of Object.entries(row)) {
-          if (["cuit", "cuitdni", "razonsocial", "mail", "email", "correo"].includes(norm(k))) continue;
-          const raw = clean(v);
-          if (!raw) continue;
-          const digits = String(raw).replace(/\D/g, "");
-          if (/^[\d\s()+-]+$/.test(String(raw)) && digits.length >= 8 && digits.length <= 13) {
-            telefono = digits;
-            break;
-          }
-        }
-      }
-
-      const { cp } = partirDireccion(direccionRaw);
-      const ciudadBase = zonaActual ? titleCase(zonaActual) : "Buenos Aires";
-
-      let lat = 0, lng = 0;
-      let barrio: string | null = null;
-      let ciudad = ciudadBase;
-      let provincia = "Provincia de Buenos Aires";
-      let placeIdGoogle: string | undefined;
-
-      if (geocodificar) {
-        const geo = await geocode(direccionRaw, ciudadBase, cp);
-        if (geo && Number.isFinite(geo.lat)) {
-          lat = geo.lat; lng = geo.lng;
-          barrio = geo.barrio;
-          ciudad = geo.ciudad || ciudadBase;
-          provincia = geo.provincia || provincia;
-          placeIdGoogle = geo.place_id;
-          geocodificados++;
-        } else {
-          sinCoordenadas++;
-        }
-      } else {
-        sinCoordenadas++;
-      }
-
-      const clientIdMatch = cuit ? cuitToClient.get(cuit) || null : null;
-      if (clientIdMatch) yaClientes++;
-
-      const placeId = placeIdGoogle || `excel-${cuit || norm(nombre + direccionRaw)}`;
-
-      const resumen = [
-        razonSocial ? `Razón social: ${razonSocial}` : null,
-        cuit ? `CUIT: ${cuit}` : null,
-        contacto ? `Contacto: ${contacto}` : null,
-        horarios ? `Horarios: ${horarios}` : null,
-      ].filter(Boolean).join(" · ") || null;
-
-      registros.push({
-        place_id: placeId,
-        nombre: titleCase(nombre),
-        direccion: direccionRaw,
-        barrio,
-        ciudad,
-        provincia,
-        latitud: lat,
-        longitud: lng,
-        telefono,
-        email: mail,
-        tipo_principal: canal ? canal.toLowerCase() : null,
-        tipos: canal ? [canal.toLowerCase()] : [],
-        sirve_vinos: true,
-        estado_negocio: "OPERATIONAL",
-        resumen_google: resumen,
-        es_cliente_cupra: !!clientIdMatch,
-        client_id: clientIdMatch,
-        updated_at: new Date().toISOString(),
+      const row = rows[i];
+      const rowNumber = row.__fila_excel || (fileMetadata.headerRow || 1) + i + 1;
+      const rowZone = pick(row, "Zona", "Área", "Localidad");
+      if (rowZone) zone = rowZone;
+      const nombre = pick(row, "CLIENTE", "Nombre", "Nombre Fantasía", "Fantasía", "Comercio");
+      const direccion = pick(row, "DIR. ENTREGA", "Dirección", "Domicilio", "Dir Entrega", "Dirección de entrega");
+      if (!nombre && !direccion && rowZone) continue;
+      if (!nombre || !direccion) { errors.push(`Fila ${rowNumber}: falta comercio o dirección`); continue; }
+      const lat = coordinateNumber(pick(row, "Latitud", "Lat"));
+      const lng = coordinateNumber(pick(row, "Longitud", "Lng", "Long"));
+      if ((lat !== null || lng !== null) && !(lat === 0 && lng === 0) && !argentinaCoordinates(lat, lng)) { errors.push(`Fila ${rowNumber}: coordenadas inválidas`); continue; }
+      const ciudad = pick(row, "Ciudad", "Localidad") || zone || "";
+      const provincia = pick(row, "Provincia") || "";
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode([nombre, direccion, ciudad, provincia].map(norm).join("|")));
+      const key = [...new Uint8Array(digest)].map(x => x.toString(16).padStart(2, "0")).join("");
+      if (records.has(key)) { duplicate++; continue; }
+      const cuitRaw = pick(row, "CUIT", "CUIT / DNI", "CUIT/DNI");
+      const cuit = cuitRaw && /e[+-]/i.test(cuitRaw) && Number.isSafeInteger(Number(cuitRaw)) ? String(Number(cuitRaw)) : cuitRaw?.replace(/\D/g, "");
+      const matches = cuit ? cuits.get(cuit) || [] : [];
+      records.set(key, {
+        place_id: `excel-${key}`, import_key: key, nombre, direccion, ciudad, provincia,
+        barrio: pick(row, "Barrio"), latitud: lat ?? 0, longitud: lng ?? 0,
+        client_id: matches.length === 1 ? matches[0] : null,
+        telefono: pick(row, "Teléfono", "Teléfono 1", "Celular", "Whatsapp", "TEL", "Contacto"),
+        email: pick(row, "Email", "E-mail", "Correo", "Mail"), instagram: pick(row, "Instagram", "IG"),
+        rubro: pick(row, "Rubro", "Canal", "Tipo", "Categoría"), tipo_principal: pick(row, "Rubro", "Canal", "Tipo", "Categoría"),
       });
     }
-
-    // Deduplicar por place_id dentro del mismo archivo
-    const porPlace = new Map<string, any>();
-    for (const r of registros) porPlace.set(r.place_id, r);
-    const finales = [...porPlace.values()];
-
-    let insertados = 0;
-    for (let i = 0; i < finales.length; i += 100) {
-      const batch = finales.slice(i, i + 100);
-      const { error } = await admin.from("prospectos").upsert(batch, { onConflict: "place_id" });
-      if (error) errores.push(`Lote ${i / 100 + 1}: ${error.message}`);
-      else insertados += batch.length;
-    }
-
-    return json({
-      success: true,
-      results: {
-        filas_recibidas: rows.length,
-        prospectos_cargados: insertados,
-        duplicados_en_archivo: registros.length - finales.length,
-        geocodificados,
-        sin_coordenadas: sinCoordenadas,
-        ya_son_clientes: yaClientes,
-        errores: errores.slice(0, 50),
-      },
+    if (errors.length) throw new RequestError(`${errors.length} filas inválidas. No se importó ninguna. ${errors.slice(0, 8).join("; ")}`, 422, "INVALID_ROWS");
+    if (!records.size) throw new RequestError("No se encontraron comercios para importar", 422, "EMPTY_IMPORT");
+    const payload = [...records.values()];
+    const { data, error } = await db.rpc("guardar_prospectos_import", {
+      p_batch_id: batchId, p_rows: payload,
+      p_resultados: { filas_recibidas: rows.length, duplicados_en_archivo: duplicate,
+        sin_coordenadas: payload.filter(p => !p.latitud || !p.longitud).length,
+        ya_son_clientes: payload.filter(p => p.client_id).length, errores: [] },
     });
-  } catch (e) {
-    console.error("[process-prospectos-excel]", e);
-    return json({ success: false, error: e instanceof Error ? e.message : "Error desconocido" }, 500);
+    if (error) throw new Error(error.message);
+    return json(data);
+  } catch (error) {
+    if (db && batchId) await db.from("import_batches").update({ estado: "fallido", error_message: error instanceof Error ? error.message : "Error de importación", completed_at: new Date().toISOString() }).eq("id", batchId).is("aplicado_at", null);
+    return failure(error);
   }
 });

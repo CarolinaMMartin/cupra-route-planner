@@ -12,8 +12,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test:motor": "deno test --allow-env=GOOGLE_MAPS_API_KEY,VITE_GOOGLE_MAPS_API_KEY,LOVABLE_API_KEY supabase/functions/generate-recommendations",
     "test:db": "node --test tests/asignaciones-db.test.mjs",
-    "test": "npm run test:motor && npm run test:db",
-    "check": "npm run typecheck && npm test && npm run build"
+    "test": "npm run test:motor && npm run test:db && npm run test:imports",
+    "check": "npm run typecheck && npm test && npm run build",
+    "test:imports": "node --test tests/importacion.test.mjs tests/importacion-db.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

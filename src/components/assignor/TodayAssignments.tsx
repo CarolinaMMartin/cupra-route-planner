@@ -120,7 +120,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
         .select(`
           id, created_at, es_prospecto, client_id, prospecto_place_id,
           vendedor:profiles!asignaciones_vendedores_clientes_vendedor_id_fkey(nombre, email),
-          cliente:clientes!asignaciones_vendedores_clientes_client_id_fkey(razon_social, cuit_dni)
+          cliente:clientes!asignaciones_vendedores_clientes_client_id_fkey(razon_social, cuit_dni, rubro)
         `)
         .neq("estado", "Visitado")
         .gte("created_at", startOfDayArg.toISOString())
@@ -136,7 +136,7 @@ const TodayAssignments = ({ onEditAssignments }: TodayAssignmentsProps) => {
       if (prospectoPlaceIds.length > 0) {
         const { data: prospectosData, error: prospectosError } = await supabase
           .from("prospectos")
-          .select("place_id, nombre, telefono, direccion, barrio, latitud, longitud")
+          .select("place_id, nombre, telefono, direccion, barrio, latitud, longitud, rubro")
           .in("place_id", prospectoPlaceIds);
 
         if (!prospectosError && prospectosData) {

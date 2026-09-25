@@ -35,3 +35,15 @@ verify_jwt = false
 
 [functions.analyze-sales]
 verify_jwt = false
+
+[functions.process-clientes-maestro]
+verify_jwt = false
+
+[functions.process-prospectos-excel]
+verify_jwt = false
+
+[functions.geocode-address]
+verify_jwt = false
+
+[functions.resolve-client-location]
+verify_jwt = false
