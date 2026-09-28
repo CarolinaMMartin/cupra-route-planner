@@ -889,6 +889,39 @@ export type Database = {
           },
         ]
       }
+      mapa_zonas_prospectos: {
+        Row: {
+          barrio: string
+          comuna: string
+          created_at: string
+          google_place_id: string | null
+          lat: number
+          lng: number
+          provincia: string
+          zona_key: string
+        }
+        Insert: {
+          barrio: string
+          comuna: string
+          created_at?: string
+          google_place_id?: string | null
+          lat: number
+          lng: number
+          provincia: string
+          zona_key: string
+        }
+        Update: {
+          barrio?: string
+          comuna?: string
+          created_at?: string
+          google_place_id?: string | null
+          lat?: number
+          lng?: number
+          provincia?: string
+          zona_key?: string
+        }
+        Relationships: []
+      }
       notificaciones: {
         Row: {
           asignacion_id: string | null
@@ -1741,6 +1774,7 @@ export type Database = {
         Returns: Json
       }
       canonical_vendedor: { Args: { _nombre: string }; Returns: string }
+      clave_territorio_mapa: { Args: { valor: string }; Returns: string }
       clean_old_recommendations: { Args: never; Returns: undefined }
       cleanup_expired_import_staging: { Args: never; Returns: number }
       commit_ventas_import_rango: {
