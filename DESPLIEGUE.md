@@ -108,3 +108,14 @@ publicar los handlers anteriores que borraban esas visitas.
 4. Verificar respuesta 401 sin sesión en los endpoints de escritura y ejecución restringida de los RPC internos.
 
 Pruebas y alcance: `REVISION_MAPA_EXCEL.md`. Una consulta de solo lectura a la conexión Google Maps de Lovable devolvió HTTP 200, `OK`, país Argentina y precisión `ROOFTOP` para Av. Santa Fe 1860, CABA. Esto comprueba la conexión de geocodificación; no sustituye una prueba de importación con un Excel comercial real.
+
+## Asignación desde el mapa — 28/09/2026
+
+1. Aplicar y registrar `20260928140000_ruta_mapa.sql` antes de publicar la interfaz.
+2. Desplegar `complete-map-route` y `generate-recommendations`, incluyendo los módulos compartidos. `complete-map-route` verifica sesión y rol activo en su código.
+3. Publicar `main`. Elegir vendedor debe mostrar automáticamente su cartera y ofrecer barrios/localidades presentes en ella.
+4. Verificar selección de clientes → completar prospectos → confirmación de ocho. El centro corresponde sólo a los clientes. El RPC vuelve a comprobar el límite de 1,5 km con los datos vigentes.
+
+5. Verificar que el borrador vuelve al navegar o recargar, separado por usuario y vendedor; la asignación sólo se confirma al pulsar el botón correspondiente. Los borradores no requieren migración adicional de base.
+
+Detalle y pruebas: `REVISION_MAPA_ASIGNACION.md`.

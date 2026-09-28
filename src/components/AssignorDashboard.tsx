@@ -30,6 +30,7 @@ import RecommendationProgress from "./assignor/RecommendationProgress";
 import { Sucursal } from "@/types/sales";
 import { supabase } from "@/integrations/supabase/client";
 import { useRecommendationsStore } from "@/hooks/useRecommendationsStore";
+import { useDraftState, useAssignmentDraftStore } from "@/hooks/useAssignmentDraft";
 
 type FlowStep = "recommendations" | "preselection" | "assignment" | "edit-select" | "edit-kanban";
 
@@ -45,20 +46,23 @@ const AssignorDashboard = () => {
     vendedoresData, setVendedoresData,
     instruccionesAdicionales, setInstruccionesAdicionales,
     resetToInitial,
+    setCurrentRequestId,
   } = useRecommendationsStore();
+  const draftStore = useAssignmentDraftStore();
 
-  const [viewMode, setViewMode] = useState<"list" | "map">("list");
-  const [selectedCiudad, setSelectedCiudad] = useState<string>("all");
-  const [selectedProvincia, setSelectedProvincia] = useState<string>("all");
-  const [selectedVendedor, setSelectedVendedor] = useState<string>("all");
-  const [selectedVendedoresIds, setSelectedVendedoresIds] = useState<string[]>([]);
-  const [selectedPlacesComuna, setSelectedPlacesComuna] = useState<string[]>([]);
-  const [selectedPlacesBarrio, setSelectedPlacesBarrio] = useState<string[]>([]);
-  const [selectedPlacesProvincia, setSelectedPlacesProvincia] = useState<string>("all");
+  const [viewMode, setViewMode] = useDraftState<"list" | "map">("panel", "viewMode", "list");
+  const [selectedCiudad, setSelectedCiudad] = useDraftState<string>("panel", "selectedCiudad", "all");
+  const [selectedProvincia, setSelectedProvincia] = useDraftState<string>("panel", "selectedProvincia", "all");
+  const [selectedVendedor, setSelectedVendedor] = useDraftState<string>("panel", "selectedVendedor", "all");
+  const [selectedVendedoresIds, setSelectedVendedoresIds] = useDraftState<string[]>("panel", "selectedVendedoresIds", []);
+  const [selectedPlacesComuna, setSelectedPlacesComuna] = useDraftState<string[]>("panel", "selectedPlacesComuna", []);
+  const [selectedPlacesBarrio, setSelectedPlacesBarrio] = useDraftState<string[]>("panel", "selectedPlacesBarrio", []);
+  const [selectedPlacesProvincia, setSelectedPlacesProvincia] = useDraftState<string>("panel", "selectedPlacesProvincia", "all");
   const [placesData, setPlacesData] = useState<
     Array<{ comuna: string | null; barrio_principal: string | null; provincia_principal: string | null }>
   >([]);
-  const [activeTab, setActiveTab] = useState<string>("nueva");
+  const [activeTab, setActiveTab] = useDraftState<string>("panel", "activeTab", "nueva");
+  const [resumeFlowStep, setResumeFlowStep] = useDraftState<FlowStep | null>("panel", "resumeFlowStep", null);
   const { toast } = useToast();
 
   const getPlaceIdFromUrl = (url: string | null | undefined) => {
@@ -114,7 +118,7 @@ const AssignorDashboard = () => {
   }, []);
 
 
-  const [selectedExistingAssignments, setSelectedExistingAssignments] = useState<any[]>([]);
+  const [selectedExistingAssignments, setSelectedExistingAssignments] = useDraftState<any[]>("panel", "selectedExistingAssignments", []);
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [isSavingAssignments, setIsSavingAssignments] = useState(false);
@@ -154,6 +158,7 @@ const AssignorDashboard = () => {
   }, [isLoading]);
 
   const handleCancelRecommendations = () => {
+    setCurrentRequestId(null);
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
@@ -167,6 +172,9 @@ const AssignorDashboard = () => {
     selectedVendedoresData: { ids: string[]; nombres: string[] },
     placesFilters: any,
   ) => {
+    const requestId = crypto.randomUUID();
+    setCurrentRequestId(requestId);
+    setResumeFlowStep(null);
     setIsLoading(true);
     setFalloGeneracion(null);
     setSelectedVendedoresIds(selectedVendedoresData.ids);
@@ -283,12 +291,14 @@ const AssignorDashboard = () => {
       setGenerationProgress(100);
       await new Promise((resolve) => window.setTimeout(resolve, 350));
 
+      if (draftStore.get<{ currentRequestId: string | null } | null>("recomendaciones", "state", null)?.currentRequestId !== requestId) return;
       setRecommendations(mappedRecommendations);
       setAiInsights(data.resumen);
       setFlowStep("preselection");
       setSelectedSucursales([]);
       toast({ title: "Recomendaciones generadas", description: data.resumen?.descripcion || `${mappedRecommendations.length} recomendaciones listas` });
     } catch (error: any) {
+      if (draftStore.get<{ currentRequestId: string | null } | null>("recomendaciones", "state", null)?.currentRequestId !== requestId) return;
       if (error.name === 'AbortError') return;
       let errorMessage = "Error al solicitar recomendaciones";
       if (error.message?.includes("429")) errorMessage = "Límite de consultas alcanzado. Reintenta en unos minutos.";
@@ -302,7 +312,7 @@ const AssignorDashboard = () => {
       setFalloGeneracion(errorMessage);
       toast({ variant: "destructive", title: "No se completaron las rutas", description: errorMessage });
     } finally {
-      setIsLoading(false);
+      if (draftStore.get<{ currentRequestId: string | null } | null>("recomendaciones", "state", null)?.currentRequestId === requestId) setIsLoading(false);
     }
   };
 
@@ -400,19 +410,30 @@ const AssignorDashboard = () => {
     }
   };
   const handleBackToPreselection = () => setFlowStep("preselection");
-  const handleBackToRecommendations = () => { setShowExitDialog(false); resetToInitial(); setSelectedCiudad("all"); setSelectedProvincia("all"); setSelectedVendedor("all"); setSelectedVendedoresIds([]); };
+  const handleBackToRecommendations = () => { setShowExitDialog(false); resetToInitial(); setResumeFlowStep(null); setSelectedCiudad("all"); setSelectedProvincia("all"); setSelectedVendedor("all"); setSelectedVendedoresIds([]); };
+  const handleDiscardDraft = () => {
+    const step = resumeFlowStep || flowStep;
+    if (step === "edit-select" || step === "edit-kanban") {
+      draftStore.clear("editar:" + selectedExistingAssignments.map(p => p.id).sort().join("|"));
+      draftStore.clear("selector-asignaciones"); setSelectedExistingAssignments([]);
+    } else {
+      draftStore.clear("tabla:" + recommendations.filter(r => selectedSucursales.includes(r.id)).map(r => r.id).sort().join("|"));
+    }
+    handleBackToRecommendations();
+  };
   // Guardar y salir: conserva las recomendaciones y la selección (persistidas) para retomarlas luego.
   const handleSaveAndExit = () => {
     setShowExitDialog(false);
+    setResumeFlowStep(flowStep);
     setFlowStep("recommendations");
-    toast({ title: "Búsqueda guardada", description: "Podés retomarla desde 'Nueva Asignación'." });
+    toast({ title: "Borrador guardado", description: "Podés retomarlo desde el panel de asignación." });
   };
   const handleAssignmentComplete = () => handleBackToRecommendations();
 
-  const handleEditAssignments = () => setFlowStep("edit-select");
+  const handleEditAssignments = () => { setResumeFlowStep(null); setFlowStep("edit-select"); };
   const handleContinueToEditKanban = (assignments: any[]) => { setSelectedExistingAssignments(assignments); setFlowStep("edit-kanban"); };
   const handleBackFromEditKanban = () => setFlowStep("edit-select");
-  const handleEditComplete = () => { setFlowStep("recommendations"); setSelectedExistingAssignments([]); toast({ title: "Modificaciones guardadas", description: "Las asignaciones se actualizaron correctamente" }); };
+  const handleEditComplete = () => { setFlowStep("recommendations"); setResumeFlowStep(null); setSelectedExistingAssignments([]); draftStore.clear("selector-asignaciones"); toast({ title: "Modificaciones guardadas", description: "Las asignaciones se actualizaron correctamente" }); };
 
   const filteredRecommendations = useMemo(() => {
     return recommendations.filter((rec: any) => {
@@ -462,7 +483,7 @@ const AssignorDashboard = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <Button variant="outline" onClick={handleBackToRecommendations}>Descartar</Button>
+            <Button variant="outline" onClick={handleDiscardDraft}>Descartar</Button>
             <AlertDialogAction onClick={handleSaveAndExit}>Guardar y salir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -519,14 +540,16 @@ const AssignorDashboard = () => {
             <p className="text-sm text-muted-foreground mt-2">Recomendaciones inteligentes y gestión de asignaciones</p>
           </div>
 
-          {recommendations.length > 0 && (
+          {(recommendations.length > 0 || resumeFlowStep) && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
               <p className="text-sm text-foreground/80">
-                Tenés una búsqueda guardada con {recommendations.length} recomendaciones{selectedSucursales.length > 0 ? ` (${selectedSucursales.length} seleccionadas)` : ""}.
+                {resumeFlowStep === "edit-select" || resumeFlowStep === "edit-kanban"
+                  ? "Tenés una modificación de asignaciones guardada para retomar."
+                  : `Tenés una búsqueda guardada con ${recommendations.length} recomendaciones${selectedSucursales.length > 0 ? ` (${selectedSucursales.length} seleccionadas)` : ""}.`}
               </p>
               <div className="flex items-center gap-2">
-                <Button size="sm" onClick={() => setFlowStep("preselection")}>Retomar</Button>
-                <Button size="sm" variant="ghost" onClick={handleBackToRecommendations}>Descartar</Button>
+                <Button size="sm" onClick={() => { setFlowStep(resumeFlowStep || "preselection"); setResumeFlowStep(null); }}>Retomar</Button>
+                <Button size="sm" variant="ghost" onClick={handleDiscardDraft}>Descartar</Button>
               </div>
             </div>
           )}
@@ -591,7 +614,7 @@ const AssignorDashboard = () => {
             <CardDescription>Selecciona las asignaciones que deseas modificar</CardDescription>
           </CardHeader>
           <CardContent>
-            <AssignmentsSelector onContinue={handleContinueToEditKanban} onBack={handleBackToRecommendations} />
+            <AssignmentsSelector onContinue={handleContinueToEditKanban} onBack={handleSaveAndExit} />
           </CardContent>
         </Card>
       )}

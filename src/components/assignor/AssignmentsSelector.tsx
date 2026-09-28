@@ -1,3 +1,4 @@
+import { useDraftState } from "@/hooks/useAssignmentDraft";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,10 +54,10 @@ interface AssignmentsSelectorProps {
 
 const AssignmentsSelector = ({ onContinue, onBack }: AssignmentsSelectorProps) => {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useDraftState<string[]>("selector-asignaciones", "selectedIds", []);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterVendedor, setFilterVendedor] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useDraftState("selector-asignaciones", "searchTerm", "");
+  const [filterVendedor, setFilterVendedor] = useDraftState<string>("selector-asignaciones", "filterVendedor", "all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [assignmentToDelete, setAssignmentToDelete] = useState<Assignment | null>(null);
   const { toast } = useToast();

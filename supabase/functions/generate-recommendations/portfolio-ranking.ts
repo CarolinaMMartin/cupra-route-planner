@@ -255,6 +255,9 @@ export function esProspectoComercialmenteValido(p: {
   if (Number.isFinite(rating) && rating > 0 && rating < MIN_RATING_PROSPECTO) return false;
 
   const tipos = [p.tipo_principal || "", ...(p.tipos || [])].map((t) => String(t).toLowerCase());
+  // Hoteles bien valorados también son canal gastronómico. "Lodging" a secas
+  // no alcanza para distinguir un hotel de un alojamiento sin perfil comercial.
+  if (tipos.includes("hotel") || tipos.some(t => t.endsWith("_hotel"))) return rating >= 4;
   if (tipos.some((t) => TIPOS_PREFERIDOS.includes(t))) return true;
   if (tipos.some((t) => TIPOS_INCOHERENTES.has(t))) return false;
   return true;

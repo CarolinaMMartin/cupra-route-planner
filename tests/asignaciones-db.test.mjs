@@ -21,7 +21,9 @@ before(async () => {
     CREATE TYPE estado_asignacion AS ENUM ('Asignado', 'Por visitar', 'Visitado');
     CREATE TABLE profiles (user_id uuid PRIMARY KEY, nombre text, rol text, activo boolean, perfil_ventas boolean);
     CREATE TABLE clientes (client_id text PRIMARY KEY, razon_social text, vendedor_actual text,
-      vendedor_principal text, etiquetas text[], last_recommendation_at timestamptz);
+      vendedor_principal text, etiquetas text[], last_recommendation_at timestamptz, excluir_recomendaciones boolean DEFAULT false);
+    CREATE TABLE client_places (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),client_id text REFERENCES clientes(client_id),
+      lat numeric,long numeric,is_primary boolean DEFAULT true,direccion_verificada boolean DEFAULT false);
     CREATE TABLE prospectos (place_id text PRIMARY KEY, client_id text, es_cliente_cupra boolean DEFAULT false,
       estado_negocio text, tipo_principal text, tipos text[], latitud float, longitud float, last_recommendation_at timestamptz);
     CREATE TABLE ventas_cupra (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, client_id text, categorias text,
@@ -43,7 +45,7 @@ before(async () => {
     CREATE TABLE asignaciones_manuales_audit (
       usuario_id uuid, vendedor_anterior text, vendedor_nuevo_id uuid, vendedor_nuevo_nombre text, client_id text, razon_social text);
   `);
-  for (const migration of ["20260923120000_rubro_normalizado.sql", "20260923130000_asignaciones_atomicas.sql", "20260925120000_analisis_ventas.sql"]) {
+  for (const migration of ["20260923120000_rubro_normalizado.sql", "20260923130000_asignaciones_atomicas.sql", "20260925120000_analisis_ventas.sql", "20260928140000_ruta_mapa.sql"]) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${migration}`, import.meta.url), "utf8"));
   }
 });
@@ -175,4 +177,56 @@ test("análisis rechaza usuarios sin permiso y filtros inválidos", async () => 
   await assert.rejects(resumen({client_ids:12}));
   await db.query("update profiles set activo=false where user_id=$1",[admin]);
   await assert.rejects(resumen({}),/administrador activo/);
+});
+
+const guardarMapa = (clients=['c1','c2'], prospects=['p1','p2','p3','p4','p5','p6']) => db.query('select guardar_ruta_mapa($1,$2,$3) as total',[vendedor,clients,prospects]);
+async function prepararMapa(){
+  await db.exec(`INSERT INTO client_places(client_id,lat,long) VALUES ('c1',-34.60,-58.401),('c2',-34.60,-58.399);
+    UPDATE prospectos SET latitud=-34.60,longitud=-58.40 WHERE place_id='p1';
+    INSERT INTO prospectos(place_id,latitud,longitud) SELECT 'p'||n,-34.60,-58.40 FROM generate_series(2,6) n;`);
+}
+test('mapa guarda ocho visitas y un reintento no duplica las asignaciones',async()=>{
+  await prepararMapa();assert.equal((await guardarMapa()).rows[0].total,8);
+  const rows=(await db.query('select id from asignaciones_vendedores_clientes order by id')).rows;
+  await guardarMapa();assert.deepEqual((await db.query('select id from asignaciones_vendedores_clientes order by id')).rows,rows);
+});
+test('mapa rechaza siete, nueve, duplicados y rutas sin clientes antes de escribir',async()=>{
+  await prepararMapa();
+  await assert.rejects(guardarMapa(['c1']),/ocho/);
+  await assert.rejects(guardarMapa(['c1','c2','c2']),/ocho/);
+  await assert.rejects(guardarMapa(['c1','c1']),/únicas/);
+  await assert.rejects(guardarMapa([],['p1','p2','p3','p4','p5','p6','p7','p8']),/cliente/);
+  assert.equal((await db.query('select count(*)::int as n from asignaciones_vendedores_clientes')).rows[0].n,0);
+});
+test('mapa calcula el centro de todos los clientes y no del primer punto',async()=>{
+  await prepararMapa();await db.exec("UPDATE client_places SET lat=CASE WHEN client_id='c1' THEN -34.612 ELSE -34.588 END;");
+  assert.equal((await guardarMapa()).rows[0].total,8);
+});
+test('mapa impide que los prospectos desplacen el centro para evadir 1,5 km',async()=>{
+  await prepararMapa();await db.exec('UPDATE prospectos SET latitud=-34.584;');
+  await assert.rejects(guardarMapa(),/1,5 km/);
+  assert.equal((await db.query('select count(*)::int as n from asignaciones_vendedores_clientes')).rows[0].n,0);
+});
+test('mapa relee la ubicación corregida y revierte todo si quedó fuera de radio',async()=>{
+  await prepararMapa();await db.exec("UPDATE client_places SET lat=-34.70 WHERE client_id='c2';");
+  await assert.rejects(guardarMapa(),/1,5 km/);
+  assert.equal((await db.query('select count(*)::int as n from asignaciones_vendedores_clientes')).rows[0].n,0);
+});
+test('mapa rechaza un cliente excluido o sin coordenadas válidas',async()=>{
+  await prepararMapa();await db.exec("UPDATE clientes SET excluir_recomendaciones=true WHERE client_id='c1';");
+  await assert.rejects(guardarMapa(),/disponible/);
+  await db.exec("UPDATE clientes SET excluir_recomendaciones=false; UPDATE client_places SET lat=0,long=0 WHERE client_id='c1';");
+  await assert.rejects(guardarMapa(),/ubicación/);
+});
+test('mapa no toma un prospecto que otro vendedor recibió mientras se armaba la ruta',async()=>{
+  await prepararMapa();await guardar([{vendedor_id:otro,prospecto_place_id:'p1'}]);
+  await assert.rejects(guardarMapa(),/asignado/);
+  assert.deepEqual((await db.query('select vendedor_id,prospecto_place_id from asignaciones_vendedores_clientes')).rows,[{vendedor_id:otro,prospecto_place_id:'p1'}]);
+});
+test('mapa valida permisos y no admite usuarios inactivos',async()=>{
+  await prepararMapa();await db.query("select set_config('test.uid',$1,false)",[vendedor]);
+  await assert.rejects(guardarMapa(),{code:'42501'});
+  await db.query("select set_config('test.uid',$1,false)",[admin]);await db.query('update profiles set activo=false where user_id=$1',[admin]);
+  await assert.rejects(guardarMapa(),{code:'42501'});
+  assert.equal((await db.query("select has_function_privilege('anon','guardar_ruta_mapa(uuid,text[],text[])','EXECUTE') as ok")).rows[0].ok,false);
 });

@@ -22,6 +22,7 @@ import { useViewMode } from "@/hooks/useViewMode";
 import VendedorKanban, { VendedorKanbanRef } from "@/components/vendedor/VendedorKanbanWrapper";
 import NotificacionesPanel from "@/components/vendedor/NotificacionesPanel";
 import { useToast } from "@/hooks/use-toast";
+import { AssignmentDraftProvider } from "@/hooks/useAssignmentDraft";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 
@@ -190,7 +191,7 @@ const Index = () => {
 
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
-        {isAssignorLike(profile.rol) && viewMode === "gestion" ? <AssignorDashboard /> : <VendedorKanban ref={kanbanRef} />}
+        {isAssignorLike(profile.rol) && viewMode === "gestion" ? <AssignmentDraftProvider key={session.user.id} userId={session.user.id}><AssignorDashboard /></AssignmentDraftProvider> : <VendedorKanban ref={kanbanRef} />}
       </main>
     </div>);
 

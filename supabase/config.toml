@@ -47,3 +47,6 @@ verify_jwt = false
 
 [functions.resolve-client-location]
 verify_jwt = false
+
+[functions.complete-map-route]
+verify_jwt = false

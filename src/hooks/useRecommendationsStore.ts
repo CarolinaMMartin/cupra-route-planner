@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { useEffect, useState } from "react";
+import { useDraftState, useAssignmentDraftStore } from "./useAssignmentDraft";
 import { Sucursal } from "@/types/sales";
 
 interface RecommendationsState {
@@ -45,49 +45,46 @@ const initialState = {
   lastRequestPayload: null,
 };
 
-export const useRecommendationsStore = create<RecommendationsState>()(
-  persist(
-    (set, get) => ({
-      ...initialState,
-      
-      setIsLoading: (loading) => set({ isLoading: loading }),
-      setRecommendations: (recommendations) => set({ recommendations }),
-      setAiInsights: (insights) => set({ aiInsights: insights }),
-      setVendedoresData: (data) => set({ vendedoresData: data }),
-      setInstruccionesAdicionales: (instrucciones) => set({ instruccionesAdicionales: instrucciones }),
-      setSelectedSucursales: (ids) => set({ selectedSucursales: ids }),
-      
-      toggleSucursal: (id) => set((state) => ({
-        selectedSucursales: state.selectedSucursales.includes(id)
-          ? state.selectedSucursales.filter(s => s !== id)
-          : [...state.selectedSucursales, id]
-      })),
-      
-      toggleAllSucursales: () => set((state) => ({
-        selectedSucursales: state.selectedSucursales.length === state.recommendations.length
-          ? []
-          : state.recommendations.map(r => r.id)
-      })),
-      
-      setFlowStep: (step) => set({ flowStep: step }),
-      setCurrentRequestId: (id) => set({ currentRequestId: id }),
-      setLastRequestPayload: (payload) => set({ lastRequestPayload: payload }),
-      
-      resetToInitial: () => set(initialState),
-    }),
-    {
-      name: 'recommendations-storage',
-      partialize: (state) => ({
-        recommendations: state.recommendations,
-        aiInsights: state.aiInsights,
-        vendedoresData: state.vendedoresData,
-        instruccionesAdicionales: state.instruccionesAdicionales,
-        selectedSucursales: state.selectedSucursales,
-        flowStep: state.flowStep,
-        isLoading: state.isLoading,
-        currentRequestId: state.currentRequestId,
-        lastRequestPayload: state.lastRequestPayload,
-      }),
+type RecommendationDraft = Pick<RecommendationsState, "recommendations" | "aiInsights" | "vendedoresData" | "instruccionesAdicionales" | "selectedSucursales" | "flowStep" | "currentRequestId" | "lastRequestPayload">;
+
+/** Keeps the previous browser draft while migrating to storage scoped to the signed-in user. */
+function legacyDraft() {
+  try {
+    const old = JSON.parse(window.localStorage.getItem("recommendations-storage") || "null")?.state;
+    if (old && Array.isArray(old.recommendations) && Array.isArray(old.selectedSucursales)) {
+      return { ...initialState, ...Object.fromEntries(Object.keys(initialState).filter(k => k in old).map(k => [k, old[k]])), isLoading: false, currentRequestId: null };
     }
-  )
-);
+  } catch { /* El almacén común informa problemas de guardado. */ }
+  return initialState;
+}
+
+export function useRecommendationsStore(): RecommendationsState {
+  const store = useAssignmentDraftStore();
+  const [state, setState] = useDraftState<RecommendationDraft>("recomendaciones", "state", legacyDraft);
+  const [isLoading, setIsLoading] = useState(false);
+  useEffect(() => {
+    if (store.get("recomendaciones", "state", null) === null) {
+      setState(state);
+      if (!store.status()) { try { window.localStorage.removeItem("recommendations-storage"); } catch { /* Se conserva la copia anterior. */ } }
+    }
+    // La migración se hace una sola vez por sesión identificada.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store]);
+  const patch = (change: Partial<typeof state>) => setState(prev => ({ ...prev, ...change }));
+  return {
+    ...state, isLoading, setIsLoading,
+    setRecommendations: recommendations => patch({ recommendations }),
+    setAiInsights: aiInsights => patch({ aiInsights }),
+    setVendedoresData: vendedoresData => patch({ vendedoresData }),
+    setInstruccionesAdicionales: instruccionesAdicionales => patch({ instruccionesAdicionales }),
+    setSelectedSucursales: selectedSucursales => patch({ selectedSucursales }),
+    toggleSucursal: id => setState(prev => ({ ...prev, selectedSucursales: prev.selectedSucursales.includes(id)
+      ? prev.selectedSucursales.filter(s => s !== id) : [...prev.selectedSucursales, id] })),
+    toggleAllSucursales: () => setState(prev => ({ ...prev, selectedSucursales: prev.selectedSucursales.length === prev.recommendations.length
+      ? [] : prev.recommendations.map(r => r.id) })),
+    setFlowStep: flowStep => patch({ flowStep }),
+    setCurrentRequestId: currentRequestId => patch({ currentRequestId }),
+    setLastRequestPayload: lastRequestPayload => patch({ lastRequestPayload }),
+    resetToInitial: () => { setState(initialState); setIsLoading(false); },
+  };
+}

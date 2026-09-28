@@ -1769,6 +1769,10 @@ export type Database = {
         Args: { top_n?: number; vendedor_user_id: string }
         Returns: string[]
       }
+      guardar_ruta_mapa: {
+        Args: { p_vendedor_id: string; p_client_ids: string[]; p_prospecto_ids?: string[] }
+        Returns: number
+      }
       guardar_asignaciones: {
         Args: { p_actualizar_cartera?: boolean; p_asignaciones: Json }
         Returns: number

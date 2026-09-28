@@ -1,7 +1,10 @@
-import { distanciaKm, errorRuta, RADIO_RUTA_KM, VISITAS_POR_DIA, type Coordenada } from "../../../supabase/functions/_shared/ruta";
-import { guardarAsignaciones } from "@/lib/asignaciones";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, MapPin, Search, UserCheck, X } from "lucide-react";
+import { distanciaKm, RADIO_RUTA_KM, VISITAS_POR_DIA } from "../../../supabase/functions/_shared/ruta";
+import {
+  carteraDelVendedor, centroClientes, coordenadaMapaValida, distanciaAlCliente, opcionesZona, perteneceZona, puntosDeCartera, validarSeleccionMapa,
+  type ClienteMapa, type PuntoMapa, type UbicacionMapa,
+} from "../../../supabase/functions/_shared/map-selection";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -10,413 +13,345 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
 import { SegmentFilters } from "@/components/shared/SegmentFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { geoBarrios, geoComunas } from "@/data/geoBuenosAires";
 import { useGoogleMap } from "@/hooks/useGoogleMap";
+import { useRubros } from "@/hooks/useRubros";
+import { useDraftState } from "@/hooks/useAssignmentDraft";
 import { createStateMarkerIcon } from "@/lib/vendorColors";
-import {
-  claveTexto,
-  colorEstado,
-  diasSinComprar,
-  ESTADOS,
-  estadoDe,
-  FILTROS_VACIOS,
-  filtrarPorSegmentos,
-  type FiltrosSegmento,
-  labelEstado,
-} from "@/lib/segmentos";
-import { fetchAllRows, fetchInChunks } from "@/lib/supabaseQuery";
+import { mapPopup } from "@/lib/mapLocations";
+import { colorEstado, ESTADOS, FILTROS_VACIOS, filtrarPorSegmentos, type FiltrosSegmento, labelEstado } from "@/lib/segmentos";
+import { fetchAllRows, fetchInPages } from "@/lib/supabaseQuery";
 import { toTitleCase } from "@/lib/format";
 
 interface VendedorOpcion { id: string; nombre: string }
-
-interface Punto {
-  key: string;
-  tipo: "cliente" | "prospecto";
-  id: string; // client_id o place_id
-  nombre: string;
-  lat: number;
-  lng: number;
-  direccion: string;
-  barrio: string | null;
-  comuna: string | null;
-  rubro: string | null;
-  estado: string;
-  vendedor: string | null;
-  dias: number | null;
-  ventas: number | null;
-  telefono: string | null;
+interface Complemento {
+  success: boolean; error?: string; clientes: PuntoMapa[]; prospectos: PuntoMapa[]; elegidos: string[];
+  faltantes: number; radio_busqueda_m: number; avisos: string[];
 }
 
-const MAX_PUNTOS = 3000;
-const coordenadasValidas = (lat: unknown, lng: unknown) =>
-  lat !== null && lat !== undefined && lat !== "" && lng !== null && lng !== undefined && lng !== "" &&
-  Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) &&
-  Number(lat) >= -56 && Number(lat) <= -21 && Number(lng) >= -74 && Number(lng) <= -53;
-
-const esc = (v: unknown) =>
-  String(v ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
-
-const pesos = (n: number | null) => (n ? `$${Math.round(n).toLocaleString("es-AR")}` : "—");
-
-const enAreaTexto = (valor: string | null | undefined, elegidos: string[]) => {
-  if (elegidos.length === 0) return true;
-  const k = claveTexto(valor);
-  return elegidos.some((e) => {
-    const ke = claveTexto(e);
-    return k === ke || k.startsWith(`${ke} `);
-  });
-};
-
-/**
- * Mapa de la zona: muestra TODOS los clientes y prospectos de las comunas/barrios
- * elegidos, con color por estado (activo, inactivo, perdido, potencial), rubro en
- * la ficha, y permite armar la ruta de un vendedor tocando los puntos.
- * Asigna VISITAS (no cambia el vendedor dueño de la cartera).
- */
+/** Cartera → zona → clientes → prospectos cercanos → confirmar ocho visitas. */
 export default function MapaZonaAsignacion({ vendedores }: { vendedores: VendedorOpcion[] }) {
   const { toast } = useToast();
   const { mapRef, map, error: errorMapa } = useGoogleMap();
-  const markersRef = useRef<Map<string, google.maps.Marker>>(new Map());
+  const { rubros } = useRubros();
+  const markersRef = useRef(new Map<string, google.maps.Marker>());
   const infoRef = useRef<google.maps.InfoWindow | null>(null);
-
-  const [comunas, setComunas] = useState<string[]>([]);
-  const [barrios, setBarrios] = useState<string[]>([]);
-  const [segmentos, setSegmentos] = useState<FiltrosSegmento>(FILTROS_VACIOS);
-  const [puntos, setPuntos] = useState<Punto[]>([]);
+  const [vendedorId, setVendedorId] = useDraftState("mapa", "vendedorId", "");
+  const draftScope = `mapa:${vendedorId}`;
+  const [zona, setZona] = useDraftState(draftScope, "zona", "todas");
+  const [segmentos, setSegmentos] = useDraftState<FiltrosSegmento>(draftScope, "segmentos", FILTROS_VACIOS);
+  const [cartera, setCartera] = useState<PuntoMapa[]>([]);
+  const [sinUbicacion, setSinUbicacion] = useState<ClienteMapa[]>([]);
   const [cargando, setCargando] = useState(false);
-  const [centroRuta, setCentroRuta] = useState<Coordenada | null>(null);
-  const centroRef = useRef<Coordenada | null>(null);
-  const seleccionRef = useRef<string[]>([]);
-  const [seleccion, setSeleccion] = useState<string[]>([]);
-  const [vendedorId, setVendedorId] = useState<string>("");
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  const [recarga, setRecarga] = useState(0);
+  const [seleccion, setSeleccion] = useDraftState<PuntoMapa[]>(draftScope, "seleccion", []);
+  const seleccionRef = useRef<PuntoMapa[]>(seleccion); seleccionRef.current = seleccion;
+  const [prospectos, setProspectos] = useDraftState<PuntoMapa[]>(draftScope, "prospectos", []);
+  const [rubrosProspectos, setRubrosProspectos] = useDraftState<string[]>(draftScope, "rubrosProspectos", []);
+  const [omitidos, setOmitidos] = useDraftState<Set<string>>(draftScope, "omitidos", () => new Set());
+  const omitidosRef = useRef(omitidos); omitidosRef.current = omitidos;
+  const [buscando, setBuscando] = useState(false);
+  const [resultado, setResultado] = useDraftState<Complemento | null>(draftScope, "resultado", null);
+  const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
   const [asignando, setAsignando] = useState(false);
-  const [aviso, setAviso] = useState<string | null>(null);
+  const busyRef = useRef(false);
+  busyRef.current = buscando || asignando || cargando;
+  const requestRef = useRef(0);
+  const controllerRef = useRef<AbortController | null>(null);
 
-  const comunasOpciones = useMemo(() => geoComunas([]).map((c) => ({ value: c, label: c })), []);
-  const barriosOpciones = useMemo(() => geoBarrios([], comunas).map((b) => ({ value: b, label: b })), [comunas]);
-
-  // Al salir de la pantalla se sacan los marcadores del mapa.
-  useEffect(() => () => {
-    markersRef.current.forEach((m) => m.setMap(null));
-    markersRef.current.clear();
-  }, []);
+  const cambiarSeleccion = (puntos: PuntoMapa[]) => { seleccionRef.current = puntos; setSeleccion(puntos); };
+  const cancelarBusqueda = () => {
+    requestRef.current++;
+    controllerRef.current?.abort(); controllerRef.current = null;
+    setBuscando(false); busyRef.current = false;
+  };
+  const limpiarProspectos = () => {
+    cancelarBusqueda(); setProspectos([]); setResultado(null); setErrorBusqueda(null); omitidosRef.current = new Set(); setOmitidos(omitidosRef.current);
+  };
+  const limpiarRuta = () => { limpiarProspectos(); cambiarSeleccion([]); infoRef.current?.close(); };
+  const cambiarVendedor = (id: string) => {
+    cancelarBusqueda(); infoRef.current?.close(); setCartera([]); setSinUbicacion([]); setVendedorId(id);
+  };
 
   useEffect(() => {
+    let vigente = true;
+    setErrorCarga(null);
+    if (!vendedorId) return;
+    cancelarBusqueda(); setCargando(true);
+    (async () => {
+      try {
+        const [clientes, perfiles] = await Promise.all([
+          fetchAllRows((from, to) => supabase.from("clientes")
+            .select("client_id,razon_social,fantasia,rubro,ultima_compra,dias_desde_ultima_compra,vendedor_actual,vendedor_principal,todos_vendedores,monto_total_historico,telefonos,excluir_recomendaciones,direccion_principal,barrio_principal,ciudad_principal")
+            .order("client_id").range(from, to)),
+          fetchAllRows((from, to) => supabase.from("profiles").select("user_id,nombre")
+            .or("rol.eq.vendedor,perfil_ventas.eq.true").order("user_id").range(from, to)),
+        ]);
+        const clientesCartera = carteraDelVendedor(clientes, perfiles, vendedorId);
+        const places = await fetchInPages<UbicacionMapa>(clientesCartera.map(c => c.client_id), (chunk, from, to) =>
+          supabase.from("client_places")
+            .select("id,client_id,lat,long,is_primary,direccion_verificada,direccion_principal,barrio_principal,comuna")
+            .in("client_id", chunk).order("id").range(from, to));
+        const guardados = [...new Map([...prospectos, ...seleccionRef.current.filter(p => p.tipo === "prospecto")].map(p => [p.id, p])).values()];
+        const actuales = await fetchInPages(guardados.map(p => p.id), (chunk, from, to) => supabase.from("prospectos")
+          .select("place_id,nombre,direccion,barrio,ciudad,comuna,rubro,latitud,longitud,telefono,rating,total_ratings,es_cliente_cupra,client_id,estado_negocio")
+          .in("place_id", chunk).order("place_id").range(from, to));
+        if (!vigente) return;
+        const datos = puntosDeCartera(clientesCartera, places);
+        setCartera(datos.puntos); setSinUbicacion(datos.sinUbicacion);
+        // Recupera el borrador sin borrar destinos: actualiza datos o marca los que requieren revisión.
+        const vigentes = new Map(datos.puntos.map(p => [p.key, p]));
+        const seleccionClientes = seleccionRef.current.filter(p => p.tipo === "cliente").map(p => vigentes.get(p.key) || { ...p, excluido: true });
+        const centroActual = centroClientes(seleccionClientes);
+        const prospectsById = new Map(actuales.map(p => [p.place_id, p]));
+        const actualizados = guardados.map(old => {
+          const p = prospectsById.get(old.id);
+          if (!p || p.es_cliente_cupra || p.client_id || ["CLOSED_PERMANENTLY", "CLOSED_TEMPORARILY"].includes(p.estado_negocio)
+            || !coordenadaMapaValida({ lat: p.latitud, lng: p.longitud })) return { ...old, excluido: true };
+          const punto = { lat: p.latitud, lng: p.longitud };
+          return { ...old, ...punto, nombre: p.nombre, direccion: p.direccion, barrio: p.barrio, ciudad: p.ciudad, comuna: p.comuna,
+            rubro: p.rubro, telefono: p.telefono, rating: p.rating, resenas: p.total_ratings, excluido: false,
+            distancia_centro_m: centroActual ? Math.round(distanciaKm(centroActual, punto) * 1000) : undefined,
+            distancia_cliente_m: seleccionClientes.length ? Math.round(distanciaAlCliente(punto, seleccionClientes) * 1000) : undefined };
+        });
+        actualizados.forEach(p => vigentes.set(p.key, p));
+        setProspectos(actualizados);
+        cambiarSeleccion(seleccionRef.current.map(p => vigentes.get(p.key) || { ...p, excluido: true }));
+      } catch {
+        if (vigente) setErrorCarga("No se pudo cargar la cartera completa. Reintentá.");
+      } finally { if (vigente) setCargando(false); }
+    })();
+    return () => { vigente = false; };
+  }, [vendedorId, recarga]);
+
+  useEffect(() => () => { requestRef.current++; controllerRef.current?.abort(); }, []);
+  useEffect(() => {
     if (!map) return;
-    infoRef.current = new google.maps.InfoWindow();
-    return () => { infoRef.current?.close(); };
+    const info = new google.maps.InfoWindow(); infoRef.current = info;
+    const markers = markersRef.current;
+    return () => {
+      info.close();
+      markers.forEach(m => { google.maps.event.clearInstanceListeners(m); m.setMap(null); });
+      markers.clear();
+    };
   }, [map]);
 
-  // ---- Datos de la zona ----
-  const cargarZona = async () => {
-    if (comunas.length === 0 && barrios.length === 0) {
-      toast({ variant: "destructive", title: "Elegí una zona", description: "Seleccioná al menos una comuna o un barrio." });
-      return;
-    }
-    setCargando(true);
-    setAviso(null);
-    limpiarSeleccion();
-    setPuntos([]);
-    // Los marcadores guardan los datos del punto en su click: se recrean con cada carga.
-    markersRef.current.forEach((m) => m.setMap(null));
-    markersRef.current.clear();
-    infoRef.current?.close();
-    try {
-      // Con solo comunas elegidas, también se buscan sus barrios: muchos registros
-      // tienen barrio pero no comuna cargada.
-      const barriosZona = barrios.length > 0 ? barrios : geoBarrios([], comunas);
-      const comunasZona = barrios.length > 0 ? [] : comunas;
-      const enZona = (barrio: string | null | undefined, comuna: string | null | undefined) =>
-        (barriosZona.length > 0 && enAreaTexto(barrio, barriosZona) && Boolean(barrio)) ||
-        (comunasZona.length > 0 && Boolean(comuna) && enAreaTexto(comuna, comunasZona));
-      // Sin comodines ni comas; letras con acento → "_" para que "Núñez" encuentre "Nunez".
-      const limpio = (v: string) => v.replace(/[%,()]/g, " ").trim().replace(/[^\x20-\x7E]/g, "_");
-      const orLugares = [
-        ...comunasZona.map((c) => `comuna.ilike.${limpio(c)}`),
-        ...barriosZona.map((b) => `barrio_principal.ilike.%${limpio(b)}%`),
-      ].join(",");
-      const places = await fetchAllRows((from, to) =>
-        supabase.from("client_places")
-          .select("client_id, lat, long, barrio_principal, comuna, direccion_principal")
-          .eq("is_primary", true)
-          .or(orLugares)
-          .order("client_id")
-          .range(from, to));
-      const placesZona = places.filter((p) =>
-        coordenadasValidas(p.lat, p.long) &&
-        enZona(p.barrio_principal, p.comuna));
-      const clientes = await fetchInChunks(placesZona.map((p) => p.client_id), (chunk) =>
-        supabase.from("clientes")
-          .select("client_id, razon_social, fantasia, rubro, canal, categoria_volumen, ultima_compra, dias_desde_ultima_compra, vendedor_actual, vendedor_principal, monto_total_historico, telefonos, excluir_recomendaciones")
-          .in("client_id", chunk));
-      const clientePorId = new Map(clientes.map((c) => [c.client_id, c]));
-
-      const orProspectos = [
-        ...comunasZona.map((c) => `comuna.ilike.${limpio(c)}`),
-        ...barriosZona.flatMap((b) => [`barrio.ilike.%${limpio(b)}%`, `ciudad.ilike.%${limpio(b)}%`]),
-      ].join(",");
-      const prospectos = await fetchAllRows((from, to) =>
-        supabase.from("prospectos")
-          .select("place_id, nombre, direccion, barrio, comuna, ciudad, latitud, longitud, rubro, telefono, es_cliente_cupra, client_id, estado_negocio")
-          .eq("es_cliente_cupra", false)
-          .or(orProspectos)
-          .order("place_id")
-          .range(from, to));
-
-      const lista: Punto[] = [];
-      for (const p of placesZona) {
-        const c = clientePorId.get(p.client_id);
-        if (!c || c.excluir_recomendaciones) continue;
-        lista.push({
-          key: `C:${c.client_id}`, tipo: "cliente", id: c.client_id,
-          nombre: c.fantasia || c.razon_social || "Sin nombre",
-          lat: Number(p.lat), lng: Number(p.long),
-          direccion: p.direccion_principal || "", barrio: p.barrio_principal, comuna: p.comuna,
-          rubro: c.rubro ?? null, estado: estadoDe(c),
-          vendedor: c.vendedor_actual || c.vendedor_principal || null,
-          dias: diasSinComprar(c), ventas: Number(c.monto_total_historico) || null,
-          telefono: c.telefonos?.[0] ?? null,
-        });
-      }
-      for (const p of prospectos) {
-        if (p.client_id || p.estado_negocio === "CLOSED_PERMANENTLY" || p.estado_negocio === "CLOSED_TEMPORARILY") continue;
-        const lat = Number(p.latitud), lng = Number(p.longitud);
-        if (!coordenadasValidas(p.latitud, p.longitud)) continue;
-        if (!enZona(p.barrio || p.ciudad, p.comuna)) continue;
-        lista.push({
-          key: `P:${p.place_id}`, tipo: "prospecto", id: p.place_id, nombre: p.nombre,
-          lat, lng, direccion: p.direccion || "", barrio: p.barrio, comuna: p.comuna,
-          rubro: p.rubro ?? null, estado: "POTENCIAL", vendedor: null, dias: null, ventas: null,
-          telefono: p.telefono ?? null,
-        });
-      }
-      setPuntos(lista);
-      if (lista.length === 0) setAviso("No hay clientes ni prospectos con ubicación en esa zona.");
-    } catch (e: unknown) {
-      console.error(e);
-      toast({ variant: "destructive", title: "Error", description: e instanceof Error ? e.message : "No se pudo cargar la zona" });
-    } finally {
-      setCargando(false);
-    }
-  };
-
-  const filtrados = useMemo(() => filtrarPorSegmentos(puntos, segmentos, (p) => ({
-    estado: p.estado, rubro: p.rubro, vendedor: p.vendedor,
-  })), [puntos, segmentos]);
-  const visibles = useMemo(() => filtrados.slice(0, MAX_PUNTOS), [filtrados]);
-
+  const zonas = useMemo(() => [{ value: "todas", label: "Toda la cartera" }, ...opcionesZona(cartera)], [cartera]);
+  const clientesVisibles = useMemo(() => filtrarPorSegmentos(cartera.filter(p => perteneceZona(p, zona)), segmentos,
+    p => ({ estado: p.estado, rubro: p.rubro })), [cartera, zona, segmentos]);
+  // Los elegidos permanecen visibles aunque se ajuste un filtro de clientes.
+  const visibles = useMemo(() => [...new Map([...clientesVisibles, ...prospectos, ...seleccion].map(p => [p.key, p])).values()], [clientesVisibles, prospectos, seleccion]);
+  const clientesElegidos = useMemo(() => seleccion.filter(p => p.tipo === "cliente"), [seleccion]);
+  const centro = useMemo(() => centroClientes(clientesElegidos), [clientesElegidos]);
+  const errorSeleccion = seleccion.length ? validarSeleccionMapa(seleccion) : null;
+  const puntosRef = useRef(visibles); puntosRef.current = visibles;
   const conteo = useMemo(() => {
-    const m = new Map<string, number>();
-    visibles.forEach((p) => m.set(p.estado, (m.get(p.estado) || 0) + 1));
-    return m;
+    const counts = new Map<string, number>();
+    visibles.forEach(p => counts.set(p.estado, (counts.get(p.estado) || 0) + 1)); return counts;
   }, [visibles]);
 
-  const vendedoresCartera = useMemo(() => {
-    const set = new Map<string, string>();
-    puntos.forEach((p) => p.vendedor && set.set(claveTexto(p.vendedor), p.vendedor));
-    return [...set.values()].sort().map((v) => ({ value: v, label: toTitleCase(v) }));
-  }, [puntos]);
-
-  const limpiarSeleccion = () => {
-    seleccionRef.current = []; centroRef.current = null;
-    setSeleccion([]); setCentroRuta(null); infoRef.current?.close();
-  };
-  const toggle = (key: string) => {
-    if (asignando) return;
-    const prev = seleccionRef.current;
-    if (prev.includes(key)) {
-      const siguiente = prev.filter(k=>k!==key);
-      seleccionRef.current = siguiente; setSeleccion(siguiente);
-      if (!siguiente.length) limpiarSeleccion();
-      return;
+  const toggle = (p: PuntoMapa) => {
+    if (busyRef.current) return;
+    const prev = seleccionRef.current, elegido = prev.some(v => v.key === p.key);
+    let next = elegido ? prev.filter(v => v.key !== p.key) : [...prev, p];
+    if (p.tipo === "cliente") next = next.filter(v => v.tipo === "cliente");
+    if (!elegido) {
+      const error = validarSeleccionMapa(next);
+      if (error) { toast({ variant: "destructive", title: "No se puede agregar", description: error }); return; }
     }
-    const punto = puntos.find(p=>p.key===key);
-    if (!punto) return;
-    const error = prev.length >= VISITAS_POR_DIA ? "La ruta ya tiene ocho visitas. Quitá una antes de agregar otra."
-      : centroRef.current && distanciaKm(centroRef.current,punto)>RADIO_RUTA_KM ? "Este destino supera el radio máximo de 1,5 km." : null;
-    if (error) { toast({variant:"destructive",title:"No se puede agregar",description:error}); return; }
-    if (!centroRef.current) {
-      centroRef.current = {lat:punto.lat,lng:punto.lng}; setCentroRuta(centroRef.current);
+    if (p.tipo === "cliente") limpiarProspectos();
+    else {
+      const ids = new Set(omitidosRef.current);
+      if (elegido) ids.add(p.id); else ids.delete(p.id);
+      omitidosRef.current = ids; setOmitidos(ids);
     }
-    seleccionRef.current = [...prev,key]; setSeleccion(seleccionRef.current);
+    cambiarSeleccion(next);
   };
-  const toggleRef = useRef(toggle);
-  toggleRef.current = toggle;
-  useEffect(() => {
-    if (!map || !centroRuta) return;
-    const circulo = new google.maps.Circle({map,center:centroRuta,radius:RADIO_RUTA_KM*1000,
-      strokeColor:"#2563eb",strokeOpacity:0.8,strokeWeight:2,fillColor:"#2563eb",fillOpacity:0.06,clickable:false});
-    return ()=>circulo.setMap(null);
-  },[map,centroRuta]);
+  const toggleRef = useRef(toggle); toggleRef.current = toggle;
+  const abrirFicha = (p: PuntoMapa, marker: google.maps.Marker) => {
+    const details = [
+      `${labelEstado(p.estado)} · ${p.tipo === "prospecto" ? "Prospecto" : "Cliente"}`,
+      `Rubro: ${p.rubro || "Sin dato"}`, [p.direccion, p.barrio || p.ciudad].filter(Boolean).join(" · "),
+      p.vendedor ? `Cartera de ${toTitleCase(p.vendedor)}` : "",
+      p.dias != null ? `${p.dias} días sin comprar` : "",
+      p.telefono ? `Tel: ${p.telefono}` : "",
+      p.rating ? `Google: ${p.rating} / 5 · ${p.resenas || 0} reseñas` : "",
+      p.distancia_centro_m != null ? `A ${p.distancia_centro_m} m del centro y ${p.distancia_cliente_m} m del cliente más cercano (en línea recta)` : "",
+      p.excluido ? "Este destino ya no está disponible. Revisá la selección." : "",
+    ];
+    const div = mapPopup(p.nombre, details, p);
+    const button = document.createElement("button");
+    const actualizar = () => {
+      button.textContent = seleccionRef.current.some(v => v.key === p.key) ? "Quitar de la ruta" : "Agregar a la ruta";
+      button.disabled = Boolean(p.excluido) || busyRef.current;
+      button.style.cssText = "display:block;margin-top:10px;padding:8px 12px;border-radius:4px;border:0;background:#111827;color:#fff;cursor:pointer;font:600 12px system-ui";
+    };
+    button.addEventListener("click", () => { toggleRef.current(p); actualizar(); });
+    actualizar(); div.append(button);
+    infoRef.current?.setContent(div); infoRef.current?.open({ map: map!, anchor: marker });
+  };
+  const abrirRef = useRef(abrirFicha); abrirRef.current = abrirFicha;
 
-  // ---- Marcadores ----
   useEffect(() => {
     if (!map) return;
-    const markers = markersRef.current;
-    const visiblesKeys = new Set(visibles.map((p) => p.key));
-    markers.forEach((m, key) => {
-      if (!visiblesKeys.has(key)) { m.setMap(null); markers.delete(key); }
+    const markers = markersRef.current, keys = new Set(visibles.map(p => p.key));
+    markers.forEach((marker, key) => {
+      if (!keys.has(key)) { google.maps.event.clearInstanceListeners(marker); marker.setMap(null); markers.delete(key); }
     });
-    const bounds = new google.maps.LatLngBounds();
     for (const p of visibles) {
-      const elegido = seleccion.includes(p.key);
+      const elegido = seleccion.some(s => s.key === p.key);
       let marker = markers.get(p.key);
       if (!marker) {
-        marker = new google.maps.Marker({ position: { lat: p.lat, lng: p.lng }, map, title: p.nombre });
-        marker.addListener("click", () => abrirFicha(p, marker!));
+        marker = new google.maps.Marker({ position: p, map, title: p.nombre });
+        const current = marker;
+        marker.addListener("click", () => {
+          const point = puntosRef.current.find(v => v.key === p.key);
+          if (point) abrirRef.current(point, current);
+        });
         markers.set(p.key, marker);
       }
+      marker.setPosition(p);
       marker.setIcon(createStateMarkerIcon(p.estado, elegido ? "#111827" : undefined, elegido ? 1.25 : 0.85));
       marker.setZIndex(elegido ? 3 : 1);
-      bounds.extend({ lat: p.lat, lng: p.lng });
+      marker.setOpacity(p.excluido ? 0.45 : 1);
     }
-    if (visibles.length > 0 && seleccion.length === 0) map.fitBounds(bounds);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, visibles, seleccion]);
 
-  const abrirFicha = (p: Punto, marker: google.maps.Marker) => {
-    const div = document.createElement("div");
-    div.style.cssText = "padding:6px;max-width:260px;color:#111827;font-family:system-ui,sans-serif";
-    div.innerHTML = `
-      <h3 style="margin:0 0 6px;font-weight:600;font-size:14px">${esc(p.nombre)}</h3>
-      <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;color:#fff;background:${colorEstado(p.estado)}">${esc(labelEstado(p.estado))}${p.tipo === "prospecto" ? " · prospecto" : ""}</span>
-      ${p.rubro ? `<p style="margin:6px 0 0;font-size:12px"><strong>Rubro:</strong> ${esc(p.rubro)}</p>` : ""}
-      <p style="margin:6px 0 0;font-size:12px;color:#4B5563">${esc(p.direccion)}${p.barrio ? ` · ${esc(p.barrio)}` : ""}</p>
-      ${p.vendedor ? `<p style="margin:4px 0 0;font-size:12px">Cartera de: ${esc(toTitleCase(p.vendedor))}</p>` : ""}
-      ${p.tipo === "cliente" ? `<p style="margin:4px 0 0;font-size:12px">${p.dias != null ? `${p.dias} días sin comprar` : "Sin compras registradas"} · Ventas: ${esc(pesos(p.ventas))}</p>` : ""}
-      ${p.telefono ? `<p style="margin:4px 0 0;font-size:12px">Tel: ${esc(p.telefono)}</p>` : ""}
-    `;
-    const boton = document.createElement("button");
-    const actualizar = () => {
-      const elegido = seleccionRef.current.includes(p.key);
-      boton.textContent = elegido ? "Quitar de la ruta" : "Agregar a la ruta";
-      boton.style.cssText = `margin-top:8px;padding:6px 10px;border-radius:6px;border:0;cursor:pointer;font-size:12px;font-weight:600;color:#fff;background:${elegido ? "#6b7280" : "#111827"}`;
-    };
-    boton.addEventListener("click", () => {
-      toggleRef.current(p.key);
-      window.setTimeout(actualizar, 0);
-    });
-    actualizar();
-    div.appendChild(boton);
-    infoRef.current?.setContent(div);
-    infoRef.current?.open({ map: map!, anchor: marker });
+  useEffect(() => {
+    if (!map || !clientesVisibles.length) return;
+    const bounds = new google.maps.LatLngBounds(); clientesVisibles.forEach(p => bounds.extend(p));
+    map.fitBounds(bounds);
+  }, [map, clientesVisibles]);
+  useEffect(() => {
+    if (!map || !centro) return;
+    const circle = new google.maps.Circle({ map, center: centro, radius: RADIO_RUTA_KM * 1000,
+      strokeColor: "#2563eb", strokeOpacity: 0.8, strokeWeight: 2, fillColor: "#2563eb", fillOpacity: 0.06, clickable: false });
+    return () => circle.setMap(null);
+  }, [map, centro]);
+  useEffect(() => {
+    if (!map || !resultado || !seleccionRef.current.length) return;
+    const bounds = new google.maps.LatLngBounds(); seleccionRef.current.forEach(p => bounds.extend(p));
+    map.fitBounds(bounds);
+  }, [map, resultado]);
+
+  const completar = async () => {
+    if (busyRef.current) return;
+    const actuales = seleccionRef.current;
+    const error = validarSeleccionMapa(actuales);
+    if (error || actuales.length >= VISITAS_POR_DIA) return;
+    const request = ++requestRef.current;
+    const controller = new AbortController(); controllerRef.current = controller;
+    setBuscando(true); busyRef.current = true; setResultado(null); setErrorBusqueda(null); infoRef.current?.close();
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke<Complemento>("complete-map-route", {
+        body: { vendedor_id: vendedorId, client_ids: actuales.filter(p => p.tipo === "cliente").map(p => p.id),
+          prospect_ids: actuales.filter(p => p.tipo === "prospecto").map(p => p.id), omitir_ids: [...omitidosRef.current], rubros: rubrosProspectos },
+        signal: controller.signal,
+      });
+      if (request !== requestRef.current) return;
+      if (invokeError || !data?.success) {
+        const context = invokeError && "context" in invokeError ? invokeError.context as Response : null;
+        const detail = context?.json ? await context.json().catch(() => null) : null;
+        throw new Error(detail?.error || data?.error || "No se pudo completar la búsqueda. Reintentá.");
+      }
+      const seleccionados = data.prospectos.filter(p => data.elegidos.includes(p.id));
+      const next = [...data.clientes, ...actuales.filter(p => p.tipo === "prospecto"), ...seleccionados];
+      const validation = validarSeleccionMapa(next);
+      if (validation) throw new Error(validation);
+      if (request !== requestRef.current) return;
+      setCartera(prev => prev.map(p => data.clientes.find(c => c.id === p.id) || p));
+      setProspectos(prev => [...new Map([...prev, ...data.prospectos].map(p => [p.key, p])).values()]);
+      cambiarSeleccion(next); setResultado(data);
+    } catch (e) {
+      if (request === requestRef.current) setErrorBusqueda(e instanceof Error ? e.message : "No se pudo completar la búsqueda.");
+    } finally {
+      if (request === requestRef.current) { setBuscando(false); busyRef.current = false; controllerRef.current = null; }
+    }
   };
 
-  const elegidos = useMemo(() => {
-    const porKey = new Map(puntos.map((p) => [p.key, p]));
-    return seleccion.map((k) => porKey.get(k)).filter(Boolean) as Punto[];
-  }, [seleccion, puntos]);
-
-  // ---- Asignar visitas ----
   const asignar = async () => {
-    const vendedor = vendedores.find((v) => v.id === vendedorId);
-    if (!vendedor || elegidos.length === 0) return;
-    const error = errorRuta(elegidos.map(p=>({...p,id:p.key})),centroRef.current);
-    if (error) { toast({variant:"destructive",title:"Ruta incompleta",description:error}); return; }
-    setAsignando(true);
+    if (busyRef.current) return;
+    const error = validarSeleccionMapa(seleccionRef.current, true);
+    const vendedor = vendedores.find(v => v.id === vendedorId);
+    if (error || !vendedor) return;
+    setAsignando(true); busyRef.current = true; infoRef.current?.close();
     try {
-      const clientIds = elegidos.filter((p) => p.tipo === "cliente").map((p) => p.id);
-      const placeIds = elegidos.filter((p) => p.tipo === "prospecto").map((p) => p.id);
-
-      const filas = [
-        ...clientIds.map((client_id) => ({ vendedor_id: vendedor.id, client_id, es_prospecto: false, origen_asignacion: "asignador" })),
-        ...placeIds.map((prospecto_place_id) => ({ vendedor_id: vendedor.id, prospecto_place_id, es_prospecto: true, origen_asignacion: "asignador" })),
-      ];
-      await guardarAsignaciones(filas);
-
-      toast({ title: "Visitas asignadas", description: `${filas.length} visita${filas.length === 1 ? "" : "s"} para ${vendedor.nombre}.` });
-      limpiarSeleccion();
-    } catch (e: unknown) {
-      console.error(e);
-      toast({ variant: "destructive", title: "No se pudo asignar", description: e instanceof Error ? e.message : "Error al guardar las asignaciones" });
-    } finally {
-      setAsignando(false);
-    }
+      const { error: saveError } = await supabase.rpc("guardar_ruta_mapa", {
+        p_vendedor_id: vendedorId,
+        p_client_ids: seleccionRef.current.filter(p => p.tipo === "cliente").map(p => p.id),
+        p_prospecto_ids: seleccionRef.current.filter(p => p.tipo === "prospecto").map(p => p.id),
+      });
+      if (saveError) throw new Error(saveError.message);
+      toast({ title: "Visitas asignadas", description: `8 visitas para ${vendedor.nombre}.` }); limpiarRuta();
+    } catch (e) {
+      toast({ variant: "destructive", title: "No se pudo asignar", description: e instanceof Error ? e.message : "Reintentá el guardado." });
+    } finally { setAsignando(false); busyRef.current = false; }
   };
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Comuna</Label>
-          <MultiSelect options={comunasOpciones} selected={comunas} onChange={(v) => { setComunas(v); setBarrios([]); }} placeholder="Elegí comunas" />
+          <Label className="text-xs text-muted-foreground">1. Vendedor</Label>
+          <SearchableSelect options={vendedores.map(v => ({ value: v.id, label: v.nombre }))} value={vendedorId}
+            onValueChange={cambiarVendedor} placeholder="Elegí el vendedor" searchPlaceholder="Buscar vendedor..." disabled={asignando} />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Barrio</Label>
-          <MultiSelect options={barriosOpciones} selected={barrios} onChange={setBarrios} placeholder="Todos los de la comuna" />
+          <Label className="text-xs text-muted-foreground">2. Barrio o zona de su cartera</Label>
+          <SearchableSelect options={zonas} value={zona} onValueChange={v => { cancelarBusqueda(); infoRef.current?.close(); setZona(v); }}
+            placeholder="Toda la cartera" searchPlaceholder="Buscar barrio o localidad..." disabled={!vendedorId || cargando || asignando} />
         </div>
-        <Button onClick={cargarZona} disabled={cargando} className="gap-2">
-          {cargando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-          Mostrar la zona en el mapa
-        </Button>
       </div>
-
-      <SegmentFilters
-        value={segmentos}
-        onChange={setSegmentos}
-        campos={["estados", "rubros", "vendedores"]}
-        vendedores={vendedoresCartera}
-        titulo="Qué mostrar"
-      />
-
-      {aviso && <p className="text-xs text-amber-600">{aviso}</p>}
-      {filtrados.length > MAX_PUNTOS && <p className="text-xs text-amber-600">Se muestran {MAX_PUNTOS} de {filtrados.length} puntos. Filtrá por estado o rubro para acotar el mapa.</p>}
-
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
-        <div className="relative rounded-lg border overflow-hidden h-[560px]">
-          {errorMapa ? (
-            <div className="p-6 text-sm text-destructive">{errorMapa}</div>
-          ) : (
-            <div ref={mapRef} className="w-full h-full" />
-          )}
-          <div className="absolute bottom-3 left-3 bg-background/95 p-3 rounded-lg shadow border text-xs space-y-1">
-            {ESTADOS.map((e) => (
-              <div key={e.value} className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: e.color }} />
-                <span>{e.plural}</span>
-                <span className="text-muted-foreground ml-auto pl-3">{conteo.get(e.value) || 0}</span>
-              </div>
-            ))}
+      {!vendedorId && <p className="text-sm text-muted-foreground">Elegí un vendedor para ver todos sus clientes y después acotá el mapa por barrio o localidad.</p>}
+      {cargando && <p role="status" className="flex items-center gap-2 text-sm"><Loader2 className="w-4 h-4 animate-spin" />Cargando la cartera completa...</p>}
+      {errorCarga && <div role="alert" className="text-sm text-destructive">{errorCarga} <Button variant="outline" size="sm" onClick={() => setRecarga(n => n + 1)}>Reintentar carga</Button></div>}
+      {vendedorId && !cargando && !errorCarga && <p role="status" className="text-sm text-muted-foreground">
+        {cartera.length + sinUbicacion.length} clientes en la cartera · {cartera.length} con ubicación · {clientesVisibles.length} coinciden con los filtros.
+      </p>}
+      {!!sinUbicacion.length && <details className="rounded-md border p-3 text-sm">
+        <summary className="cursor-pointer">{sinUbicacion.length} cliente{sinUbicacion.length === 1 ? "" : "s"} sin ubicación en el mapa</summary>
+        <p className="mt-2 text-xs text-muted-foreground">Faltan coordenadas válidas. Completá sus ubicaciones en Carga de datos para poder seleccionarlos.</p>
+        <ul className="mt-2 space-y-1 max-h-40 overflow-auto">{sinUbicacion.map(c => <li key={c.client_id}>{c.fantasia || c.razon_social} <span className="text-muted-foreground">· {c.direccion_principal || c.ciudad_principal || "Sin dirección"}</span></li>)}</ul>
+      </details>}
+      {vendedorId && <fieldset disabled={asignando}><SegmentFilters value={segmentos} onChange={setSegmentos} campos={["estados", "rubros"]} titulo="Filtrar clientes de la cartera" /></fieldset>}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4">
+        <div className="relative rounded-lg border overflow-hidden h-[420px] sm:h-[560px] min-w-0">
+          <div ref={mapRef} className="w-full h-full" />
+          {errorMapa && <div role="alert" className="absolute inset-0 p-6 bg-background text-sm text-destructive">{errorMapa}</div>}
+          <div className="absolute bottom-3 left-3 bg-background/95 p-3 rounded-md shadow border text-xs space-y-1">
+            {ESTADOS.map(e => <div key={e.value} className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: e.color }} /><span>{e.plural}</span><span className="text-muted-foreground ml-auto pl-3">{conteo.get(e.value) || 0}</span></div>)}
           </div>
         </div>
-
-        <div className="rounded-lg border p-4 space-y-3 h-fit">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Ruta en armado</span>
-            <Badge variant="secondary" className="ml-auto">{elegidos.length}/{VISITAS_POR_DIA}</Badge>
+        <div className="rounded-lg border p-4 space-y-3 h-fit min-w-0">
+          <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-muted-foreground" /><span className="text-sm font-medium">3. Ruta en armado</span><Badge variant="secondary" className="ml-auto">{seleccion.length}/{VISITAS_POR_DIA}</Badge></div>
+          <p className="text-xs text-muted-foreground">Tocá los clientes en el mapa para agregarlos. El centro se calcula entre los clientes elegidos; el círculo marca el límite de 1,5 km.</p>
+          {!!seleccion.length && <p className="text-sm">{clientesElegidos.length} clientes + {seleccion.length - clientesElegidos.length} prospectos</p>}
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {seleccion.map(p => <div key={p.key} className="flex items-start gap-2 text-sm">
+              <span className="w-2.5 h-2.5 mt-1 rounded-full shrink-0" style={{ backgroundColor: colorEstado(p.estado) }} />
+              <div className="flex-1 min-w-0"><p className="truncate" title={p.nombre}>{p.nombre}</p><p className="text-xs text-muted-foreground">{p.rubro || (p.tipo === "cliente" ? "Cliente" : "Prospecto")}{p.distancia_cliente_m != null ? ` · a ${p.distancia_cliente_m} m de un cliente` : ""}</p></div>
+              <button type="button" className="p-1" onClick={() => toggle(p)} disabled={buscando || asignando} aria-label={`Quitar ${p.nombre}`}><X className="w-4 h-4 text-muted-foreground" /></button>
+            </div>)}
           </div>
-          <p className="text-xs text-muted-foreground">Elegí ocho visitas. El primer punto fija el centro del radio de 1,5 km; el círculo indica el límite.</p>
-          {elegidos.length > 0 && <Button variant="ghost" size="sm" disabled={asignando} onClick={limpiarSeleccion}>Vaciar ruta y cambiar centro</Button>}
-          <div className="space-y-1.5 max-h-64 overflow-y-auto">
-            {elegidos.map((p) => (
-              <div key={p.key} className="flex items-center gap-2 text-sm">
-                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: colorEstado(p.estado) }} />
-                <span className="truncate flex-1">{p.nombre}</span>
-                {p.rubro && <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">{p.rubro}</span>}
-                <button type="button" onClick={() => toggle(p.key)} aria-label="Quitar">
-                  <X className="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Vendedor</Label>
-            <SearchableSelect
-              options={vendedores.map((v) => ({ value: v.id, label: v.nombre }))}
-              value={vendedorId}
-              onValueChange={setVendedorId}
-              placeholder="Elegí el vendedor"
-              searchPlaceholder="Buscar vendedor..."
-            />
-          </div>
-          {elegidos.length > 0 && elegidos.length !== 8 && (
-            <p className="text-xs text-muted-foreground">La ruta debe tener 8 visitas ({elegidos.length} elegidas).</p>
-          )}
-          <Button className="w-full gap-2" disabled={!vendedorId || elegidos.length !== VISITAS_POR_DIA || asignando} onClick={asignar}>
-            {asignando ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
-            Asignar {elegidos.length || ""} visita{elegidos.length === 1 ? "" : "s"}
+          {errorSeleccion && <p role="alert" className="text-xs text-destructive">{errorSeleccion}</p>}
+          {!!clientesElegidos.length && seleccion.length < VISITAS_POR_DIA && <div className="space-y-2 border-t pt-3">
+            <Label className="text-xs">Rubros para completar con prospectos</Label>
+            <fieldset disabled={buscando || asignando}><MultiSelect ariaLabel="Rubros de los prospectos" options={rubros.some(r => r.value.toUpperCase() === "HOTEL") ? rubros : [...rubros, { value: "Hotel", label: "Hotel" }]} selected={rubrosProspectos} onChange={setRubrosProspectos} placeholder="Todos, incluidos hoteles" /></fieldset>
+            <Button className="w-full gap-2" onClick={completar} disabled={cargando || Boolean(errorCarga) || buscando || asignando || Boolean(errorSeleccion)}>{buscando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}Completar con prospectos</Button>
+            <p className="text-xs text-muted-foreground">Busca primero a 150 m del centro y amplía sólo si hace falta, hasta 1,5 km. Los más cercanos completan las 8 visitas; podés cambiarlos desde el mapa.</p>
+          </div>}
+          {buscando && <p role="status" className="text-xs text-muted-foreground">Buscando prospectos cercanos en la base y en Google Maps...</p>}
+          {errorBusqueda && <p role="alert" className="text-xs text-destructive">{errorBusqueda}</p>}
+          {resultado && <div role="status" className="space-y-1 text-xs text-muted-foreground">
+            <p>Búsqueda hasta {resultado.radio_busqueda_m} m del centro de los clientes.</p>
+            {seleccion.length < VISITAS_POR_DIA && <p className="text-amber-600">Faltan {VISITAS_POR_DIA - seleccion.length} visitas para completar la ruta. Podés volver a buscar o ajustar los rubros y los clientes. Se mantiene el límite de 1,5 km.</p>}
+            {resultado.avisos.map((a, i) => <p key={i} className="text-amber-600">{a}</p>)}
+          </div>}
+          {!!seleccion.length && <Button variant="ghost" size="sm" disabled={asignando} onClick={() => { if (window.confirm("¿Descartar el borrador de esta ruta y vaciar la selección?")) limpiarRuta(); }}>Descartar borrador</Button>}
+          <Button className="w-full gap-2" onClick={asignar} disabled={cargando || Boolean(errorCarga) || seleccion.length !== VISITAS_POR_DIA || Boolean(errorSeleccion) || !vendedorId || buscando || asignando}>
+            {asignando ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}Asignar 8 visitas
           </Button>
+          <p className="text-xs text-muted-foreground">Las visitas se guardan al pulsar Asignar 8 visitas.</p>
         </div>
       </div>
     </div>

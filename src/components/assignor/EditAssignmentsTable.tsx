@@ -1,3 +1,4 @@
+import { useDraftState, useAssignmentDraftStore } from "@/hooks/useAssignmentDraft";
 import { guardarAsignaciones } from "@/lib/asignaciones";
 import { useState, useEffect, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -74,11 +75,13 @@ const EditAssignmentsTable = ({
   onBack,
   onComplete,
 }: EditAssignmentsTableProps) => {
+  const draftStore = useAssignmentDraftStore();
+  const draftScope = "editar:" + selectedAssignments.map(p => p.id).sort().join("|");
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [assignmentMap, setAssignmentMap] = useState<Record<string, string>>({});
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterVendedor, setFilterVendedor] = useState<string>("all");
+  const [assignmentMap, setAssignmentMap] = useDraftState<Record<string, string>>(draftScope, "assignmentMap", {});
+  const [selectedIds, setSelectedIds] = useDraftState<Set<string>>(draftScope, "selectedIds", new Set());
+  const [searchTerm, setSearchTerm] = useDraftState(draftScope, "searchTerm", "");
+  const [filterVendedor, setFilterVendedor] = useDraftState<string>(draftScope, "filterVendedor", "all");
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -108,7 +111,7 @@ const EditAssignmentsTable = ({
       selectedAssignments.forEach((a) => {
         initialMap[a.id] = a.vendedor_id;
       });
-      setAssignmentMap(initialMap);
+      setAssignmentMap(prev => ({ ...initialMap, ...Object.fromEntries(Object.entries(prev).filter(([id]) => Object.prototype.hasOwnProperty.call(initialMap, id))) }));
     } catch (error) {
       console.error("Error fetching vendedores:", error);
       toast({ variant: "destructive", title: "Error", description: "Error al cargar vendedores" });
@@ -195,6 +198,7 @@ const EditAssignmentsTable = ({
         description: `Se modificaron ${newAssignments.length} asignaciones exitosamente`,
       });
 
+      draftStore.clear(draftScope);
       if (onComplete) onComplete(); else onBack();
     } catch (error) {
       console.error("Error saving assignments:", error);

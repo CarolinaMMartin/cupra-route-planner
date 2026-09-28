@@ -16,6 +16,7 @@ import { GEO_PROVINCIAS, geoComunas, geoBarrios } from "@/data/geoBuenosAires";
 import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 import { ESTADOS } from "@/lib/segmentos";
 import { useRubros } from "@/hooks/useRubros";
+import { useDraftState, useAssignmentDraftStore } from "@/hooks/useAssignmentDraft";
 
 
 interface Vendedor { id: string; profileId: string; nombre: string; email: string; }
@@ -34,23 +35,24 @@ const FilterPanel = ({
   onRequestRecommendations, isLoading, onCancel, placesData,
   instruccionesAdicionales, onInstruccionesChange
 }: FilterPanelProps) => {
-  const [mode, setMode] = useState<'area' | 'custom' | 'manual' | 'mapa'>('area');
+  const [mode, setMode] = useDraftState<'area' | 'custom' | 'manual' | 'mapa'>("filtros", "mode", 'area');
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [selectedVendedores, setSelectedVendedores] = useState<string[]>([]);
+  const [selectedVendedores, setSelectedVendedores] = useDraftState<string[]>("filtros", "selectedVendedores", []);
   const [isLoadingVendedores, setIsLoadingVendedores] = useState(true);
-  const [selectedComuna, setSelectedComuna] = useState<string[]>([]);
-  const [selectedBarrio, setSelectedBarrio] = useState<string[]>([]);
-  const [selectedProvincia, setSelectedProvincia] = useState<string>('all');
+  const [selectedComuna, setSelectedComuna] = useDraftState<string[]>("filtros", "selectedComuna", []);
+  const [selectedBarrio, setSelectedBarrio] = useDraftState<string[]>("filtros", "selectedBarrio", []);
+  const [selectedProvincia, setSelectedProvincia] = useDraftState<string>("filtros", "selectedProvincia", 'all');
   const [areas, setAreas] = useState<Area[]>([]);
-  const [selectedArea, setSelectedArea] = useState<string>('none');
+  const [selectedArea, setSelectedArea] = useDraftState<string>("filtros", "selectedArea", 'none');
   const [isLoadingAreas, setIsLoadingAreas] = useState(true);
-  const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useState(false);
+  const [isAIInstructionsOpen, setIsAIInstructionsOpen] = useDraftState("filtros", "isAIInstructionsOpen", false);
   // Qué tipo de visitas pedir: vacío = todos los estados, sin cupos.
-  const [selectedEstados, setSelectedEstados] = useState<string[]>([]);
-  const [selectedRubros, setSelectedRubros] = useState<string[]>([]);
+  const [selectedEstados, setSelectedEstados] = useDraftState<string[]>("filtros", "selectedEstados", []);
+  const [selectedRubros, setSelectedRubros] = useDraftState<string[]>("filtros", "selectedRubros", []);
   const { rubros: rubrosOpciones, loading: loadingRubros } = useRubros();
   
   const { toast } = useToast();
+  const draftStore = useAssignmentDraftStore();
 
   const provincias = useMemo(() => {
     const set = new Set<string>(GEO_PROVINCIAS);
@@ -120,7 +122,7 @@ const FilterPanel = ({
       if (error) throw error;
       const mapped = (data || []).map(v => ({ id: v.user_id, profileId: v.id, nombre: toTitleCase(v.nombre), email: v.email }));
       setVendedores(mapped);
-      setSelectedVendedores(mapped.map(v => v.id));
+      if (draftStore.get("filtros", "selectedVendedores", null) === null) setSelectedVendedores(mapped.map(v => v.id));
     } catch (error) { console.error('Error fetching vendedores:', error); }
     finally { setIsLoadingVendedores(false); }
   };
@@ -227,7 +229,7 @@ const FilterPanel = ({
             <MapIcon className={`w-4 h-4 shrink-0 ${mode === 'mapa' ? 'text-primary' : 'text-muted-foreground'}`} />
             <span className="font-medium text-sm">Mapa de la zona</span>
           </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">Ver clientes y prospectos por estado y asignar desde el mapa</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">Elegir clientes de un vendedor y completar con prospectos cercanos</p>
         </button>
       </div>
 

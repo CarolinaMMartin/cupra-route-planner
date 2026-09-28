@@ -40,6 +40,7 @@ import { toTitleCase } from "@/lib/format";
 import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { useRubros } from "@/hooks/useRubros";
+import { useDraftState } from "@/hooks/useAssignmentDraft";
 import { colorEstado, DIAS_ACTIVO, DIAS_INACTIVO, ESTADOS, estadoPorDias, hoyArgentina, labelEstado } from "@/lib/segmentos";
 
 
@@ -123,28 +124,29 @@ const ManualAssignment = () => {
   const { toast } = useToast();
 
   // ── State ──
-  const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [filterTipo, setFilterTipo] = useState<TipoFiltro>("todos");
-  const [filterCiudad, setFilterCiudad] = useState("all");
-  const [filterProvincia, setFilterProvincia] = useState("all");
-  const [filterVendedor, setFilterVendedor] = useState("all");
-  const [filterEstados, setFilterEstados] = useState<string[]>([]);
-  const [filterRubros, setFilterRubros] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useDraftState("manual", "searchQuery", "");
+  const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
+  const [filterTipo, setFilterTipo] = useDraftState<TipoFiltro>("manual", "filterTipo", "todos");
+  const [filterCiudad, setFilterCiudad] = useDraftState("manual", "filterCiudad", "all");
+  const [filterProvincia, setFilterProvincia] = useDraftState("manual", "filterProvincia", "all");
+  const [filterVendedor, setFilterVendedor] = useDraftState("manual", "filterVendedor", "all");
+  const [filterEstados, setFilterEstados] = useDraftState<string[]>("manual", "filterEstados", []);
+  const [filterRubros, setFilterRubros] = useDraftState<string[]>("manual", "filterRubros", []);
   const { rubros: rubrosOpciones } = useRubros();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [prospectos, setProspectos] = useState<Prospecto[]>([]);
   const [vendedores, setVendedores] = useState<Vendedor[]>([]);
-  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
-  const [selectedVendedorId, setSelectedVendedorId] = useState<string>("");
+  const [selectedRows, setSelectedRows] = useDraftState<Set<string>>("manual", "selectedRows", new Set());
+  const [selectedSnapshots, setSelectedSnapshots] = useDraftState<Record<string, Fila>>("manual", "selectedSnapshots", {});
+  const [selectedVendedorId, setSelectedVendedorId] = useDraftState<string>("manual", "selectedVendedorId", "");
   const [isSearching, setIsSearching] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [suggestionMode, setSuggestionMode] = useState<SuggestionMode | null>(null);
+  const [suggestionMode, setSuggestionMode] = useDraftState<SuggestionMode | null>("manual", "suggestionMode", null);
   const [hasSearched, setHasSearched] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [sortKey, setSortKey] = useState<SortKey>("monto");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [filtersOpen, setFiltersOpen] = useDraftState("manual", "filtersOpen", false);
+  const [sortKey, setSortKey] = useDraftState<SortKey>("manual", "sortKey", "monto");
+  const [sortDir, setSortDir] = useDraftState<SortDir>("manual", "sortDir", "desc");
 
   const activeFilterCount =
     (filterCiudad !== "all" ? 1 : 0) +
@@ -260,7 +262,6 @@ const ManualAssignment = () => {
 
       setClientes(clientesData);
       setProspectos(prospectosData);
-      setSelectedRows(new Set());
     } catch (err) {
       console.error("Error searching:", err);
       toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los resultados" });
@@ -423,6 +424,8 @@ const ManualAssignment = () => {
 
   // ── Selection helpers ──
   const toggleRow = (rowKey: string) => {
+    const row = filas.find(f => f.key === rowKey);
+    if (row) setSelectedSnapshots(prev => ({ ...prev, [rowKey]: row }));
     setSelectedRows(prev => {
       const next = new Set(prev);
       if (next.has(rowKey)) next.delete(rowKey);
@@ -432,13 +435,18 @@ const ManualAssignment = () => {
   };
 
   const toggleAll = () => {
-    if (selectedRows.size === filas.length) setSelectedRows(new Set());
-    else setSelectedRows(new Set(filas.map(f => f.key)));
+    setSelectedSnapshots(prev => ({ ...prev, ...Object.fromEntries(filas.map(f => [f.key, f])) }));
+    setSelectedRows(prev => {
+      const next = new Set(prev);
+      const quitar = filas.every(f => prev.has(f.key));
+      filas.forEach(f => { if (quitar) next.delete(f.key); else next.add(f.key); });
+      return next;
+    });
   };
 
   // ── Assign ──
   const selectedVendedor = vendedores.find(v => v.user_id === selectedVendedorId);
-  const selectedFilas = filas.filter(f => selectedRows.has(f.key));
+  const selectedFilas = [...selectedRows].map(key => filas.find(f => f.key === key) || selectedSnapshots[key]).filter((f): f is Fila => Boolean(f));
   const selClientes = selectedFilas.filter(f => f.tipo === "cliente");
   const selProspectos = selectedFilas.filter(f => f.tipo === "prospecto");
 
@@ -484,7 +492,7 @@ const ManualAssignment = () => {
         description: `${partes} asignado(s) a ${selectedVendedor!.nombre}`,
       });
 
-      setSelectedRows(new Set());
+      setSelectedRows(new Set()); setSelectedSnapshots({});
       buscar(debouncedQuery, filterTipo, filterCiudad, filterProvincia, filterVendedor, suggestionMode || undefined, filterEstados, filterRubros);
 
     } catch (err: any) {
@@ -803,7 +811,7 @@ const ManualAssignment = () => {
                   <TableRow>
                     <TableHead className="w-10">
                       <Checkbox
-                        checked={selectedRows.size === filas.length && filas.length > 0}
+                        checked={filas.length > 0 && filas.every(f => selectedRows.has(f.key))}
                         onCheckedChange={toggleAll}
                       />
                     </TableHead>
