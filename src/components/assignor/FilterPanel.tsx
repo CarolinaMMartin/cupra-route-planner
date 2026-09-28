@@ -386,7 +386,8 @@ const FilterPanel = ({
       )}
 
       {mode === 'mapa' && (
-        <MapaZonaAsignacion vendedores={vendedores.map((v) => ({ id: v.id, nombre: v.nombre }))} />
+        <MapaZonaAsignacion vendedores={vendedores.map((v) => ({ id: v.id, nombre: v.nombre }))}
+          onIrAManual={vendedorId => { draftStore.set("manual", "selectedVendedorId", vendedorId, ""); setMode("manual"); }} />
       )}
     </div>
   );

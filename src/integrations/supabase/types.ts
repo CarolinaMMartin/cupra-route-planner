@@ -1797,6 +1797,7 @@ export type Database = {
           p_client_ids: string[]
           p_prospecto_ids?: string[]
           p_vendedor_id: string
+          p_zona_key?: string
         }
         Returns: number
       }

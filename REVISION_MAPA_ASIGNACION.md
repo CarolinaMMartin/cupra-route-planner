@@ -9,6 +9,14 @@
 5. Los prospectos más cercanos completan automáticamente los lugares libres. Se muestran alternativas en el mapa, rubro, reseñas y distancia al cliente más próximo. Se puede quitar un prospecto y reemplazarlo; volver a completar respeta los que se quitaron.
 6. **Asignar 8 visitas** confirma la selección. Buscar prospectos no asigna visitas. Se conserva el guardado transaccional y la protección frente a reintentos.
 
+## Vendedores sin clientes
+
+Al elegir un vendedor sin cartera se ofrece el catálogo completo de barrios de CABA y localidades bonaerenses que ya usa la aplicación. Se elige una zona y una o varias categorías (vinotecas, restaurantes, bares, hoteles, etc.) y se pulsa **Buscar 8 prospectos**. No exige seleccionar un cliente ni utiliza clientes ajenos como anclas.
+
+El servidor resuelve el centro del barrio con Google, verificando nombre, provincia, país y distrito cuando corresponde. Guarda ese centro en `mapa_zonas_prospectos`, una tabla que el navegador no puede modificar. Los prospectos deben corresponder a la zona elegida y estar dentro de 1,5 km; se conserva la ampliación progresiva y el descarte de duplicados/no disponibles. Los negocios de un barrio vecino no completan el faltante silenciosamente.
+
+El aviso ofrece **Ir a asignación manual** para asignar clientes de otro vendedor y lleva el vendedor seleccionado. El borrador del mapa queda guardado. Cambiar de barrio o categoría con una ruta armada pide confirmación antes de reemplazar sus prospectos. Si faltan destinos, la pantalla informa el déficit y no permite confirmar una ruta incompleta.
+
 ## Búsqueda y límites
 
 - Incluye vinotecas, wine bars, restaurantes, bares y hoteles; ofrece filtros de rubro independientes de los filtros de clientes.
@@ -31,18 +39,20 @@
 
 ## Protección al confirmar
 
-`guardar_ruta_mapa` verifica permisos, exactamente ocho destinos únicos, al menos un cliente y vendedor activo. Relee y bloquea ubicaciones/clientes/prospectos, calcula el centro exclusivamente con los clientes y rechaza cualquier destino a más de 1,5 km. Impide tomar un prospecto asignado a otro vendedor mientras se preparaba la ruta. Delega el guardado en `guardar_asignaciones` dentro de la misma transacción. No cambia el dueño de la cartera.
+`guardar_ruta_mapa` verifica permisos, exactamente ocho destinos únicos y vendedor activo. Relee y bloquea ubicaciones/clientes/prospectos, calcula el centro con los clientes, o relee el centro territorial verificado cuando son ocho prospectos. Rechaza cualquier destino a más de 1,5 km y, en el segundo caso, los negocios de otro barrio/localidad. Impide tomar un prospecto asignado a otro vendedor mientras se preparaba la ruta. Delega el guardado en `guardar_asignaciones` dentro de la misma transacción. No cambia el dueño de la cartera.
 
 ## Validación
 
-`npm run check`: 148 pruebas aprobadas (87 de reglas/motor/búsqueda, 22 de base, 28 de importaciones, 9 de borradores y 2 de empaquetado), TypeScript y compilación de producción.
+`npm run check`: 163 pruebas aprobadas (95 de reglas/motor/búsqueda, 29 de base, 28 de importaciones, 9 de borradores y 2 de empaquetado), TypeScript y compilación de producción.
 
 Las pruebas nuevas cubren centroides, distintas carteras, localidades fuera de CABA, coordenadas faltantes, cuatro clientes más cuatro prospectos, orden por distancia, ampliación progresiva, búsqueda de cobertura, hoteles, filtros, duplicados, fallos de Google, rutas incompletas, guardado de ocho, cambio concurrente de ubicación/disponibilidad, permisos, rollback y reintentos.
 
-Prueba de interfaz en Chromium con servicios simulados: vendedor → cartera completa → Palermo → cuatro clientes → cuatro prospectos; reemplazo de un prospecto; cambio de clientes; guardado; cambio de vendedor durante la búsqueda; error/reintento; recarga; navegación a otra pantalla y regreso; borradores separados por vendedor; selección manual recuperada; fallo de almacenamiento, advertencia al cerrar y reintento; vista móvil sin desbordamiento. Sin errores de ejecución. Google se simula en las pruebas automatizadas; la disponibilidad real depende del servicio y de negocios existentes con ubicación válida.
+Prueba de interfaz en Chromium con servicios simulados: vendedor → cartera completa → Palermo → cuatro clientes → cuatro prospectos; reemplazo de un prospecto; cambio de clientes; guardado; cambio de vendedor durante la búsqueda; error/reintento; recarga; navegación a otra pantalla y regreso; borradores separados por vendedor; selección manual recuperada; fallo de almacenamiento, advertencia al cerrar y reintento; vista móvil sin desbordamiento. También se prueba un vendedor sin cartera: barrio + Hotel → ocho prospectos, reemplazo de uno, restauración del borrador, aviso/cancelación al cambiar barrio o categoría, paso a asignación manual con el vendedor y confirmación de ocho prospectos. Sin errores de ejecución. Google se simula en las pruebas automatizadas; la disponibilidad real depende del servicio y de negocios existentes con ubicación válida.
 
 ## Publicación
 
 Aplicar y registrar `20260928140000_ruta_mapa.sql`. Desplegar `complete-map-route` y `generate-recommendations` (la regla de hoteles es compartida). Publicar el frontend de `main`, conectado a Lovable. Esta migración sólo incorpora un RPC y permisos: no inserta visitas ni cambia clientes, prospectos o ventas existentes.
 
 Las reglas de cartera, filtrado y geometría viven en `_shared/` para que cada función pueda desplegarse de forma independiente. Las pruebas de empaquetado recorren los imports y rechazan dependencias de carpetas de otras funciones.
+
+Para el caso sin cartera, aplicar `20260928150000_mapa_sin_cartera.sql` y desplegar `complete-map-route` con `_shared/`. La firma de `guardar_ruta_mapa` incorpora `p_zona_key` opcional y conserva las llamadas anteriores de tres argumentos. La migración no modifica clientes, prospectos ni visitas existentes. Se verificó en Google la geocodificación territorial de Palermo y la presencia de sublocalidad en Nearby: ambas consultas de sólo lectura respondieron HTTP 200.

@@ -1,7 +1,8 @@
-import { authorize, corsHeaders, json, RequestError, failure } from "../_shared/location-service.ts";
+import { authorize, corsHeaders, json, RequestError, failure, googleGeocode } from "../_shared/location-service.ts";
 import { hayGoogleMaps } from "../_shared/google-maps.ts";
 import { allClients } from "../_shared/import-batch.ts";
-import { carteraDelVendedor, puntosDeCartera, validarSeleccionMapa, ubicacionesPreferidas, type UbicacionMapa } from "../_shared/map-selection.ts";
+import { carteraDelVendedor, centroClientes, coordenadaMapaValida, puntosDeCartera, validarSeleccionMapa, ubicacionesPreferidas, type UbicacionMapa } from "../_shared/map-selection.ts";
+import { centroDeZonaGoogle, prospectoEnZona, zonaDelCatalogo, type ZonaProspeccion, type ZonaProspeccionResuelta } from "../_shared/map-zones.ts";
 import { distanciaKm, RADIO_RUTA_KM, VISITAS_POR_DIA } from "../_shared/ruta.ts";
 import { hoyArgentina, excluidoPorFeedback, type FeedbackLike } from "../_shared/reglas.ts";
 import { evaluarProspectoContraCartera, type ClienteRef } from "../_shared/portfolio-ranking.ts";
@@ -26,19 +27,40 @@ function ids(value: unknown, max: number, required = false): string[] {
   return value;
 }
 
+/** El centro proviene de una zona del catálogo verificada por Google, no del navegador. */
+async function resolverZona(db: Awaited<ReturnType<typeof authorize>>["db"], zona: ZonaProspeccion): Promise<ZonaProspeccionResuelta> {
+  const leer = () => db.from("mapa_zonas_prospectos").select("lat,lng").eq("zona_key", zona.key).maybeSingle();
+  const { data: guardada, error } = await leer();
+  if (error) throw new Error("No se pudo consultar el barrio. Reintentá.");
+  if (guardada && coordenadaMapaValida(guardada)) return { ...zona, ...guardada };
+  const results = await googleGeocode(new URLSearchParams({ address: `${zona.barrio}, ${zona.comuna}, ${zona.provincia}, Argentina`, components: "country:AR" }));
+  const validos = results.flatMap(r => { const centro = centroDeZonaGoogle(r, zona); return centro ? [{ ...centro, google_place_id: r.place_id || null }] : []; });
+  if (validos.length !== 1) throw new RequestError("Google no pudo ubicar ese barrio de forma única. Elegí otra zona o reintentá.", 422, "ZONE_NOT_FOUND");
+  const { error: saveError } = await db.from("mapa_zonas_prospectos").upsert({ zona_key: zona.key,
+    provincia: zona.provincia, comuna: zona.comuna, barrio: zona.barrio, ...validos[0] }, { onConflict: "zona_key", ignoreDuplicates: true });
+  if (saveError) throw new Error("No se pudo guardar el centro del barrio. Reintentá.");
+  const { data: vigente, error: readError } = await leer();
+  if (readError || !vigente || !coordenadaMapaValida(vigente)) throw new Error("No se pudo verificar el centro del barrio.");
+  return { ...zona, ...vigente };
+}
+
 export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Método no permitido" }, 405);
   try {
     const { db } = await authorize(req, true);
     const body = await req.json().catch(() => { throw new RequestError("Solicitud inválida", 400, "INVALID_REQUEST"); });
-    const clientesIds = ids(body.client_ids, 7, true);
-    const conservarIds = ids(body.prospect_ids ?? [], 6);
+    if (!body || typeof body !== "object") throw new RequestError("Solicitud inválida", 400, "INVALID_REQUEST");
+    const clientesIds = ids(body.client_ids, 7);
+    const conservarIds = ids(body.prospect_ids ?? [], 7);
     const omitirIds = new Set(ids(body.omitir_ids ?? [], 100));
     const rubros = ids(body.rubros ?? [], 20);
     if (typeof body.vendedor_id !== "string" || clientesIds.length + conservarIds.length >= VISITAS_POR_DIA) {
-      throw new RequestError("La ruta debe tener entre una y siete visitas antes de completar.", 400, "INVALID_SELECTION");
+      throw new RequestError("La ruta debe tener menos de ocho visitas antes de completar.", 400, "INVALID_SELECTION");
     }
+    const zonaCatalogo = clientesIds.length ? null : zonaDelCatalogo(body.zona_key);
+    if (!clientesIds.length && !zonaCatalogo) throw new RequestError("Elegí un barrio o localidad para buscar prospectos.", 400, "ZONE_REQUIRED");
+    if (clientesIds.length && body.zona_key) throw new RequestError("Una ruta con clientes usa el centro de esos clientes.", 400, "INVALID_CENTER");
     const [perfiles, clientes, places] = await Promise.all([
       all((from, to) => db.from("profiles").select("user_id,nombre,activo,rol,perfil_ventas").or("rol.eq.vendedor,perfil_ventas.eq.true").order("user_id").range(from, to)),
       allClients(db),
@@ -51,11 +73,11 @@ export async function handler(req: Request): Promise<Response> {
     const elegidos = cartera.filter(c => clientesIds.includes(c.client_id));
     const { puntos: clientesPuntos } = puntosDeCartera(elegidos, places);
     if (clientesPuntos.length !== clientesIds.length) throw new RequestError("La cartera o las ubicaciones cambiaron. Volvé a cargar el vendedor.", 409, "STALE_SELECTION");
-    const selectionError = validarSeleccionMapa(clientesPuntos);
+    const zona = zonaCatalogo ? await resolverZona(db, zonaCatalogo) : null;
+    const selectionError = validarSeleccionMapa(clientesPuntos, false, zona);
     if (selectionError) throw new RequestError(selectionError, 422, "INVALID_ROUTE");
-    // El centro se recalcula desde la base, nunca se acepta una coordenada arbitraria del navegador.
-    const centro = { lat: clientesPuntos.reduce((sum, p) => sum + p.lat, 0) / clientesPuntos.length,
-      lng: clientesPuntos.reduce((sum, p) => sum + p.lng, 0) / clientesPuntos.length };
+    // Con clientes se usa su centro; sin clientes se usa el barrio verificado.
+    const centro = (clientesPuntos.length ? centroClientes(clientesPuntos) : zona)!;
     const dLat = RADIO_RUTA_KM / 110.5;
     const dLng = RADIO_RUTA_KM / (110.5 * Math.cos(centro.lat * Math.PI / 180));
     const hoy = hoyArgentina();
@@ -88,19 +110,20 @@ export async function handler(req: Request): Promise<Response> {
     });
     const disponible = (p: ProspectoMapa) => prospectoDisponible(p) && !bloqueados.has(p.place_id)
       && !bloqueados.has(p.google_place_id || "") && !clientesGoogle.has(p.google_place_id || p.place_id)
+      && (!zona || prospectoEnZona(p, zona))
       && evaluarProspectoContraCartera(p, refs).estado === "nuevo";
     const conservar = base.filter(p => conservarIds.includes(p.place_id));
     if (conservar.length !== conservarIds.length || conservar.some(p => !disponible(p))) {
       throw new RequestError("Uno de los prospectos ya no está disponible. Quitalo de la ruta y reintentá.", 409, "STALE_PROSPECTS");
     }
-    const routeError = validarSeleccionMapa([...clientesPuntos, ...conservar.map(p => puntoProspecto(p, clientesPuntos))]);
+    const routeError = validarSeleccionMapa([...clientesPuntos, ...conservar.map(p => puntoProspecto(p, clientesPuntos, centro))], false, zona);
     if (routeError) throw new RequestError(routeError, 422, "INVALID_ROUTE");
     const deadline = Date.now() + 45_000;
     let consultas = 0;
     const consumir = () => { if (++consultas > 60 || Date.now() >= deadline) throw new Error("Se agotó el tiempo de búsqueda"); };
     const objetivo = VISITAS_POR_DIA - clientesPuntos.length - conservar.length;
     const result = await buscarComplementoMapa({
-      clientes: clientesPuntos, objetivo, base, rubros,
+      clientes: clientesPuntos, centroZona: zona || undefined, objetivo, base, rubros,
       pasaGate: p => disponible(p) && !omitirIds.has(p.place_id) && !omitirIds.has(p.google_place_id || "")
         && !conservar.some(prev => mismoProspecto(prev, p)),
       descubrir: hayGoogleMaps() ? (center, radius, types) => descubrirProspectosMapa(center, radius, types, deadline, consumir) : undefined,
@@ -124,8 +147,8 @@ export async function handler(req: Request): Promise<Response> {
         && distanciaKm(centro, { lat: p!.latitud!, lng: p!.longitud! }) <= RADIO_RUTA_KM), centro);
     }
     const seleccionados = final.slice(0, objetivo);
-    return json({ success: true, centro, radio_busqueda_m: result.radio_m,
-      clientes: clientesPuntos, prospectos: final.map(p => puntoProspecto(p, clientesPuntos)),
+    return json({ success: true, centro, zona, radio_busqueda_m: result.radio_m,
+      clientes: clientesPuntos, prospectos: final.map(p => puntoProspecto(p, clientesPuntos, centro)),
       elegidos: seleccionados.map(p => p.place_id), faltantes: objetivo - seleccionados.length,
       avisos: result.avisos });
   } catch (error) { return failure(error); }

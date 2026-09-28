@@ -5,6 +5,8 @@ import {
   carteraDelVendedor, centroClientes, coordenadaMapaValida, distanciaAlCliente, opcionesZona, perteneceZona, puntosDeCartera, validarSeleccionMapa,
   type ClienteMapa, type PuntoMapa, type UbicacionMapa,
 } from "../../../supabase/functions/_shared/map-selection";
+import { ZONAS_PROSPECCION, zonaDelCatalogo, prospectoEnZona, type ZonaProspeccionResuelta } from "../../../supabase/functions/_shared/map-zones";
+import { rubroKey } from "../../../supabase/functions/_shared/reglas";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -26,10 +28,12 @@ interface VendedorOpcion { id: string; nombre: string }
 interface Complemento {
   success: boolean; error?: string; clientes: PuntoMapa[]; prospectos: PuntoMapa[]; elegidos: string[];
   faltantes: number; radio_busqueda_m: number; avisos: string[];
+  zona?: ZonaProspeccionResuelta | null;
 }
+const zonasParaProspectos = ZONAS_PROSPECCION.map(z => ({ value: z.key, label: z.label }));
 
 /** Cartera → zona → clientes → prospectos cercanos → confirmar ocho visitas. */
-export default function MapaZonaAsignacion({ vendedores }: { vendedores: VendedorOpcion[] }) {
+export default function MapaZonaAsignacion({ vendedores, onIrAManual }: { vendedores: VendedorOpcion[]; onIrAManual?: (vendedorId: string) => void }) {
   const { toast } = useToast();
   const { mapRef, map, error: errorMapa } = useGoogleMap();
   const { rubros } = useRubros();
@@ -38,9 +42,12 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
   const [vendedorId, setVendedorId] = useDraftState("mapa", "vendedorId", "");
   const draftScope = `mapa:${vendedorId}`;
   const [zona, setZona] = useDraftState(draftScope, "zona", "todas");
+  const [zonaProspectosKey, setZonaProspectosKey] = useDraftState(draftScope, "zonaProspectosKey", "");
+  const [centroZona, setCentroZona] = useDraftState<ZonaProspeccionResuelta | null>(draftScope, "centroZona", null);
   const [segmentos, setSegmentos] = useDraftState<FiltrosSegmento>(draftScope, "segmentos", FILTROS_VACIOS);
   const [cartera, setCartera] = useState<PuntoMapa[]>([]);
   const [sinUbicacion, setSinUbicacion] = useState<ClienteMapa[]>([]);
+  const [carteraCargada, setCarteraCargada] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [recarga, setRecarga] = useState(0);
@@ -70,7 +77,12 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
   };
   const limpiarRuta = () => { limpiarProspectos(); cambiarSeleccion([]); infoRef.current?.close(); };
   const cambiarVendedor = (id: string) => {
-    cancelarBusqueda(); infoRef.current?.close(); setCartera([]); setSinUbicacion([]); setVendedorId(id);
+    cancelarBusqueda(); infoRef.current?.close(); setCartera([]); setSinUbicacion([]); setCarteraCargada(null); setVendedorId(id);
+  };
+  const cambiarZonaProspectos = (key: string) => {
+    if (key === zonaProspectosKey) return;
+    if (seleccionRef.current.length && !window.confirm("Cambiar de barrio descarta los prospectos de esta ruta. ¿Continuar?")) return;
+    limpiarRuta(); setCentroZona(null); setZonaProspectosKey(key);
   };
 
   useEffect(() => {
@@ -94,20 +106,21 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
             .in("client_id", chunk).order("id").range(from, to));
         const guardados = [...new Map([...prospectos, ...seleccionRef.current.filter(p => p.tipo === "prospecto")].map(p => [p.id, p])).values()];
         const actuales = await fetchInPages(guardados.map(p => p.id), (chunk, from, to) => supabase.from("prospectos")
-          .select("place_id,nombre,direccion,barrio,ciudad,comuna,rubro,latitud,longitud,telefono,rating,total_ratings,es_cliente_cupra,client_id,estado_negocio")
+          .select("place_id,nombre,direccion,barrio,ciudad,provincia,comuna,rubro,latitud,longitud,telefono,rating,total_ratings,es_cliente_cupra,client_id,estado_negocio")
           .in("place_id", chunk).order("place_id").range(from, to));
         if (!vigente) return;
         const datos = puntosDeCartera(clientesCartera, places);
-        setCartera(datos.puntos); setSinUbicacion(datos.sinUbicacion);
+        setCartera(datos.puntos); setSinUbicacion(datos.sinUbicacion); setCarteraCargada(vendedorId);
         // Recupera el borrador sin borrar destinos: actualiza datos o marca los que requieren revisión.
         const vigentes = new Map(datos.puntos.map(p => [p.key, p]));
         const seleccionClientes = seleccionRef.current.filter(p => p.tipo === "cliente").map(p => vigentes.get(p.key) || { ...p, excluido: true });
-        const centroActual = centroClientes(seleccionClientes);
+        const centroActual = seleccionClientes.length ? centroClientes(seleccionClientes) : centroZona?.key === zonaProspectosKey ? centroZona : null;
         const prospectsById = new Map(actuales.map(p => [p.place_id, p]));
         const actualizados = guardados.map(old => {
           const p = prospectsById.get(old.id);
           if (!p || p.es_cliente_cupra || p.client_id || ["CLOSED_PERMANENTLY", "CLOSED_TEMPORARILY"].includes(p.estado_negocio)
-            || !coordenadaMapaValida({ lat: p.latitud, lng: p.longitud })) return { ...old, excluido: true };
+            || !coordenadaMapaValida({ lat: p.latitud, lng: p.longitud })
+            || !seleccionClientes.length && centroZona && !prospectoEnZona(p, centroZona)) return { ...old, excluido: true };
           const punto = { lat: p.latitud, lng: p.longitud };
           return { ...old, ...punto, nombre: p.nombre, direccion: p.direccion, barrio: p.barrio, ciudad: p.ciudad, comuna: p.comuna,
             rubro: p.rubro, telefono: p.telefono, rating: p.rating, resenas: p.total_ratings, excluido: false,
@@ -136,14 +149,25 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
     };
   }, [map]);
 
+  const clientesElegidos = useMemo(() => seleccion.filter(p => p.tipo === "cliente"), [seleccion]);
+  const sinCartera = carteraCargada === vendedorId && !cartera.length && !sinUbicacion.length;
+  const soloProspectos = sinCartera || Boolean(zonaProspectosKey && seleccion.length && !clientesElegidos.length);
+  const zonaElegida = zonaDelCatalogo(zonaProspectosKey);
+  const centroBarrio = zonaElegida && centroZona?.key === zonaElegida.key ? centroZona : null;
+  const rubrosBusqueda = useMemo(() => {
+    const opciones = rubros.map(r => ({ value: r.value, label: r.value }));
+    for (const nombre of ["Vinoteca", "Wine bar", "Restaurante", "Bar", "Hotel", "Almacén / Supermercado", "Tienda gourmet"]) {
+      if (!opciones.some(r => rubroKey(r.value) === rubroKey(nombre))) opciones.push({ value: nombre, label: nombre });
+    }
+    return opciones.sort((a, b) => a.label.localeCompare(b.label, "es"));
+  }, [rubros]);
   const zonas = useMemo(() => [{ value: "todas", label: "Toda la cartera" }, ...opcionesZona(cartera)], [cartera]);
   const clientesVisibles = useMemo(() => filtrarPorSegmentos(cartera.filter(p => perteneceZona(p, zona)), segmentos,
     p => ({ estado: p.estado, rubro: p.rubro })), [cartera, zona, segmentos]);
   // Los elegidos permanecen visibles aunque se ajuste un filtro de clientes.
-  const visibles = useMemo(() => [...new Map([...clientesVisibles, ...prospectos, ...seleccion].map(p => [p.key, p])).values()], [clientesVisibles, prospectos, seleccion]);
-  const clientesElegidos = useMemo(() => seleccion.filter(p => p.tipo === "cliente"), [seleccion]);
-  const centro = useMemo(() => centroClientes(clientesElegidos), [clientesElegidos]);
-  const errorSeleccion = seleccion.length ? validarSeleccionMapa(seleccion) : null;
+  const visibles = useMemo(() => [...new Map([...(soloProspectos ? [] : clientesVisibles), ...prospectos, ...seleccion].map(p => [p.key, p])).values()], [clientesVisibles, prospectos, seleccion, soloProspectos]);
+  const centro = useMemo(() => clientesElegidos.length ? centroClientes(clientesElegidos) : centroBarrio, [clientesElegidos, centroBarrio]);
+  const errorSeleccion = seleccion.length ? validarSeleccionMapa(seleccion, false, soloProspectos ? centroBarrio : null) : null;
   const puntosRef = useRef(visibles); puntosRef.current = visibles;
   const conteo = useMemo(() => {
     const counts = new Map<string, number>();
@@ -156,7 +180,7 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
     let next = elegido ? prev.filter(v => v.key !== p.key) : [...prev, p];
     if (p.tipo === "cliente") next = next.filter(v => v.tipo === "cliente");
     if (!elegido) {
-      const error = validarSeleccionMapa(next);
+      const error = validarSeleccionMapa(next, false, soloProspectos ? centroBarrio : null);
       if (error) { toast({ variant: "destructive", title: "No se puede agregar", description: error }); return; }
     }
     if (p.tipo === "cliente") limpiarProspectos();
@@ -176,7 +200,7 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
       p.dias != null ? `${p.dias} días sin comprar` : "",
       p.telefono ? `Tel: ${p.telefono}` : "",
       p.rating ? `Google: ${p.rating} / 5 · ${p.resenas || 0} reseñas` : "",
-      p.distancia_centro_m != null ? `A ${p.distancia_centro_m} m del centro y ${p.distancia_cliente_m} m del cliente más cercano (en línea recta)` : "",
+      p.distancia_centro_m != null ? `A ${p.distancia_centro_m} m del centro${p.distancia_cliente_m != null ? ` y ${p.distancia_cliente_m} m del cliente más cercano` : " del barrio"} (en línea recta)` : "",
       p.excluido ? "Este destino ya no está disponible. Revisá la selección." : "",
     ];
     const div = mapPopup(p.nombre, details, p);
@@ -229,6 +253,9 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
     return () => circle.setMap(null);
   }, [map, centro]);
   useEffect(() => {
+    if (map && soloProspectos && centroBarrio && !seleccion.length) { map.setCenter(centroBarrio); map.setZoom(15); }
+  }, [map, soloProspectos, centroBarrio, seleccion.length]);
+  useEffect(() => {
     if (!map || !resultado || !seleccionRef.current.length) return;
     const bounds = new google.maps.LatLngBounds(); seleccionRef.current.forEach(p => bounds.extend(p));
     map.fitBounds(bounds);
@@ -237,7 +264,8 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
   const completar = async () => {
     if (busyRef.current) return;
     const actuales = seleccionRef.current;
-    const error = validarSeleccionMapa(actuales);
+    if (soloProspectos && !zonaElegida) return;
+    const error = soloProspectos && !actuales.length ? null : validarSeleccionMapa(actuales, false, soloProspectos ? centroBarrio : null);
     if (error || actuales.length >= VISITAS_POR_DIA) return;
     const request = ++requestRef.current;
     const controller = new AbortController(); controllerRef.current = controller;
@@ -245,7 +273,8 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
     try {
       const { data, error: invokeError } = await supabase.functions.invoke<Complemento>("complete-map-route", {
         body: { vendedor_id: vendedorId, client_ids: actuales.filter(p => p.tipo === "cliente").map(p => p.id),
-          prospect_ids: actuales.filter(p => p.tipo === "prospecto").map(p => p.id), omitir_ids: [...omitidosRef.current], rubros: rubrosProspectos },
+          prospect_ids: actuales.filter(p => p.tipo === "prospecto").map(p => p.id), omitir_ids: [...omitidosRef.current], rubros: rubrosProspectos,
+          ...(soloProspectos ? { zona_key: zonaProspectosKey } : {}) },
         signal: controller.signal,
       });
       if (request !== requestRef.current) return;
@@ -256,11 +285,13 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
       }
       const seleccionados = data.prospectos.filter(p => data.elegidos.includes(p.id));
       const next = [...data.clientes, ...actuales.filter(p => p.tipo === "prospecto"), ...seleccionados];
-      const validation = validarSeleccionMapa(next);
+      if (soloProspectos && (!data.zona || data.zona.key !== zonaProspectosKey || !coordenadaMapaValida(data.zona))) throw new Error("No se pudo verificar el centro del barrio.");
+      const validation = validarSeleccionMapa(next, false, soloProspectos ? data.zona! : null);
       if (validation) throw new Error(validation);
       if (request !== requestRef.current) return;
       setCartera(prev => prev.map(p => data.clientes.find(c => c.id === p.id) || p));
       setProspectos(prev => [...new Map([...prev, ...data.prospectos].map(p => [p.key, p])).values()]);
+      if (soloProspectos) setCentroZona(data.zona!);
       cambiarSeleccion(next); setResultado(data);
     } catch (e) {
       if (request === requestRef.current) setErrorBusqueda(e instanceof Error ? e.message : "No se pudo completar la búsqueda.");
@@ -271,7 +302,7 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
 
   const asignar = async () => {
     if (busyRef.current) return;
-    const error = validarSeleccionMapa(seleccionRef.current, true);
+    const error = validarSeleccionMapa(seleccionRef.current, true, soloProspectos ? centroBarrio : null);
     const vendedor = vendedores.find(v => v.id === vendedorId);
     if (error || !vendedor) return;
     setAsignando(true); busyRef.current = true; infoRef.current?.close();
@@ -280,6 +311,7 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
         p_vendedor_id: vendedorId,
         p_client_ids: seleccionRef.current.filter(p => p.tipo === "cliente").map(p => p.id),
         p_prospecto_ids: seleccionRef.current.filter(p => p.tipo === "prospecto").map(p => p.id),
+        ...(soloProspectos ? { p_zona_key: zonaProspectosKey } : {}),
       });
       if (saveError) throw new Error(saveError.message);
       toast({ title: "Visitas asignadas", description: `8 visitas para ${vendedor.nombre}.` }); limpiarRuta();
@@ -297,9 +329,13 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
             onValueChange={cambiarVendedor} placeholder="Elegí el vendedor" searchPlaceholder="Buscar vendedor..." disabled={asignando} />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">2. Barrio o zona de su cartera</Label>
-          <SearchableSelect options={zonas} value={zona} onValueChange={v => { cancelarBusqueda(); infoRef.current?.close(); setZona(v); }}
-            placeholder="Toda la cartera" searchPlaceholder="Buscar barrio o localidad..." disabled={!vendedorId || cargando || asignando} />
+          <Label className="text-xs text-muted-foreground">{soloProspectos ? "2. Barrio o localidad para buscar prospectos" : "2. Barrio o zona de su cartera"}</Label>
+          {soloProspectos
+            ? <SearchableSelect options={zonasParaProspectos} value={zonaProspectosKey} onValueChange={cambiarZonaProspectos}
+                placeholder="Elegí un barrio o localidad" searchPlaceholder="Buscar barrio o localidad..." className="h-auto min-h-10 whitespace-normal text-left"
+                disabled={!vendedorId || cargando || asignando} />
+            : <SearchableSelect options={zonas} value={zona} onValueChange={v => { cancelarBusqueda(); infoRef.current?.close(); setZona(v); }}
+                placeholder="Toda la cartera" searchPlaceholder="Buscar barrio o localidad..." disabled={!vendedorId || cargando || asignando} />}
         </div>
       </div>
       {!vendedorId && <p className="text-sm text-muted-foreground">Elegí un vendedor para ver todos sus clientes y después acotá el mapa por barrio o localidad.</p>}
@@ -308,12 +344,17 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
       {vendedorId && !cargando && !errorCarga && <p role="status" className="text-sm text-muted-foreground">
         {cartera.length + sinUbicacion.length} clientes en la cartera · {cartera.length} con ubicación · {clientesVisibles.length} coinciden con los filtros.
       </p>}
+      {soloProspectos && !cargando && !errorCarga && <div className="border-l-2 border-primary/50 pl-3 space-y-2 text-sm">
+        <p>{sinCartera ? "Este vendedor todavía no tiene clientes. " : "Estás armando una ruta sólo de prospectos. "}Elegí un barrio y las categorías para completar 8 visitas con prospectos.</p>
+        <p className="text-muted-foreground">Para asignarle clientes de otro vendedor, usá la opción Asignación manual.</p>
+        {onIrAManual && <Button type="button" variant="outline" size="sm" disabled={asignando} onClick={() => onIrAManual(vendedorId)}>Ir a asignación manual</Button>}
+      </div>}
       {!!sinUbicacion.length && <details className="rounded-md border p-3 text-sm">
         <summary className="cursor-pointer">{sinUbicacion.length} cliente{sinUbicacion.length === 1 ? "" : "s"} sin ubicación en el mapa</summary>
         <p className="mt-2 text-xs text-muted-foreground">Faltan coordenadas válidas. Completá sus ubicaciones en Carga de datos para poder seleccionarlos.</p>
         <ul className="mt-2 space-y-1 max-h-40 overflow-auto">{sinUbicacion.map(c => <li key={c.client_id}>{c.fantasia || c.razon_social} <span className="text-muted-foreground">· {c.direccion_principal || c.ciudad_principal || "Sin dirección"}</span></li>)}</ul>
       </details>}
-      {vendedorId && <fieldset disabled={asignando}><SegmentFilters value={segmentos} onChange={setSegmentos} campos={["estados", "rubros"]} titulo="Filtrar clientes de la cartera" /></fieldset>}
+      {vendedorId && !soloProspectos && <fieldset disabled={asignando}><SegmentFilters value={segmentos} onChange={setSegmentos} campos={["estados", "rubros"]} titulo="Filtrar clientes de la cartera" /></fieldset>}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4">
         <div className="relative rounded-lg border overflow-hidden h-[420px] sm:h-[560px] min-w-0">
           <div ref={mapRef} className="w-full h-full" />
@@ -324,27 +365,36 @@ export default function MapaZonaAsignacion({ vendedores }: { vendedores: Vendedo
         </div>
         <div className="rounded-lg border p-4 space-y-3 h-fit min-w-0">
           <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-muted-foreground" /><span className="text-sm font-medium">3. Ruta en armado</span><Badge variant="secondary" className="ml-auto">{seleccion.length}/{VISITAS_POR_DIA}</Badge></div>
-          <p className="text-xs text-muted-foreground">Tocá los clientes en el mapa para agregarlos. El centro se calcula entre los clientes elegidos; el círculo marca el límite de 1,5 km.</p>
+          <p className="text-xs text-muted-foreground">{soloProspectos
+            ? "La búsqueda parte del centro del barrio elegido. Los prospectos deben estar en esa zona y a no más de 1,5 km del centro; podés revisar y cambiar la selección en el mapa."
+            : "Tocá los clientes en el mapa para agregarlos. El centro se calcula entre los clientes elegidos; el círculo marca el límite de 1,5 km."}</p>
           {!!seleccion.length && <p className="text-sm">{clientesElegidos.length} clientes + {seleccion.length - clientesElegidos.length} prospectos</p>}
           <div className="space-y-2 max-h-72 overflow-y-auto">
             {seleccion.map(p => <div key={p.key} className="flex items-start gap-2 text-sm">
               <span className="w-2.5 h-2.5 mt-1 rounded-full shrink-0" style={{ backgroundColor: colorEstado(p.estado) }} />
-              <div className="flex-1 min-w-0"><p className="truncate" title={p.nombre}>{p.nombre}</p><p className="text-xs text-muted-foreground">{p.rubro || (p.tipo === "cliente" ? "Cliente" : "Prospecto")}{p.distancia_cliente_m != null ? ` · a ${p.distancia_cliente_m} m de un cliente` : ""}</p></div>
+              <div className="flex-1 min-w-0"><p className="truncate" title={p.nombre}>{p.nombre}</p><p className="text-xs text-muted-foreground">{p.rubro || (p.tipo === "cliente" ? "Cliente" : "Prospecto")}{p.distancia_cliente_m != null ? ` · a ${p.distancia_cliente_m} m de un cliente` : p.distancia_centro_m != null ? ` · a ${p.distancia_centro_m} m del centro` : ""}</p></div>
               <button type="button" className="p-1" onClick={() => toggle(p)} disabled={buscando || asignando} aria-label={`Quitar ${p.nombre}`}><X className="w-4 h-4 text-muted-foreground" /></button>
             </div>)}
           </div>
           {errorSeleccion && <p role="alert" className="text-xs text-destructive">{errorSeleccion}</p>}
-          {!!clientesElegidos.length && seleccion.length < VISITAS_POR_DIA && <div className="space-y-2 border-t pt-3">
-            <Label className="text-xs">Rubros para completar con prospectos</Label>
-            <fieldset disabled={buscando || asignando}><MultiSelect ariaLabel="Rubros de los prospectos" options={rubros.some(r => r.value.toUpperCase() === "HOTEL") ? rubros : [...rubros, { value: "Hotel", label: "Hotel" }]} selected={rubrosProspectos} onChange={setRubrosProspectos} placeholder="Todos, incluidos hoteles" /></fieldset>
-            <Button className="w-full gap-2" onClick={completar} disabled={cargando || Boolean(errorCarga) || buscando || asignando || Boolean(errorSeleccion)}>{buscando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}Completar con prospectos</Button>
+          {(soloProspectos || !!clientesElegidos.length && seleccion.length < VISITAS_POR_DIA) && <div className="space-y-2 border-t pt-3">
+            <Label className="text-xs">{soloProspectos ? "Categorías de los prospectos" : "Rubros para completar con prospectos"}</Label>
+            <fieldset disabled={buscando || asignando}><MultiSelect ariaLabel="Rubros de los prospectos" options={rubrosBusqueda} selected={rubrosProspectos} onChange={values => {
+              if (soloProspectos && seleccionRef.current.length) {
+                if (!window.confirm("Cambiar las categorías descarta los prospectos de esta ruta para buscar otros. ¿Continuar?")) return;
+                limpiarRuta();
+              }
+              setRubrosProspectos(values);
+            }} placeholder="Todos, incluidos hoteles" /></fieldset>
+            <Button className="w-full gap-2" onClick={completar} disabled={cargando || Boolean(errorCarga) || buscando || asignando || Boolean(errorSeleccion) || seleccion.length >= VISITAS_POR_DIA || soloProspectos && !zonaElegida}>{buscando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}{soloProspectos && !seleccion.length ? "Buscar 8 prospectos" : "Completar con prospectos"}</Button>
+            {soloProspectos && !zonaElegida && <p className="text-xs text-muted-foreground">Elegí primero el barrio o localidad.</p>}
             <p className="text-xs text-muted-foreground">Busca primero a 150 m del centro y amplía sólo si hace falta, hasta 1,5 km. Los más cercanos completan las 8 visitas; podés cambiarlos desde el mapa.</p>
           </div>}
           {buscando && <p role="status" className="text-xs text-muted-foreground">Buscando prospectos cercanos en la base y en Google Maps...</p>}
           {errorBusqueda && <p role="alert" className="text-xs text-destructive">{errorBusqueda}</p>}
           {resultado && <div role="status" className="space-y-1 text-xs text-muted-foreground">
-            <p>Búsqueda hasta {resultado.radio_busqueda_m} m del centro de los clientes.</p>
-            {seleccion.length < VISITAS_POR_DIA && <p className="text-amber-600">Faltan {VISITAS_POR_DIA - seleccion.length} visitas para completar la ruta. Podés volver a buscar o ajustar los rubros y los clientes. Se mantiene el límite de 1,5 km.</p>}
+            <p>Búsqueda hasta {resultado.radio_busqueda_m} m del centro {soloProspectos ? `de ${zonaElegida?.barrio || "la zona"}` : "de los clientes"}.</p>
+            {seleccion.length < VISITAS_POR_DIA && <p className="text-amber-600">Faltan {VISITAS_POR_DIA - seleccion.length} visitas para completar la ruta. Podés volver a buscar o ajustar {soloProspectos ? "las categorías o el barrio" : "los rubros y los clientes"}. Se mantiene el límite de 1,5 km.</p>}
             {resultado.avisos.map((a, i) => <p key={i} className="text-amber-600">{a}</p>)}
           </div>}
           {!!seleccion.length && <Button variant="ghost" size="sm" disabled={asignando} onClick={() => { if (window.confirm("¿Descartar el borrador de esta ruta y vaciar la selección?")) limpiarRuta(); }}>Descartar borrador</Button>}

@@ -49,12 +49,12 @@ export function centroClientes(puntos: Coordenada[]): Coordenada | null {
   };
 }
 
-export function validarSeleccionMapa(puntos: PuntoMapa[], completa = false): string | null {
+export function validarSeleccionMapa(puntos: PuntoMapa[], completa = false, centroZona: Coordenada | null = null): string | null {
   const clientes = puntos.filter(p => p.tipo === "cliente");
-  if (!clientes.length) return "Seleccioná primero al menos un cliente del vendedor.";
+  if (!clientes.length && !coordenadaMapaValida(centroZona || { lat: null, lng: null })) return "Seleccioná primero al menos un cliente del vendedor.";
   if (puntos.length > VISITAS_POR_DIA) return "La ruta ya tiene ocho visitas. Quitá una antes de agregar otra.";
   if (puntos.some(p => p.excluido)) return "Hay destinos del borrador que ya no están disponibles. Revisá la selección.";
-  return errorRuta(puntos.map(p => ({ ...p, id: p.key })), centroClientes(clientes), completa);
+  return errorRuta(puntos.map(p => ({ ...p, id: p.key })), clientes.length ? centroClientes(clientes) : centroZona, completa);
 }
 
 /** Se usa la misma preferencia de ubicación en el mapa y al validar en el servidor. */

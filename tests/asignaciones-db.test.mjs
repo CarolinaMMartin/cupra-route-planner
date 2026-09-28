@@ -25,7 +25,7 @@ before(async () => {
     CREATE TABLE client_places (id uuid PRIMARY KEY DEFAULT gen_random_uuid(),client_id text REFERENCES clientes(client_id),
       lat numeric,long numeric,is_primary boolean DEFAULT true,direccion_verificada boolean DEFAULT false);
     CREATE TABLE prospectos (place_id text PRIMARY KEY, client_id text, es_cliente_cupra boolean DEFAULT false,
-      estado_negocio text, tipo_principal text, tipos text[], latitud float, longitud float, last_recommendation_at timestamptz);
+      estado_negocio text, tipo_principal text, tipos text[], barrio text, ciudad text, provincia text, latitud float, longitud float, last_recommendation_at timestamptz);
     CREATE TABLE ventas_cupra (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, client_id text, categorias text,
       ticket text, letra text, fecha_emision date, tipo_comprobante text, vendedor text, nombre text, codigo_producto text,
       facturacion_ars numeric, cajas integer, import_batch_id uuid);
@@ -45,14 +45,14 @@ before(async () => {
     CREATE TABLE asignaciones_manuales_audit (
       usuario_id uuid, vendedor_anterior text, vendedor_nuevo_id uuid, vendedor_nuevo_nombre text, client_id text, razon_social text);
   `);
-  for (const migration of ["20260923120000_rubro_normalizado.sql", "20260923130000_asignaciones_atomicas.sql", "20260925120000_analisis_ventas.sql", "20260928140000_ruta_mapa.sql"]) {
+  for (const migration of ["20260923120000_rubro_normalizado.sql", "20260923130000_asignaciones_atomicas.sql", "20260925120000_analisis_ventas.sql", "20260928140000_ruta_mapa.sql", "20260928150000_mapa_sin_cartera.sql"]) {
     await db.exec(await readFile(new URL(`../supabase/migrations/${migration}`, import.meta.url), "utf8"));
   }
 });
 after(async () => { await db?.close(); });
 beforeEach(async () => {
   await db.exec(`
-    TRUNCATE ventas_cupra, asignaciones_vendedores_clientes, asignaciones_manuales_audit, clientes, prospectos, profiles CASCADE;
+    TRUNCATE mapa_zonas_prospectos, ventas_cupra, asignaciones_vendedores_clientes, asignaciones_manuales_audit, clientes, prospectos, profiles CASCADE;
     INSERT INTO profiles VALUES ('${admin}', 'Admin', 'administrador', true, false),
       ('${vendedor}', 'Vendedora', 'vendedor', true, false), ('${otro}', 'Otro', 'vendedor', true, false);
     INSERT INTO clientes(client_id, razon_social, vendedor_actual) VALUES ('c1', 'Cuenta 1', 'Otro'), ('c2', 'Cuenta 2', 'Otro');
@@ -190,12 +190,12 @@ test('mapa guarda ocho visitas y un reintento no duplica las asignaciones',async
   const rows=(await db.query('select id from asignaciones_vendedores_clientes order by id')).rows;
   await guardarMapa();assert.deepEqual((await db.query('select id from asignaciones_vendedores_clientes order by id')).rows,rows);
 });
-test('mapa rechaza siete, nueve, duplicados y rutas sin clientes antes de escribir',async()=>{
+test('mapa rechaza siete, nueve, duplicados y rutas sin clientes ni barrio antes de escribir',async()=>{
   await prepararMapa();
   await assert.rejects(guardarMapa(['c1']),/ocho/);
   await assert.rejects(guardarMapa(['c1','c2','c2']),/ocho/);
   await assert.rejects(guardarMapa(['c1','c1']),/únicas/);
-  await assert.rejects(guardarMapa([],['p1','p2','p3','p4','p5','p6','p7','p8']),/cliente/);
+  await assert.rejects(guardarMapa([],['p1','p2','p3','p4','p5','p6','p7','p8']),/barrio/);
   assert.equal((await db.query('select count(*)::int as n from asignaciones_vendedores_clientes')).rows[0].n,0);
 });
 test('mapa calcula el centro de todos los clientes y no del primer punto',async()=>{
@@ -228,5 +228,55 @@ test('mapa valida permisos y no admite usuarios inactivos',async()=>{
   await assert.rejects(guardarMapa(),{code:'42501'});
   await db.query("select set_config('test.uid',$1,false)",[admin]);await db.query('update profiles set activo=false where user_id=$1',[admin]);
   await assert.rejects(guardarMapa(),{code:'42501'});
-  assert.equal((await db.query("select has_function_privilege('anon','guardar_ruta_mapa(uuid,text[],text[])','EXECUTE') as ok")).rows[0].ok,false);
+  assert.equal((await db.query("select has_function_privilege('anon','guardar_ruta_mapa(uuid,text[],text[],text)','EXECUTE') as ok")).rows[0].ok,false);
+});
+
+const ochoProspectos = Array.from({length:8},(_,i)=>`p${i+1}`);
+const guardarSoloProspectos = (ids=ochoProspectos, zona='palermo') => db.query('select guardar_ruta_mapa($1,$2,$3,$4) as total',[vendedor,[],ids,zona]);
+async function prepararBarrio(){
+  await prepararMapa();
+  await db.exec("INSERT INTO mapa_zonas_prospectos(zona_key,provincia,comuna,barrio,lat,lng) VALUES ('palermo','CABA','Comuna 14','Palermo',-34.6,-58.4); INSERT INTO prospectos(place_id,latitud,longitud) VALUES ('p7',-34.6,-58.4),('p8',-34.6,-58.4);");
+  await db.exec("UPDATE prospectos SET barrio='Palermo',ciudad='Buenos Aires',provincia='CABA';");
+}
+test('sin cartera guarda ocho prospectos y conserva las carteras existentes',async()=>{
+  await prepararBarrio();assert.equal((await guardarSoloProspectos()).rows[0].total,8);
+  assert.deepEqual((await db.query('select distinct client_id,es_prospecto,vendedor_id from asignaciones_vendedores_clientes')).rows,[{client_id:null,es_prospecto:true,vendedor_id:vendedor}]);
+  assert.deepEqual((await db.query('select distinct vendedor_actual from clientes')).rows,[{vendedor_actual:'Otro'}]);
+  const antes=(await db.query('select id from asignaciones_vendedores_clientes order by id')).rows;
+  await guardarSoloProspectos();assert.deepEqual((await db.query('select id from asignaciones_vendedores_clientes order by id')).rows,antes);
+});
+test('sin cartera rechaza barrio no verificado, siete, nueve o duplicados sin escribir',async()=>{
+  await prepararBarrio();
+  await assert.rejects(guardarSoloProspectos(ochoProspectos,'desconocido'),/barrio/);
+  await assert.rejects(guardarSoloProspectos(ochoProspectos.slice(0,7)),/ocho/);
+  await assert.rejects(guardarSoloProspectos([...ochoProspectos,'p9']),/ocho/);
+  await assert.rejects(guardarSoloProspectos([...ochoProspectos.slice(0,7),'p1']),/únicas/);
+  assert.equal((await db.query('select count(*)::int as n from asignaciones_vendedores_clientes')).rows[0].n,0);
+});
+test('sin cartera comprueba 1,5 km desde el barrio, no desde los prospectos',async()=>{
+  await prepararBarrio();await db.exec('UPDATE prospectos SET latitud=-34.584;');
+  await assert.rejects(guardarSoloProspectos(),/1,5 km/);
+  assert.equal((await db.query('select count(*)::int as n from asignaciones_vendedores_clientes')).rows[0].n,0);
+});
+test('sin cartera rechaza un prospecto convertido o asignado a otro vendedor',async()=>{
+  await prepararBarrio();await db.exec("UPDATE prospectos SET es_cliente_cupra=true WHERE place_id='p8';");
+  await assert.rejects(guardarSoloProspectos(),/disponible/);
+  await db.exec("UPDATE prospectos SET es_cliente_cupra=false WHERE place_id='p8';");await guardar([{vendedor_id:otro,prospecto_place_id:'p8'}]);
+  await assert.rejects(guardarSoloProspectos(),/asignado/);
+  assert.equal((await db.query('select count(*)::int as n from asignaciones_vendedores_clientes')).rows[0].n,1);
+});
+test('centro de barrio no puede reemplazar el centro de una ruta con clientes',async()=>{
+  await prepararBarrio();await assert.rejects(db.query('select guardar_ruta_mapa($1,$2,$3,$4)',[vendedor,['c1','c2'],ochoProspectos.slice(0,6),'palermo']),/centro de esos clientes/);
+});
+test('el navegador no puede crear ni modificar centros de barrio',async()=>{
+  const {rows}=await db.query("select has_table_privilege('authenticated','mapa_zonas_prospectos','INSERT') as insertar,has_table_privilege('authenticated','mapa_zonas_prospectos','UPDATE') as modificar,has_function_privilege('anon','guardar_ruta_mapa(uuid,text[],text[],text)','EXECUTE') as anon");
+  assert.deepEqual(rows,[{insertar:false,modificar:false,anon:false}]);
+});
+test('sin cartera no confirma negocios de otro barrio aunque estén dentro del radio',async()=>{
+  await prepararBarrio();await db.exec("UPDATE prospectos SET barrio='Recoleta' WHERE place_id='p8';");
+  await assert.rejects(guardarSoloProspectos(),/barrio/);
+  await db.exec("UPDATE prospectos SET barrio='Palermo',provincia='Buenos Aires' WHERE place_id='p8';");
+  await assert.rejects(guardarSoloProspectos(),/barrio/);
+  await db.exec("UPDATE prospectos SET barrio='Palermo Soho',provincia='Ciudad Autónoma de Buenos Aires' WHERE place_id='p8';");
+  assert.equal((await guardarSoloProspectos()).rows[0].total,8);
 });

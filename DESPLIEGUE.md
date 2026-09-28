@@ -119,3 +119,10 @@ Pruebas y alcance: `REVISION_MAPA_EXCEL.md`. Una consulta de solo lectura a la c
 5. Verificar que el borrador vuelve al navegar o recargar, separado por usuario y vendedor; la asignación sólo se confirma al pulsar el botón correspondiente. Los borradores no requieren migración adicional de base.
 
 Detalle y pruebas: `REVISION_MAPA_ASIGNACION.md`.
+
+## Vendedores sin cartera — 28/09/2026
+
+1. Aplicar y registrar `20260928150000_mapa_sin_cartera.sql`. Incorpora los centros territoriales verificados y el parámetro opcional `p_zona_key` del RPC, conservando las llamadas anteriores.
+2. Desplegar `complete-map-route` con el catálogo y los validadores de `_shared/`.
+3. Publicar `main`. Elegir un vendedor sin clientes debe mostrar el selector de barrio/localidad y categorías, permitir completar ocho prospectos dentro de 1,5 km y ofrecer acceso a la asignación manual.
+4. Verificar borrador al recargar/cambiar de pantalla y confirmación antes de reemplazar una ruta al cambiar barrio o categoría.

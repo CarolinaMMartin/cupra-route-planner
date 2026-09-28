@@ -106,3 +106,22 @@ Deno.test('mapa: si Nearby repite veinte descartados, busca dentro de la zona si
 Deno.test('mapa: el tipo principal prevalece al filtrar bares que también figuran como restaurante',()=>{
   eq(prospectoDeGoogle({id:'bar',displayName:{text:'Bar'},location:{latitude:-34.6,longitude:-58.4},primaryType:'bar',types:['bar','restaurant']})?.rubro,'Bar');
 });
+Deno.test('sin cartera: completa ocho prospectos sin clientes, con centro fijo del barrio y categoría',async()=>{
+  const rows=Array.from({length:8},(_,i)=>prospect(`h${i}`,20+i*10,{rubro:'Hotel',tipo_principal:'hotel'}));
+  const result=await buscarComplementoMapa({clientes:[],centroZona:center,objetivo:8,base:[prospect('bar',10,{rubro:'Bar'}),...rows],rubros:['Hotel'],pasaGate:()=>true});
+  eq(result.elegidos.length,8);same(result.elegidos.map(p=>p.place_id),rows.map(p=>p.place_id));same(result.centro,center);
+  const route=result.elegidos.map(p=>puntoProspecto(p,[],center));
+  eq(validarSeleccionMapa(route,true,center),null);eq(route[0].distancia_cliente_m,undefined);ok(Number.isFinite(route[0].distancia_centro_m));
+});
+Deno.test('sin cartera: no busca sin centro y no confirma siete ni destinos fuera de 1,5 km',async()=>{
+  await rejects(()=>buscarComplementoMapa({clientes:[],objetivo:8,base:[],rubros:[],pasaGate:()=>true}),/barrio/);
+  const rows=Array.from({length:7},(_,i)=>prospect(`p${i}`,20+i*10));
+  const result=await buscarComplementoMapa({clientes:[],centroZona:center,objetivo:8,base:[...rows,prospect('fuera',1510)],rubros:[],pasaGate:()=>true});
+  eq(result.elegidos.length,7);eq(result.radio_m,1500);
+  ok(validarSeleccionMapa(result.elegidos.map(p=>puntoProspecto(p,[],center)),true,center));
+  ok(validarSeleccionMapa([...rows,prospect('fuera',1510)].map(p=>puntoProspecto(p,[],center)),true,center));
+});
+Deno.test('sin cartera: completar después de quitar uno busca sólo el faltante y respeta el descarte',async()=>{
+  const result=await buscarComplementoMapa({clientes:[],centroZona:center,objetivo:1,base:[prospect('descartado',5),prospect('reemplazo',20)],rubros:[],pasaGate:p=>p.place_id!=='descartado'});
+  same(result.elegidos.map(p=>p.place_id),['reemplazo']);
+});

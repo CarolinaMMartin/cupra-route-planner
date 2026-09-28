@@ -48,14 +48,16 @@ export function prospectoDisponible(p: ProspectoMapa): boolean {
     && coordenadaMapaValida({ lat: p.latitud, lng: p.longitud })
     && (origenProspecto(p) !== "google" || esProspectoComercialmenteValido(p));
 }
-export function puntoProspecto(p: ProspectoMapa, clientes: Coordenada[]): PuntoMapa {
+export function puntoProspecto(p: ProspectoMapa, clientes: Coordenada[], centroZona?: Coordenada): PuntoMapa {
   const point = { lat: p.latitud!, lng: p.longitud! };
+  const centro = clientes.length ? centroClientes(clientes) : centroZona;
+  if (!centro) throw new Error("Falta el centro de la búsqueda.");
   return { key: `P:${p.place_id}`, tipo: "prospecto", id: p.place_id, nombre: p.nombre, ...point,
     direccion: p.direccion || "", barrio: p.barrio || null, ciudad: p.ciudad || null, comuna: p.comuna || null,
     rubro: p.rubro || null, estado: "POTENCIAL", vendedor: null, dias: null, ventas: null,
     telefono: p.telefono || null, rating: p.rating || null, resenas: p.total_ratings || null,
-    distancia_centro_m: Math.round(distanciaKm(centroClientes(clientes)!, point) * 1000),
-    distancia_cliente_m: Math.round(distanciaAlCliente(point, clientes) * 1000) };
+    distancia_centro_m: Math.round(distanciaKm(centro, point) * 1000),
+    distancia_cliente_m: clientes.length ? Math.round(distanciaAlCliente(point, clientes) * 1000) : undefined };
 }
 
 export function mismoProspecto(a: ProspectoMapa, b: ProspectoMapa): boolean {
@@ -78,6 +80,7 @@ export function ordenarProspectos(lista: ProspectoMapa[], centro: Coordenada): P
 
 export interface BusquedaMapa {
   clientes: Coordenada[];
+  centroZona?: Coordenada;
   objetivo: number;
   base: ProspectoMapa[];
   rubros: string[];
@@ -87,9 +90,10 @@ export interface BusquedaMapa {
 }
 /** Busca desde el centro sin moverlo, empezando a 150 m y ampliando sólo si faltan visitas. */
 export async function buscarComplementoMapa(opts: BusquedaMapa) {
-  const centro = centroClientes(opts.clientes);
-  if (!centro || opts.clientes.some(c => distanciaKm(centro, c) > RADIO_RUTA_KM)) throw new Error("Los clientes superan el radio de 1,5 km respecto de su centro.");
-  if (!Number.isInteger(opts.objetivo) || opts.objetivo < 1 || opts.objetivo > 7) throw new Error("Cantidad de prospectos inválida.");
+  const centro = opts.clientes.length ? centroClientes(opts.clientes) : opts.centroZona;
+  if (!centro || !coordenadaMapaValida(centro)) throw new Error("Elegí un barrio o seleccioná clientes para definir el centro.");
+  if (opts.clientes.some(c => distanciaKm(centro, c) > RADIO_RUTA_KM)) throw new Error("Los clientes superan el radio de 1,5 km respecto de su centro.");
+  if (!Number.isInteger(opts.objetivo) || opts.objetivo < 1 || opts.objetivo > 8 - opts.clientes.length) throw new Error("Cantidad de prospectos inválida.");
   const todos = new Map(opts.base.map(p => [p.place_id, p]));
   const rubros = new Set(opts.rubros.map(rubroKey));
   const tipos = tiposBusquedaMapa(opts.rubros);
