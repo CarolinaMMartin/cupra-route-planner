@@ -1,8 +1,8 @@
 import { googleMapsFetch, type GooglePlace, PLACES_FIELD_MASK } from "../_shared/google-maps.ts";
 import { centroClientes, coordenadaMapaValida, distanciaAlCliente, RADIOS_BUSQUEDA_MAPA, type PuntoMapa } from "../_shared/map-selection.ts";
 import { distanciaKm, RADIO_RUTA_KM, type Coordenada } from "../_shared/ruta.ts";
-import { esProspectoComercialmenteValido, normalizeFantasyName } from "../generate-recommendations/portfolio-ranking.ts";
-import { origenProspecto, rubroKey, TIPOS_GOOGLE_POR_RUBRO } from "../generate-recommendations/reglas.ts";
+import { esProspectoComercialmenteValido, normalizeFantasyName } from "../_shared/portfolio-ranking.ts";
+import { origenProspecto, rubroKey, TIPOS_GOOGLE_POR_RUBRO } from "../_shared/reglas.ts";
 
 export interface ProspectoMapa {
   place_id: string; google_place_id?: string | null; nombre: string;

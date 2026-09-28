@@ -35,7 +35,7 @@
 
 ## Validación
 
-`npm run check`: 146 pruebas aprobadas (87 de reglas/motor/búsqueda, 22 de base, 28 de importaciones y 9 de borradores), TypeScript y compilación de producción.
+`npm run check`: 148 pruebas aprobadas (87 de reglas/motor/búsqueda, 22 de base, 28 de importaciones, 9 de borradores y 2 de empaquetado), TypeScript y compilación de producción.
 
 Las pruebas nuevas cubren centroides, distintas carteras, localidades fuera de CABA, coordenadas faltantes, cuatro clientes más cuatro prospectos, orden por distancia, ampliación progresiva, búsqueda de cobertura, hoteles, filtros, duplicados, fallos de Google, rutas incompletas, guardado de ocho, cambio concurrente de ubicación/disponibilidad, permisos, rollback y reintentos.
 
@@ -44,3 +44,5 @@ Prueba de interfaz en Chromium con servicios simulados: vendedor → cartera com
 ## Publicación
 
 Aplicar y registrar `20260928140000_ruta_mapa.sql`. Desplegar `complete-map-route` y `generate-recommendations` (la regla de hoteles es compartida). Publicar el frontend de `main`, conectado a Lovable. Esta migración sólo incorpora un RPC y permisos: no inserta visitas ni cambia clientes, prospectos o ventas existentes.
+
+Las reglas de cartera, filtrado y geometría viven en `_shared/` para que cada función pueda desplegarse de forma independiente. Las pruebas de empaquetado recorren los imports y rechazan dependencias de carpetas de otras funciones.

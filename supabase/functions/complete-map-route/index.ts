@@ -3,10 +3,10 @@ import { hayGoogleMaps } from "../_shared/google-maps.ts";
 import { allClients } from "../_shared/import-batch.ts";
 import { carteraDelVendedor, puntosDeCartera, validarSeleccionMapa, ubicacionesPreferidas, type UbicacionMapa } from "../_shared/map-selection.ts";
 import { distanciaKm, RADIO_RUTA_KM, VISITAS_POR_DIA } from "../_shared/ruta.ts";
-import { hoyArgentina, excluidoPorFeedback, type FeedbackLike } from "../generate-recommendations/reglas.ts";
-import { evaluarProspectoContraCartera, type ClienteRef } from "../generate-recommendations/portfolio-ranking.ts";
+import { hoyArgentina, excluidoPorFeedback, type FeedbackLike } from "../_shared/reglas.ts";
+import { evaluarProspectoContraCartera, type ClienteRef } from "../_shared/portfolio-ranking.ts";
 import { buscarComplementoMapa, cubrirZonaMapa, descubrirProspectosMapa, mismoProspecto, ordenarProspectos, prospectoDisponible, puntoProspecto, type ProspectoMapa } from "./search.ts";
-import { rubroKey } from "../generate-recommendations/reglas.ts";
+import { rubroKey } from "../_shared/reglas.ts";
 
 async function all<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
   const rows: T[] = [];

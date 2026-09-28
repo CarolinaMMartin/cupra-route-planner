@@ -1,5 +1,5 @@
 import { distanciaKm, errorRuta, RADIO_RUTA_KM, VISITAS_POR_DIA, type Coordenada } from "./ruta.ts";
-import { crearResolvedorVendedores } from "../generate-recommendations/reglas.ts";
+import { crearResolvedorVendedores } from "./reglas.ts";
 import { diasDesdeUltimaCompra, estadoPorDias } from "./estado-comercial.ts";
 
 export interface PuntoMapa extends Coordenada {
