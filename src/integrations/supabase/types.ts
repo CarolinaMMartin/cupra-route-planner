@@ -554,10 +554,43 @@ export type Database = {
         Relationships: []
       }
       clientes_informacion_complementaria: {
-        Row: { client_id: string; prospecto_place_id: string; datos: Json; fuente: string; updated_at: string }
-        Insert: { client_id: string; prospecto_place_id: string; datos: Json; fuente?: string; updated_at?: string }
-        Update: { datos?: Json; fuente?: string; updated_at?: string }
-        Relationships: []
+        Row: {
+          client_id: string
+          datos: Json
+          fuente: string
+          prospecto_place_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          datos: Json
+          fuente?: string
+          prospecto_place_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          datos?: Json
+          fuente?: string
+          prospecto_place_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clientes_informacion_complementaria_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "clientes_informacion_complementaria_prospecto_place_id_fkey"
+            columns: ["prospecto_place_id"]
+            isOneToOne: false
+            referencedRelation: "prospectos"
+            referencedColumns: ["place_id"]
+          },
+        ]
       }
       clientes_recomendaciones_temporal: {
         Row: {
@@ -1073,6 +1106,84 @@ export type Database = {
           },
         ]
       }
+      prospecto_cliente_revisiones: {
+        Row: {
+          client_id: string
+          cliente_huella: string
+          decision: string
+          prospecto_huella: string
+          prospecto_place_id: string
+          updated_at: string
+          usuario_id: string
+        }
+        Insert: {
+          client_id: string
+          cliente_huella: string
+          decision: string
+          prospecto_huella: string
+          prospecto_place_id: string
+          updated_at?: string
+          usuario_id: string
+        }
+        Update: {
+          client_id?: string
+          cliente_huella?: string
+          decision?: string
+          prospecto_huella?: string
+          prospecto_place_id?: string
+          updated_at?: string
+          usuario_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospecto_cliente_revisiones_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "prospecto_cliente_revisiones_prospecto_place_id_fkey"
+            columns: ["prospecto_place_id"]
+            isOneToOne: false
+            referencedRelation: "prospectos"
+            referencedColumns: ["place_id"]
+          },
+        ]
+      }
+      prospecto_revision_historial: {
+        Row: {
+          antes: Json
+          client_id: string
+          created_at: string
+          decision: string
+          despues: Json
+          id: string
+          prospecto_place_id: string
+          usuario_id: string | null
+        }
+        Insert: {
+          antes: Json
+          client_id: string
+          created_at?: string
+          decision: string
+          despues: Json
+          id?: string
+          prospecto_place_id: string
+          usuario_id?: string | null
+        }
+        Update: {
+          antes?: Json
+          client_id?: string
+          created_at?: string
+          decision?: string
+          despues?: Json
+          id?: string
+          prospecto_place_id?: string
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       prospectos: {
         Row: {
           barrio: string | null
@@ -1171,6 +1282,67 @@ export type Database = {
           website?: string | null
         }
         Relationships: []
+      }
+      prospectos_informacion_encontrada: {
+        Row: {
+          datos: Json
+          fuente: string
+          prospecto_place_id: string
+          updated_at: string
+        }
+        Insert: {
+          datos: Json
+          fuente?: string
+          prospecto_place_id: string
+          updated_at?: string
+        }
+        Update: {
+          datos?: Json
+          fuente?: string
+          prospecto_place_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospectos_informacion_encontrada_prospecto_place_id_fkey"
+            columns: ["prospecto_place_id"]
+            isOneToOne: true
+            referencedRelation: "prospectos"
+            referencedColumns: ["place_id"]
+          },
+        ]
+      }
+      prospectos_informacion_historial: {
+        Row: {
+          created_at: string
+          datos: Json
+          fuente: string
+          huella: string
+          prospecto_place_id: string
+        }
+        Insert: {
+          created_at?: string
+          datos: Json
+          fuente?: string
+          huella: string
+          prospecto_place_id: string
+        }
+        Update: {
+          created_at?: string
+          datos?: Json
+          fuente?: string
+          huella?: string
+          prospecto_place_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prospectos_informacion_historial_prospecto_place_id_fkey"
+            columns: ["prospecto_place_id"]
+            isOneToOne: false
+            referencedRelation: "prospectos"
+            referencedColumns: ["place_id"]
+          },
+        ]
       }
       recomendaciones_ia: {
         Row: {
@@ -1791,6 +1963,10 @@ export type Database = {
         }
         Returns: Json
       }
+      complementar_cliente_prospecto: {
+        Args: { p_actor?: string; p_id: string }
+        Returns: undefined
+      }
       completar_barrio_ubicacion: {
         Args: {
           p_barrio: string
@@ -1801,6 +1977,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      contexto_revision_cupra: { Args: never; Returns: Json }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -1845,7 +2022,10 @@ export type Database = {
         Args: { p_client_id: string; p_datos: Json; p_manual?: boolean }
         Returns: Json
       }
+      huella_cliente_cupra: { Args: { p_id: string }; Returns: string }
+      huella_prospecto_cupra: { Args: { p_id: string }; Returns: string }
       import_identity: { Args: { p_text: string }; Returns: string }
+      incorporar_info_prospectos: { Args: { p_filas: Json }; Returns: Json }
       is_active_admin: { Args: { _user_id: string }; Returns: boolean }
       is_active_assignor: { Args: { _user_id: string }; Returns: boolean }
       is_active_user: { Args: { _user_id: string }; Returns: boolean }
@@ -1872,6 +2052,17 @@ export type Database = {
       recompute_client_metrics: { Args: never; Returns: number }
       reconciliar_places_primarios: { Args: never; Returns: number }
       refrescar_rubros: { Args: never; Returns: Json }
+      resolver_revision_cupra: {
+        Args: {
+          p_actor: string
+          p_cliente_huella: string
+          p_cliente_id: string
+          p_decision: string
+          p_prospecto_huella: string
+          p_prospecto_id: string
+        }
+        Returns: Json
+      }
       resumen_ubicaciones: { Args: never; Returns: Json }
       resumen_ventas: { Args: { p_filtros?: Json }; Returns: Json }
       revertir_import_ventas: { Args: { p_batch_id: string }; Returns: Json }
@@ -1889,6 +2080,7 @@ export type Database = {
       }
       sync_clientes_barrio_from_places: { Args: never; Returns: number }
       sync_places_catalog: { Args: never; Returns: number }
+      telefono_identidad_cupra: { Args: { v: string }; Returns: string }
       titlecase_nombre: { Args: { _texto: string }; Returns: string }
       unaccent: { Args: { "": string }; Returns: string }
       vendedor_key: { Args: { _nombre: string }; Returns: string }
