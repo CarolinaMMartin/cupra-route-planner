@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ClienteComplementos } from "./ClienteComplementos";
 import BriefingVisita from "@/components/shared/BriefingVisita";
 
 import { Loader2, MapPin, Phone, Mail, Users, ShoppingCart, MessageSquare } from "lucide-react";
@@ -60,7 +61,12 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
             .eq("client_id", cliente.client_id)
             .order("created_at", { ascending: false })
             .limit(50);
-          let list = fbs || [];
+          const { data: linked } = await supabase.from("prospectos").select("place_id").eq("client_id", cliente.client_id);
+          const related = linked?.length ? await supabase.from("cliente_feedbacks")
+            .select("id, feedback, visita_realizada, motivo_no_visita, tipo_interaccion, created_at, vendedor_id")
+            .in("prospecto_place_id", linked.map(p => p.place_id)).order("created_at", { ascending:false }).limit(50) : { data: [] };
+          let list = [...new Map([...(fbs || []), ...(related.data || [])].map(f => [f.id, f])).values()]
+            .sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,50);
           if (list.length > 0) {
             const ids = Array.from(new Set(list.map((f: any) => f.vendedor_id).filter(Boolean)));
             const { data: profs } = await supabase
@@ -205,7 +211,7 @@ const ClienteDetalleDialog = ({ cliente, open, onOpenChange, formatCurrency }: P
               </Card>
             </div>
 
-            {cliente.client_id && <BriefingVisita clientId={cliente.client_id} />}
+            {cliente.client_id && <><BriefingVisita clientId={cliente.client_id} /><ClienteComplementos clientId={cliente.client_id} /></>}
 
             {loading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground gap-2">

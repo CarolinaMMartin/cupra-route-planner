@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.complete-map-route]
 verify_jwt = false
+
+[functions.review-prospect]
+verify_jwt = false

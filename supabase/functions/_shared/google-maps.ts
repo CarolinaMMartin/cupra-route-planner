@@ -133,6 +133,8 @@ export interface NearbyOptions {
   excluir?: Set<string>;
   /** Presupuesto compartido de búsquedas de una generación completa. */
   consumirConsulta?: () => void;
+  /** Persistir la información recibida, incluso de lugares ya conocidos. */
+  onResults?: (places: GooglePlace[]) => Promise<void>;
 }
 
 export async function buscarLugaresCercanos(opts: NearbyOptions): Promise<GooglePlace[]> {
@@ -192,6 +194,7 @@ export async function buscarLugaresCercanos(opts: NearbyOptions): Promise<Google
         continue;
       }
       respuestasOk++;
+      await opts.onResults?.(payload.places || []);
       for (const place of payload.places || []) {
         if (!place.id || excluir.has(place.id) || encontrados.has(place.id)) continue;
         if (place.businessStatus === "CLOSED_PERMANENTLY" || place.businessStatus === "CLOSED_TEMPORARILY") continue;

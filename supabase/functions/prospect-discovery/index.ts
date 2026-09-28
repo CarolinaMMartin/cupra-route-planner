@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
 import { googleMapsFetch, hayGoogleMaps } from "../_shared/google-maps.ts";
+import { persistFoundProspects } from "../_shared/prospect-review-service.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -287,7 +288,9 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const { error: insertError } = await supabase.from('prospectos').upsert({
+        let canonicalId: string;
+        try {
+          const [guardado] = await persistFoundProspects(supabase, [{
           place_id: placeId,
           nombre,
           direccion,
@@ -306,18 +309,18 @@ Deno.serve(async (req) => {
           website: place.websiteUri || null,
           estado_negocio: place.businessStatus || null,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'place_id' });
-
-        if (insertError) {
-          skipped.push({ place_id: placeId, motivo: insertError.message });
+          }]);
+          canonicalId = guardado.place_id;
+        } catch (error) {
+          skipped.push({ place_id: placeId, motivo: error instanceof Error ? error.message : 'No se pudo guardar el prospecto' });
           continue;
         }
 
         await supabase
           .from('prospect_discovery_queue')
-          .update({ estado: 'CONVERTIDO', convertido_prospecto_place_id: placeId })
+          .update({ estado: 'CONVERTIDO', convertido_prospecto_place_id: canonicalId })
           .eq('place_id', placeId);
-        created.push(placeId);
+        created.push(canonicalId);
       }
 
       return jsonResponse({ success: true, created: created.length, skipped });

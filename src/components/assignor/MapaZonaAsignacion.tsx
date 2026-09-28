@@ -1,3 +1,5 @@
+import { ProspectReviewDialog } from "@/components/prospectos/ProspectReviewDialog";
+import { walkingRouteUrl } from "@/lib/walkingRoute";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, MapPin, Search, UserCheck, X } from "lucide-react";
 import { distanciaKm, RADIO_RUTA_KM, VISITAS_POR_DIA } from "../../../supabase/functions/_shared/ruta";
@@ -28,7 +30,7 @@ interface VendedorOpcion { id: string; nombre: string }
 interface Complemento {
   success: boolean; error?: string; clientes: PuntoMapa[]; prospectos: PuntoMapa[]; elegidos: string[];
   faltantes: number; radio_busqueda_m: number; avisos: string[];
-  zona?: ZonaProspeccionResuelta | null;
+  zona?: ZonaProspeccionResuelta | null; revision_ids?: string[];
 }
 const zonasParaProspectos = ZONAS_PROSPECCION.map(z => ({ value: z.key, label: z.label }));
 
@@ -60,6 +62,7 @@ export default function MapaZonaAsignacion({ vendedores, onIrAManual }: { vended
   const [buscando, setBuscando] = useState(false);
   const [resultado, setResultado] = useDraftState<Complemento | null>(draftScope, "resultado", null);
   const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [asignando, setAsignando] = useState(false);
   const busyRef = useRef(false);
   busyRef.current = buscando || asignando || cargando;
@@ -322,6 +325,14 @@ export default function MapaZonaAsignacion({ vendedores, onIrAManual }: { vended
 
   return (
     <div className="space-y-4">
+      <ProspectReviewDialog open={reviewOpen} onOpenChange={setReviewOpen} prospectIds={resultado?.revision_ids}
+        onResolved={(id, decision) => {
+          if (decision === "unificado") {
+            cambiarSeleccion(seleccionRef.current.filter(p => p.tipo !== "prospecto" || p.id !== id));
+            setProspectos(prev => prev.filter(p => p.id !== id));
+          }
+          setRecarga(n => n + 1);
+        }} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">1. Vendedor</Label>
@@ -397,6 +408,12 @@ export default function MapaZonaAsignacion({ vendedores, onIrAManual }: { vended
             {seleccion.length < VISITAS_POR_DIA && <p className="text-amber-600">Faltan {VISITAS_POR_DIA - seleccion.length} visitas para completar la ruta. Podés volver a buscar o ajustar {soloProspectos ? "las categorías o el barrio" : "los rubros y los clientes"}. Se mantiene el límite de 1,5 km.</p>}
             {resultado.avisos.map((a, i) => <p key={i} className="text-amber-600">{a}</p>)}
           </div>}
+          {!!resultado?.revision_ids?.length && <div className="border p-3 space-y-2 text-sm">
+            <p>{resultado.revision_ids.length} prospectos tienen coincidencias con clientes. Podés revisarlos y después volver a completar la ruta.</p>
+            <Button variant="outline" size="sm" disabled={buscando || asignando} onClick={()=>setReviewOpen(true)}>Revisar y unificar</Button>
+          </div>}
+          {walkingRouteUrl(seleccion) && <a className="block text-sm underline" target="_blank" rel="noopener noreferrer" href={walkingRouteUrl(seleccion)!}>Ver recorrido a pie en Google Maps</a>}
+          <p className="text-xs text-muted-foreground">El radio de 1,5 km se mide en línea recta desde el centro. Revisá el recorrido a pie para comprobar calles, accesos y distancia total.</p>
           {!!seleccion.length && <Button variant="ghost" size="sm" disabled={asignando} onClick={() => { if (window.confirm("¿Descartar el borrador de esta ruta y vaciar la selección?")) limpiarRuta(); }}>Descartar borrador</Button>}
           <Button className="w-full gap-2" onClick={asignar} disabled={cargando || Boolean(errorCarga) || seleccion.length !== VISITAS_POR_DIA || Boolean(errorSeleccion) || !vendedorId || buscando || asignando}>
             {asignando ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}Asignar 8 visitas

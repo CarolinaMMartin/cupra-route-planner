@@ -10,6 +10,8 @@
 // ============================================================
 
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.47.10";
+import { loadIdentityContext, persistFoundProspects } from "../_shared/prospect-review-service.ts";
+import type { IdentityProspect } from "../_shared/prospect-identity.ts";
 import { aiChat, hayProveedorIA } from "../_shared/ai-chat.ts";
 import { buscarLugaresCercanos, type GooglePlace, hayGoogleMaps } from "../_shared/google-maps.ts";
 import { type AnchorPoint, calculateCentroid, findDensestHotspot } from "./geo-hotspot.ts";
@@ -17,10 +19,8 @@ import {
   areaKey,
   belongsToArea,
   buildAreaFilter,
-  type ClienteRef,
   dedupeBarrios,
   esProspectoComercialmenteValido,
-  evaluarProspectoContraCartera,
   normalizeBarrio,
 } from "./portfolio-ranking.ts";
 import {
@@ -368,41 +368,13 @@ Deno.serve(async (req) => {
     });
 
     // ---- 5. Gate prospecto ↔ cartera (toda la cartera conocida, no solo la de la zona) ----
-    const refs: ClienteRef[] = [];
-    const placeIdsDeClientes = new Set<string>();
-    const barrioRef = new Map<ClienteRef, string | null>();
-    const refsDesde = async () => {
-      const lista = clientesConVendedor;
-      const faltantes = lista.filter((c) => !placesMap.has(c.client_id)).map((c) => c.client_id);
-      const extra = await fetchIn(faltantes, (chunk) =>
-        db.from("client_places").select("client_id, lat, long, barrio_principal, google_maps_link").eq("is_primary", true).in("client_id", chunk));
-      const pm = new Map<string, any>(placesMap);
-      extra.forEach((p: any) => pm.set(p.client_id, p));
-      for (const c of lista) {
-        const place = pm.get(c.client_id);
-        const googleId = String(place?.google_maps_link || "").match(/(?:[?&]query_place_id=|place_id:)([^&]+)/)?.[1];
-        if (googleId) {
-          try { placeIdsDeClientes.add(decodeURIComponent(googleId)); } catch { /* enlace mal formado */ }
-        }
-        if (!place || !isValidCoord(place.lat, place.long)) continue;
-        const base = { lat: Number(place.lat), lng: Number(place.long), vendedor: c.vendedor_actual || c.vendedor_principal || null, diasDesdeUltimaCompra: c.dias_desde_ultima_compra ?? null };
-        for (const name of new Set([c.fantasia, c.razon_social].filter(Boolean))) {
-          const ref: ClienteRef = { ...base, name };
-          refs.push(ref);
-          barrioRef.set(ref, place.barrio_principal || c.barrio_principal || null);
-        }
-      }
-    };
-    await refsDesde();
+    const { matcher } = await loadIdentityContext(db);
     const posiblesClientes = new Map<string, { cliente: string; vendedor: string | null; dias: number | null }>();
-    /** ¿El lugar es un cliente que ya tenemos (mismo negocio o posible)? */
     const pasaGateCartera = (p: any): boolean => {
       if (!p?.place_id || p.client_id || p.es_cliente_cupra) return false;
-      if (placeIdsDeClientes.has(p.place_id)) return false;
-      const gate = evaluarProspectoContraCartera(p, refs, (r) => barrioRef.get(r) || null);
-      if (gate.estado === "duplicado") return false;
-      if (gate.estado === "posible_cliente") {
-        posiblesClientes.set(p.place_id, { cliente: gate.cliente.name, vendedor: gate.cliente.vendedor ?? null, dias: gate.cliente.diasDesdeUltimaCompra ?? null });
+      const matches = matcher.matches(p);
+      if (matches.length) {
+        posiblesClientes.set(p.place_id, { cliente: matches[0].nombre, vendedor: matches[0].vendedor, dias: null });
         return false;
       }
       return true;
@@ -505,26 +477,15 @@ Deno.serve(async (req) => {
       },
       descubrirEnGoogle: hayGoogleMaps()
         ? async (lat, lng, radioKm, objetivo, excluir, vendedorId = "ruta") => {
-          const lugares = await buscarLugaresCercanos({ lat, lng, radioKm, tipos: tiposGoogle, objetivo: objetivo * 2, excluir, consumirConsulta: () => consumirConsulta(vendedorId) });
-          const candidatas = lugares
-            .map(placeAProspecto)
-            .filter((p): p is NonNullable<ReturnType<typeof placeAProspecto>> => Boolean(p))
-            .filter((p) => !placeIdsDeClientes.has(p.place_id))
-            .filter((p) => esProspectoComercialmenteValido(p))
-            // Lo que ya es cliente (mismo nombre y cerca) no se guarda como prospecto.
-            .filter(pasaGateCartera);
-          if (candidatas.length === 0) return [];
-          // Solo lugares NUEVOS: los que ya están en la base no se tocan (pueden tener
-          // datos editados a mano o estar marcados como cliente).
-          const existentes = await fetchIn(candidatas.map(f => f.place_id), chunk =>
-            db.from("prospectos").select("*").in("place_id", chunk));
-          const idsExistentes = new Set(existentes.map(p => p.place_id));
-          const nuevas = candidatas.filter(f => !idsExistentes.has(f.place_id));
-          if (nuevas.length) {
-            const { error } = await db.from("prospectos").upsert(nuevas, { onConflict: "place_id", ignoreDuplicates: true });
-            if (error) throw new Error(`No se pudieron guardar los prospectos: ${error.message}`);
-          }
-          return await fetchIn(candidatas.map(f => f.place_id), chunk => db.from("prospectos").select("*").in("place_id", chunk));
+          const guardados = new Map<string, IdentityProspect>();
+          const lugares = await buscarLugaresCercanos({ lat, lng, radioKm, tipos: tiposGoogle, objetivo: objetivo * 2, excluir, consumirConsulta: () => consumirConsulta(vendedorId),
+            onResults: async places => {
+              const rows = await persistFoundProspects<IdentityProspect>(db, places.map(placeAProspecto).filter((p): p is NonNullable<ReturnType<typeof placeAProspecto>> => Boolean(p)));
+              matcher.remember(rows);
+              for (const p of rows) { guardados.set(p.place_id,p); if (typeof p.google_place_id === "string") guardados.set(p.google_place_id,p); }
+            },
+          });
+          return lugares.map(p => guardados.get(p.id!)).filter((p): p is IdentityProspect => Boolean(p)).filter(esProspectoComercialmenteValido).filter(pasaGateCartera);
         }
         : undefined,
       pasaGate,
@@ -692,7 +653,7 @@ Deno.serve(async (req) => {
     }
     if (posiblesClientes.size > 0) {
       const muestras = [...posiblesClientes.values()].slice(0, 3).map((v) => `${v.cliente}${v.vendedor ? ` (atiende ${v.vendedor})` : ""}`).join(", ");
-      avisos.push(`Se apartaron ${posiblesClientes.size} lugares que podrían ser clientes actuales: ${muestras}. Verificar antes de visitarlos como nuevos.`);
+      avisos.push(`Se apartaron ${posiblesClientes.size} lugares que podrían ser clientes actuales: ${muestras}. Revisalos en Prospectos → Revisar coincidencias antes de visitarlos como nuevos.`);
     }
     if (nombresSinPerfil.size > 0) {
       const lista = [...nombresSinPerfil.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n, k]) => `${n} (${k})`).join(", ");

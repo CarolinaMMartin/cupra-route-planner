@@ -3,9 +3,10 @@ import { centroClientes, coordenadaMapaValida, distanciaAlCliente, RADIOS_BUSQUE
 import { distanciaKm, RADIO_RUTA_KM, type Coordenada } from "../_shared/ruta.ts";
 import { esProspectoComercialmenteValido, normalizeFantasyName } from "../_shared/portfolio-ranking.ts";
 import { origenProspecto, rubroKey, TIPOS_GOOGLE_POR_RUBRO } from "../_shared/reglas.ts";
+import { ProspectPersistenceError } from "../_shared/prospect-review-service.ts";
 
 export interface ProspectoMapa {
-  place_id: string; google_place_id?: string | null; nombre: string;
+  place_id: string; google_place_id?: string | null; nombre: string; huella?: string; website?: string | null; resumen_google?: string | null;
   latitud: number | null; longitud: number | null; direccion?: string | null;
   barrio?: string | null; ciudad?: string | null; comuna?: string | null; provincia?: string | null;
   rubro?: string | null; telefono?: string | null; rating?: number | null; total_ratings?: number | null;
@@ -37,6 +38,7 @@ export function prospectoDeGoogle(place: GooglePlace): ProspectoMapa | null {
     ciudad: component("locality") || comuna || "", provincia: component("administrative_area_level_1") || "",
     comuna: comuna?.toLowerCase().startsWith("comuna") ? comuna : null,
     rubro, telefono: place.nationalPhoneNumber || place.internationalPhoneNumber || null,
+    website: place.websiteUri || null, resumen_google: place.editorialSummary?.text || null,
     tipo_principal: place.primaryType || null, tipos: place.types || [],
     rating: place.rating || null, total_ratings: place.userRatingCount || null,
     estado_negocio: place.businessStatus || null, es_cliente_cupra: false };
@@ -106,13 +108,20 @@ export async function buscarComplementoMapa(opts: BusquedaMapa) {
     && (!rubros.size || rubros.has(rubroKey(p.rubro))) && opts.pasaGate(p)), centro);
   const agregar = (nuevos: ProspectoMapa[]) => {
     // La base es autoridad: no reabrir negocios cerrados ni reemplazar IDs de Excel.
-    for (const p of nuevos) if (!todos.has(p.place_id) && !opts.base.some(known => mismoProspecto(known, p))) todos.set(p.place_id, p);
+    for (const p of nuevos) {
+      const known = todos.get(p.place_id);
+      if (known) todos.set(p.place_id, { ...known, ...p,
+        client_id: known.client_id || p.client_id, es_cliente_cupra: known.es_cliente_cupra || p.es_cliente_cupra,
+        estado_negocio: ["CLOSED_PERMANENTLY","CLOSED_TEMPORARILY"].includes(known.estado_negocio || "") ? known.estado_negocio : p.estado_negocio });
+      else if (!opts.base.some(known => mismoProspecto(known, p))) todos.set(p.place_id, p);
+    }
   };
   for (radio of RADIOS_BUSQUEDA_MAPA) {
     if (opts.descubrir && tipos.length && !googleError) {
       try {
         agregar(await opts.descubrir(centro, radio, tipos));
-      } catch {
+      } catch (error) {
+        if (error instanceof ProspectPersistenceError) throw error;
         googleError = true;
         avisos.push("Google no pudo completar la búsqueda. Podés reintentar; se conservaron los prospectos disponibles.");
       }
@@ -124,7 +133,7 @@ export async function buscarComplementoMapa(opts: BusquedaMapa) {
   // el interior con consultas adicionales, pero se mantiene el centro y el límite.
   if (validos().length < opts.objetivo && opts.cubrirZona && tipos.length && !googleError) {
     try { agregar(await opts.cubrirZona(centro, tipos)); }
-    catch { avisos.push("No se pudo terminar de recorrer la zona en Google. Podés reintentar la búsqueda."); }
+    catch (error) { if (error instanceof ProspectPersistenceError) throw error; avisos.push("No se pudo terminar de recorrer la zona en Google. Podés reintentar la búsqueda."); }
   }
   const candidatos = validos().slice(0, 40);
   return { centro, candidatos, elegidos: candidatos.slice(0, opts.objetivo), radio_m: Math.round(radio * 1000), avisos };
@@ -150,7 +159,7 @@ export async function descubrirProspectosMapa(centro: Coordenada, radioKm: numbe
     }
     if (!response?.ok) throw new Error("Google Places no completó la búsqueda");
     const payload = await response.json();
-    return (payload.places || []).map(prospectoDeGoogle).filter((p: ProspectoMapa | null): p is ProspectoMapa => Boolean(p) && esProspectoComercialmenteValido(p!));
+    return (payload.places || []).map(prospectoDeGoogle).filter((p: ProspectoMapa | null): p is ProspectoMapa => Boolean(p));
   }));
   // No afirmar que la búsqueda está completa si un rubro falló.
   if (responses.some(r => r.status === "rejected")) throw new Error("No se pudieron consultar todos los rubros en Google");

@@ -24,3 +24,10 @@ Deno.test('Google preserva resultados útiles ante error posterior y excluye cer
     igual(r.length,1);igual(r[0].id,'p1');
   });
 });
+Deno.test('Google entrega también los datos conocidos y cerrados para persistir antes de filtrar la ruta',async()=>{
+  const recibidos:string[]=[];
+  await conMock([Response.json({places:[{id:'conocido'},{id:'cerrado',businessStatus:'CLOSED_PERMANENTLY'},{id:'nuevo'}]})],async()=>{
+    const r=await buscarLugaresCercanos({...opciones,excluir:new Set(['conocido']),onResults:async places=>{recibidos.push(...places.map(p=>p.id!));}});
+    igual(r.length,1);igual(r[0].id,'nuevo');igual(recibidos.join(','),'conocido,cerrado,nuevo');
+  });
+});

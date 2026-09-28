@@ -1,11 +1,12 @@
 import { authorize, corsHeaders, json, RequestError, failure, googleGeocode } from "../_shared/location-service.ts";
 import { hayGoogleMaps } from "../_shared/google-maps.ts";
 import { allClients } from "../_shared/import-batch.ts";
-import { carteraDelVendedor, centroClientes, coordenadaMapaValida, puntosDeCartera, validarSeleccionMapa, ubicacionesPreferidas, type UbicacionMapa } from "../_shared/map-selection.ts";
+import { carteraDelVendedor, centroClientes, coordenadaMapaValida, puntosDeCartera, validarSeleccionMapa, type UbicacionMapa } from "../_shared/map-selection.ts";
 import { centroDeZonaGoogle, prospectoEnZona, zonaDelCatalogo, type ZonaProspeccion, type ZonaProspeccionResuelta } from "../_shared/map-zones.ts";
 import { distanciaKm, RADIO_RUTA_KM, VISITAS_POR_DIA } from "../_shared/ruta.ts";
 import { hoyArgentina, excluidoPorFeedback, type FeedbackLike } from "../_shared/reglas.ts";
-import { evaluarProspectoContraCartera, type ClienteRef } from "../_shared/portfolio-ranking.ts";
+import { loadIdentityContext, persistFoundProspects } from "../_shared/prospect-review-service.ts";
+import type { IdentityProspect } from "../_shared/prospect-identity.ts";
 import { buscarComplementoMapa, cubrirZonaMapa, descubrirProspectosMapa, mismoProspecto, ordenarProspectos, prospectoDisponible, puntoProspecto, type ProspectoMapa } from "./search.ts";
 import { rubroKey } from "../_shared/reglas.ts";
 
@@ -98,20 +99,18 @@ export async function handler(req: Request): Promise<Response> {
     const comentarios = new Map<string, FeedbackLike[]>();
     for (const f of feedbacks) if (f.prospecto_place_id) comentarios.set(f.prospecto_place_id, [...(comentarios.get(f.prospecto_place_id) || []), f]);
     for (const [id, list] of comentarios) if (excluidoPorFeedback(list)) bloqueados.add(id);
-    const clientesGoogle = new Set<string>();
-    for (const p of places) {
-      const id = p.google_maps_link?.match(/(?:[?&]query_place_id=|place_id:)([^&]+)/)?.[1];
-      if (id) { try { clientesGoogle.add(decodeURIComponent(id)); } catch { /* enlace viejo no utilizable */ } }
-    }
-    const ubicaciones = ubicacionesPreferidas(places);
-    const refs: ClienteRef[] = clientes.flatMap(c => {
-      const p = ubicaciones.get(c.client_id);
-      return p ? [...new Set([c.fantasia, c.razon_social].filter(Boolean))].map(name => ({ name, lat: p.lat!, lng: p.long! })) : [];
-    });
+    const { matcher } = await loadIdentityContext(db);
+    const revisiones = new Set<string>();
+    const identidadDisponible = (p: ProspectoMapa) => {
+      if (p.client_id || p.es_cliente_cupra) return false;
+      const matches = matcher.matches(p as IdentityProspect);
+      if (matches.length) { revisiones.add(p.place_id); return false; }
+      return true;
+    };
     const disponible = (p: ProspectoMapa) => prospectoDisponible(p) && !bloqueados.has(p.place_id)
-      && !bloqueados.has(p.google_place_id || "") && !clientesGoogle.has(p.google_place_id || p.place_id)
+      && !bloqueados.has(p.google_place_id || "")
       && (!zona || prospectoEnZona(p, zona))
-      && evaluarProspectoContraCartera(p, refs).estado === "nuevo";
+      && identidadDisponible(p);
     const conservar = base.filter(p => conservarIds.includes(p.place_id));
     if (conservar.length !== conservarIds.length || conservar.some(p => !disponible(p))) {
       throw new RequestError("Uno de los prospectos ya no está disponible. Quitalo de la ruta y reintentá.", 409, "STALE_PROSPECTS");
@@ -122,19 +121,17 @@ export async function handler(req: Request): Promise<Response> {
     let consultas = 0;
     const consumir = () => { if (++consultas > 60 || Date.now() >= deadline) throw new Error("Se agotó el tiempo de búsqueda"); };
     const objetivo = VISITAS_POR_DIA - clientesPuntos.length - conservar.length;
+    const guardarEncontrados = async (rows: ProspectoMapa[]) => {
+      const guardados = await persistFoundProspects(db, rows as IdentityProspect[]);
+      matcher.remember(guardados); return guardados as ProspectoMapa[];
+    };
     const result = await buscarComplementoMapa({
       clientes: clientesPuntos, centroZona: zona || undefined, objetivo, base, rubros,
       pasaGate: p => disponible(p) && !omitirIds.has(p.place_id) && !omitirIds.has(p.google_place_id || "")
         && !conservar.some(prev => mismoProspecto(prev, p)),
-      descubrir: hayGoogleMaps() ? (center, radius, types) => descubrirProspectosMapa(center, radius, types, deadline, consumir) : undefined,
-      cubrirZona: hayGoogleMaps() ? (center, types) => cubrirZonaMapa(center, types, deadline, consumir) : undefined,
+      descubrir: hayGoogleMaps() ? async (center, radius, types) => guardarEncontrados(await descubrirProspectosMapa(center, radius, types, deadline, consumir)) : undefined,
+      cubrirZona: hayGoogleMaps() ? async (center, types) => guardarEncontrados(await cubrirZonaMapa(center, types, deadline, consumir)) : undefined,
     });
-    const conocidos = new Set(base.map(p => p.place_id));
-    const nuevos = result.candidatos.filter(p => !conocidos.has(p.place_id));
-    if (nuevos.length) {
-      const { error } = await db.from("prospectos").upsert(nuevos, { onConflict: "place_id", ignoreDuplicates: true });
-      if (error) throw new Error("No se pudieron guardar los prospectos encontrados. Reintentá antes de asignar.");
-    }
     // Releer mantiene las ediciones/conversiones concurrentes y los rubros calculados por la base.
     const candidateIds = result.candidatos.map(p => p.place_id);
     let final: ProspectoMapa[] = [];
@@ -150,7 +147,7 @@ export async function handler(req: Request): Promise<Response> {
     return json({ success: true, centro, zona, radio_busqueda_m: result.radio_m,
       clientes: clientesPuntos, prospectos: final.map(p => puntoProspecto(p, clientesPuntos, centro)),
       elegidos: seleccionados.map(p => p.place_id), faltantes: objetivo - seleccionados.length,
-      avisos: result.avisos });
+      avisos: result.avisos, revision_ids: [...revisiones] });
   } catch (error) { return failure(error); }
 }
 

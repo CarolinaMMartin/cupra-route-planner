@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import AgregarProspectoForm, { hasProspectoDraft } from "@/components/vendedor/AgregarProspectoForm";
 import { ProspectDiscoveryDialog } from "@/components/prospectos/ProspectDiscoveryDialog";
+import { ProspectReviewDialog } from "@/components/prospectos/ProspectReviewDialog";
 import { ProspectoDetalleDialog } from "@/components/prospectos/ProspectoDetalleDialog";
 import { Slider } from "@/components/ui/slider";
 import { useRubros } from "@/hooks/useRubros";
@@ -160,6 +161,7 @@ const ProspectosDashboard = () => {
   // Dialogs
   const [showAgregarProspecto, setShowAgregarProspecto] = useState(hasProspectoDraft);
   const [showBuscarProspectos, setShowBuscarProspectos] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [detalleProspecto, setDetalleProspecto] = useState<Prospecto | null>(null);
 
   // Asignación de prospectos
@@ -560,7 +562,8 @@ const ProspectosDashboard = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 md:gap-3">
+              <Button variant="outline" onClick={() => setReviewOpen(true)} className="h-[38px]">Revisar coincidencias</Button>
               <Button variant="outline" onClick={() => downloadCsv(filteredData)} className="h-[38px] gap-2">
                 <Download className="h-4 w-4" />
                 <span className="hidden sm:inline">Exportar CSV</span>
@@ -1041,6 +1044,7 @@ const ProspectosDashboard = () => {
           onConverted={fetchProspectosData}
         />
 
+        <ProspectReviewDialog open={reviewOpen} onOpenChange={setReviewOpen} onResolved={()=>{ void fetchProspectosData(); }} />
         <ProspectoDetalleDialog
           prospecto={detalleProspecto}
           open={!!detalleProspecto}

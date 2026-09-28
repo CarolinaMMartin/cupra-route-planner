@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "test:motor": "deno test --allow-env=GOOGLE_MAPS_API_KEY,VITE_GOOGLE_MAPS_API_KEY,LOVABLE_API_KEY supabase/functions/generate-recommendations supabase/functions/complete-map-route",
-    "test:db": "node --test tests/asignaciones-db.test.mjs",
+    "test:db": "node --test tests/asignaciones-db.test.mjs tests/revision-prospectos-db.test.mjs",
     "test": "npm run test:motor && npm run test:db && npm run test:imports && npm run test:drafts && npm run test:bundles",
     "check": "npm run typecheck && npm test && npm run build",
     "test:imports": "node --test tests/importacion.test.mjs tests/importacion-db.test.mjs",

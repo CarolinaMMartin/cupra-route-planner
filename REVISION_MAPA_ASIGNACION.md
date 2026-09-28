@@ -56,3 +56,15 @@ Aplicar y registrar `20260928140000_ruta_mapa.sql`. Desplegar `complete-map-rout
 Las reglas de cartera, filtrado y geometría viven en `_shared/` para que cada función pueda desplegarse de forma independiente. Las pruebas de empaquetado recorren los imports y rechazan dependencias de carpetas de otras funciones.
 
 Para el caso sin cartera, aplicar `20260928150000_mapa_sin_cartera.sql` y desplegar `complete-map-route` con `_shared/`. La firma de `guardar_ruta_mapa` incorpora `p_zona_key` opcional y conserva las llamadas anteriores de tres argumentos. La migración no modifica clientes, prospectos ni visitas existentes. Se verificó en Google la geocodificación territorial de Palermo y la presencia de sublocalidad en Nearby: ambas consultas de sólo lectura respondieron HTTP 200.
+
+## Revisión y complemento persistente — 28/09/2026
+
+- Comparación contra toda la cartera, incluso clientes sin coordenadas: teléfono normalizado, dirección, identificador Google, nombres y todas las ubicaciones. La cercanía y el teléfono compartido producen una revisión, no una fusión automática.
+- El asignador compara las fichas y elige **Unificar información** o **Son negocios distintos**. Las decisiones se guardan; una modificación de identidad exige revisar otra vez. También puede volver a mostrar decisiones de negocios distintos.
+- La unificación es una transacción. Vincula el prospecto al cliente, completa campos vacíos, agrega contactos sin duplicarlos y aporta coordenadas sólo cuando faltan. Conserva dueño de cartera, ventas, asignaciones y feedback. La ficha del cliente muestra el complemento y el feedback del prospecto vinculado.
+- La información encontrada en Google se conserva antes de decidir si sirve para la ruta. Se guardan valores alternativos, fuente e historial. Los nuevos contactos de un prospecto ya vinculado también complementan al cliente. No se reabren comercios cerrados ni se sobrescriben valores manuales existentes.
+- Mapa y recomendaciones apartan las coincidencias pendientes de los prospectos nuevos. El mapa permite revisarlas y volver a completar. La búsqueda manual de prospectos utiliza la misma incorporación aditiva.
+- Se mantiene el límite de 1,5 km desde el centro y la búsqueda progresiva en radios menores. Las reglas de días siguen priorizando clientes y pueden flexibilizar la repetición para completar. No se agregan cuotas P1/P2/P3 ni se amplía el radio para cumplir una frecuencia.
+- El mapa ofrece un enlace de recorrido a pie. Es un orden aproximado de paradas: Google resuelve calles y accesos. El radio geográfico no equivale a la longitud total del recorrido peatonal.
+
+Validación: `npm run check`, que incluye pruebas PostgreSQL de unificación, datos en conflicto, reintentos, permisos, cambios concurrentes y persistencia de las variantes. Pruebas de identidad sin coordenadas, nombres parciales, teléfonos alternativos y decisiones persistidas; búsqueda que aprovecha datos de lugares ya conocidos y cerrados. Se comprueba adicionalmente la interfaz con servicios simulados, sin modificar registros reales.

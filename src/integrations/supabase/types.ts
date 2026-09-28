@@ -553,6 +553,12 @@ export type Database = {
         }
         Relationships: []
       }
+      clientes_informacion_complementaria: {
+        Row: { client_id: string; prospecto_place_id: string; datos: Json; fuente: string; updated_at: string }
+        Insert: { client_id: string; prospecto_place_id: string; datos: Json; fuente?: string; updated_at?: string }
+        Update: { datos?: Json; fuente?: string; updated_at?: string }
+        Relationships: []
+      }
       clientes_recomendaciones_temporal: {
         Row: {
           avg_ticket: number | null

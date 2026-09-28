@@ -126,3 +126,11 @@ Detalle y pruebas: `REVISION_MAPA_ASIGNACION.md`.
 2. Desplegar `complete-map-route` con el catálogo y los validadores de `_shared/`.
 3. Publicar `main`. Elegir un vendedor sin clientes debe mostrar el selector de barrio/localidad y categorías, permitir completar ocho prospectos dentro de 1,5 km y ofrecer acceso a la asignación manual.
 4. Verificar borrador al recargar/cambiar de pantalla y confirmación antes de reemplazar una ruta al cambiar barrio o categoría.
+
+## Revisión y unificación de prospectos — 28/09/2026
+
+1. Verificar el esquema actual. Aplicar únicamente `20260928220000_revision_prospectos.sql` y registrar esa versión. La migración crea tablas y funciones; no unifica ni modifica fichas comerciales por sí sola.
+2. Desplegar `review-prospect`, `complete-map-route`, `generate-recommendations` y `prospect-discovery` incluyendo `_shared/`. Conservar secretos existentes; las cuatro funciones verifican usuario y rol en servidor.
+3. Publicar el frontend de `main`. En Prospectos aparece **Revisar coincidencias** y en el mapa aparece **Revisar y unificar** cuando la búsqueda detecta coincidencias.
+4. Verificar acceso anónimo rechazado y RPC internos sin permiso para `authenticated`. Las pruebas de unificación utilizan datos sintéticos en PGlite; no ejecutar fusiones sobre fichas reales para comprobar el despliegue.
+5. Conservar el commit anterior `54c36e45c152ad35bf9275aaa6f4db2e5749423c` como referencia de reversión. Las tablas aditivas pueden permanecer al revertir aplicación y funciones.
