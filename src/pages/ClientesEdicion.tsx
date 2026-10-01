@@ -3,6 +3,7 @@ import { isAssignorLike, canViewSalesDashboard } from "@/lib/roles";
 import AppNav from "@/components/AppNav";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Filter, Users } from "lucide-react";
