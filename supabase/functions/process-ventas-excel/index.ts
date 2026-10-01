@@ -220,13 +220,19 @@ const normalizeProvincia = (prov: string | null): string | null => {
   return PROVINCIA_NORM[key] || prov;
 };
 
+const BARRIO_KEYS_NORM = Object.keys(BARRIOS_A_COMUNA).map(k => [k, k.normalize('NFD').replace(/[\u0300-\u036f]/g, '')] as const);
+const geoCache = new Map<string, GeoResult>();
 function normalizarGeografia(ciudadRaw: string | null): GeoResult {
+  if (ciudadRaw && geoCache.has(ciudadRaw)) return geoCache.get(ciudadRaw)!;
+  const r = normalizarGeografiaRaw(ciudadRaw);
+  if (ciudadRaw) geoCache.set(ciudadRaw, r);
+  return r;
+}
+function normalizarGeografiaRaw(ciudadRaw: string | null): GeoResult {
   if (!ciudadRaw) return { barrio: null, comuna: null, ciudad: null, provincia: null };
   const ubicacionNorm = ciudadRaw.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
   // Fix 2: Normalizar también las keys del mapa para evitar que NFD rompa Ñ→N
-  const barrioKey = Object.keys(BARRIOS_A_COMUNA).find(k =>
-    k.normalize('NFD').replace(/[\u0300-\u036f]/g, '') === ubicacionNorm
-  );
+  const barrioKey = BARRIO_KEYS_NORM.find(([, n]) => n === ubicacionNorm)?.[0];
   if (barrioKey) {
     return { barrio: barrioKey, comuna: BARRIOS_A_COMUNA[barrioKey], ciudad: 'CABA', provincia: 'CABA' };
   }
@@ -360,7 +366,7 @@ Deno.serve(async (req) => {
     };
     const rawRows = body.rows;
     const rawNotasCredito = Array.isArray(body.notasCredito) ? body.notasCredito : [];
-    const replaceExisting = body.replaceExisting !== false; // default true
+    let replaceExisting = body.replaceExisting !== false; // default true
     const modoCarga: 'rango' | 'rebase' = body.modoCarga === 'rebase' ? 'rebase' : 'rango';
     if (modoCarga === 'rebase') throw new Error('La carga de Excel permite reemplazar el período o agregar ventas. El reemplazo total no está disponible en este módulo.');
     const confirmarEliminaciones = body.confirmarEliminaciones === true;
@@ -431,6 +437,17 @@ Deno.serve(async (req) => {
       ? resolveFieldName(rows[0], FACTURACION_FIELD_NAMES)
       : null;
     console.log(`💰 Columna facturación: resuelta="${facturacionColumnResolved}" | evaluadas=${JSON.stringify(FACTURACION_FIELD_NAMES)}`);
+
+    // Modo "sin importes": el informe llegó sin ninguna columna de precio con datos.
+    // Se cargan cantidades y se conservan los importes que ya existían en la base.
+    const sinImportes = rows.length > 0 && rows.every(r => {
+      const v = parseNumericValue(getFieldValue(r, FACTURACION_FIELD_NAMES));
+      return v === null || v === undefined;
+    });
+    if (sinImportes) {
+      replaceExisting = false;
+      console.log('💸 Archivo sin importes: modo agregar/actualizar, se conservan importes existentes');
+    }
 
     // ============ FASE 0: identidad comercial contra el maestro ============
     // El campo "ID" del informe de ventas NO es el Id oficial del maestro.
@@ -573,7 +590,7 @@ Deno.serve(async (req) => {
         client_id,
         ticket, letra, fecha_emision: fecha_iso, cuit_dni, razon_social, fantasia,
         cajas, codigo_producto, nombre: producto, marca,
-        facturacion_ars: facturacion === null || facturacion === undefined ? 0 : facturacion,
+        facturacion_ars: facturacion === null || facturacion === undefined ? (sinImportes ? null : 0) : facturacion,
         bonificacion,
         vendedor, telefono, celular, correo, direccion, ciudad: ciudad_raw,
         provincia: provincia_raw, pais, categorias,
@@ -739,7 +756,7 @@ Deno.serve(async (req) => {
     }
 
     // La revisión debe poder corregir cualquier fila inválida antes de aplicar el lote.
-    if (ventasSinClientId || facturacionNullCount || notasCreditoSinMatch || notasCreditoSinImporte) {
+    if (ventasSinClientId || (facturacionNullCount && !sinImportes) || notasCreditoSinMatch || notasCreditoSinImporte) {
       throw new Error(`Carga rechazada: ${ventasSinClientId} ventas sin cliente inequívoco, ${facturacionNullCount} sin importe, ${notasCreditoSinMatch} notas de crédito sin cliente y ${notasCreditoSinImporte} sin importe. No se modificó nada.`);
     }
 
@@ -749,6 +766,52 @@ Deno.serve(async (req) => {
     // ============ FASE 1b: Numerar renglones (OT8-fix, ya NO se fusiona nada) ============
     const renglonStats = asignarRenglones(ventasRaw);
     const ventasDuplicadas = renglonStats.colisiones;
+
+    // Conservar importes existentes: cada línea sin importe que coincide con una
+    // ya cargada (comprobante, letra, fecha, cliente, producto) adopta su importe,
+    // bonificación y renglón para actualizar esa misma fila en lugar de duplicarla.
+    let importesConservados = 0;
+    if (sinImportes) {
+      const existentes: any[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from('ventas_cupra')
+          .select('ticket,letra,fecha_emision,client_id,codigo_producto,facturacion_ars,bonificacion,renglon')
+          .eq('tipo_comprobante', 'venta').not('facturacion_ars', 'is', null)
+          .order('id').range(from, from + 999);
+        if (error) throw new Error(`No se pudieron leer las ventas existentes: ${error.message}`);
+        existentes.push(...(data || []));
+        if (!data || data.length < 1000) break;
+      }
+      const k = (v: any) => [v.ticket, v.letra, v.fecha_emision, v.client_id, v.codigo_producto].map(x => String(x ?? '').trim().toUpperCase()).join('||');
+      const pool = new Map<string, any[]>();
+      for (const e of existentes) { const key = k(e); if (!pool.has(key)) pool.set(key, []); pool.get(key)!.push(e); }
+      for (const v of ventasRaw) {
+        const e = pool.get(k(v))?.shift();
+        if (!e) continue;
+        v.facturacion_ars = Number(e.facturacion_ars);
+        v.bonificacion = e.bonificacion;
+        v.renglon = e.renglon;
+        v.__fijo = true;
+        importesConservados++;
+      }
+      // Renumerar los no coincidentes para que no choquen con renglones adoptados.
+      const usados = new Map<string, Set<number>>();
+      for (const v of ventasRaw) {
+        const key = buildVentaConflictKey(v); if (!key || !v.__fijo) continue;
+        if (!usados.has(key)) usados.set(key, new Set());
+        usados.get(key)!.add(Number(v.renglon));
+      }
+      for (const v of ventasRaw) {
+        if (v.__fijo) continue;
+        const key = buildVentaConflictKey(v); if (!key) continue;
+        if (!usados.has(key)) usados.set(key, new Set());
+        const set = usados.get(key)!;
+        let n = 1; while (set.has(n)) n++;
+        v.renglon = n; set.add(n);
+      }
+      for (const v of ventasRaw) delete v.__fijo;
+      console.log(`💰 Importes conservados: ${importesConservados} de ${existentes.length} líneas existentes`);
+    }
     const ventasDeduplicadas = ventasRaw;
 
     if (ventasDeduplicadas.length === 0) {
@@ -1030,6 +1093,9 @@ Deno.serve(async (req) => {
       metricas_recalculadas: metricasRecalculadas,
 
       filas_procesadas: ventasRaw.length,
+      sin_importes: sinImportes,
+      importes_conservados: importesConservados,
+      filas_sin_importe: ventasDeduplicadas.filter(v => v.facturacion_ars === null).length,
       filas_deduplicadas: ventasDeduplicadas.length,
       renglones_con_ordinal: renglonStats.colisiones,
       filas_bonificadas_100: ventasDeduplicadas.filter(v => Number(v.bonificacion) === 100).length,

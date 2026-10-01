@@ -88,6 +88,9 @@ interface Reconciliacion {
   notas_credito_aplicadas?: number;
   notas_credito_sin_match?: number;
   notas_credito_duplicadas?: number;
+  sin_importes?: boolean;
+  importes_conservados?: number;
+  filas_sin_importe?: number;
   notas_credito_sin_importe?: number;
   monto_notas_credito?: number;
   filas_procesadas: number;
@@ -1025,6 +1028,18 @@ const CargaDatos = () => {
                             <td className="px-3 py-1.5 text-foreground/80">Filas omitidas</td>
                             <td className="px-3 py-1.5 text-right font-medium text-amber-500">{(reconciliacion.filas_descartadas_total ?? reconciliacion.filas_descartadas_sin_id).toLocaleString()}</td>
                           </tr>
+                          {reconciliacion.sin_importes && (
+                            <>
+                              <tr>
+                                <td className="px-3 py-1.5 text-foreground/80">Líneas con importe conservado</td>
+                                <td className="px-3 py-1.5 text-right font-medium text-foreground">{(reconciliacion.importes_conservados ?? 0).toLocaleString()}</td>
+                              </tr>
+                              <tr>
+                                <td className="px-3 py-1.5 text-foreground/80">Líneas sin importe (el archivo no trae precios)</td>
+                                <td className="px-3 py-1.5 text-right font-medium text-amber-500">{(reconciliacion.filas_sin_importe ?? 0).toLocaleString()}</td>
+                              </tr>
+                            </>
+                          )}
                         </tbody>
                       </table>
                     </div>
