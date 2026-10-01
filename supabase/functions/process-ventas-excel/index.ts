@@ -142,24 +142,37 @@ const normalizeCuit = (v: any): string | null => {
  * Para facturacion_ars, la prioridad es:
  *   'Facturación Ar$' > 'Facturacion Ar$' > etc. > 'Precio Total Final'
  */
+const fieldNormCache = new Map<string, string>();
+const normField = (s: string) => {
+  let r = fieldNormCache.get(s);
+  if (r === undefined) { r = s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ''); fieldNormCache.set(s, r); }
+  return r;
+};
+// Resolución de columna cacheada por conjunto de nombres: evita recorrer y
+// normalizar las 60+ columnas en cada fila (excedía el límite de CPU).
+const fieldResolveCache = new Map<string, string | null>();
 function getFieldValue(obj: Record<string, any>, fieldNames: string[]): any {
   for (const f of fieldNames) {
     if (obj[f] !== undefined) return obj[f];
   }
   const keys = Object.keys(obj);
-  for (const f of fieldNames) {
-    for (const k of keys) {
-      if (k.toLowerCase() === f.toLowerCase()) return obj[k];
+  const cacheKey = fieldNames.join('\u0001') + '\u0002' + keys.length + '\u0002' + keys[0] + '\u0002' + keys[keys.length - 1];
+  if (fieldResolveCache.has(cacheKey)) {
+    const k = fieldResolveCache.get(cacheKey);
+    return k === null || k === undefined ? undefined : obj[k];
+  }
+  let found: string | null = null;
+  outer: for (const f of fieldNames) {
+    for (const k of keys) if (k.toLowerCase() === f.toLowerCase()) { found = k; break outer; }
+  }
+  if (found === null) {
+    outer2: for (const f of fieldNames) {
+      const nf = normField(f);
+      for (const k of keys) if (normField(k) === nf) { found = k; break outer2; }
     }
   }
-  const normalize = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
-  for (const f of fieldNames) {
-    const nf = normalize(f);
-    for (const k of keys) {
-      if (normalize(k) === nf) return obj[k];
-    }
-  }
-  return undefined;
+  fieldResolveCache.set(cacheKey, found);
+  return found === null ? undefined : obj[found];
 }
 
 /**
