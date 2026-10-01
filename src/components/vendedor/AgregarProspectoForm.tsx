@@ -21,6 +21,10 @@ import {
   GeocodingResponse,
 } from "@/services/geocodingService";
 
+import { catalogoClientes } from "@/lib/catalogoVisitas";
+import { AssignmentDraftProvider, useDraftState, useAssignmentDraftStore } from "@/hooks/useAssignmentDraft";
+import { AssignmentDraftStore } from "@/lib/assignmentDrafts";
+
 interface AgregarProspectoFormProps {
   onSuccess: () => void;
   onCancel: () => void;
@@ -103,8 +107,6 @@ const riskConfig: Record<RiskLevel, { bg: string; border: string; text: string; 
   bajo: { bg: "bg-blue-500/20", border: "border-blue-500", text: "text-blue-500", label: "Riesgo Bajo" }
 };
 
-const DRAFT_KEY = "prospecto-draft-v1";
-
 const EMPTY_FORM: FormData = {
   nombre: "",
   direccion: "",
@@ -117,52 +119,21 @@ const EMPTY_FORM: FormData = {
   instagram: "",
 };
 
-// Permite reabrir el formulario automáticamente si quedó carga a medio hacer
-export const hasProspectoDraft = (): boolean => {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as Partial<FormData>;
-    return Object.values(parsed).some((v) => typeof v === "string" && v.trim() !== "");
-  } catch {
-    return false;
-  }
+export const hasProspectoDraft = (userId: string): boolean => {
+  const store = new AssignmentDraftStore(userId, window.localStorage);
+  return Object.values(store.get("prospecto", "form", EMPTY_FORM)).some(v => typeof v === "string" && v.trim());
 };
 
-const loadDraft = (): FormData => {
-  try {
-    const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return EMPTY_FORM;
-    return { ...EMPTY_FORM, ...(JSON.parse(raw) as Partial<FormData>) };
-  } catch {
-    return EMPTY_FORM;
-  }
-};
-
-const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps) => {
+const ProspectoFormInterno = ({ onSuccess, onCancel }: AgregarProspectoFormProps) => {
   const [step, setStep] = useState<FormStep>("form");
-  const [formData, setFormData] = useState<FormData>(loadDraft);
+  const [formData, setFormData] = useDraftState<FormData>("prospecto", "form", EMPTY_FORM);
+  const draftStore = useAssignmentDraftStore();
   const [geocodeResult, setGeocodeResult] = useState<GeocodingResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [duplicatesFound, setDuplicatesFound] = useState<DuplicateMatch[]>([]);
   const { toast } = useToast();
 
-  // Guardar borrador: si el operador cambia de app o se recarga la pestaña, no pierde lo cargado
-  useEffect(() => {
-    try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(formData));
-    } catch {
-      /* storage lleno o no disponible */
-    }
-  }, [formData]);
-
-  const clearDraft = () => {
-    try {
-      localStorage.removeItem(DRAFT_KEY);
-    } catch {
-      /* noop */
-    }
-  };
+  const clearDraft = () => draftStore.clear("prospecto");
 
   const handleCancel = () => {
     clearDraft();
@@ -207,6 +178,9 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
     const seenIds = new Set<string>(); // Para evitar duplicados en la lista
 
     try {
+      const catalogo = await catalogoClientes();
+      const clientesCatalogo = catalogo.map(c => ({ client_id:c.id, razon_social:c.nombre, fantasia:c.nombre,
+        direccion_principal:c.direccion, telefonos:c.telefonos, lat:c.lat, long:c.lng }));
       // 1. CRÍTICO: Verificar place_id exacto en prospectos
       if (placeId) {
         const { data: exactMatch } = await supabase
@@ -272,20 +246,12 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
       }
 
       // 3. Buscar client_places por proximidad geográfica
-      const { data: clientesCercanos } = await supabase
-        .from("client_places")
-        .select("client_id, direccion_principal, lat, long")
-        .gte("lat", lat - 0.002)
-        .lte("lat", lat + 0.002)
-        .gte("long", lng - 0.002)
-        .lte("long", lng + 0.002);
+      const clientesCercanos = clientesCatalogo.filter(c => c.lat != null && c.long != null
+        && haversineDistance(lat,lng,Number(c.lat),Number(c.long)) < 300);
 
       if (clientesCercanos && clientesCercanos.length > 0) {
         const clientIds = clientesCercanos.map(c => c.client_id);
-        const { data: clientes } = await supabase
-          .from("clientes")
-          .select("client_id, razon_social, fantasia, telefonos, direccion_principal")
-          .in("client_id", clientIds);
+        const clientes = clientesCatalogo.filter(c => clientIds.includes(c.client_id));
 
         if (clientes) {
           for (const cliente of clientes) {
@@ -357,10 +323,7 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
           }
 
           // Buscar en clientes
-          const { data: clientesConTel } = await supabase
-            .from("clientes")
-            .select("client_id, razon_social, fantasia, telefonos, direccion_principal")
-            .not("telefonos", "is", null);
+          const clientesConTel = clientesCatalogo.filter(c => c.telefonos?.length);
 
           if (clientesConTel) {
             for (const c of clientesConTel) {
@@ -417,11 +380,7 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
         }
 
         // Buscar clientes con nombre similar
-        const { data: clientesNombre } = await supabase
-          .from("clientes")
-          .select("client_id, razon_social, fantasia, direccion_principal, telefonos")
-          .or(`razon_social.ilike.%${tokens[0]}%,fantasia.ilike.%${tokens[0]}%`)
-          .limit(20);
+        const clientesNombre = clientesCatalogo.filter(c => normalizeName(c.razon_social).includes(tokens[0])).slice(0,20);
 
         if (clientesNombre) {
           for (const c of clientesNombre) {
@@ -446,7 +405,7 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
       }
 
     } catch (error) {
-      console.error("Error checking duplicates:", error);
+      throw new Error("No se pudo verificar si el comercio ya existe. Reintentá antes de guardarlo.");
     }
 
     // Ordenar por nivel de riesgo (crítico primero)
@@ -929,4 +888,14 @@ const AgregarProspectoForm = ({ onSuccess, onCancel }: AgregarProspectoFormProps
   );
 };
 
-export default AgregarProspectoForm;
+export default function AgregarProspectoForm(props: AgregarProspectoFormProps) {
+  const [userId,setUserId] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted=true;
+    supabase.auth.getSession().then(({data}) => { if(mounted) setUserId(data.session?.user.id ?? null); });
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>setUserId(session?.user.id ?? null));
+    return ()=>{mounted=false;subscription.unsubscribe();};
+  },[]);
+  if (!userId) return <p role="status">Validando sesión...</p>;
+  return <AssignmentDraftProvider key={userId} userId={userId}><ProspectoFormInterno {...props} /></AssignmentDraftProvider>;
+}

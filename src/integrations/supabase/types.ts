@@ -1942,6 +1942,10 @@ export type Database = {
       }
     }
     Functions: {
+      catalogo_visitas: { Args: { p_busqueda?: string; p_tipo?: string; p_offset?: number; p_limite?: number }; Returns: Json }
+      autoasignar_visita: { Args: { p_client_id?: string | null; p_prospecto_id?: string | null; p_fecha?: string | null }; Returns: Json }
+      reasignar_pendientes: { Args: { p_origen: string; p_destino: string }; Returns: number }
+
       aplicar_ventas_import: {
         Args: {
           p_batch_id: string

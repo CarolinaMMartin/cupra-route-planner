@@ -252,7 +252,12 @@ const VendedorKanban = forwardRef<VendedorKanbanRef, object>(function VendedorKa
   const [recordatorioActivo, setRecordatorioActivo] = useState(false);
   const [recordatorioFecha, setRecordatorioFecha] = useState("");
   const [recordatorioNota, setRecordatorioNota] = useState("");
-  const [showAgregarProspecto, setShowAgregarProspecto] = useState(hasProspectoDraft);
+  const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
+  useEffect(() => {
+    let mounted=true;
+    supabase.auth.getUser().then(({data})=>{ if(mounted && data.user) setShowAgregarProspecto(hasProspectoDraft(data.user.id)); });
+    return ()=>{mounted=false;};
+  }, []);
   const [showAutoAsignar, setShowAutoAsignar] = useState(false);
   const { toast } = useToast();
 

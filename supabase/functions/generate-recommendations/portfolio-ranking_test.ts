@@ -78,8 +78,8 @@ Deno.test("normalización de nombre de fantasía", () => {
   assertEquals(normalizeFantasyName("Vinoteca Masís S.R.L."), "MASIS");
 });
 
-Deno.test("calidad de prospectos: 5.0 con 3 reseñas se descarta", () => {
-  assertEquals(esProspectoComercialmenteValido({ rating: 5, total_ratings: 3, tipo_principal: "liquor_store" }), false);
+Deno.test("calidad de prospectos: un comercio nuevo no se descarta por pocas reseñas", () => {
+  assertEquals(esProspectoComercialmenteValido({ rating: 5, total_ratings: 3, tipo_principal: "liquor_store" }), true);
   assertEquals(esProspectoComercialmenteValido({ rating: 4.3, total_ratings: 120, tipo_principal: "liquor_store" }), true);
   assertEquals(
     esProspectoComercialmenteValido({ rating: 4.8, total_ratings: 300, tipo_principal: "cultural_center" }),

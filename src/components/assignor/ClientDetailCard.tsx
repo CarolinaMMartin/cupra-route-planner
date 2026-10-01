@@ -280,7 +280,6 @@ const ClientDetailCard = ({
             </div>
           )}
           
-          {/* Justificación legacy (del sistema anterior) */}
           {cliente.justificacion && !cliente.ai_reasoning && (
             <div className="bg-muted/50 p-3 rounded-md flex gap-2">
               <Lightbulb className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />

@@ -1,7 +1,6 @@
 // ============================================================
 // Ranking de cartera y saneamiento de candidatos.
-// Se decide PRIMERO qué cuentas merecen la visita (a nivel vendedor,
-// sin filtro geográfico) y RECIÉN DESPUÉS dónde se arma la ruta.
+// Prioridad comercial para elegir la referencia dentro de una ruta cercana.
 // ============================================================
 
 import { type AnchorPoint, calcularDistanciaKm } from "./geo-hotspot.ts";
@@ -230,7 +229,6 @@ export function evaluarProspectoContraCartera(
 // Calidad de prospectos de Google
 // ============================================================
 
-export const MIN_RESENAS_PROSPECTO = 15;
 export const MIN_RATING_PROSPECTO = 3.8;
 
 const TIPOS_INCOHERENTES = new Set([
@@ -241,7 +239,7 @@ const TIPOS_INCOHERENTES = new Set([
 
 const TIPOS_PREFERIDOS = ["liquor_store", "wine_bar", "restaurant", "bar", "meal_takeaway"];
 
-/** Un 5.0 con 3 reseñas no es potencial: filtramos por volumen de reseñas y coherencia de rubro. */
+/** La categoría comercial determina elegibilidad; las reseñas sólo ayudan a ordenar. */
 export function esProspectoComercialmenteValido(p: {
   rating?: number | null;
   total_ratings?: number | null;
@@ -249,15 +247,9 @@ export function esProspectoComercialmenteValido(p: {
   tipo_principal?: string | null;
   tipos?: string[] | null;
 }): boolean {
-  const reseñas = Number(p.total_ratings ?? p.userRatingCount ?? 0);
-  if (!Number.isFinite(reseñas) || reseñas < MIN_RESENAS_PROSPECTO) return false;
-  const rating = Number(p.rating ?? 0);
-  if (Number.isFinite(rating) && rating > 0 && rating < MIN_RATING_PROSPECTO) return false;
-
   const tipos = [p.tipo_principal || "", ...(p.tipos || [])].map((t) => String(t).toLowerCase());
-  // Hoteles bien valorados también son canal gastronómico. "Lodging" a secas
-  // no alcanza para distinguir un hotel de un alojamiento sin perfil comercial.
-  if (tipos.includes("hotel") || tipos.some(t => t.endsWith("_hotel"))) return rating >= 4;
+  // "Lodging" por sí solo no identifica un hotel del canal gastronómico.
+  if (tipos.includes("hotel") || tipos.some(t => t.endsWith("_hotel"))) return true;
   if (tipos.some((t) => TIPOS_PREFERIDOS.includes(t))) return true;
   if (tipos.some((t) => TIPOS_INCOHERENTES.has(t))) return false;
   return true;

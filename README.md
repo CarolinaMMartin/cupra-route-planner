@@ -1,35 +1,22 @@
 # CUPRA Route Planner
 
-Aplicación para organizar visitas comerciales de una distribuidora de vinos.
-Combina cartera propia, reactivación de clientes y prospectos cercanos, con
-revisión y asignación humana antes de generar la jornada del vendedor.
+Aplicación para preparar, asignar y registrar visitas comerciales de CUPRA.
 
-## Planificación
+El objetivo es **ocho comercios cercanos por vendedor**, combinando clientes y
+prospectos. El motor compara zonas compactas, conserva una referencia comercial
+cuando existe y busca vecinos en Google incluso cuando ya hay ocho clientes
+más dispersos. El radio máximo es **1,5 km desde el centro**; la interfaz permite
+consultar por separado los kilómetros y minutos del recorrido a pie.
 
-Cada generación exitosa entrega ocho visitas por vendedor dentro de un radio
-máximo de **1,5 km desde el centro de su ruta**. No hay una cuota fija 5-2-1:
-se priorizan clientes del estado elegido y se completa con prospectos. Se comparan
-centros alternativos de la zona antes de buscar nuevos negocios en Google.
+Los vendedores ven sus pendientes y pueden tomar visitas desde un catálogo
+compartido. La operación conserva el historial y avisa a los asignadores.
+Los borradores se guardan por usuario en el navegador. Los datos comerciales
+confirmados se guardan en Supabase.
 
-El rubro es estricto. Si no existen ocho destinos elegibles, la generación falla
-con un mensaje por vendedor; no presenta una ruta parcial como terminada ni
-amplía el radio. Una nueva búsqueda permite reintentar sin asignar visitas.
-El radio es geográfico, no la longitud total del recorrido por calles.
+## Desarrollo
 
-Los dashboards ofrecen filtros comerciales y por rubro. El mapa muestra colores
-por estado y permite asignar una ruta completa dentro del círculo de 1,5 km.
-En Ventas → Análisis IA se procesan todas las filas importadas de un archivo o
-selección: PostgreSQL calcula las métricas y la IA explica los resultados. Si la
-IA falla, las cifras siguen disponibles con un aviso.
-
-El motor decide mediante reglas explícitas. La IA redacta explicaciones y
-puede fallar sin impedir la planificación. Los estados se calculan con la
-fecha actual de Argentina: activo hasta 30 días, inactivo hasta 90, perdido
-por encima de 90 y potencial sin compras registradas.
-
-## Desarrollo y validación
-
-Requiere Node.js 24 y npm.
+Requiere Node.js 24 y npm. Usar `.env.example` para la configuración pública;
+las credenciales de servidor permanecen en Supabase.
 
 ```bash
 npm ci
@@ -37,21 +24,16 @@ npm run dev
 npm run check
 ```
 
-`check` ejecuta la verificación de tipos, las pruebas del motor, las pruebas
-transaccionales de PostgreSQL y la compilación de producción. No necesita
-credenciales ni datos reales. La configuración pública de desarrollo puede
-copiarse de `.env.example`; nunca incluir credenciales de servidor en variables `VITE_*`.
+`check` verifica tipos, motor, transacciones y permisos en PostgreSQL embebido,
+importaciones, borradores, empaquetado de funciones y compilación de producción.
+Las pruebas usan datos sintéticos. GitHub Actions ejecuta la misma validación.
 
-## Estructura
+## Documentación
 
-- `supabase/functions/generate-recommendations/`: reglas, candidatos, composición y planificación.
-- `supabase/functions/_shared/estado-comercial.ts`: criterio comercial compartido con la interfaz.
-- `src/lib/asignaciones.ts`: acceso único al guardado transaccional de visitas.
-- `src/components/assignor/`: recomendaciones, asignación manual, mapa y calendario.
-- `tests/asignaciones-db.test.mjs`: integridad del guardado y migraciones.
+- [Funcionamiento y reglas comerciales](./DOCUMENTACION_FUNCIONAL.md)
+- [Arquitectura y contratos](./DOCUMENTACION_TECNICA.md)
+- [Publicación y verificación](./DESPLIEGUE.md)
 
-## Publicación
-
-El entorno existente usa [Lovable](https://lovable.dev/projects/4edb6182-f643-40b4-b2af-197de983701b)
-y Supabase. Seguir [DESPLIEGUE.md](./DESPLIEGUE.md): migraciones y funciones primero,
-frontend después. El detalle de esta revisión está en [REVISION_CLAUDE.md](./REVISION_CLAUDE.md).
+El proyecto existente usa [Lovable](https://lovable.dev/projects/4edb6182-f643-40b4-b2af-197de983701b)
+y Supabase. Las migraciones históricas forman parte del registro de la base;
+las instrucciones de publicación indican cómo aplicar solamente las pendientes.

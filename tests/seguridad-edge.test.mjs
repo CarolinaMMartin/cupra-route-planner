@@ -36,8 +36,9 @@ async function loadHandler(name) {
   const query=(table)=>({
     select(){return this},order(){return this},limit(){return this},in(){return this},
     eq(k,v){filters.push([table,k,v]);return this},
+    async maybeSingle(){return {data:table==='visita_briefings'?{briefing:'Contexto propio',hechos:{},updated_at:new Date().toISOString()}:null,error:null}},
     async single(){return {data:scenario.active?{rol:scenario.role}:null,error:null}},
-    async then(resolve){resolve({data:[],error:null})},
+    async then(resolve){resolve({data:table==='asignaciones_vendedores_clientes'&&scenario.own?[{id:'own'}]:[],error:null})},
   });
   const mock={
     auth:{getUser:async()=>({data:{user:scenario.valid?{id:'test-user'}:null},error:scenario.valid?null:{message:'invalid'}}),admin:{createUser(){throw Error('No debe crear usuarios')}}},
@@ -48,7 +49,8 @@ async function loadHandler(name) {
       businessCalls.push(name); return {data:0,error:null};
     },
   };
-  await import(pathToFileURL(await compile(new URL('../supabase/functions/'+name+'/index.ts',import.meta.url))).href);
+  const mod=await import(pathToFileURL(await compile(new URL('../supabase/functions/'+name+'/index.ts',import.meta.url))).href);
+  handler ||= mod.handler;
   return {async run(overrides={},token='valid',body={}){
     scenario={active:true,role:'administrador',valid:true,...overrides};businessCalls=[];filters=[];
     const headers={'Content-Type':'application/json'};if(token)headers.Authorization='Bearer '+token;
@@ -57,14 +59,14 @@ async function loadHandler(name) {
   },async close(){delete globalThis.__securitySdk;delete globalThis.Deno;await rm(dir,{recursive:true,force:true})}};
 }
 
-for(const name of ['cleanup-visited-assignments','check-pending-assignments','generate-briefing','extract-feedback','admin-create-user']) {
+for(const name of ['cleanup-visited-assignments','check-pending-assignments','generate-briefing','extract-feedback','admin-create-user','walking-route']) {
   test(name+': rechaza anónimo, token inválido y cuenta inactiva antes de acceder al negocio',async()=>{
     const h=await loadHandler(name);
     try {
       for(const [scenario,token,want] of [[{},null,401],[{valid:false},'invalid',401],[{active:false},'valid',403]]) {
         const r=await h.run(scenario,token);assert.equal(r.status,want);assert.deepEqual(r.businessCalls,[]);
       }
-      if(['cleanup-visited-assignments','check-pending-assignments','admin-create-user'].includes(name)) {
+      if(['cleanup-visited-assignments','check-pending-assignments','admin-create-user','walking-route'].includes(name)) {
         const r=await h.run({role:'vendedor'});assert.equal(r.status,403);assert.deepEqual(r.businessCalls,[]);
       }
       if(name==='cleanup-visited-assignments'){
@@ -80,3 +82,15 @@ for(const name of ['cleanup-visited-assignments','check-pending-assignments','ge
     } finally {await h.close()}
   });
 }
+
+test('briefing: ficha y caché solo para cuenta propia; se verifica antes de leer datos comerciales',async()=>{
+  const h=await loadHandler('generate-briefing');
+  try{
+    for(const body of [{client_id:'ajeno'},{prospecto_place_id:'ajeno'}]){
+      const denied=await h.run({role:'vendedor'},'valid',body);
+      assert.equal(denied.status,403);assert.deepEqual(denied.businessCalls,['asignaciones_vendedores_clientes']);
+    }
+    const own=await h.run({role:'vendedor',own:true},'valid',{client_id:'propio'});
+    assert.equal(own.status,200);assert.equal(own.body.briefing,'Contexto propio');
+  }finally{await h.close()}
+});

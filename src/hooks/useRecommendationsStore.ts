@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useDraftState, useAssignmentDraftStore } from "./useAssignmentDraft";
+import { useState } from "react";
+import { useDraftState } from "./useAssignmentDraft";
 import { Sucursal } from "@/types/sales";
 
 interface RecommendationsState {
@@ -47,29 +47,9 @@ const initialState = {
 
 type RecommendationDraft = Pick<RecommendationsState, "recommendations" | "aiInsights" | "vendedoresData" | "instruccionesAdicionales" | "selectedSucursales" | "flowStep" | "currentRequestId" | "lastRequestPayload">;
 
-/** Keeps the previous browser draft while migrating to storage scoped to the signed-in user. */
-function legacyDraft() {
-  try {
-    const old = JSON.parse(window.localStorage.getItem("recommendations-storage") || "null")?.state;
-    if (old && Array.isArray(old.recommendations) && Array.isArray(old.selectedSucursales)) {
-      return { ...initialState, ...Object.fromEntries(Object.keys(initialState).filter(k => k in old).map(k => [k, old[k]])), isLoading: false, currentRequestId: null };
-    }
-  } catch { /* El almacén común informa problemas de guardado. */ }
-  return initialState;
-}
-
 export function useRecommendationsStore(): RecommendationsState {
-  const store = useAssignmentDraftStore();
-  const [state, setState] = useDraftState<RecommendationDraft>("recomendaciones", "state", legacyDraft);
+  const [state, setState] = useDraftState<RecommendationDraft>("recomendaciones", "state", initialState);
   const [isLoading, setIsLoading] = useState(false);
-  useEffect(() => {
-    if (store.get("recomendaciones", "state", null) === null) {
-      setState(state);
-      if (!store.status()) { try { window.localStorage.removeItem("recommendations-storage"); } catch { /* Se conserva la copia anterior. */ } }
-    }
-    // La migración se hace una sola vez por sesión identificada.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [store]);
   const patch = (change: Partial<typeof state>) => setState(prev => ({ ...prev, ...change }));
   return {
     ...state, isLoading, setIsLoading,

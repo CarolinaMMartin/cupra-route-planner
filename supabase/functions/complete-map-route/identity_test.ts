@@ -5,9 +5,9 @@ const ctx=():IdentityContext=>({clientes:[{client_id:'c',razon_social:'Servicios
 Deno.test('identidad: compara teléfono argentino y dirección aunque el cliente no tenga coordenadas',()=>{
   const matches=createIdentityMatcher(ctx()).matches(prospect);eq(matches.length,1);ok(matches[0].motivos.includes('Mismo teléfono'));ok(matches[0].motivos.includes('Misma dirección'));eq(matches[0].nivel,'posible');
 });
-Deno.test('identidad: la cercanía sola exige revisión, nunca unificación automática',()=>{
+Deno.test('identidad: comercios vecinos con datos diferentes no se bloquean por cercanía',()=>{
   const context=ctx();context.clientes[0].telefonos=[];context.clientes[0].direccion_principal='Otra 222';context.lugares=[{client_id:'c',lat:-34.58,long:-58.44}];
-  const matches=createIdentityMatcher(context).matches(prospect);eq(matches.length,1);eq(matches[0].nivel,'posible');eq(matches[0].motivos.length,1);
+  const matches=createIdentityMatcher(context).matches(prospect);eq(matches.length,0);
 });
 Deno.test('identidad: compara todas las sucursales y conserva coincidencias múltiples para revisión',()=>{
   const context=ctx();context.clientes.push({...context.clientes[0],client_id:'c2'});context.lugares=[{client_id:'c',lat:-34.9,long:-58.6},{client_id:'c',lat:-34.58,long:-58.44}];

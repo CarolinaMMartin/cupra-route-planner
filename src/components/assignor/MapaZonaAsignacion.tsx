@@ -1,3 +1,4 @@
+import { RecorridoAPie } from "@/components/shared/RecorridoAPie";
 import { ProspectReviewDialog } from "@/components/prospectos/ProspectReviewDialog";
 import { walkingRouteUrl } from "@/lib/walkingRoute";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -413,6 +414,7 @@ export default function MapaZonaAsignacion({ vendedores, onIrAManual }: { vended
             <Button variant="outline" size="sm" disabled={buscando || asignando} onClick={()=>setReviewOpen(true)}>Revisar y unificar</Button>
           </div>}
           {walkingRouteUrl(seleccion) && <a className="block text-sm underline" target="_blank" rel="noopener noreferrer" href={walkingRouteUrl(seleccion)!}>Ver recorrido a pie en Google Maps</a>}
+          <RecorridoAPie puntos={seleccion} onOrden={ids=>cambiarSeleccion(ids.map(id=>seleccionRef.current.find(p=>p.key===id)!))} />
           <p className="text-xs text-muted-foreground">El radio de 1,5 km se mide en línea recta desde el centro. Revisá el recorrido a pie para comprobar calles, accesos y distancia total.</p>
           {!!seleccion.length && <Button variant="ghost" size="sm" disabled={asignando} onClick={() => { if (window.confirm("¿Descartar el borrador de esta ruta y vaciar la selección?")) limpiarRuta(); }}>Descartar borrador</Button>}
           <Button className="w-full gap-2" onClick={asignar} disabled={cargando || Boolean(errorCarga) || seleccion.length !== VISITAS_POR_DIA || Boolean(errorSeleccion) || !vendedorId || buscando || asignando}>

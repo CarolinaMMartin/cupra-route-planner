@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Search, UserPlus, Building, MapPin, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { guardarVisitaPropia } from "@/lib/asignaciones";
+import { buscarCatalogo } from "@/lib/catalogoVisitas";
 import { useToast } from "@/hooks/use-toast";
 
 interface AutoAsignarDialogProps {
@@ -25,6 +26,7 @@ interface SearchResult {
   nombre: string;
   direccion: string;
   barrio?: string | null;
+  vendedor?: string | null;
   entityType: "cliente" | "prospecto";
   client_id?: string;
   place_id?: string;
@@ -49,9 +51,11 @@ const AutoAsignarDialog = ({
   const [isSearching, setIsSearching] = useState(false);
   const [isAssigning, setIsAssigning] = useState<string | null>(null);
   const { toast } = useToast();
+  const searchVersion = useRef(0);
 
-  // Debounce search
   useEffect(() => {
+    searchVersion.current++;
+    setIsSearching(false);
     const sanitized = sanitizeSearchQuery(searchQuery);
     if (sanitized.length < 2) {
       setResults([]);
@@ -62,70 +66,24 @@ const AutoAsignarDialog = ({
       searchItems(sanitized, tipo);
     }, 300);
 
-    return () => clearTimeout(timeoutId);
+    return () => {clearTimeout(timeoutId); searchVersion.current++;};
   }, [searchQuery, tipo]);
 
   const searchItems = async (
     query: string,
     tipoFiltro: "clientes" | "prospectos" | "ambos"
   ) => {
+    const version = ++searchVersion.current;
     setIsSearching(true);
-    const searchResults: SearchResult[] = [];
-
     try {
-      if (tipoFiltro === "clientes" || tipoFiltro === "ambos") {
-        const { data: clientes, error } = await supabase
-          .from("clientes")
-          .select("client_id, razon_social, direccion_principal, barrio_principal")
-          .or(`razon_social.ilike.%${query}%,direccion_principal.ilike.%${query}%`)
-          .limit(15);
-
-        if (error) throw error;
-
-        clientes?.forEach((c) =>
-          searchResults.push({
-            id: c.client_id,
-            nombre: c.razon_social || "Sin nombre",
-            direccion: c.direccion_principal || "",
-            barrio: c.barrio_principal,
-            entityType: "cliente",
-            client_id: c.client_id,
-          })
-        );
-      }
-
-      if (tipoFiltro === "prospectos" || tipoFiltro === "ambos") {
-        const { data: prospectos, error } = await supabase
-          .from("prospectos")
-          .select("place_id, nombre, direccion, barrio")
-          .or(`nombre.ilike.%${query}%,direccion.ilike.%${query}%`)
-          .limit(15);
-
-        if (error) throw error;
-
-        prospectos?.forEach((p) =>
-          searchResults.push({
-            id: p.place_id,
-            nombre: p.nombre,
-            direccion: p.direccion,
-            barrio: p.barrio,
-            entityType: "prospecto",
-            place_id: p.place_id,
-          })
-        );
-      }
-
-      setResults(searchResults);
-    } catch (error) {
-      console.error("Error searching:", error);
-      toast({
-        variant: "destructive",
-        title: "Error de búsqueda",
-        description: "No se pudieron cargar los resultados",
-      });
-    } finally {
-      setIsSearching(false);
-    }
+      const rows = await buscarCatalogo(query, tipoFiltro, 0, 50);
+      if (version !== searchVersion.current) return;
+      setResults(rows.map(r => ({ id:r.id, nombre:r.nombre, direccion:r.direccion || "", barrio:r.barrio,
+        vendedor:r.vendedor, entityType:r.tipo, client_id:r.tipo === "cliente" ? r.id : undefined,
+        place_id:r.tipo === "prospecto" ? r.id : undefined })));
+    } catch {
+      if (version === searchVersion.current) toast({ variant:"destructive", title:"No se pudo buscar", description:"Reintentá la búsqueda." });
+    } finally { if (version === searchVersion.current) setIsSearching(false); }
   };
 
   const handleAsignar = async (item: SearchResult) => {
@@ -150,48 +108,14 @@ const AutoAsignarDialog = ({
     setIsAssigning(item.id);
 
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Usuario no autenticado",
-        });
-        return;
+      const creada = await guardarVisitaPropia({ vendedor_id:"", client_id:item.client_id, prospecto_place_id:item.place_id });
+      if (!creada) {
+        toast({ title:"Ya lo tenés asignado", description:"La visita ya está en tus pendientes." });
+        onSuccess(); return;
       }
-
-      const insertData = {
-        vendedor_id: user.id,
-        estado: "Por visitar" as const,
-        es_prospecto: item.entityType === "prospecto",
-        // Usar null explícito, NUNCA string vacío
-        client_id: item.entityType === "cliente" ? item.client_id : null,
-        prospecto_place_id: item.entityType === "prospecto" ? item.place_id : null,
-        origen_asignacion: 'auto' as const, // Marca que fue auto-asignado por el vendedor
-      };
-
-      const { error } = await supabase
-        .from("asignaciones_vendedores_clientes")
-        .insert(insertData);
-
-      if (error) {
-        // Error 23505 = violación de unique constraint
-        if (error.code === "23505") {
-          toast({
-            title: "Ya lo tenés asignado",
-            description: `"${item.nombre}" ya está en tu lista de visitas`,
-            variant: "destructive",
-          });
-          return;
-        }
-        throw error;
-      }
-
       toast({
         title: "Asignación creada",
-        description: `"${item.nombre}" fue agregado a "Por visitar"`,
+        description: `"${item.nombre}" fue agregado a tus pendientes. Se notificó al asignador`,
       });
 
       // Cerrar modal y refrescar Kanban
@@ -211,6 +135,7 @@ const AutoAsignarDialog = ({
 
   const handleClose = (isOpen: boolean) => {
     if (!isOpen) {
+      searchVersion.current++;
       setSearchQuery("");
       setResults([]);
       setTipo("ambos");
@@ -307,7 +232,8 @@ const AutoAsignarDialog = ({
                         <MapPin className="h-3 w-3 mr-1 shrink-0" />
                         <span className="truncate">
                           {item.direccion}
-                          {item.barrio && `, ${item.barrio}`}
+                          {item.vendedor && <p className="text-xs text-muted-foreground">Cartera de {item.vendedor}</p>}
+                {item.barrio && `, ${item.barrio}`}
                         </span>
                       </div>
                     </div>

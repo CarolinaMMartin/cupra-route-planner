@@ -1,3 +1,5 @@
+import { seleccionarCercanos } from "../_shared/compact-route.ts";
+import { addressKey } from "../_shared/prospect-identity.ts";
 import { googleMapsFetch, type GooglePlace, PLACES_FIELD_MASK } from "../_shared/google-maps.ts";
 import { centroClientes, coordenadaMapaValida, distanciaAlCliente, RADIOS_BUSQUEDA_MAPA, type PuntoMapa } from "../_shared/map-selection.ts";
 import { distanciaKm, RADIO_RUTA_KM, type Coordenada } from "../_shared/ruta.ts";
@@ -66,7 +68,8 @@ export function mismoProspecto(a: ProspectoMapa, b: ProspectoMapa): boolean {
   if (a.place_id === b.place_id || (a.google_place_id || a.place_id) === (b.google_place_id || b.place_id)) return true;
   const nombre = normalizeFantasyName(a.nombre);
   return Boolean(nombre) && nombre === normalizeFantasyName(b.nombre)
-    && distanciaKm({ lat: a.latitud!, lng: a.longitud! }, { lat: b.latitud!, lng: b.longitud! }) < 0.2;
+    && Boolean(addressKey(a.direccion)) && addressKey(a.direccion) === addressKey(b.direccion)
+    && distanciaKm({lat:a.latitud!,lng:a.longitud!},{lat:b.latitud!,lng:b.longitud!}) < 0.05;
 }
 
 /** Distancia primero; la valoración sólo desempata lugares a igual distancia. */
@@ -135,8 +138,11 @@ export async function buscarComplementoMapa(opts: BusquedaMapa) {
     try { agregar(await opts.cubrirZona(centro, tipos)); }
     catch (error) { if (error instanceof ProspectPersistenceError) throw error; avisos.push("No se pudo terminar de recorrer la zona en Google. Podés reintentar la búsqueda."); }
   }
-  const candidatos = validos().slice(0, 40);
-  return { centro, candidatos, elegidos: candidatos.slice(0, opts.objetivo), radio_m: Math.round(radio * 1000), avisos };
+  const candidatos = validos().slice(0, 100);
+  const fijos=opts.clientes.map((c,i)=>({...c,id:`fijo:${i}`}));
+  const seleccion=seleccionarCercanos(centro,candidatos.map(p=>({id:p.place_id,lat:p.latitud!,lng:p.longitud!})),fijos,opts.objetivo+fijos.length);
+  const elegidos=seleccion.flatMap(s=>candidatos.filter(p=>p.place_id===s.id));
+  return {centro,candidatos,elegidos,radio_m:Math.round(radio*1000),avisos};
 }
 
 /** Una consulta por rubro evita que 20 restaurantes oculten hoteles o vinotecas. */

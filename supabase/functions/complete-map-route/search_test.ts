@@ -60,8 +60,8 @@ Deno.test('mapa: una respuesta incompleta nunca rellena con duplicados ni cruza 
   eq(result.elegidos.length,1);eq(result.radio_m,1500);
 });
 Deno.test('mapa: deduplica Excel y Google sin reemplazar el estado guardado',async()=>{
-  const base=[prospect('excel-a',20,{nombre:'Restaurante Altamira',rating:null,total_ratings:null}),prospect('excel-c',30,{google_place_id:'google-c',estado_negocio:'CLOSED_PERMANENTLY'})];
-  const result=await buscarComplementoMapa({...opts(base,2),descubrir:async()=>[prospect('google-a',22,{nombre:'Restaurante Altamira'}),prospect('google-c',30)]});
+  const base=[prospect('excel-a',20,{nombre:'Restaurante Altamira',direccion:'Av Corrientes 123',rating:null,total_ratings:null}),prospect('excel-c',30,{google_place_id:'google-c',estado_negocio:'CLOSED_PERMANENTLY'})];
+  const result=await buscarComplementoMapa({...opts(base,2),descubrir:async()=>[prospect('google-a',22,{nombre:'Restaurante Altamira',direccion:'Av Corrientes 123'}),prospect('google-c',30)]});
   same(result.elegidos.map(p=>p.place_id),['excel-a']);
 });
 Deno.test('mapa: fallo de Google se distingue de zona vacía y preserva la base',async()=>{
@@ -72,10 +72,10 @@ Deno.test('mapa: filtro de rubro de prospectos independiente, desconocidos no am
   const result=await buscarComplementoMapa({...opts([prospect('bar',20,{rubro:'Bar'}),prospect('hotel',50,{rubro:'Hotel',tipo_principal:'hotel'})],1),rubros:['HOTEL']});
   same(result.elegidos.map(p=>p.place_id),['hotel']);same(tiposBusquedaMapa(['Hotel']),['hotel']);same(tiposBusquedaMapa(['Especial desconocido']),[]);
 });
-Deno.test('mapa: hoteles bien valorados sí, hoteles con baja nota o pocas reseñas no',()=>{
+Deno.test('mapa: hoteles nuevos y con pocas reseñas siguen siendo candidatos',()=>{
   eq(prospectoDisponible(prospect('hotel',30,{tipo_principal:'hotel',tipos:['hotel','lodging'],rating:4.5,total_ratings:30})),true);
-  eq(prospectoDisponible(prospect('hotel',30,{tipo_principal:'hotel',tipos:['hotel'],rating:3.9})),false);
-  eq(prospectoDisponible(prospect('hotel',30,{tipo_principal:'boutique_hotel',tipos:['hotel'],rating:5,total_ratings:3})),false);
+  eq(prospectoDisponible(prospect('hotel',30,{tipo_principal:'hotel',tipos:['hotel'],rating:3.9})),true);
+  eq(prospectoDisponible(prospect('hotel',30,{tipo_principal:'boutique_hotel',tipos:['hotel'],rating:5,total_ratings:3})),true);
   eq(prospectoDisponible(prospect('excel-one',20,{rating:null,total_ratings:null})),true);
 });
 Deno.test('mapa: no interpreta coordenadas vacías ni comercios extranjeros como prospectos',()=>{
@@ -124,4 +124,11 @@ Deno.test('sin cartera: no busca sin centro y no confirma siete ni destinos fuer
 Deno.test('sin cartera: completar después de quitar uno busca sólo el faltante y respeta el descarte',async()=>{
   const result=await buscarComplementoMapa({clientes:[],centroZona:center,objetivo:1,base:[prospect('descartado',5),prospect('reemplazo',20)],rubros:[],pasaGate:p=>p.place_id!=='descartado'});
   same(result.elegidos.map(p=>p.place_id),['reemplazo']);
+});
+
+Deno.test('mapa: dos locales vecinos de una misma marca se conservan con distintas direcciones',async()=>{
+  const base=[prospect('sucursal-a',20,{nombre:'Vinoteca Vecina',direccion:'Av Corrientes 123'}),
+    prospect('sucursal-b',30,{nombre:'Vinoteca Vecina',direccion:'Av Corrientes 145'})];
+  const result=await buscarComplementoMapa({...opts(base,2)});
+  same(new Set(result.elegidos.map(p=>p.place_id)),new Set(['sucursal-a','sucursal-b']));
 });

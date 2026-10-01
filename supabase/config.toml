@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.review-prospect]
 verify_jwt = false
+
+[functions.walking-route]
+verify_jwt = false
