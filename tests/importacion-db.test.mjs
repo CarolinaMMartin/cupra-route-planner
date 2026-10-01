@@ -12,6 +12,7 @@ before(async () => {
   await migration('20260814164819_a10c8241-79db-489a-a9f6-ca16ab2a0a66.sql');
   await migration('20260923120000_rubro_normalizado.sql');
   await migration('20260925140000_importaciones_seguras.sql');
+  await migration('20261001130000_importaciones_sin_timeout.sql');
   await db.query('INSERT INTO profiles(user_id,rol) VALUES($1,\'asignador\')',[uid]);
   await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)",[uid]);
 });
@@ -122,4 +123,39 @@ test('una NC de agosto no amplía el período de reemplazo de las ventas de sept
   await save(await batch(),[sale('ago',{fecha_emision:'2026-08-02'}),sale('sep')]);
   await save(await batch(),[sale('nueva'),sale('NCago',{fecha_emision:'2026-08-01',tipo_comprobante:'nota_credito',letra:'NC',facturacion_ars:-20})],[client()],[],true,true);
   const ventas=await rows('ventas_cupra');assert(ventas.some(v=>v.ticket==='ago'));assert(ventas.some(v=>v.ticket==='NCago'));assert(!ventas.some(v=>v.ticket==='sep'));
+});
+
+test('archivo sin precios conserva importes, no diluye promedios y permite revertir', async () => {
+  const first=await batch(); await save(first,[sale('1')]);
+  const second=await batch();
+  await save(second,[sale('1',{facturacion_ars:null}),sale('2',{facturacion_ars:null,fecha_emision:'2026-09-30',cajas:5})]);
+  let c=(await rows('clientes'))[0];
+  assert.equal(Number(c.monto_total_historico),100);
+  assert.equal(Number(c.cantidad_ordenes),2);
+  assert.equal(Number(c.ticket_promedio),100);
+  assert.equal(Number(c.precio_promedio_caja),100);
+  assert.equal(c.ultima_compra.toISOString().slice(0,10),'2026-09-30');
+  assert.equal((await rows('ventas_cupra')).find(v=>v.ticket==='2').facturacion_ars,null);
+  await db.query('SELECT revertir_import_ventas($1)',[second]);
+  assert.equal((await rows('ventas_cupra')).length,1);
+  c=(await rows('clientes'))[0]; assert.equal(Number(c.monto_total_historico),100);
+  assert.equal(Number(c.cantidad_ordenes),1);
+});
+
+test('importar 10.975 filas sobre un histórico de 2.000 y reintentarlo conserva dinero y cantidad', {timeout:90000}, async () => {
+  const previous=Array.from({length:2000},(_,i)=>sale(String(i)));
+  await save(await batch(),previous);
+  const incoming=Array.from({length:10975},(_,i)=>sale(String(i),{facturacion_ars:null}));
+  const id=await batch();
+  const result=await save(id,incoming);
+  assert.equal(result.rango.filas_insertadas,8975);
+  assert.equal(result.rango.filas_actualizadas,2000);
+  assert.equal(result.rango.filas_eliminadas,0);
+  assert.deepEqual(await save(id,incoming),result);
+  // Una nueva selección del mismo Excel también es idempotente por clave de venta.
+  const again=await save(await batch(),incoming);
+  assert.equal(again.rango.filas_insertadas,0);
+  assert.equal((await rows('ventas_cupra')).length,10975);
+  const c=(await rows('clientes'))[0]; assert.equal(Number(c.monto_total_historico),200000);
+  assert.equal(Number(c.ticket_promedio),100);
 });

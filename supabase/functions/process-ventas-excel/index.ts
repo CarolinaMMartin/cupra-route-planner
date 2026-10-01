@@ -151,12 +151,15 @@ const normField = (s: string) => {
 // Resolución de columna cacheada por conjunto de nombres: evita recorrer y
 // normalizar las 60+ columnas en cada fila (excedía el límite de CPU).
 const fieldResolveCache = new Map<string, string | null>();
+const fieldSchemaCache = new WeakMap<object, string>();
 function getFieldValue(obj: Record<string, any>, fieldNames: string[]): any {
   for (const f of fieldNames) {
     if (obj[f] !== undefined) return obj[f];
   }
   const keys = Object.keys(obj);
-  const cacheKey = fieldNames.join('\u0001') + '\u0002' + keys.length + '\u0002' + keys[0] + '\u0002' + keys[keys.length - 1];
+  let schemaKey = fieldSchemaCache.get(obj);
+  if (!schemaKey) { schemaKey = JSON.stringify(keys); fieldSchemaCache.set(obj, schemaKey); }
+  const cacheKey = JSON.stringify(fieldNames) + '\u0002' + schemaKey;
   if (fieldResolveCache.has(cacheKey)) {
     const k = fieldResolveCache.get(cacheKey);
     return k === null || k === undefined ? undefined : obj[k];
@@ -171,6 +174,7 @@ function getFieldValue(obj: Record<string, any>, fieldNames: string[]): any {
       for (const k of keys) if (normField(k) === nf) { found = k; break outer2; }
     }
   }
+  if (fieldResolveCache.size >= 4096) fieldResolveCache.clear();
   fieldResolveCache.set(cacheKey, found);
   return found === null ? undefined : obj[found];
 }
@@ -569,7 +573,7 @@ Deno.serve(async (req) => {
       const fecha_iso = parseDate(fecha_raw);
       const cajas = parseNumericValue(getFieldValue(row, ['Cajas', 'cajas', 'Cantidad', 'cantidad']));
       const codigo_producto = toStr(getFieldValue(row, ['Código Producto', 'Codigo Producto', 'codigo_producto', 'Código', 'Codigo']));
-      const producto = toStr(getFieldValue(row, ['Nombre', 'nombre', 'Producto', 'producto', 'Descripción', 'Descripcion']));
+      const producto = toStr(getFieldValue(row, ['Nombre', 'nombre', 'Producto', 'producto', 'Descripción', 'Descripcion', 'Etiqueta']));
       const marca = toStr(getFieldValue(row, ['Marca', 'marca']));
       // El informe nuevo puede traer el vendedor vacío y el nombre en "Operador"
       const vendedor = toStr(getFieldValue(row, ['Vendedor', 'vendedor']))
@@ -586,7 +590,7 @@ Deno.serve(async (req) => {
       const ciudad_raw = toStr(getFieldValue(row, ['Ciudad', 'ciudad', 'Localidad', 'localidad']));
       const provincia_raw = toStr(getFieldValue(row, ['Provincia', 'provincia']));
       const pais = toStr(getFieldValue(row, ['País', 'Pais', 'pais']));
-      const categorias = toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias']));
+      const categorias = toStr(getFieldValue(row, ['Categorías', 'Categorias', 'categorias', 'Categorías Cliente', 'Categorias Cliente']));
       const facturacion = parseNumericValue(getFieldValue(row, FACTURACION_FIELD_NAMES));
       if (facturacion === null || facturacion === undefined) facturacionNullCount++;
       const bonificacion = parseNumericValue(getFieldValue(row, BONIFICACION_FIELD_NAMES));
