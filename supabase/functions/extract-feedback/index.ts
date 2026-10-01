@@ -6,7 +6,7 @@
 // Nunca es bloqueante: si falla, el motor sigue usando el regex de siempre.
 // ============================================================
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { authorize, failure } from "../_shared/location-service.ts";
 import { aiChat, hayProveedorIA } from "../_shared/ai-chat.ts";
 
 const corsHeaders = {
@@ -101,16 +101,16 @@ async function extraer(texto: string, _apiKey: string): Promise<Record<string, u
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
+  if (req.method !== "POST") return new Response(null, { status: 405, headers: corsHeaders });
+
   try {
     const apiKey = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("LOVABLE_API_KEY");
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+    const { db: supabase, user, profile } = await authorize(req, false);
 
     const body = await req.json().catch(() => ({}));
     const feedbackId: string | undefined = body.feedback_id;
-    const limite: number = Math.min(Number(body.limit) || 25, 100);
+    const requestedLimit = Number(body.limit);
+    const limite = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(Math.floor(requestedLimit), 100)) : 25;
 
     if (!hayProveedorIA()) {
       // Sin clave no rompemos nada: el motor sigue con el parser de siempre.
@@ -125,6 +125,7 @@ Deno.serve(async (req) => {
       .select("id, client_id, prospecto_place_id, vendedor_id, feedback, motivo_no_visita, created_at")
       .order("created_at", { ascending: false });
 
+    if (profile.rol === "vendedor") query = query.eq("vendedor_id", user.id);
     if (feedbackId) query = query.eq("id", feedbackId);
     else query = query.limit(300);
 
@@ -186,9 +187,6 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("extract-feedback error", e);
-    return new Response(JSON.stringify({ error: String(e), procesados: 0 }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return failure(e);
   }
 });

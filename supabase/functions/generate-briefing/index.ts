@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { authorize, failure } from "../_shared/location-service.ts";
 import { aiChat, hayProveedorIA } from "../_shared/ai-chat.ts";
 
 const corsHeaders = {
@@ -86,11 +86,10 @@ function construirFallback(h: Hechos): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  if (req.method !== "POST") return new Response(null, { status: 405, headers: corsHeaders });
+
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    );
+    const { db: supabase } = await authorize(req, false);
 
     const body = await req.json().catch(() => ({}));
     const clientId: string | null = typeof body.client_id === "string" && body.client_id ? body.client_id : null;
@@ -340,9 +339,6 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("generate-briefing error", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Error inesperado" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return failure(e);
   }
 });

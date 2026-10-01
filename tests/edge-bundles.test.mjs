@@ -7,7 +7,7 @@ import ts from 'typescript';
 
 const root = fileURLToPath(new URL('../supabase/functions/', import.meta.url));
 // Lovable empaqueta la carpeta de la función y _shared, no las funciones vecinas.
-for (const name of ['complete-map-route', 'generate-recommendations', 'review-prospect', 'prospect-discovery']) {
+for (const name of ['complete-map-route', 'generate-recommendations', 'review-prospect', 'prospect-discovery', 'process-ventas-excel', 'cleanup-visited-assignments', 'check-pending-assignments', 'generate-briefing', 'extract-feedback', 'admin-create-user']) {
   test(`${name} puede empaquetarse sin carpetas de otras funciones`, async () => {
     const visited = new Set();
     async function visit(file) {
