@@ -220,7 +220,7 @@ const ClientesEdicion = () => {
       const allowedFields = ['telefonos', 'emails', 'vendedor_principal'];
       const sanitizedChanges = Object.fromEntries(
         Object.entries(changes).filter(([key]) => allowedFields.includes(key))
-      );
+      ) as Partial<Pick<Tables<'clientes'>, 'telefonos' | 'emails' | 'vendedor_principal'>>;
       
       const { error } = await supabase
         .from('clientes')
