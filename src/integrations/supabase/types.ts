@@ -961,6 +961,42 @@ export type Database = {
         }
         Relationships: []
       }
+      movimientos_visitas: {
+        Row: {
+          asignacion_id: string
+          client_id: string | null
+          created_at: string
+          fecha_programada: string
+          id: string
+          prospecto_place_id: string | null
+          usuario_id: string
+          vendedor_anterior: string | null
+          vendedor_nuevo: string
+        }
+        Insert: {
+          asignacion_id: string
+          client_id?: string | null
+          created_at?: string
+          fecha_programada: string
+          id?: string
+          prospecto_place_id?: string | null
+          usuario_id: string
+          vendedor_anterior?: string | null
+          vendedor_nuevo: string
+        }
+        Update: {
+          asignacion_id?: string
+          client_id?: string | null
+          created_at?: string
+          fecha_programada?: string
+          id?: string
+          prospecto_place_id?: string | null
+          usuario_id?: string
+          vendedor_anterior?: string | null
+          vendedor_nuevo?: string
+        }
+        Relationships: []
+      }
       notificaciones: {
         Row: {
           asignacion_id: string | null
@@ -1942,10 +1978,6 @@ export type Database = {
       }
     }
     Functions: {
-      catalogo_visitas: { Args: { p_busqueda?: string; p_tipo?: string; p_offset?: number; p_limite?: number }; Returns: Json }
-      autoasignar_visita: { Args: { p_client_id?: string | null; p_prospecto_id?: string | null; p_fecha?: string | null }; Returns: Json }
-      reasignar_pendientes: { Args: { p_origen: string; p_destino: string }; Returns: number }
-
       aplicar_ventas_import: {
         Args: {
           p_batch_id: string
@@ -1955,7 +1987,24 @@ export type Database = {
         }
         Returns: Json
       }
+      autoasignar_visita: {
+        Args: {
+          p_client_id?: string
+          p_fecha?: string
+          p_prospecto_id?: string
+        }
+        Returns: Json
+      }
       canonical_vendedor: { Args: { _nombre: string }; Returns: string }
+      catalogo_visitas: {
+        Args: {
+          p_busqueda?: string
+          p_limite?: number
+          p_offset?: number
+          p_tipo?: string
+        }
+        Returns: Json
+      }
       clave_territorio_mapa: { Args: { valor: string }; Returns: string }
       clean_old_recommendations: { Args: never; Returns: undefined }
       cleanup_expired_import_staging: { Args: never; Returns: number }
@@ -1982,6 +2031,7 @@ export type Database = {
         Returns: undefined
       }
       contexto_revision_cupra: { Args: never; Returns: Json }
+      generar_notificaciones_pendientes: { Args: never; Returns: number }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -2045,8 +2095,16 @@ export type Database = {
         Returns: Json
       }
       preview_ventas_import: { Args: { p_rows: Json }; Returns: Json }
+      puede_ver_cuenta: {
+        Args: { p_cliente: string; p_prospecto?: string }
+        Returns: boolean
+      }
       rank_fuente_ubicacion: {
         Args: { _fuente: string; _verificada: boolean }
+        Returns: number
+      }
+      reasignar_pendientes: {
+        Args: { p_destino: string; p_origen: string }
         Returns: number
       }
       rebase_ventas_cupra: {
