@@ -85,7 +85,7 @@ export function createIdentityMatcher(context: IdentityContext) {
       const sameName = prospectNames.some(pn => pn.length >= 4 && names.some(n => n === pn));
       if (sameName && (distance === null ? sameCity : distance <= 800)) motivos.push("Mismo nombre");
       else if (coord(p.latitud, p.longitud) && places.some(place => coord(place.lat, place.long) && names.some(name => evaluarProspectoContraCartera(p, [{name,lat:place.lat!,lng:place.long!}]).estado !== "nuevo"))) motivos.push("Nombre similar y ubicación cercana");
-      if (distance !== null && distance <= 30) motivos.push("Ubicación a menos de 30 m");
+      if (motivos.length && distance !== null && distance <= 30) motivos.push("Ubicación a menos de 30 m");
       if (!motivos.length) continue;
       result.push({ client_id: c.client_id, nombre: c.fantasia || c.razon_social || c.client_id, vendedor: c.vendedor_actual || null,
         motivos, nivel: sameId ? "coincidencia" : "posible", distancia_m: distance === null ? null : Math.round(distance), huella: c.huella,

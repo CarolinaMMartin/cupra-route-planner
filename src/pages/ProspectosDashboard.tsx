@@ -159,7 +159,12 @@ const ProspectosDashboard = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Dialogs
-  const [showAgregarProspecto, setShowAgregarProspecto] = useState(hasProspectoDraft);
+  const [showAgregarProspecto, setShowAgregarProspecto] = useState(false);
+  useEffect(() => {
+    let mounted=true;
+    supabase.auth.getUser().then(({data})=>{ if(mounted && data.user) setShowAgregarProspecto(hasProspectoDraft(data.user.id)); });
+    return ()=>{mounted=false;};
+  }, []);
   const [showBuscarProspectos, setShowBuscarProspectos] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [detalleProspecto, setDetalleProspecto] = useState<Prospecto | null>(null);

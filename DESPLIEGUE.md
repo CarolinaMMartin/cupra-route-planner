@@ -1,136 +1,68 @@
 # Publicación de CUPRA
 
-El repositorio conserva la integración con el proyecto de Lovable
-`4edb6182-f643-40b4-b2af-197de983701b` y el backend de Supabase
-`ofwhxaglbcgyksauwjby`. Esta actualización se publica sobre ese entorno.
-Cambiar de proveedor de alojamiento es una tarea separada.
+Proyecto Lovable: `4edb6182-f643-40b4-b2af-197de983701b`.
+Proyecto Supabase: `ofwhxaglbcgyksauwjby`.
 
-## Orden de publicación
+## Preparación
 
-1. Verificar en Supabase el proyecto, el esquema y las migraciones ya aplicadas.
-   Confirmar una copia recuperable de los datos y registrar la versión de las funciones desplegadas.
-2. Aplicar, en este orden, únicamente las tres migraciones de esta entrega:
-   - `supabase/migrations/20260923120000_rubro_normalizado.sql`
-   - `supabase/migrations/20260923130000_asignaciones_atomicas.sql`
-   - `supabase/migrations/20260925120000_analisis_ventas.sql`
-3. Desplegar las funciones modificadas listadas abajo. Confirmar sesión válida,
-   roles, secretos existentes y respuesta del motor.
-4. Publicar en `main` el commit validado y actualizar la publicación de Lovable.
-5. Verificar la URL publicada, la carga de mapas, una generación y el guardado de
-   una ruta acordada con el asignador. Registrar el identificador del despliegue.
+1. Confirmar el commit candidato y ejecutar `npm ci` y `npm run check`.
+2. Consultar el registro de migraciones y el esquema del entorno destino.
+3. Registrar la versión anterior de la aplicación y de las funciones.
+4. Simular las migraciones pendientes en una transacción con `ROLLBACK`.
 
-La sincronización de GitHub no prueba que las migraciones, las funciones o el
-sitio público estén actualizados. No publicar el frontend antes del backend:
-usa `rubro`, `rubros_disponibles()`, `guardar_asignaciones()` y `resumen_ventas()`.
+Las migraciones históricas incluyen operaciones destructivas. En una base
+existente aplicar solo las pendientes confirmadas; no reproducir todo el
+historial para resolver una diferencia del registro.
 
-Antes de usar la CLI, revisar `supabase migration list --linked` y la salida de
-`supabase db push --dry-run`. El repositorio contiene migraciones antiguas con
-operaciones destructivas. No ejecutar todas las migraciones históricas para
-resolver una diferencia de registro en una base existente.
+## Orden de actualización
 
-## Funciones
+1. Aplicar y registrar, cuando aún estén pendientes:
+   - `20261001150000_seguridad_prepruebas.sql`: cuentas activas, notificaciones
+     privadas, ventas restringidas y conservación del historial.
+   - `20261001160000_visitas_propias_catalogo.sql`: pendientes propios,
+     catálogo compartido, autoasignación y traslado auditado de pendientes.
+2. Desplegar las funciones afectadas con sus módulos `_shared`:
+   `generate-recommendations`, `complete-map-route`, `review-prospect`,
+   `prospect-discovery`, `walking-route`, `generate-briefing`, `extract-feedback`,
+   `admin-create-user`, `check-pending-assignments` y `cleanup-visited-assignments`.
+3. Publicar el commit validado en `main` y actualizar la publicación de Lovable.
+4. Confirmar la versión publicada y verificar los casos funcionales.
 
-Desplegar en el proyecto confirmado:
+La sincronización de GitHub no comprueba por sí sola el despliegue del backend
+ni la publicación del frontend. La interfaz nueva requiere los RPC nuevos.
 
-```bash
-supabase functions deploy analyze-sales --project-ref ofwhxaglbcgyksauwjby
-supabase functions deploy generate-recommendations --project-ref ofwhxaglbcgyksauwjby
-supabase functions deploy geocode-address --project-ref ofwhxaglbcgyksauwjby
-supabase functions deploy geocode-clients --project-ref ofwhxaglbcgyksauwjby
-supabase functions deploy resolve-client-location --project-ref ofwhxaglbcgyksauwjby
-supabase functions deploy prospect-discovery --project-ref ofwhxaglbcgyksauwjby
-supabase functions deploy process-prospectos-excel --project-ref ofwhxaglbcgyksauwjby
-supabase functions deploy process-clientes-maestro --project-ref ofwhxaglbcgyksauwjby
-supabase functions deploy process-ventas-excel --project-ref ofwhxaglbcgyksauwjby
-```
+## Configuración de servicios
 
-El archivo compartido `ai-chat.ts` incorpora un tiempo máximo de espera. Otras
-funciones que lo importen recibirán esa mejora al ser desplegadas posteriormente.
-
-## Configuración
-
-| Variable del servidor | Uso |
+| Variable de servidor | Uso |
 |---|---|
-| `GOOGLE_MAPS_API_KEY` | Places y Geocoding; usar una credencial de servidor restringida por API. |
-| `GEMINI_API_KEY` | Redacción opcional. El motor funciona con textos determinísticos si falla. |
-| `LOVABLE_API_KEY` | Compatibilidad con el gateway existente. Conservar durante esta publicación. |
+| `GOOGLE_MAPS_API_KEY` | Places, Geocoding y Directions para caminata. |
+| `LOVABLE_API_KEY` | Gateway configurado para las integraciones existentes. |
+| `GEMINI_API_KEY` | Redacción opcional de explicaciones. |
 
-Las claves del servidor permanecen en Supabase. La clave del navegador se
-administra por separado y requiere restricciones de dominio. Esta entrega no
-rota ni elimina credenciales.
+Conservar las restricciones de las credenciales y verificar disponibilidad de
+la API de Directions en el proyecto de Google. Si no responde, la aplicación
+indica que la distancia peatonal está pendiente; no muestra una estimación falsa.
+La clave de navegador es independiente de los secretos del servidor.
 
-## Validación reproducible
+## Validación después de publicar
 
-```bash
-npm ci
-npm run check
-```
-
-`check` verifica los tipos de la interfaz, las reglas y el recorrido del motor,
-las migraciones y transacciones en PostgreSQL embebido (PGlite), y la compilación
-de producción. Las pruebas usan datos sintéticos y no acceden a producción.
-La validación de GitHub Actions ejecuta el mismo comando.
-
-El lint global conserva deuda de tipado del proyecto y no forma parte de la
-puerta de publicación de esta entrega; no se han desactivado reglas para ocultarla.
-
-## Comprobación funcional
-
-- Generar una ruta con inventario suficiente: ocho visitas por vendedor, sin cuota 5-2-1 y a no más de 1,5 km del centro.
-- Elegir solo perdidos: prioriza ese estado y avisa cualquier sustitución.
-- Elegir un rubro: el filtro se conserva durante las ampliaciones.
-- Si no hay ocho candidatos dentro de 1,5 km, devuelve 422 con el déficit por vendedor.
-  La interfaz bloquea la confirmación de rutas incompletas; nunca aumenta el radio.
-- Asignar por recomendaciones, tabla, mapa y calendario; preservar visitas realizadas
-  y citas de otros días. Reintentar no debe duplicar la visita.
-- Verificar que la asignación manual de cartera registra la transferencia y su auditoría.
-- Analizar un archivo de más de 1000 filas: filas y venta neta deben coincidir con la
-  base. Verificar archivo, fechas, rubro y estados; probar indisponibilidad de IA.
-- Revisar Supervisión: cada visita usa feedback de su propio intervalo temporal.
+- Anónimo, token inválido y cuenta inactiva: acceso rechazado en servidor.
+- Vendedor: pendientes propios; catálogo compartido; ficha ajena bloqueada.
+- Autoasignación: un pendiente, un movimiento y un aviso a supervisión;
+  reintentar no los duplica. Comprobar en un comercio de prueba autorizado.
+- Baja de vendedor: cuenta inactiva y traslado de pendientes con fechas intactas.
+- Generación: ocho paradas cercanas, prospectos de la misma calle incluidos,
+  sin ampliar el radio por frecuencia ni por falta de candidatos.
+- Mapa: ocho paradas y nuevo control de radio al guardar.
+- Caminata: tramos, minutos, advertencias y atribución del proveedor visibles.
+- Revisar y unificar: información persistente tras recargar.
+- Excel: vista previa, carga por lotes y totales conciliados con el archivo.
+- Cron: limpieza de visitas desactivada; avisos pendientes con ejecución SQL.
 
 ## Recuperación
 
-Registrar el commit anterior de la aplicación y la versión anterior de cada
-Edge Function antes de publicar. Ante un fallo, restaurar la versión completa
-probada; no mezclar frontend nuevo con funciones o esquema antiguos.
-
-Las nuevas columnas pueden permanecer al revertir código. La migración de
-asignaciones permite historial repetido: no restaurar a ciegas índices únicos
-antiguos, porque rechazarían visitas históricas legítimas. Tampoco volver a
-publicar los handlers anteriores que borraban esas visitas.
-
-
-## Revisión de mapas e importación — 25/09/2026
-
-1. Aplicar `20260925140000_importaciones_seguras.sql` y registrar la versión. No requiere un backfill ni modifica ventas existentes.
-2. Desplegar `process-ventas-excel`, `process-clientes-maestro`, `process-prospectos-excel`, `geocode-address`, `geocode-clients`, `resolve-client-location`, `upsert-client-places`, `upsert-clientes`, `upsert-ventas-cupra` y `upsert-prospectos`, incluyendo sus módulos compartidos. Cada endpoint verifica la sesión y el rol en su código; `verify_jwt = false` evita incompatibilidades del gateway con JWT modernos.
-3. Publicar el frontend de `main`; confirmar que la vista previa permite elegir la hoja y el modo agregar/reemplazar.
-4. Verificar respuesta 401 sin sesión en los endpoints de escritura y ejecución restringida de los RPC internos.
-
-Pruebas y alcance: `REVISION_MAPA_EXCEL.md`. Una consulta de solo lectura a la conexión Google Maps de Lovable devolvió HTTP 200, `OK`, país Argentina y precisión `ROOFTOP` para Av. Santa Fe 1860, CABA. Esto comprueba la conexión de geocodificación; no sustituye una prueba de importación con un Excel comercial real.
-
-## Asignación desde el mapa — 28/09/2026
-
-1. Aplicar y registrar `20260928140000_ruta_mapa.sql` antes de publicar la interfaz.
-2. Desplegar `complete-map-route` y `generate-recommendations`, incluyendo los módulos compartidos. `complete-map-route` verifica sesión y rol activo en su código.
-3. Publicar `main`. Elegir vendedor debe mostrar automáticamente su cartera y ofrecer barrios/localidades presentes en ella.
-4. Verificar selección de clientes → completar prospectos → confirmación de ocho. El centro corresponde sólo a los clientes. El RPC vuelve a comprobar el límite de 1,5 km con los datos vigentes.
-
-5. Verificar que el borrador vuelve al navegar o recargar, separado por usuario y vendedor; la asignación sólo se confirma al pulsar el botón correspondiente. Los borradores no requieren migración adicional de base.
-
-Detalle y pruebas: `REVISION_MAPA_ASIGNACION.md`.
-
-## Vendedores sin cartera — 28/09/2026
-
-1. Aplicar y registrar `20260928150000_mapa_sin_cartera.sql`. Incorpora los centros territoriales verificados y el parámetro opcional `p_zona_key` del RPC, conservando las llamadas anteriores.
-2. Desplegar `complete-map-route` con el catálogo y los validadores de `_shared/`.
-3. Publicar `main`. Elegir un vendedor sin clientes debe mostrar el selector de barrio/localidad y categorías, permitir completar ocho prospectos dentro de 1,5 km y ofrecer acceso a la asignación manual.
-4. Verificar borrador al recargar/cambiar de pantalla y confirmación antes de reemplazar una ruta al cambiar barrio o categoría.
-
-## Revisión y unificación de prospectos — 28/09/2026
-
-1. Verificar el esquema actual. Aplicar únicamente `20260928220000_revision_prospectos.sql` y registrar esa versión. La migración crea tablas y funciones; no unifica ni modifica fichas comerciales por sí sola.
-2. Desplegar `review-prospect`, `complete-map-route`, `generate-recommendations` y `prospect-discovery` incluyendo `_shared/`. Conservar secretos existentes; las cuatro funciones verifican usuario y rol en servidor.
-3. Publicar el frontend de `main`. En Prospectos aparece **Revisar coincidencias** y en el mapa aparece **Revisar y unificar** cuando la búsqueda detecta coincidencias.
-4. Verificar acceso anónimo rechazado y RPC internos sin permiso para `authenticated`. Las pruebas de unificación utilizan datos sintéticos en PGlite; no ejecutar fusiones sobre fichas reales para comprobar el despliegue.
-5. Conservar el commit anterior `54c36e45c152ad35bf9275aaa6f4db2e5749423c` como referencia de reversión. Las tablas aditivas pueden permanecer al revertir aplicación y funciones.
+Revertir aplicación y funciones como una versión consistente. Las tablas y RPC
+aditivos pueden permanecer. Mantener las restricciones de acceso y la
+conservación del historial; no restaurar handlers que borren visitas ni índices
+que impidan conservar visitas históricas legítimas. Corregir problemas de datos
+con una migración nueva y revisable.

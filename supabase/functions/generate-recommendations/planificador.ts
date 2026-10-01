@@ -6,7 +6,8 @@ import { dedupeByIdentity, isValidCoord, type RevisitInfo, type ScoredCandidate,
 import { diasDesdeUltimaCompra, type EstadoComercial, estadoPorDias } from "./reglas.ts";
 import { distanciaKm, errorRuta, RADIO_RUTA_KM, VISITAS_POR_DIA } from "../_shared/ruta.ts";
 export { RADIO_RUTA_KM, VISITAS_POR_DIA } from "../_shared/ruta.ts";
-export const COOLDOWN_DIAS = 15;
+export const COOLDOWN_DIAS = 0;
+import { RADIOS_CERCANIA, longitudRuta } from "../_shared/compact-route.ts";
 export interface Vendedor { user_id: string; nombre: string }
 export interface PlanInput {
   vendedores: Vendedor[];
@@ -107,44 +108,46 @@ export async function planificarRutas(input: PlanInput, deps: PlanDeps): Promise
         .map(c => ({ ...c, origen: nuevos.has(c.client_id) ? "maps_live" as const : "base" as const, fuera_de_zona: input.areaActiva && !input.enArea(prospectos.get(c.client_id)) }));
       const pool = new Map<string, ScoredCandidate>([...clients, ...prospects].map(c => [c.client_id, c]));
       const compuesto = composeRoute({ preferredIds: deps.preferidosIA?.get(vendedor.user_id) || [], clients, prospects,
-        unavailableIds: usadosIds, estados: input.estados, permitirOtrosEstados: otrosEstados });
+        unavailableIds: usadosIds, estados: input.estados, permitirOtrosEstados: otrosEstados, centro:h });
       const elegidos = compuesto.ids.map(id => pool.get(id)!);
       return { h, pool, compuesto, elegidos, propios: elegidos.filter(c => !c.es_prospecto && (!input.estados.size || input.estados.has(c.estado_comercial))).length };
     };
-    const ordenar = (a: ReturnType<typeof evaluar>, b: ReturnType<typeof evaluar>) =>
-      b.elegidos.length - a.elegidos.length || b.propios - a.propios ||
-      a.elegidos.reduce((s,c) => s+c.distancia_km,0) - b.elegidos.reduce((s,c) => s+c.distancia_km,0);
-    let candidatos = centros.map(h => evaluar(h, COOLDOWN_DIAS)).sort(ordenar);
-    let mejor = candidatos[0];
-    if (!mejor || mejor.elegidos.length < VISITAS_POR_DIA) {
-      // Si la cartera no da un centro viable, también probamos núcleos de prospectos
-      // de la zona. Un vendedor puede completar sus ocho con prospectos solamente.
-      const denso = findDensestHotspot(puntosProspectos, RADIO_RUTA_KM);
-      for (const p of [...(denso ? [denso] : []), ...puntosProspectos]) {
-        if (!centros.some(c=>c.lat===p.lat && c.lng===p.lng)) centros.push(p);
-      }
-      candidatos = centros.map(h => evaluar(h, 0)).sort(ordenar);
-      // Búsqueda local paginada también cuando el inventario inicial no trajo la zona.
-      for (const c of candidatos.slice(0, 4)) {
-        try { for (const p of await deps.prospectosCerca(c.h.lat, c.h.lng, RADIO_RUTA_KM)) if (deps.pasaGate(p)) prospectos.set(p.place_id, p); }
-        catch(e) { cobertura.error_base = e instanceof Error ? e.message : String(e); }
-      }
-      candidatos = centros.map(h => evaluar(h, 0)).sort(ordenar);
-      mejor = candidatos[0];
-      // Reintenta centros alternativos, conservando SIEMPRE el radio de 1,5 km.
-      if (deps.descubrirEnGoogle) for (const c of candidatos.slice(0, 3)) {
-        if (mejor?.elegidos.length === VISITAS_POR_DIA) break;
-        try {
-          const excluir = new Set([...usadosIds, ...c.pool.keys()]);
-          const encontrados = await deps.descubrirEnGoogle(c.h.lat, c.h.lng, RADIO_RUTA_KM, VISITAS_POR_DIA - c.elegidos.length + 8, excluir, vendedor.user_id);
-          for (const p of encontrados) if (deps.pasaGate(p)) { nuevos.set(p.place_id, p); prospectos.set(p.place_id, p); }
-        } catch(e) { cobertura.error_google = e instanceof Error ? e.message : String(e); }
-        candidatos = centros.map(h => evaluar(h, 0)).sort(ordenar);
-        mejor = candidatos[0];
-      }
-      // Si la búsqueda de prospectos se agotó, otros estados de su propia cartera.
-      if (!mejor || mejor.elegidos.length < VISITAS_POR_DIA) mejor = centros.map(h => evaluar(h, 0, true)).sort(ordenar)[0];
+    const extension = (r:ReturnType<typeof evaluar>) => Math.max(0,...r.elegidos.map(c=>distanciaKm(r.h,{lat:Number(c.lat),lng:Number(c.long)})));
+    const recorrido = (r:ReturnType<typeof evaluar>) => longitudRuta(r.elegidos.map(c=>({lat:Number(c.lat),lng:Number(c.long)})));
+    const ordenar = (a:ReturnType<typeof evaluar>,b:ReturnType<typeof evaluar>) =>
+      b.elegidos.length-a.elegidos.length || Number(b.propios>0)-Number(a.propios>0)
+      || Math.ceil(extension(a)/0.15)-Math.ceil(extension(b)/0.15) || recorrido(a)-recorrido(b)
+      || b.elegidos.reduce((s,c)=>s+c.prioridad_comercial,0)-a.elegidos.reduce((s,c)=>s+c.prioridad_comercial,0);
+    let candidatos=centros.map(h=>evaluar(h,0)).sort(ordenar);
+    let mejor=candidatos[0];
+    const agregarCentro=(h:AnchorPoint)=>{if(!centros.some(c=>c.lat===h.lat&&c.lng===h.lng))centros.push(h);};
+    if(!mejor || mejor.elegidos.length<VISITAS_POR_DIA) {
+      const denso=findDensestHotspot(puntosProspectos,RADIO_RUTA_KM);
+      if(denso)agregarCentro(denso);
+      puntosProspectos.forEach(agregarCentro);
+      if(input.centroZona && !centros.length)agregarCentro(input.centroZona);
     }
+    candidatos=centros.map(h=>evaluar(h,0)).sort(ordenar);
+    for(const c of candidatos.slice(0,3)) {
+      try { for(const p of await deps.prospectosCerca(c.h.lat,c.h.lng,RADIO_RUTA_KM)) if(deps.pasaGate(p))prospectos.set(p.place_id,p); }
+      catch(e) { cobertura.error_base=e instanceof Error?e.message:String(e); }
+    }
+    candidatos=centros.map(h=>evaluar(h,0)).sort(ordenar);mejor=candidatos[0];
+    // Se busca también con ocho clientes disponibles cuando aún están dispersos.
+    if(deps.descubrirEnGoogle && (!mejor || mejor.elegidos.length<8 || extension(mejor)>0.15)) {
+      for(const c of candidatos.slice(0,3)) {
+        for(const radio of RADIOS_CERCANIA) {
+          try {
+            const encontrados=await deps.descubrirEnGoogle(c.h.lat,c.h.lng,radio,16,new Set([...usadosIds,...prospectos.keys()]),vendedor.user_id);
+            for(const p of encontrados) if(deps.pasaGate(p)) {nuevos.set(p.place_id,p);prospectos.set(p.place_id,p);}
+          } catch(e) { cobertura.error_google=e instanceof Error?e.message:String(e);break; }
+          candidatos=centros.map(h=>evaluar(h,0)).sort(ordenar);mejor=candidatos[0];
+          if(mejor?.elegidos.length===8 && extension(mejor)<=radio)break;
+        }
+        if(mejor?.elegidos.length===8)break;
+      }
+    }
+    if(!mejor || mejor.elegidos.length<8) mejor=centros.map(h=>evaluar(h,0,true)).sort(ordenar)[0];
     cobertura.centros_evaluados = centros.length;
     const elegidos = mejor?.elegidos || [];
     const h = mejor?.h || null;

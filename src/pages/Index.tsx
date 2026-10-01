@@ -184,14 +184,12 @@ const Index = () => {
       {/* Header global */}
       <AppNav
         profile={{ nombre: profile.nombre, rol: profile.rol, perfil_ventas: profile.perfil_ventas }}
-        rightSlot={viewMode === 'ventas'
-          ? <NotificacionesPanel onNotificacionClick={handleNotificacionClick} />
-          : null}
+        rightSlot={<NotificacionesPanel onNotificacionClick={viewMode === 'ventas' ? handleNotificacionClick : undefined} />}
       />
 
 
       <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-12 py-8">
-        {isAssignorLike(profile.rol) && viewMode === "gestion" ? <AssignmentDraftProvider key={session.user.id} userId={session.user.id}><AssignorDashboard /></AssignmentDraftProvider> : <VendedorKanban ref={kanbanRef} />}
+        {isAssignorLike(profile.rol) && viewMode === "gestion" ? <AssignmentDraftProvider key={session.user.id} userId={session.user.id}><AssignorDashboard /></AssignmentDraftProvider> : <VendedorKanban key={session.user.id} ref={kanbanRef} />}
       </main>
     </div>);
 

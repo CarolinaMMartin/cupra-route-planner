@@ -23,6 +23,7 @@ import TableAssignment from "@/components/assignor/TableAssignment";
 import TodayAssignments from "./assignor/TodayAssignments";
 import AsignadorCalendario from "./assignor/AsignadorCalendario";
 
+import { RecorridoAPie } from "./shared/RecorridoAPie";
 import AIInsightsCard from "./assignor/AIInsightsCard";
 import AssignmentsSelector from "./assignor/AssignmentsSelector";
 import EditAssignmentsTable from "./assignor/EditAssignmentsTable";
@@ -628,6 +629,22 @@ const AssignorDashboard = () => {
           {aiInsights && vendedoresData.length > 0 && (
             <AIInsightsCard resumen={aiInsights} vendedores={vendedoresData} />
           )}
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {vendedoresData.map(v => {
+              const filas = recommendations.filter(r => r.vendedor_recomendado_id === v.id && selectedSucursales.includes(r.id));
+              const puntos = filas.map(r => ({key:r.es_prospecto ? `P:${r.prospecto_place_id}` : `C:${r.client_id}`,nombre:r.nombre}));
+              if (puntos.length !== 8) return null;
+              return <Card key={v.id}><CardHeader><CardTitle>{v.nombre}</CardTitle></CardHeader><CardContent>
+                <RecorridoAPie puntos={puntos} onOrden={ids => {
+                  const orden = new Map(ids.map((id,i) => [id,i]));
+                  const organizadas = [...filas].sort((a,b) => orden.get(a.es_prospecto ? `P:${a.prospecto_place_id}` : `C:${a.client_id}`)! - orden.get(b.es_prospecto ? `P:${b.prospecto_place_id}` : `C:${b.client_id}`)!);
+                  const siguientes = [...organizadas];
+                  setRecommendations(recommendations.map(r => filas.some(f => f.id===r.id) ? siguientes.shift()! : r));
+                }} />
+              </CardContent></Card>;
+            })}
+          </div>
 
           <Card>
             <CardHeader className="border-b border-border/60 pb-4">

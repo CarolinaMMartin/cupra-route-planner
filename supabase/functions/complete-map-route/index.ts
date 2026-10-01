@@ -1,3 +1,4 @@
+import { seleccionarCercanos } from "../_shared/compact-route.ts";
 import { authorize, corsHeaders, json, RequestError, failure, googleGeocode } from "../_shared/location-service.ts";
 import { hayGoogleMaps } from "../_shared/google-maps.ts";
 import { allClients } from "../_shared/import-batch.ts";
@@ -143,7 +144,9 @@ export async function handler(req: Request): Promise<Response> {
         && (!rubros.length || rubros.some(r => rubroKey(r) === rubroKey(p!.rubro)))
         && distanciaKm(centro, { lat: p!.latitud!, lng: p!.longitud! }) <= RADIO_RUTA_KM), centro);
     }
-    const seleccionados = final.slice(0, objetivo);
+    const fijos=[...clientesPuntos.map(p=>({id:p.key,lat:p.lat,lng:p.lng})),...conservar.map(p=>({id:`P:${p.place_id}`,lat:p.latitud!,lng:p.longitud!}))];
+    const orden=seleccionarCercanos(centro,final.map(p=>({id:`P:${p.place_id}`,lat:p.latitud!,lng:p.longitud!})),fijos);
+    const seleccionados=orden.flatMap(p=>final.filter(f=>`P:${f.place_id}`===p.id));
     return json({ success: true, centro, zona, radio_busqueda_m: result.radio_m,
       clientes: clientesPuntos, prospectos: final.map(p => puntoProspecto(p, clientesPuntos, centro)),
       elegidos: seleccionados.map(p => p.place_id), faltantes: objetivo - seleccionados.length,

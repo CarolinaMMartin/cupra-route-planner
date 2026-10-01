@@ -26,20 +26,12 @@ export async function guardarAsignaciones(visitas: VisitaParaAsignar[], actualiz
   return data;
 }
 
-/** Autoasignación bajo RLS: inserta una visita nueva sin reabrir el historial. */
 export async function guardarVisitaPropia(visita: Omit<VisitaParaAsignar, "asignacion_id">): Promise<boolean> {
-  if (!visita.vendedor_id || Boolean(visita.client_id) === Boolean(visita.prospecto_place_id)) {
-    throw new Error("La visita necesita un vendedor y un cliente o prospecto.");
-  }
-  const { error } = await supabase.from("asignaciones_vendedores_clientes").insert({
-    ...visita,
-    es_prospecto: Boolean(visita.prospecto_place_id),
-    estado: visita.estado ?? "Por visitar",
-    origen_asignacion: "auto",
-    fecha_programada: visita.fecha_programada ?? hoyArgentina(),
+  if (Boolean(visita.client_id) === Boolean(visita.prospecto_place_id)) throw new Error("Elegí un cliente o prospecto.");
+  const { data, error } = await supabase.rpc("autoasignar_visita", {
+    p_client_id: visita.client_id ?? null, p_prospecto_id: visita.prospecto_place_id ?? null,
+    p_fecha: visita.fecha_programada ?? hoyArgentina(),
   });
-  // El índice de pendientes por cuenta, vendedor y día resuelve también los reintentos concurrentes.
-  if (error?.code === "23505") return false;
   if (error) throw error;
-  return true;
+  return (data as { creada: boolean }).creada;
 }

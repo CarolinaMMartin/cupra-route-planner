@@ -4,7 +4,7 @@ import { isAssignorLike, canManageAssignors, ROLE_LABELS, type AppRole } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Wine, LogOut, User, ArrowLeft, Pencil, Filter, Trash2, UserPlus, Briefcase, KeyRound } from "lucide-react";
+import { Wine, LogOut, User, ArrowLeft, Pencil, Filter, UserX, UserPlus, Briefcase, KeyRound } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import PermisosMatriz from "@/components/admin/PermisosMatriz";
 import { useToast } from "@/hooks/use-toast";
@@ -55,8 +55,8 @@ const Profiles = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<any>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [profileToDelete, setProfileToDelete] = useState<any>(null);
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [profileToDeactivate, setProfileToDeactivate] = useState<any>(null);
   const [formData, setFormData] = useState<{
     nombre: string;
     email: string;
@@ -82,6 +82,20 @@ const Profiles = () => {
   }>({ nombre: "", email: "", password: "", rol: "vendedor", activo: true, perfil_ventas: false });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkSaving, setIsBulkSaving] = useState(false);
+  const [transferirDesde,setTransferirDesde]=useState<{user_id:string;nombre:string}|null>(null);
+  const [transferirA,setTransferirA]=useState("");
+  const [transfiriendo,setTransfiriendo]=useState(false);
+  const transferirPendientes=async()=>{
+    if(!transferirDesde||!transferirA)return;
+    setTransfiriendo(true);
+    try {
+      const {data,error}=await supabase.rpc("reasignar_pendientes",{p_origen:transferirDesde.user_id,p_destino:transferirA});
+      if(error)throw error;
+      toast({title:"Pendientes reasignados",description:`${data} visitas transferidas. El historial se conserva.`});
+      setTransferirDesde(null);setTransferirA("");
+    }catch(e){toast({variant:"destructive",title:"No se pudo reasignar",description:e instanceof Error?e.message:"Revisá el vendedor de destino."});}
+    finally{setTransfiriendo(false);}
+  };
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -277,44 +291,44 @@ const Profiles = () => {
     }
   };
 
-  const handleDeleteClick = (profileItem: any) => {
+  const handleDeactivateClick = (profileItem: any) => {
     if (profileItem.user_id === session?.user?.id) {
       toast({
         variant: "destructive",
         title: "Acción no permitida",
-        description: "No puedes eliminar tu propio perfil",
+        description: "No podés desactivar tu propio perfil",
       });
       return;
     }
-    setProfileToDelete(profileItem);
-    setDeleteDialogOpen(true);
+    setProfileToDeactivate(profileItem);
+    setDeactivateDialogOpen(true);
   };
 
-  const handleDeleteConfirm = async () => {
-    if (!profileToDelete) return;
+  const handleDeactivateConfirm = async () => {
+    if (!profileToDeactivate) return;
 
     try {
       const { error } = await supabase
         .from('profiles')
-        .delete()
-        .eq('id', profileToDelete.id);
+        .update({activo:false})
+        .eq('id', profileToDeactivate.id);
 
       if (error) throw error;
 
       toast({
-        title: "Perfil eliminado",
-        description: "El perfil se eliminó correctamente",
+        title: "Perfil desactivado",
+        description: "Se bloqueó el acceso y se conservó el historial. Podés reasignar sus pendientes.",
       });
 
-      setDeleteDialogOpen(false);
-      setProfileToDelete(null);
+      setDeactivateDialogOpen(false);
+      setProfileToDeactivate(null);
       fetchProfiles();
     } catch (error) {
-      console.error('Error deleting profile:', error);
+      console.error('Error deactivating profile:', error);
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Error al eliminar el perfil",
+        description: "Error al desactivar el perfil",
       });
     }
   };
@@ -406,7 +420,7 @@ const Profiles = () => {
               {profiles.length} {profiles.length === 1 ? "usuario" : "usuarios"} · administración de accesos
             </p>
           </div>
-          <Button className="wine-button gap-2" onClick={() => setIsCreateOpen(true)}>
+          <Button disabled={profile.rol !== "administrador"} className="wine-button gap-2" onClick={() => setIsCreateOpen(true)}>
             <UserPlus className="w-4 h-4" />
             Nuevo perfil
           </Button>
@@ -519,6 +533,7 @@ const Profiles = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {(profileItem.rol === "vendedor" || profileItem.perfil_ventas) && <Button size="sm" variant="outline" onClick={()=>{setTransferirDesde(profileItem);setTransferirA("");}}>Reasignar pendientes</Button>}
                         <Button
                           size="sm"
                           variant="outline"
@@ -539,11 +554,11 @@ const Profiles = () => {
                         <Button
                           size="sm"
                           variant="destructive"
-                          title="Eliminar"
-                          onClick={() => handleDeleteClick(profileItem)}
-                          disabled={profileItem.user_id === session?.user?.id || !editable}
+                          title="Desactivar perfil"
+                          onClick={() => handleDeactivateClick(profileItem)}
+                          disabled={profileItem.user_id === session?.user?.id || !editable || !profileItem.activo}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <UserX className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -561,6 +576,14 @@ const Profiles = () => {
         )}
 
 
+        <Dialog open={Boolean(transferirDesde)} onOpenChange={open=>{if(!open&&!transfiriendo)setTransferirDesde(null);}}>
+          <DialogContent><DialogHeader><DialogTitle>Reasignar pendientes de {transferirDesde?.nombre}</DialogTitle></DialogHeader>
+            <p className="text-sm">Se transfieren las visitas pendientes, incluidas las futuras. Las realizadas y la cartera permanente se conservan.</p>
+            <Select value={transferirA} onValueChange={setTransferirA}><SelectTrigger><SelectValue placeholder="Vendedor de destino" /></SelectTrigger>
+              <SelectContent>{profiles.filter(p=>p.activo&&(p.rol==="vendedor"||p.perfil_ventas)&&p.user_id!==transferirDesde?.user_id).map(p=><SelectItem key={p.user_id} value={p.user_id}>{p.nombre}</SelectItem>)}</SelectContent></Select>
+            <Button onClick={transferirPendientes} disabled={!transferirA||transfiriendo}>{transfiriendo?"Reasignando...":"Confirmar reasignación"}</Button>
+          </DialogContent>
+        </Dialog>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogContent>
             <DialogHeader>
@@ -721,23 +744,23 @@ const Profiles = () => {
           </DialogContent>
         </Dialog>
 
-        {/* Dialog de confirmación de eliminación */}
-        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        {/* Confirmación de baja */}
+        <AlertDialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
               <AlertDialogDescription>
-                Esta acción no se puede deshacer. Se eliminará permanentemente el perfil de{" "}
-                <span className="font-semibold">{profileToDelete?.nombre}</span>.
+                Se bloqueará el acceso y se conservará el historial de{" "}
+                <span className="font-semibold">{profileToDeactivate?.nombre}</span>.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
               <AlertDialogAction
-                onClick={handleDeleteConfirm}
+                onClick={handleDeactivateConfirm}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
-                Eliminar
+                Desactivar
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

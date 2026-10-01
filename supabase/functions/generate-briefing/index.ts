@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { authorize, failure, RequestError } from "../_shared/location-service.ts";
 import { aiChat, hayProveedorIA } from "../_shared/ai-chat.ts";
 
 const corsHeaders = {
@@ -86,22 +86,28 @@ function construirFallback(h: Hechos): string {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  if (req.method !== "POST") return new Response(null, { status: 405, headers: corsHeaders });
+
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    );
+    const { db: supabase, user, profile } = await authorize(req, false);
 
     const body = await req.json().catch(() => ({}));
     const clientId: string | null = typeof body.client_id === "string" && body.client_id ? body.client_id : null;
     const placeId: string | null = typeof body.prospecto_place_id === "string" && body.prospecto_place_id ? body.prospecto_place_id : null;
     const forzar: boolean = body.forzar === true;
 
-    if (!clientId && !placeId) {
-      return new Response(JSON.stringify({ error: "Falta client_id o prospecto_place_id" }), {
+    if ((!clientId && !placeId) || (clientId && placeId)) {
+      return new Response(JSON.stringify({ error: "Indicá solo un client_id o prospecto_place_id" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    if (profile.rol === "vendedor") {
+      let query = supabase.from("asignaciones_vendedores_clientes").select("id").eq("vendedor_id",user.id);
+      query = clientId ? query.eq("client_id",clientId) : query.eq("prospecto_place_id",placeId!);
+      const {data,error}=await query.limit(1);
+      if(error || !data?.length) throw new RequestError("La ficha requiere una visita asignada",403,"FORBIDDEN");
     }
 
     // Cache: 7 días
@@ -340,9 +346,6 @@ Deno.serve(async (req) => {
     });
   } catch (e) {
     console.error("generate-briefing error", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Error inesperado" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return failure(e);
   }
 });

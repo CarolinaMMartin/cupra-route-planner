@@ -21,9 +21,9 @@ export async function authorize(req: Request, write: boolean) {
   if (error || !data.user) throw new RequestError("Sesión inválida o vencida", 401, "UNAUTHORIZED");
   const { data: profile, error: profileError } = await db.from("profiles").select("rol").eq("user_id", data.user.id).eq("activo", true).single();
   if (profileError || !profile || write && !["administrador", "asignador"].includes(profile.rol)) {
-    throw new RequestError(write ? "Solo un asignador o administrador activo puede modificar ubicaciones" : "Se requiere un usuario activo", 403, "FORBIDDEN");
+    throw new RequestError(write ? "Se requiere un asignador o administrador activo" : "Se requiere un usuario activo", 403, "FORBIDDEN");
   }
-  return { db, user: data.user };
+  return { db, user: data.user, profile };
 }
 export function failure(error: unknown) {
   const known = error instanceof RequestError;
