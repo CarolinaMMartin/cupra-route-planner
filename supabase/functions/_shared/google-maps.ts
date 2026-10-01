@@ -1,15 +1,4 @@
-// Cliente único de Google Maps para todas las edge functions.
-//
-// Llama DIRECTO a Google con GOOGLE_MAPS_API_KEY (clave de servidor, sin
-// restricción por dominio). El gateway de Lovable queda solo como respaldo
-// durante la migración: si Google rechaza la clave (401/403/400 por clave inválida) y existe
-// LOVABLE_API_KEY, se reintenta por el gateway. Al dar de baja Lovable basta
-// con configurar GOOGLE_MAPS_API_KEY.
-//
-// `path` usa la misma forma que el gateway:
-//   /places/v1/places:searchText        → https://places.googleapis.com/v1/places:searchText
-//   /places/v1/places/{id}              → https://places.googleapis.com/v1/places/{id}
-//   /maps/api/geocode/json?address=...  → https://maps.googleapis.com/maps/api/geocode/json?...&key=
+// Cliente de Google Maps con conexión directa y respaldo del gateway configurado.
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 
@@ -22,6 +11,9 @@ export function hayGoogleMaps(): boolean {
 }
 
 function directUrl(path: string, key: string): { url: string; headers: Record<string, string> } {
+  if (path.startsWith("/routes/")) {
+    return { url: `https://routes.googleapis.com${path.slice("/routes".length)}`, headers: { "X-Goog-Api-Key": key } };
+  }
   if (path.startsWith("/places/")) {
     return { url: `https://places.googleapis.com${path.slice("/places".length)}`, headers: { "X-Goog-Api-Key": key } };
   }

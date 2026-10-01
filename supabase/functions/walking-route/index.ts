@@ -18,9 +18,12 @@ export async function handler(req:Request) {
       prospectIds.length?db.from("prospectos").select("place_id,latitud,longitud").in("place_id",prospectIds):Promise.resolve({data:[],error:null})]);
     if(lugares.error||prospectos.error)throw new Error("No se pudieron cargar las ubicaciones");
     const puntos: ParadaCercana[]=body.puntos.map((id:string)=>{
-      // deno-lint-ignore no-explicit-any
-      const p:any=id.startsWith("C:")?lugares.data?.find(p=>p.client_id===id.slice(2)):prospectos.data?.find(p=>p.place_id===id.slice(2));
-      return {id,lat:Number(p?.lat??p?.latitud),lng:Number(p?.long??p?.longitud)};
+      if(id.startsWith("C:")) {
+        const p=lugares.data?.find(p=>p.client_id===id.slice(2));
+        return {id,lat:Number(p?.lat??NaN),lng:Number(p?.long??NaN)};
+      }
+      const p=prospectos.data?.find(p=>p.place_id===id.slice(2));
+      return {id,lat:Number(p?.latitud??NaN),lng:Number(p?.longitud??NaN)};
     });
     if(puntos.some(p=>!coordenadaMapaValida(p)))throw new RequestError("Hay ubicaciones incompletas",422,"INVALID_LOCATION");
     return json(await calcularCaminata(puntos));

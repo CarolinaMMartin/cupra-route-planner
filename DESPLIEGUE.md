@@ -35,12 +35,12 @@ ni la publicación del frontend. La interfaz nueva requiere los RPC nuevos.
 
 | Variable de servidor | Uso |
 |---|---|
-| `GOOGLE_MAPS_API_KEY` | Places, Geocoding y Directions para caminata. |
+| `GOOGLE_MAPS_API_KEY` | Places, Geocoding y Routes API para caminata. |
 | `LOVABLE_API_KEY` | Gateway configurado para las integraciones existentes. |
 | `GEMINI_API_KEY` | Redacción opcional de explicaciones. |
 
 Conservar las restricciones de las credenciales y verificar disponibilidad de
-la API de Directions en el proyecto de Google. Si no responde, la aplicación
+la Routes API en el proyecto de Google. Si no responde, la aplicación
 indica que la distancia peatonal está pendiente; no muestra una estimación falsa.
 La clave de navegador es independiente de los secretos del servidor.
 
