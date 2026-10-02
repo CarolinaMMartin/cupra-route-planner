@@ -4,7 +4,8 @@ import { googleMapsFetch, type GooglePlace, PLACES_FIELD_MASK } from "../_shared
 import { centroClientes, coordenadaMapaValida, distanciaAlCliente, RADIOS_BUSQUEDA_MAPA, type PuntoMapa } from "../_shared/map-selection.ts";
 import { distanciaKm, RADIO_RUTA_KM, type Coordenada } from "../_shared/ruta.ts";
 import { esProspectoComercialmenteValido, normalizeFantasyName } from "../_shared/portfolio-ranking.ts";
-import { origenProspecto, rubroKey, TIPOS_GOOGLE_POR_RUBRO } from "../_shared/reglas.ts";
+import { origenProspecto, rubroKey } from "../_shared/reglas.ts";
+import { candidatoRegalos, rubroDeTipos, tiposGoogleParaRubros } from "../_shared/prospect-categories.ts";
 import { ProspectPersistenceError } from "../_shared/prospect-review-service.ts";
 
 export interface ProspectoMapa {
@@ -16,9 +17,8 @@ export interface ProspectoMapa {
   client_id?: string | null; es_cliente_cupra?: boolean | null;
 }
 export const TIPOS_MAPA = ["liquor_store", "wine_bar", "restaurant", "bar", "hotel"];
-export function tiposBusquedaMapa(rubros: string[]): string[] {
-  if (!rubros.length) return TIPOS_MAPA;
-  return [...new Set(rubros.flatMap(r => TIPOS_GOOGLE_POR_RUBRO[rubroKey(r)] || []))];
+export function tiposBusquedaMapa(rubros: string[], regalos = false): string[] {
+  return tiposGoogleParaRubros(new Set(rubros), regalos);
 }
 export function prospectoDeGoogle(place: GooglePlace): ProspectoMapa | null {
   const lat = place.location?.latitude, lng = place.location?.longitude;
@@ -27,14 +27,7 @@ export function prospectoDeGoogle(place: GooglePlace): ProspectoMapa | null {
   const pais = place.addressComponents?.find(c => c.types?.includes("country"));
   if (pais && pais.shortText !== "AR" && pais.longText !== "Argentina") return null;
   const comuna = component("administrative_area_level_2");
-  const tipos = [place.primaryType || "", ...(place.types || [])];
-  const rubroTipo = (t: string) => t === "hotel" || t.endsWith("_hotel") ? "Hotel"
-    : t === "liquor_store" ? "Vinoteca" : t === "wine_bar" ? "Wine bar"
-    : t.includes("restaurant") || ["steak_house", "meal_takeaway", "meal_delivery"].includes(t) ? "Restaurante"
-    : ["bar", "pub"].includes(t) ? "Bar"
-    : ["grocery_store", "supermarket", "convenience_store"].includes(t) ? "Almacén / Supermercado"
-    : ["food_store", "deli"].includes(t) ? "Tienda gourmet" : null;
-  const rubro = tipos.map(rubroTipo).find(Boolean) || null;
+  const rubro = rubroDeTipos(place.primaryType, place.types);
   return { place_id: place.id, nombre: place.displayName.text.trim(), latitud: lat!, longitud: lng!,
     direccion: place.formattedAddress || place.displayName.text.trim(), barrio: component("neighborhood", "sublocality_level_1", "sublocality"),
     ciudad: component("locality") || comuna || "", provincia: component("administrative_area_level_1") || "",
@@ -89,6 +82,7 @@ export interface BusquedaMapa {
   objetivo: number;
   base: ProspectoMapa[];
   rubros: string[];
+  regalos?: boolean;
   pasaGate: (p: ProspectoMapa) => boolean;
   descubrir?: (centro: Coordenada, radioKm: number, tipos: string[]) => Promise<ProspectoMapa[]>;
   cubrirZona?: (centro: Coordenada, tipos: string[]) => Promise<ProspectoMapa[]>;
@@ -101,13 +95,14 @@ export async function buscarComplementoMapa(opts: BusquedaMapa) {
   if (!Number.isInteger(opts.objetivo) || opts.objetivo < 1 || opts.objetivo > 8 - opts.clientes.length) throw new Error("Cantidad de prospectos inválida.");
   const todos = new Map(opts.base.map(p => [p.place_id, p]));
   const rubros = new Set(opts.rubros.map(rubroKey));
-  const tipos = tiposBusquedaMapa(opts.rubros);
+  const tipos = tiposBusquedaMapa(opts.rubros, opts.regalos);
   let radio = 0, googleError = false;
   const avisos: string[] = [];
   if (!opts.descubrir) avisos.push("La búsqueda en Google no está disponible; se usaron los prospectos guardados.");
   else if (!tipos.length) avisos.push("Este rubro no tiene una búsqueda disponible en Google; se usaron los prospectos guardados de ese rubro.");
   const validos = () => ordenarProspectos([...todos.values()].filter(p => prospectoDisponible(p)
     && distanciaKm(centro, { lat: p.latitud!, lng: p.longitud! }) <= radio
+    && (!opts.regalos || candidatoRegalos(p))
     && (!rubros.size || rubros.has(rubroKey(p.rubro))) && opts.pasaGate(p)), centro);
   const agregar = (nuevos: ProspectoMapa[]) => {
     // La base es autoridad: no reabrir negocios cerrados ni reemplazar IDs de Excel.

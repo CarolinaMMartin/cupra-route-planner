@@ -33,6 +33,7 @@ import {
 } from "./candidatos.ts";
 import { type PlanVendedor, planificarRutas, VISITAS_POR_DIA } from "./planificador.ts";
 import { RADIO_RUTA_KM, errorRuta } from "../_shared/ruta.ts";
+import { candidatoRegalos } from "../_shared/prospect-categories.ts";
 import { SolicitudInvalida, validarSolicitud } from "./solicitud.ts";
 import {
   crearResolvedorVendedores,
@@ -131,6 +132,7 @@ function placeAProspecto(place: GooglePlace) {
 async function redactarConIA(
   planes: PlanVendedor[],
   instrucciones: string | null,
+  regalos = false,
 ): Promise<{ textos: Map<string, string>; resumen: string | null }> {
   const textos = new Map<string, string>();
   if (!hayProveedorIA()) return { textos, resumen: null };
@@ -170,6 +172,7 @@ async function redactarConIA(
 Las visitas del día YA están decididas. Tu única tarea es redactar, para cada una, una o dos frases en español rioplatense
 que expliquen al asignador comercial POR QUÉ conviene la visita hoy: rubro, relación con el cliente, tiempo sin comprar,
 potencial y cercanía (en cuadras). Empezá cada justificación con el rubro si lo tenés (ej: "Restaurante · ...").
+${regalos ? "Objetivo comercial: regalos empresariales. Proponer contacto con compras, RR. HH. o eventos y validar interés; no asumir consumo gastronómico, presupuesto ni compras confirmadas." : ""}
 PROHIBIDO: coordenadas, "hotspot", "score", "cluster", km, IDs o jerga interna. No inventes datos.${instrucciones ? `\nIndicaciones del asignador (tenelas en cuenta al redactar): ${instrucciones}` : ""}`,
         },
         { role: "user", content: secciones },
@@ -238,6 +241,7 @@ Deno.serve(async (req) => {
 
     const body = validarSolicitud(await req.json());
     const { vendedores, provincia, comuna, barrio, area_id, instrucciones_adicionales } = body;
+    const regalos = body.regalos_empresariales;
     const estados = parseEstados(body.estados);
     const rubros = new Set<string>((Array.isArray(body.rubros) ? body.rubros : []).map(rubroKey).filter(Boolean));
     const now = new Date();
@@ -317,7 +321,7 @@ Deno.serve(async (req) => {
       if (c.excluir_recomendaciones) continue;
       const id = duenio(c);
       if (!id || !idsVendedores.has(id)) continue;
-      if (!pasaRubro(c.rubro)) continue;
+      if (!pasaRubro(c.rubro) || regalos && !candidatoRegalos(c)) continue;
       carteraTotal.get(id)!.push(c);
       clientesDeVendedores.push(c);
     }
@@ -379,7 +383,7 @@ Deno.serve(async (req) => {
       }
       return true;
     };
-    const pasaGate = (p: any): boolean => pasaGateCartera(p) && pasaRubro(p.rubro)
+    const pasaGate = (p: any): boolean => pasaGateCartera(p) && pasaRubro(p.rubro) && (!regalos || candidatoRegalos(p))
       && (!provinciaFiltro || String(p.provincia || "").toLowerCase().includes(provinciaFiltro.toLowerCase()));
 
     // ---- 6. Prospectos del área ----
@@ -438,7 +442,7 @@ Deno.serve(async (req) => {
     const precioCajaCanal = precios.length ? precios.reduce((a, b) => a + b, 0) / precios.length : 0;
 
     // ---- 8. Planificar ----
-    const tiposGoogle = tiposGoogleParaRubros(rubros);
+    const tiposGoogle = tiposGoogleParaRubros(rubros, regalos);
     const consultasPorVendedor = new Map<string, number>();
     const plazoGoogle = Date.now() + 70_000;
     const consumirConsulta = (vendedorId: string) => {
@@ -478,7 +482,7 @@ Deno.serve(async (req) => {
       descubrirEnGoogle: hayGoogleMaps()
         ? async (lat, lng, radioKm, objetivo, excluir, vendedorId = "ruta") => {
           const guardados = new Map<string, IdentityProspect>();
-          const lugares = await buscarLugaresCercanos({ lat, lng, radioKm, tipos: tiposGoogle, objetivo: objetivo * 2, excluir, consumirConsulta: () => consumirConsulta(vendedorId),
+          const lugares = await buscarLugaresCercanos({ lat, lng, radioKm, tipos: tiposGoogle, agruparTipos: true, soloCentro: true, objetivo: objetivo * 2, excluir, consumirConsulta: () => consumirConsulta(vendedorId),
             onResults: async places => {
               const rows = await persistFoundProspects<IdentityProspect>(db, places.map(placeAProspecto).filter((p): p is NonNullable<ReturnType<typeof placeAProspecto>> => Boolean(p)));
               matcher.remember(rows);
@@ -511,7 +515,7 @@ Deno.serve(async (req) => {
     }
 
     // ---- 9. Textos (IA opcional) ----
-    const { textos, resumen: resumenIA } = await redactarConIA(plan.porVendedor, instrucciones_adicionales || null);
+    const { textos, resumen: resumenIA } = await redactarConIA(plan.porVendedor, instrucciones_adicionales || null, regalos);
 
     // ---- 10. Armar filas y guardar ----
     const request_id = crypto.randomUUID();
@@ -527,9 +531,10 @@ Deno.serve(async (req) => {
     const recomendaciones: any[] = [];
     for (const pv of plan.porVendedor) {
       for (const c of pv.elegidos) {
+        const propuestaRegalos = regalos && !c.alerta_nc ? "Proponer regalos empresariales y consultar quién gestiona compras, RR. HH. o eventos. Validar interés y ocasión de compra. " : "";
         const fallback = justificacionComercial(c);
         const cuerpo = limpiarJustificacion(textos.get(c.client_id), fallback);
-        const justificacion = c.rubro && !cuerpo.toLowerCase().includes(c.rubro.toLowerCase()) ? `${c.rubro} · ${cuerpo}` : cuerpo;
+        const justificacion = propuestaRegalos + (c.rubro && !cuerpo.toLowerCase().includes(c.rubro.toLowerCase()) ? `${c.rubro} · ${cuerpo}` : cuerpo);
         const factores = {
           score_comercial: c.score_comercial,
           score_recencia: c.score_rotacion,
@@ -542,7 +547,7 @@ Deno.serve(async (req) => {
           fuera_de_zona: Boolean(c.fuera_de_zona),
           fuera_de_seleccion: pv.fueraDeSeleccion.has(c.client_id),
           alerta_nota_credito: c.alerta_nc || null,
-          tipo_visita: c.alerta_nc ? "servicio/recupero" : "comercial",
+          tipo_visita: c.alerta_nc ? "servicio/recupero" : regalos ? "regalos empresariales" : "comercial",
           prioridad_comercial: c.prioridad_comercial,
           tipo_negocio: c.tipo_negocio ?? null,
           rating: c.rating ?? null,

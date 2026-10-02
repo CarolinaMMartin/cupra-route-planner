@@ -1,3 +1,4 @@
+import { candidatoRegalos } from "./prospect-categories.ts";
 // ============================================================
 // Ranking de cartera y saneamiento de candidatos.
 // Prioridad comercial para elegir la referencia dentro de una ruta cercana.
@@ -248,7 +249,7 @@ export function esProspectoComercialmenteValido(p: {
   tipos?: string[] | null;
 }): boolean {
   const tipos = [p.tipo_principal || "", ...(p.tipos || [])].map((t) => String(t).toLowerCase());
-  // "Lodging" por sí solo no identifica un hotel del canal gastronómico.
+  if (candidatoRegalos(p)) return true;
   if (tipos.includes("hotel") || tipos.some(t => t.endsWith("_hotel"))) return true;
   if (tipos.some((t) => TIPOS_PREFERIDOS.includes(t))) return true;
   if (tipos.some((t) => TIPOS_INCOHERENTES.has(t))) return false;

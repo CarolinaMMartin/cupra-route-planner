@@ -1,3 +1,5 @@
+import { CATEGORIAS_PROSPECTOS, candidatoRegalos } from "../_shared/prospect-categories.ts";
+import { MAX_PROMOTION_BATCH } from "../_shared/prospect-promotion.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.74.0';
 import { googleMapsFetch, hayGoogleMaps } from "../_shared/google-maps.ts";
 import { persistFoundProspects } from "../_shared/prospect-review-service.ts";
@@ -12,7 +14,7 @@ const CABA_VIEWPORT = {
   high: { latitude: -34.526, longitude: -58.335 },
 };
 
-const ALLOWED_TYPES = new Set(['liquor_store', 'wine_bar', 'restaurant', 'bar']);
+const ALLOWED_TYPES = new Set<string>(CATEGORIAS_PROSPECTOS.map(c => c.tipo));
 const ALLOWED_QUEUE_STATUSES = new Set(['NUEVO', 'EN_REVISION', 'DESCARTADO']);
 const GOOGLE_FIELD_MASK = [
   'places.id',
@@ -53,6 +55,7 @@ interface SearchRequest {
   zone?: string;
   includedType?: string | null;
   excludeExisting?: boolean;
+  regalos_empresariales?: boolean;
 }
 
 
@@ -241,7 +244,10 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === 'promote') {
-      const placeIds = Array.from(new Set((body.placeIds || []).filter(isValidPlaceId))).slice(0, 25);
+      if (!Array.isArray(body.placeIds) || body.placeIds.length > MAX_PROMOTION_BATCH || body.placeIds.some(id => !isValidPlaceId(id))) {
+        return jsonResponse({ success: false, error: `Seleccioná hasta ${MAX_PROMOTION_BATCH} lugares por lote` }, 400);
+      }
+      const placeIds = [...new Set(body.placeIds)];
       if (placeIds.length === 0) return jsonResponse({ success: false, error: 'Lugares requeridos' }, 400);
 
       if (!hayGoogleMaps()) {
@@ -249,6 +255,7 @@ Deno.serve(async (req) => {
       }
 
       const created: string[] = [];
+      const promotedPlaceIds: string[] = [];
       const skipped: Array<{ place_id: string; motivo: string }> = [];
 
       for (const placeId of placeIds) {
@@ -321,18 +328,24 @@ Deno.serve(async (req) => {
           .update({ estado: 'CONVERTIDO', convertido_prospecto_place_id: canonicalId })
           .eq('place_id', placeId);
         created.push(canonicalId);
+        promotedPlaceIds.push(placeId);
       }
 
-      return jsonResponse({ success: true, created: created.length, skipped });
+      return jsonResponse({ success: true, created: created.length, promoted_place_ids: promotedPlaceIds, skipped });
     }
 
     if (body.action !== 'search') return jsonResponse({ success: false, error: 'Acción inválida' }, 400);
 
     const query = String(body.query || '').trim();
     const zone = String(body.zone || '').trim();
-    const includedType = body.includedType && ALLOWED_TYPES.has(body.includedType)
-      ? body.includedType
-      : null;
+    if (body.includedType != null && !ALLOWED_TYPES.has(body.includedType)) {
+      return jsonResponse({ success: false, error: 'Tipo de negocio inválido' }, 400);
+    }
+    if (body.regalos_empresariales != null && typeof body.regalos_empresariales !== 'boolean') {
+      return jsonResponse({ success: false, error: 'Enfoque comercial inválido' }, 400);
+    }
+    const includedType = body.includedType || null;
+    const regalos = body.regalos_empresariales === true;
     if (query.length < 3 || query.length > 120 || zone.length > 80) {
       return jsonResponse({ success: false, error: 'Consulta o zona inválida' }, 400);
     }
@@ -402,7 +415,7 @@ Deno.serve(async (req) => {
       if (!pageToken) break;
     }
 
-    const places = collected;
+    const places = regalos ? collected.filter(p => candidatoRegalos({ tipo_principal: p.primaryType, tipos: p.types })) : collected;
     const placeIds = places.map((place) => place.id);
 
 
@@ -450,7 +463,8 @@ Deno.serve(async (req) => {
         existing_prospect: existingProspectIds.has(place.id),
         existing_client: clientNameMap.get(normalizeName(displayName)) || null,
       };
-    }).sort((a, b) => b.premium_score - a.premium_score);
+    });
+    if (!regalos) results.sort((a, b) => b.premium_score - a.premium_score);
 
     const isNew = (item: typeof results[number]) => !item.queued && !item.existing_prospect && !item.existing_client;
     const excludeExisting = (body as SearchRequest).excludeExisting !== false;

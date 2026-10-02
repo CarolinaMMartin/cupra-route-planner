@@ -1,3 +1,4 @@
+import { candidatoRegalos, etiquetaTipo } from "../../../supabase/functions/_shared/prospect-categories";
 import { getGoogleMapsUrl } from "@/lib/googleMapsLinks";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -36,6 +37,7 @@ export interface ProspectoDetalle {
   rating?: number | null;
   total_ratings?: number | null;
   nivel_precio?: string | null;
+  rubro?: string | null;
   tipo_principal?: string | null;
   tipos?: string[] | null;
   website?: string | null;
@@ -59,8 +61,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
 }
 
-const formatTipo = (tipo?: string | null) =>
-  tipo ? tipo.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()) : "—";
+const formatTipo = etiquetaTipo;
 
 const nivelPrecio = (nivel?: string | null) => {
   if (!nivel) return "—";
@@ -146,12 +147,13 @@ export function ProspectoDetalleDialog({ prospecto, open, onOpenChange }: Props)
         <DialogHeader>
           <DialogTitle className="text-xl">{p.nombre}</DialogTitle>
           <DialogDescription className="flex flex-wrap items-center gap-2">
-            <span>{formatTipo(p.tipo_principal)}</span>
+            <span>{p.rubro || formatTipo(p.tipo_principal)}</span>
             {p.es_cliente_cupra && (
               <Badge variant="outline" className="border-accent/40 bg-accent/10 text-accent">
                 Ya es cliente CUPRA
               </Badge>
             )}
+            {candidatoRegalos(p) && <Badge variant="outline">Regalos empresariales · interés por confirmar</Badge>}
             {p.sirve_vinos && <Badge variant="outline">Sirve vinos</Badge>}
           </DialogDescription>
         </DialogHeader>

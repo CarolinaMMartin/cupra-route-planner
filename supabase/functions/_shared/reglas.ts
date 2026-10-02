@@ -140,7 +140,7 @@ export function crearResolvedorVendedores(perfiles: { user_id: string; nombre: s
 export type OrigenProspecto = "google" | "excel" | "manual";
 
 /**
- * Origen del prospecto, para decidir si se le exige volumen de reseñas.
+ * Origen del prospecto a partir de sus identificadores y metadatos.
  * Ojo: el importador de Excel guarda el place_id de Google cuando logra geocodificar,
  * así que el prefijo no alcanza. Un prospecto SIN datos de reseñas (rating y cantidad
  * vacíos o en cero) no vino de una búsqueda de Google Places: lo cargó el equipo.
@@ -162,29 +162,4 @@ export function origenProspecto(p: {
 // Rubro
 // ------------------------------------------------------------
 
-/** Clave comparable de rubro (el valor viene de la columna `rubro`, calculada en la base). */
-export function rubroKey(value: string | null | undefined): string {
-  return (value || "")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-    .toUpperCase().replace(/\s+/g, " ").trim();
-}
-
-/** Tipos de Google Places que corresponden a cada rubro normalizado (para buscar prospectos). */
-export const TIPOS_GOOGLE_POR_RUBRO: Record<string, string[]> = {
-  "VINOTECA": ["liquor_store"],
-  "WINE BAR": ["wine_bar"],
-  "RESTAURANTE": ["restaurant"],
-  "BAR": ["bar", "pub"],
-  "HOTEL": ["hotel"],
-  "ALMACEN / SUPERMERCADO": ["grocery_store", "supermarket", "convenience_store"],
-  "TIENDA GOURMET": ["food_store", "deli"],
-};
-
-export const TIPOS_GOOGLE_DEFAULT = ["liquor_store", "wine_bar", "restaurant", "bar"];
-
-export function tiposGoogleParaRubros(rubros: Set<string>): string[] {
-  if (rubros.size === 0) return TIPOS_GOOGLE_DEFAULT;
-  const out = new Set<string>();
-  for (const r of rubros) (TIPOS_GOOGLE_POR_RUBRO[r] || []).forEach((t) => out.add(t));
-  return out.size > 0 ? [...out] : TIPOS_GOOGLE_DEFAULT;
-}
+export { rubroKey, TIPOS_GOOGLE_POR_RUBRO, TIPOS_GOOGLE_DEFAULT, tiposGoogleParaRubros } from "./prospect-categories.ts";

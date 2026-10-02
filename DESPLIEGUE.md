@@ -21,6 +21,8 @@ historial para resolver una diferencia del registro.
      privadas, ventas restringidas y conservación del historial.
    - `20261001160000_visitas_propias_catalogo.sql`: pendientes propios,
      catálogo compartido, autoasignación y traslado auditado de pendientes.
+   - `20261002123000_prospeccion_empresarial.sql`: rubros de empresas y
+     profesionales; completar tipos faltantes conservando la identidad.
 2. Desplegar las funciones afectadas con sus módulos `_shared`:
    `generate-recommendations`, `complete-map-route`, `review-prospect`,
    `prospect-discovery`, `walking-route`, `generate-briefing`, `extract-feedback`,
@@ -53,6 +55,8 @@ La clave de navegador es independiente de los secretos del servidor.
 - Baja de vendedor: cuenta inactiva y traslado de pendientes con fechas intactas.
 - Generación: ocho paradas cercanas, prospectos de la misma calle incluidos,
   sin ampliar el radio por frecuencia ni por falta de candidatos.
+- Regalos empresariales: búsqueda, dashboard, recomendaciones y mapa usan
+  empresas/hoteles; agregar más de 25 resultados conserva éxitos y pendientes.
 - Mapa: ocho paradas y nuevo control de radio al guardar.
 - Caminata: tramos, minutos, advertencias y atribución del proveedor visibles.
 - Revisar y unificar: información persistente tras recargar.

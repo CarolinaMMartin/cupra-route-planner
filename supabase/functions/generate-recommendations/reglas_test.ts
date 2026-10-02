@@ -92,8 +92,8 @@ Deno.test("origen del prospecto", () => {
 
 Deno.test("tipos de Google por rubro", () => {
   assertEquals(tiposGoogleParaRubros(new Set(["VINOTECA"])), ["liquor_store"]);
-  assertEquals(tiposGoogleParaRubros(new Set()), ["liquor_store", "wine_bar", "restaurant", "bar"]);
-  assertEquals(tiposGoogleParaRubros(new Set(["OTRO RARO"])), ["liquor_store", "wine_bar", "restaurant", "bar"]);
+  assertEquals(tiposGoogleParaRubros(new Set()), ["liquor_store", "wine_bar", "restaurant", "bar", "hotel"]);
+  assertEquals(tiposGoogleParaRubros(new Set(["OTRO RARO"])), []);
 });
 
 Deno.test("sin compras: el centinela 9999 es potencial, igual que en la interfaz", () => {

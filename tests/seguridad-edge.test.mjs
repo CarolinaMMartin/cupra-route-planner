@@ -36,8 +36,8 @@ async function loadHandler(name) {
   const query=(table)=>({
     select(){return this},order(){return this},limit(){return this},in(){return this},
     eq(k,v){filters.push([table,k,v]);return this},
-    async maybeSingle(){return {data:table==='visita_briefings'?{briefing:'Contexto propio',hechos:{},updated_at:new Date().toISOString()}:null,error:null}},
-    async single(){return {data:scenario.active?{rol:scenario.role}:null,error:null}},
+    async maybeSingle(){return {data:table==='visita_briefings'?{briefing:'Contexto propio',hechos:{version:2},updated_at:new Date().toISOString()}:null,error:null}},
+    async single(){return {data:scenario.active?{rol:scenario.role,activo:true}:null,error:null}},
     async then(resolve){resolve({data:table==='asignaciones_vendedores_clientes'&&scenario.own?[{id:'own'}]:[],error:null})},
   });
   const mock={
@@ -59,14 +59,14 @@ async function loadHandler(name) {
   },async close(){delete globalThis.__securitySdk;delete globalThis.Deno;await rm(dir,{recursive:true,force:true})}};
 }
 
-for(const name of ['cleanup-visited-assignments','check-pending-assignments','generate-briefing','extract-feedback','admin-create-user','walking-route']) {
+for(const name of ['cleanup-visited-assignments','check-pending-assignments','generate-briefing','extract-feedback','admin-create-user','walking-route','prospect-discovery']) {
   test(name+': rechaza anónimo, token inválido y cuenta inactiva antes de acceder al negocio',async()=>{
     const h=await loadHandler(name);
     try {
       for(const [scenario,token,want] of [[{},null,401],[{valid:false},'invalid',401],[{active:false},'valid',403]]) {
         const r=await h.run(scenario,token);assert.equal(r.status,want);assert.deepEqual(r.businessCalls,[]);
       }
-      if(['cleanup-visited-assignments','check-pending-assignments','admin-create-user','walking-route'].includes(name)) {
+      if(['cleanup-visited-assignments','check-pending-assignments','admin-create-user','walking-route','prospect-discovery'].includes(name)) {
         const r=await h.run({role:'vendedor'});assert.equal(r.status,403);assert.deepEqual(r.businessCalls,[]);
       }
       if(name==='cleanup-visited-assignments'){
@@ -93,4 +93,17 @@ test('briefing: ficha y caché solo para cuenta propia; se verifica antes de lee
     const own=await h.run({role:'vendedor',own:true},'valid',{client_id:'propio'});
     assert.equal(own.status,200);assert.equal(own.body.briefing,'Contexto propio');
   }finally{await h.close()}
+});
+
+test('discovery: rechaza rubros inválidos, enfoque manipulado y más de 25 promociones sin llamadas comerciales',async()=>{
+  const h=await loadHandler('prospect-discovery');
+  try {
+    for(const body of [
+      {action:'search',query:'empresas',includedType:'arbitrary_type'},
+      {action:'search',query:'empresas',regalos_empresariales:'true'},
+      {action:'promote',placeIds:Array.from({length:26},(_,i)=>'place-'+i)},
+    ]) {
+      const r=await h.run({},'valid',body);assert.equal(r.status,400);assert.deepEqual(r.businessCalls,[]);
+    }
+  } finally {await h.close()}
 });

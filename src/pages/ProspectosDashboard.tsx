@@ -1,3 +1,5 @@
+import { EnfoqueRegalos } from "@/components/prospectos/EnfoqueRegalos";
+import { candidatoRegalos, etiquetaTipo } from "../../supabase/functions/_shared/prospect-categories";
 import { getGoogleMapsUrl } from "@/lib/googleMapsLinks";
 import { SALES_PROFILE_OR_FILTER } from "@/lib/roles";
 import { guardarAsignaciones } from "@/lib/asignaciones";
@@ -106,8 +108,7 @@ const estadoStyles: Record<EstadoProspecto, string> = {
   "Descartado": "border-border bg-muted text-muted-foreground",
 };
 
-const formatTipoNegocio = (tipo: string) =>
-  tipo.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+const formatTipoNegocio = etiquetaTipo;
 
 const precioCorto = (nivel: string | null) => {
   if (!nivel) return "-";
@@ -144,6 +145,7 @@ const ProspectosDashboard = () => {
   const [selectedTipos, setSelectedTipos] = useState<string[]>([]);
   const [selectedEstados, setSelectedEstados] = useState<string[]>([]);
   const [estadosClientes, setEstadosClientes] = useState<Record<string, string>>({});
+  const [regalos, setRegalos] = useState(false);
   const [selectedRubros, setSelectedRubros] = useState<string[]>([]);
   const { rubros: rubrosTodos } = useRubros();
   const rubrosProspectos = useMemo(() => rubrosTodos.filter((r) => r.prospectos > 0).map((r) => ({ value: r.value, label: `${r.value} (${r.prospectos})` })), [rubrosTodos]);
@@ -338,11 +340,11 @@ const ProspectosDashboard = () => {
         (p.direccion || "").toLowerCase().includes(term) ||
         (p.tipo_principal ? formatTipoNegocio(p.tipo_principal).toLowerCase().includes(term) : false);
 
-      return matchProvincia && matchComuna && matchBarrio && matchTipos && matchRubro && matchEstado &&
+      return (!regalos || candidatoRegalos(p)) && matchProvincia && matchComuna && matchBarrio && matchTipos && matchRubro && matchEstado &&
         matchNivelPrecio && matchRating && matchSearch;
     });
   }, [prospectosData, selectedProvincia, selectedComuna, selectedBarrio,
-    selectedTipos, selectedRubros, selectedEstados, estadosClientes, selectedNivelPrecio, minRating, searchTerm]);
+    regalos, selectedTipos, selectedRubros, selectedEstados, estadosClientes, selectedNivelPrecio, minRating, searchTerm]);
 
   const sortedData = useMemo(() => {
     if (!sortBy) return filteredData;
@@ -377,6 +379,7 @@ const ProspectosDashboard = () => {
 
   const activeFilters = useMemo(() => {
     const chips: Array<{ key: string; label: string; clear: () => void }> = [];
+    if (regalos) chips.push({ key: "regalos", label: "Regalos empresariales", clear: () => setRegalos(false) });
     if (selectedProvincia !== "all") chips.push({ key: "provincia", label: selectedProvincia, clear: () => setSelectedProvincia("all") });
     if (selectedComuna !== "all") chips.push({ key: "comuna", label: `Comuna ${selectedComuna}`, clear: () => setSelectedComuna("all") });
     if (selectedBarrio !== "all") chips.push({ key: "barrio", label: selectedBarrio, clear: () => setSelectedBarrio("all") });
@@ -396,9 +399,10 @@ const ProspectosDashboard = () => {
     if (minRating > 0) chips.push({ key: "rating", label: `Rating ≥ ${minRating.toFixed(1)}`, clear: () => setMinRating(0) });
     if (searchTerm.trim() !== "") chips.push({ key: "search", label: `"${searchTerm.trim()}"`, clear: () => setSearchTerm("") });
     return chips;
-  }, [selectedProvincia, selectedComuna, selectedBarrio, selectedTipos, selectedRubros, selectedEstados, estadosClientes, selectedNivelPrecio, minRating, searchTerm]);
+  }, [selectedProvincia, selectedComuna, selectedBarrio, regalos, selectedTipos, selectedRubros, selectedEstados, estadosClientes, selectedNivelPrecio, minRating, searchTerm]);
 
   const handleClearFilters = () => {
+    setRegalos(false);
     setSelectedProvincia("all");
     setSelectedComuna("all");
     setSelectedBarrio("all");
@@ -450,10 +454,12 @@ const ProspectosDashboard = () => {
   };
 
   const buildCsv = (rowsSource: Prospecto[]) => {
-    const headers = ["Nombre", "Dirección", "Tipo", "Barrio", "Comuna", "Ciudad", "Rating", "Nivel Precio", "Teléfono", "Website", "Estado"];
+    const headers = ["Nombre", "Dirección", "Rubro", "Regalos empresariales", "Tipo", "Barrio", "Comuna", "Ciudad", "Rating", "Nivel Precio", "Teléfono", "Website", "Estado"];
     const rows = rowsSource.map((p) => [
       p.nombre,
       p.direccion || "",
+      p.rubro || "",
+      candidatoRegalos(p) ? "Posible comprador; interés por confirmar" : "",
       p.tipo_principal ? formatTipoNegocio(p.tipo_principal) : "",
       p.barrio || "",
       p.comuna || "",
@@ -464,7 +470,7 @@ const ProspectosDashboard = () => {
       p.website || "",
       normalizeEstado(p.estado_negocio),
     ]);
-    return [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+    return [headers, ...rows].map((row) => row.map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
   };
 
   const downloadCsv = (rowsSource: Prospecto[]) => {
@@ -708,6 +714,10 @@ const ProspectosDashboard = () => {
                     />
                   </div>
 
+                  <EnfoqueRegalos checked={regalos} onChange={value => {
+                    setRegalos(value); setSelectedRubros([]); setSelectedTipos([]); setCurrentPage(1);
+                  }} />
+
                   <div className="space-y-2">
                     <label className="text-xs text-muted-foreground">Estado comercial</label>
                     <MultiSelect options={ESTADOS_COMERCIALES.map(e=>({value:e.value,label:e.plural}))} selected={selectedEstados}
@@ -716,7 +726,7 @@ const ProspectosDashboard = () => {
                   <div className="space-y-2">
                     <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Rubro</label>
                     <MultiSelect
-                      options={rubrosProspectos}
+                      options={regalos ? rubrosProspectos.filter(r => candidatoRegalos({ rubro: r.value })) : rubrosProspectos}
                       selected={selectedRubros}
                       onChange={(v) => { setSelectedRubros(v); setCurrentPage(1); }}
                       placeholder="Todos los rubros"
@@ -880,7 +890,7 @@ const ProspectosDashboard = () => {
                             </button>
                           </TableCell>
                           <TableCell className="text-sm">
-                            {p.tipo_principal ? formatTipoNegocio(p.tipo_principal) : "-"}
+                            {p.rubro || formatTipoNegocio(p.tipo_principal)}
                           </TableCell>
                           <TableCell className="text-sm">
                             <p className="text-foreground truncate max-w-[180px]">{p.barrio || p.ciudad}</p>
@@ -944,7 +954,7 @@ const ProspectosDashboard = () => {
                         <RowActions p={p} />
                       </div>
                       <div className="flex flex-wrap items-center gap-3 text-sm">
-                        <span className="text-muted-foreground">{p.tipo_principal ? formatTipoNegocio(p.tipo_principal) : "-"}</span>
+                        <span className="text-muted-foreground">{p.rubro || formatTipoNegocio(p.tipo_principal)}</span>
                         <span className="inline-flex items-center gap-1.5">
                           <MapPin className="h-3.5 w-3.5 text-accent" />
                           {p.barrio || p.ciudad}
@@ -1044,6 +1054,7 @@ const ProspectosDashboard = () => {
         </Dialog>
 
         <ProspectDiscoveryDialog
+          enfoqueRegalos={regalos}
           open={showBuscarProspectos}
           onOpenChange={setShowBuscarProspectos}
           onConverted={fetchProspectosData}

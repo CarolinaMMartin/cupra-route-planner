@@ -1,3 +1,4 @@
+import { candidatoRegalos } from "../_shared/prospect-categories.ts";
 import { seleccionarCercanos } from "../_shared/compact-route.ts";
 import { authorize, corsHeaders, json, RequestError, failure, googleGeocode } from "../_shared/location-service.ts";
 import { hayGoogleMaps } from "../_shared/google-maps.ts";
@@ -57,6 +58,8 @@ export async function handler(req: Request): Promise<Response> {
     const conservarIds = ids(body.prospect_ids ?? [], 7);
     const omitirIds = new Set(ids(body.omitir_ids ?? [], 100));
     const rubros = ids(body.rubros ?? [], 20);
+    if (body.regalos_empresariales != null && typeof body.regalos_empresariales !== "boolean") throw new RequestError("Enfoque comercial inválido", 400, "INVALID_REQUEST");
+    const regalos = body.regalos_empresariales === true;
     if (typeof body.vendedor_id !== "string" || clientesIds.length + conservarIds.length >= VISITAS_POR_DIA) {
       throw new RequestError("La ruta debe tener menos de ocho visitas antes de completar.", 400, "INVALID_SELECTION");
     }
@@ -108,7 +111,7 @@ export async function handler(req: Request): Promise<Response> {
       if (matches.length) { revisiones.add(p.place_id); return false; }
       return true;
     };
-    const disponible = (p: ProspectoMapa) => prospectoDisponible(p) && !bloqueados.has(p.place_id)
+    const disponible = (p: ProspectoMapa) => prospectoDisponible(p) && (!regalos || candidatoRegalos(p)) && !bloqueados.has(p.place_id)
       && !bloqueados.has(p.google_place_id || "")
       && (!zona || prospectoEnZona(p, zona))
       && identidadDisponible(p);
@@ -127,7 +130,7 @@ export async function handler(req: Request): Promise<Response> {
       matcher.remember(guardados); return guardados as ProspectoMapa[];
     };
     const result = await buscarComplementoMapa({
-      clientes: clientesPuntos, centroZona: zona || undefined, objetivo, base, rubros,
+      clientes: clientesPuntos, centroZona: zona || undefined, objetivo, base, rubros, regalos,
       pasaGate: p => disponible(p) && !omitirIds.has(p.place_id) && !omitirIds.has(p.google_place_id || "")
         && !conservar.some(prev => mismoProspecto(prev, p)),
       descubrir: hayGoogleMaps() ? async (center, radius, types) => guardarEncontrados(await descubrirProspectosMapa(center, radius, types, deadline, consumir)) : undefined,
