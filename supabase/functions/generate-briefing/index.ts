@@ -1,3 +1,5 @@
+import { candidatoRegalos } from "../_shared/prospect-categories.ts";
+import { construirFallback } from "../_shared/briefing.ts";
 import { authorize, failure, RequestError } from "../_shared/location-service.ts";
 import { aiChat, hayProveedorIA } from "../_shared/ai-chat.ts";
 
@@ -50,6 +52,7 @@ async function redactarBriefing(hechos: Hechos, nombre: string): Promise<{ texto
               "1) QUÉ OFRECER: producto o categoría concreta apoyada en el hueco de portfolio o estacionalidad.\n" +
               "2) POR QUÉ: el número que lo justifica (monto, cadencia, precio, share, cliente modelo de la zona).\n" +
               "3) CÓMO ENCARAR: advertencias reales (nota de crédito pendiente, objeción previa, pedido del cliente, persona de contacto). Si no hay riesgos, dar el ángulo de cierre.\n" +
+              "Si hay oportunidad de regalos empresariales, proponerla y consultar por compras, RR. HH. o eventos; no asumir interés, presupuesto ni compras confirmadas. " +
               "Máximo 25 palabras por línea. Si un dato falta, omitilo en vez de suponerlo.",
           },
           { role: "user", content: `Cliente: ${nombre}\nHechos:\n${JSON.stringify(hechos, null, 2)}` },
@@ -69,19 +72,7 @@ async function redactarBriefing(hechos: Hechos, nombre: string): Promise<{ texto
   }
 }
 
-function construirFallback(h: Hechos): string {
-  const lineas: string[] = [];
-  const gap = (h.hueco_portfolio as string[]) || [];
-  lineas.push(gap.length ? `Ofrecer: ${gap.slice(0, 3).join(", ")} (nunca compró).` : "Ofrecer: reponer las líneas que ya compra y sumar una etiqueta nueva.");
-  const monto = h.monto_total as string | null;
-  const dias = h.dias_desde_ultima_compra as number | null;
-  lineas.push(`Por qué: ${monto ? `histórico ${monto}` : "cuenta activa"}${dias !== null && dias !== undefined ? `, ${dias} días sin comprar` : ""}.`);
-  const riesgos: string[] = [];
-  if (h.nota_credito_pendiente) riesgos.push(`NC pendiente ${h.nota_credito_pendiente}`);
-  if (h.ultima_objecion) riesgos.push(`objeción: ${h.ultima_objecion}`);
-  lineas.push(riesgos.length ? `Cuidado: ${riesgos.join(" | ")}.` : "Cómo encarar: cerrar pedido en la visita, no dejarlo para llamado.");
-  return lineas.join("\n");
-}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -118,21 +109,21 @@ Deno.serve(async (req) => {
 
     if (existente && !forzar) {
       const edadDias = (Date.now() - new Date(existente.updated_at).getTime()) / 86400000;
-      if (edadDias < 7) {
+      if (edadDias < 7 && existente.hechos?.version === 2) {
         return new Response(JSON.stringify({ briefing: existente.briefing, hechos: existente.hechos, cache: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
 
-    const hechos: Hechos = {};
+    const hechos: Hechos = { version: 2 };
     let nombre = "Cliente";
 
     if (clientId) {
       const { data: cliente } = await supabase
         .from("clientes")
         .select(
-          "client_id, razon_social, fantasia, canal, barrio_principal, monto_total_cupra, monto_total_historico, ticket_promedio, cadencia_dias, dias_desde_ultima_compra, ultima_compra, precio_promedio_caja, monto_notas_credito, fecha_ultima_nc, share_cupra, productos_comprados, etiquetas, categoria_volumen, categoria_recencia",
+          "client_id, razon_social, fantasia, rubro, canal, barrio_principal, monto_total_cupra, monto_total_historico, ticket_promedio, cadencia_dias, dias_desde_ultima_compra, ultima_compra, precio_promedio_caja, monto_notas_credito, fecha_ultima_nc, share_cupra, productos_comprados, etiquetas, categoria_volumen, categoria_recencia",
         )
         .eq("client_id", clientId)
         .maybeSingle();
@@ -146,6 +137,8 @@ Deno.serve(async (req) => {
 
       nombre = cliente.fantasia || cliente.razon_social || clientId;
       hechos.canal = cliente.canal;
+      hechos.rubro = cliente.rubro;
+      if (candidatoRegalos(cliente)) hechos.oportunidad_regalos_empresariales = "Afinidad por rubro; interés por validar";
       hechos.barrio = cliente.barrio_principal;
       hechos.monto_total = fmtARS(cliente.monto_total_cupra ?? cliente.monto_total_historico);
       hechos.ticket_promedio = fmtARS(cliente.ticket_promedio);
@@ -255,7 +248,7 @@ Deno.serve(async (req) => {
     } else {
       const { data: prospecto } = await supabase
         .from("prospectos")
-        .select("place_id, nombre, tipo_principal, barrio, ciudad, rating, total_ratings, nivel_precio, resumen_google, website")
+        .select("place_id, nombre, tipo_principal, tipos, rubro, barrio, ciudad, rating, total_ratings, nivel_precio, resumen_google, website")
         .eq("place_id", placeId!)
         .maybeSingle();
 
@@ -267,7 +260,8 @@ Deno.serve(async (req) => {
       }
       nombre = prospecto.nombre;
       hechos.tipo = "prospecto";
-      hechos.tipo_negocio = prospecto.tipo_principal;
+      hechos.tipo_negocio = prospecto.rubro || prospecto.tipo_principal;
+      if (candidatoRegalos(prospecto)) hechos.oportunidad_regalos_empresariales = "Afinidad por rubro; interés por validar";
       hechos.zona = [prospecto.barrio, prospecto.ciudad].filter(Boolean).join(", ");
       hechos.rating = prospecto.rating;
       hechos.resenas = prospecto.total_ratings;

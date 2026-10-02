@@ -31,3 +31,13 @@ Deno.test('Google entrega también los datos conocidos y cerrados para persistir
     igual(r.length,1);igual(r[0].id,'nuevo');igual(recibidos.join(','),'conocido,cerrado,nuevo');
   });
 });
+
+Deno.test('Google: agrupa empresas y hoteles en una consulta para reservar presupuesto a radios mayores',async()=>{
+  await conMock([],async()=>{
+    const cuerpos:Record<string,any>[]=[];
+    globalThis.fetch=async(_url,init)=>{cuerpos.push(JSON.parse(init!.body as string));return Response.json({places:[]});};
+    for(const radioKm of [.15,.3,.6,1,1.5]) await buscarLugaresCercanos({...opciones,radioKm,tipos:['corporate_office','hotel','lawyer'],agruparTipos:true,soloCentro:true});
+    igual(cuerpos.length,5);igual(cuerpos[4].includedTypes.join(','),'corporate_office,hotel,lawyer');
+    igual(cuerpos[4].locationRestriction.circle.radius,1500);igual(cuerpos[0].rankPreference,'DISTANCE');
+  });
+});

@@ -15,6 +15,10 @@ before(async()=>{
     CREATE TABLE visitas(id int PRIMARY KEY,prospecto_place_id text REFERENCES prospectos(place_id),estado text);
   `);
   await db.exec(await readFile(new URL('../supabase/migrations/20260928220000_revision_prospectos.sql',import.meta.url),'utf8'));
+  await db.exec("ALTER TABLE clientes ADD COLUMN etiquetas text[]; CREATE TABLE ventas_cupra(client_id text,categorias text);");
+  await db.exec(await readFile(new URL('../supabase/migrations/20260923120000_rubro_normalizado.sql',import.meta.url),'utf8'));
+  await db.exec(await readFile(new URL('../supabase/migrations/20261002123000_prospeccion_empresarial.sql',import.meta.url),'utf8'));
+
 });
 after(async()=>{await db?.close();});
 beforeEach(async()=>{
@@ -91,4 +95,25 @@ test('conserva las variantes encontradas y los vacíos no borran datos; la huell
   assert.equal(context.prospectos[0].informacion_encontrada.website,'https://primera.test');
   assert.equal(context.prospectos[0].telefono,'+54 11 5555 1234');
   assert.equal((await db.query('SELECT count(*)::int AS n FROM prospectos_informacion_historial')).rows[0].n,2);
+});
+
+test('empresas: clasificación persistente, enriquecimiento y reintento conservan el ID y datos propios',async()=>{
+  const rows=await found({place_id:'empresa-google',nombre:'Empresa de prueba',tipo_principal:'corporate_office',tipos:['corporate_office','establishment'],rating:null,total_ratings:null});
+  assert.equal(rows[0].rubro,'Empresa');
+  await found({place_id:'empresa-google',nombre:'Empresa de prueba',tipo_principal:'corporate_office',website:'https://empresa.example',telefono:'1123456789'});
+  const saved=(await db.query("SELECT * FROM prospectos WHERE place_id='empresa-google'")).rows[0];
+  assert.equal(saved.rubro,'Empresa');assert.equal(saved.website,'https://empresa.example');
+  assert.equal((await db.query("SELECT count(*)::int AS n FROM prospectos WHERE place_id='empresa-google'")).rows[0].n,1);
+  await db.exec("UPDATE prospectos SET tipo_principal='Manual',tipos='{}' WHERE place_id='p1'");
+  await found({tipo_principal:'hotel',tipos:['hotel','restaurant']});
+  assert.equal((await db.query("SELECT rubro FROM prospectos WHERE place_id='p1'")).rows[0].rubro,'Hotel');
+  await found({tipo_principal:'restaurant',tipos:['restaurant']});
+  assert.equal((await db.query("SELECT rubro FROM prospectos WHERE place_id='p1'")).rows[0].rubro,'Hotel');
+});
+test('rubros de empresas, hoteles y profesionales se normalizan en clientes, prospectos y Excel',async()=>{
+  for(const [tipo,rubro] of [['corporate_office','Empresa'],['business_center','Empresa'],['coworking_space','Empresa'],['manufacturer','Empresa'],['Empresa','Empresa'],['lawyer','Estudio jurídico'],['accounting','Estudio contable'],['real_estate_agency','Inmobiliaria'],['insurance_agency','Agencia de seguros'],['event_venue','Catering / Eventos'],['hotel','Hotel']]){
+    assert.equal((await db.query("SELECT rubro_prospecto($1,ARRAY[$1,'restaurant']) AS r",[tipo])).rows[0].r,rubro);
+    await db.query("UPDATE clientes SET etiquetas=ARRAY[$1] WHERE client_id='c1'",[tipo]);
+    assert.equal((await db.query("SELECT rubro FROM clientes WHERE client_id='c1'")).rows[0].rubro,rubro);
+  }
 });

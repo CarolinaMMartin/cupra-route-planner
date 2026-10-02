@@ -54,6 +54,32 @@ En el mapa, los clientes elegidos manualmente se conservan como puntos fijos.
 **Completar prospectos** agrega vecinos hasta llegar a ocho. La selección se
 valida nuevamente al guardar con las coordenadas vigentes de la base.
 
+## Empresas, hoteles y regalos empresariales
+
+En **Prospectos → Buscar nuevos prospectos**, elegir el tipo de negocio o activar
+**Regalos empresariales**. La búsqueda incluye empresas y oficinas, hoteles,
+estudios jurídicos y contables, inmobiliarias, seguros y espacios de eventos.
+Se busca al posible comprador por su actividad, no a proveedores de regalos.
+La búsqueda manual de Google abarca CABA; las rutas mantienen la zona elegida.
+
+El mismo enfoque está en **Filtros del dashboard de Prospectos**, en las
+**recomendaciones por área o personalizadas** y en **Completar prospectos** del
+mapa. En recomendaciones filtra clientes y prospectos; en el mapa se conservan
+los clientes seleccionados y el enfoque se aplica al complemento de prospectos.
+Puede combinarse con un rubro específico. No exige reseñas ni agranda el radio:
+si faltan candidatos cercanos, informa el faltante.
+
+Hotel y Empresa son rubros, no estados comerciales. La afinidad con regalos se
+deduce del rubro; el interés debe confirmarse al contactar. Las fichas y el CSV
+lo indican. La guía de visita propone consultar ocasión, cantidad, presupuesto
+y responsable de compras, RR. HH. o eventos, preservando advertencias previas.
+La carga manual también permite elegir rubro. La clasificación queda guardada
+y se comparte con los filtros, la revisión y las futuras recomendaciones.
+
+Al agregar muchos resultados se procesan lotes de hasta 25 hasta completar la
+selección. Los fallidos quedan pendientes para reintentar; los lotes guardados
+se conservan y no se marcan como cargados los lugares que fallaron.
+
 ## Prospectos e información persistente
 
 **Revisar coincidencias** compara identidad, teléfono, dirección y ubicación.

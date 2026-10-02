@@ -115,6 +115,8 @@ export function circulosDeCobertura(lat: number, lng: number, radioKm: number): 
 }
 
 export interface NearbyOptions {
+  agruparTipos?: boolean;
+  soloCentro?: boolean;
   lat: number;
   lng: number;
   radioKm: number;
@@ -135,8 +137,10 @@ export async function buscarLugaresCercanos(opts: NearbyOptions): Promise<Google
   const errores: string[] = [];
   let respuestasOk = 0;
 
-  for (const circulo of circulosDeCobertura(opts.lat, opts.lng, opts.radioKm)) {
-    for (const tipo of opts.tipos) {
+  const circulos = opts.soloCentro ? [{ lat: opts.lat, lng: opts.lng, radioM: opts.radioKm * 1000 }] : circulosDeCobertura(opts.lat, opts.lng, opts.radioKm);
+  const grupos = opts.agruparTipos && opts.tipos.length ? [opts.tipos] : opts.tipos.map(t => [t]);
+  for (const circulo of circulos) {
+    for (const tipos of grupos) {
       if (encontrados.size >= opts.objetivo) break;
       try {
         opts.consumirConsulta?.();
@@ -152,7 +156,7 @@ export async function buscarLugaresCercanos(opts: NearbyOptions): Promise<Google
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Goog-FieldMask": PLACES_FIELD_MASK },
         body: JSON.stringify({
-          includedTypes: [tipo],
+          includedTypes: tipos,
           maxResultCount: 20,
           rankPreference: "DISTANCE",
           languageCode: "es",

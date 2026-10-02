@@ -1,3 +1,4 @@
+import { CATEGORIAS_PROSPECTOS } from "../../../supabase/functions/_shared/prospect-categories";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ interface DuplicateMatch {
 }
 
 interface FormData {
+  tipo_principal?: string;
   nombre: string;
   direccion: string;
   barrio: string;
@@ -508,7 +510,7 @@ const ProspectoFormInterno = ({ onSuccess, onCancel }: AgregarProspectoFormProps
           telefono: formData.telefono.trim() || null,
           email: formData.email.trim() || null,
           instagram: formData.instagram.trim() || null,
-          tipo_principal: "Manual",
+          tipo_principal: formData.tipo_principal || "Manual",
           es_cliente_cupra: false,
         });
 
@@ -748,6 +750,16 @@ const ProspectoFormInterno = ({ onSuccess, onCancel }: AgregarProspectoFormProps
   return (
     <div className="space-y-4">
       {/* Campos obligatorios principales */}
+      <div className="space-y-2">
+        <Label>Rubro</Label>
+        <Select value={formData.tipo_principal || "Manual"} onValueChange={value => handleInputChange("tipo_principal", value)}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Manual">Sin especificar</SelectItem>
+            {CATEGORIAS_PROSPECTOS.map(c => <SelectItem key={c.tipo} value={c.tipo}>{c.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
       <div className="space-y-1.5">
         <Label htmlFor="nombre" className="text-sm">Nombre del establecimiento *</Label>
         <Input

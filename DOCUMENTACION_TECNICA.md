@@ -10,6 +10,7 @@ recorridos; la IA redacta explicaciones a partir de resultados calculados.
 | Ubicación | Responsabilidad |
 |---|---|
 | `supabase/functions/generate-recommendations/` | Candidatos, prioridad comercial y planificación por vendedor. |
+| `supabase/functions/_shared/prospect-categories.ts` | Catálogo compartido de rubros, tipos Google y afinidad con regalos empresariales. |
 | `supabase/functions/_shared/compact-route.ts` | Selección por cercanía y orden sugerido compartidos por motor y mapa. |
 | `supabase/functions/complete-map-route/` | Completar selección manual conservando puntos fijos. |
 | `supabase/functions/walking-route/` | Resolver ocho IDs contra la base y medir el recorrido peatonal. |
@@ -29,6 +30,27 @@ El mapa y el motor usan el mismo selector. La asignación manual conserva los
 puntos que eligió el operador. La medición a pie optimiza el orden por proximidad
 y consulta las calles; devuelve `orden`, `metros`, `minutos`, `avisos`,
 `atribucion` y `verificada`. Un fallo devuelve medidas nulas y un aviso explícito.
+
+## Prospección empresarial
+
+`regalos_empresariales` es un filtro booleano validado por los handlers de
+búsqueda, recomendaciones y mapa. La afinidad se calcula a partir del rubro
+persistido y, cuando falta, del tipo principal. No representa interés confirmado.
+Los rubros seleccionados se intersectan con el enfoque; un rubro desconocido
+no se sustituye por gastronomía. El catálogo ofrece categorías para descubrir
+aunque todavía no haya registros locales de ellas.
+
+`normalizar_rubro` y `rubro_prospecto` clasifican importaciones, altas y datos
+Google. La incorporación completa tipos vacíos o manuales, conserva los tipos
+ya definidos y sigue el ID canónico de la revisión. `prospect-promotion.ts`
+procesa los lotes y recibe `promoted_place_ids` para informar éxitos reales.
+La búsqueda por texto conserva el contexto usado para agregar los resultados.
+
+El motor agrupa los tipos en cada consulta Nearby y recorre radios progresivos
+centrados en la ruta, para no agotar el presupuesto antes de buscar a 1,5 km.
+El enriquecimiento continúa guardándose antes de filtrar los destinos.
+Los briefings incluyen la afinidad comercial; su caché versión 2 evita reutilizar
+una guía anterior que no contemplaba empresas.
 
 ## Autorización y persistencia
 

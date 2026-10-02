@@ -197,6 +197,7 @@ const AssignorDashboard = () => {
         area_id: filters.area_id,
         max_recomendaciones: 8,
         estados: Array.isArray(filters.estados) ? filters.estados : [],
+        regalos_empresariales: filters.regalos_empresariales === true,
         rubros: Array.isArray(filters.rubros) ? filters.rubros : [],
         instrucciones_adicionales: instruccionesAdicionales || null,
       };

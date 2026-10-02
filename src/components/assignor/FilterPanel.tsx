@@ -1,3 +1,5 @@
+import { EnfoqueRegalos } from "@/components/prospectos/EnfoqueRegalos";
+import { candidatoRegalos } from "../../../supabase/functions/_shared/prospect-categories";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -49,6 +51,7 @@ const FilterPanel = ({
   // Qué tipo de visitas pedir: vacío = todos los estados, sin cupos.
   const [selectedEstados, setSelectedEstados] = useDraftState<string[]>("filtros", "selectedEstados", []);
   const [selectedRubros, setSelectedRubros] = useDraftState<string[]>("filtros", "selectedRubros", []);
+  const [regalos, setRegalos] = useDraftState("filtros", "regalosEmpresariales", false);
   const { rubros: rubrosOpciones, loading: loadingRubros } = useRubros();
   
   const { toast } = useToast();
@@ -149,7 +152,7 @@ const FilterPanel = ({
 
 
     onRequestRecommendations(
-      { area_id: selectedArea, cantidad_vendedores: ids.length, estados: selectedEstados, rubros: selectedRubros },
+      { area_id: selectedArea, cantidad_vendedores: ids.length, estados: selectedEstados, rubros: selectedRubros, regalos_empresariales: regalos },
       { ids, nombres },
       { comuna: null, barrio: area.barrios.length > 0 ? area.barrios : null, provincia: null }
     );
@@ -159,7 +162,7 @@ const FilterPanel = ({
     e.preventDefault();
     if (selectedVendedores.length === 0) { toast({ variant: "destructive", title: "Error", description: "Seleccioná al menos un vendedor" }); return; }
     const nombres = selectedVendedores.map(id => vendedores.find(v => v.id === id)?.nombre || "Vendedor");
-    onRequestRecommendations({ cantidad_vendedores: selectedVendedores.length, estados: selectedEstados, rubros: selectedRubros }, { ids: selectedVendedores, nombres }, { comuna: selectedComuna.length > 0 ? selectedComuna : null, barrio: selectedBarrio.length > 0 ? selectedBarrio : null, provincia: selectedProvincia !== 'all' ? selectedProvincia : null });
+    onRequestRecommendations({ cantidad_vendedores: selectedVendedores.length, estados: selectedEstados, rubros: selectedRubros, regalos_empresariales: regalos }, { ids: selectedVendedores, nombres }, { comuna: selectedComuna.length > 0 ? selectedComuna : null, barrio: selectedBarrio.length > 0 ? selectedBarrio : null, provincia: selectedProvincia !== 'all' ? selectedProvincia : null });
   };
 
   const selectedAreaData = areas.find(a => a.id === selectedArea);
@@ -273,6 +276,8 @@ const FilterPanel = ({
           )}
 
           <VisitTypeFilters
+            regalos={regalos}
+            onRegalosChange={value => { setRegalos(value); setSelectedRubros([]); }}
             estados={selectedEstados}
             onEstadosChange={setSelectedEstados}
             rubros={selectedRubros}
@@ -356,6 +361,8 @@ const FilterPanel = ({
           </div>
 
           <VisitTypeFilters
+            regalos={regalos}
+            onRegalosChange={value => { setRegalos(value); setSelectedRubros([]); }}
             estados={selectedEstados}
             onEstadosChange={setSelectedEstados}
             rubros={selectedRubros}
@@ -393,12 +400,9 @@ const FilterPanel = ({
   );
 };
 
-/**
- * Tipo de visitas del día. Sin selección se prioriza la cartera y se completa con prospectos.
- * Con estados elegidos (ej. solo "Perdidos"), las 8 salen de esos estados y,
- * si no alcanzan, se completan con prospectos cercanos (siempre 8, avisado).
- */
-function VisitTypeFilters({ estados, onEstadosChange, rubros, onRubrosChange, rubrosOpciones, loadingRubros }: {
+function VisitTypeFilters({ regalos, onRegalosChange, estados, onEstadosChange, rubros, onRubrosChange, rubrosOpciones, loadingRubros }: {
+  regalos: boolean;
+  onRegalosChange: (value: boolean) => void;
   estados: string[];
   onEstadosChange: (v: string[]) => void;
   rubros: string[];
@@ -408,6 +412,7 @@ function VisitTypeFilters({ estados, onEstadosChange, rubros, onRubrosChange, ru
 }) {
   return (
     <div className="space-y-3 rounded-xl border border-border/40 p-4">
+      <EnfoqueRegalos checked={regalos} onChange={onRegalosChange} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Estado de los clientes a visitar</Label>
@@ -422,7 +427,7 @@ function VisitTypeFilters({ estados, onEstadosChange, rubros, onRubrosChange, ru
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Rubro</Label>
           <MultiSelect
-            options={rubrosOpciones}
+            options={regalos ? rubrosOpciones.filter(r => candidatoRegalos({ rubro: r.value })) : rubrosOpciones}
             selected={rubros}
             onChange={onRubrosChange}
             placeholder={loadingRubros ? "Cargando rubros..." : "Todos los rubros"}

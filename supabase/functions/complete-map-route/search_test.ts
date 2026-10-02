@@ -132,3 +132,11 @@ Deno.test('mapa: dos locales vecinos de una misma marca se conservan con distint
   const result=await buscarComplementoMapa({...opts(base,2)});
   same(new Set(result.elegidos.map(p=>p.place_id)),new Set(['sucursal-a','sucursal-b']));
 });
+
+Deno.test('mapa empresarial: completa ocho empresas y hoteles, conserva vecinos en una calle y limita 1,5 km',async()=>{
+  const near=Array.from({length:8},(_,i)=>prospect(`empresa-${i}`,40+i*10,{rubro:i%2?'Hotel':'Empresa',tipo_principal:i%2?'hotel':'corporate_office',rating:null,total_ratings:null}));
+  const result=await buscarComplementoMapa({clientes:[],centroZona:center,objetivo:8,base:[prospect('restaurante',10),prospect('hotel-lejano',1600,{rubro:'Hotel',tipo_principal:'hotel'})],rubros:[],regalos:true,pasaGate:()=>true,
+    descubrir:async(_,radius,tipos)=>{ok(tipos.includes('corporate_office'));ok(tipos.includes('hotel'));return radius===.15?near:[];}});
+  same(result.elegidos.map(p=>p.place_id),near.map(p=>p.place_id));eq(result.radio_m,150);
+  ok(result.elegidos.every(p=>distanciaKm(center,{lat:p.latitud!,lng:p.longitud!})<=1.5));
+});

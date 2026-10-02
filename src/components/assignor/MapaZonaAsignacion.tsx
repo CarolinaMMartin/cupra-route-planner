@@ -1,3 +1,5 @@
+import { EnfoqueRegalos } from "@/components/prospectos/EnfoqueRegalos";
+import { candidatoRegalos } from "../../../supabase/functions/_shared/prospect-categories";
 import { RecorridoAPie } from "@/components/shared/RecorridoAPie";
 import { ProspectReviewDialog } from "@/components/prospectos/ProspectReviewDialog";
 import { walkingRouteUrl } from "@/lib/walkingRoute";
@@ -57,6 +59,7 @@ export default function MapaZonaAsignacion({ vendedores, onIrAManual }: { vended
   const [seleccion, setSeleccion] = useDraftState<PuntoMapa[]>(draftScope, "seleccion", []);
   const seleccionRef = useRef<PuntoMapa[]>(seleccion); seleccionRef.current = seleccion;
   const [prospectos, setProspectos] = useDraftState<PuntoMapa[]>(draftScope, "prospectos", []);
+  const [regalos, setRegalos] = useDraftState(draftScope, "regalosEmpresariales", false);
   const [rubrosProspectos, setRubrosProspectos] = useDraftState<string[]>(draftScope, "rubrosProspectos", []);
   const [omitidos, setOmitidos] = useDraftState<Set<string>>(draftScope, "omitidos", () => new Set());
   const omitidosRef = useRef(omitidos); omitidosRef.current = omitidos;
@@ -277,7 +280,7 @@ export default function MapaZonaAsignacion({ vendedores, onIrAManual }: { vended
     try {
       const { data, error: invokeError } = await supabase.functions.invoke<Complemento>("complete-map-route", {
         body: { vendedor_id: vendedorId, client_ids: actuales.filter(p => p.tipo === "cliente").map(p => p.id),
-          prospect_ids: actuales.filter(p => p.tipo === "prospecto").map(p => p.id), omitir_ids: [...omitidosRef.current], rubros: rubrosProspectos,
+          prospect_ids: actuales.filter(p => p.tipo === "prospecto").map(p => p.id), omitir_ids: [...omitidosRef.current], rubros: rubrosProspectos, regalos_empresariales: regalos,
           ...(soloProspectos ? { zona_key: zonaProspectosKey } : {}) },
         signal: controller.signal,
       });
@@ -390,14 +393,19 @@ export default function MapaZonaAsignacion({ vendedores, onIrAManual }: { vended
           </div>
           {errorSeleccion && <p role="alert" className="text-xs text-destructive">{errorSeleccion}</p>}
           {(soloProspectos || !!clientesElegidos.length && seleccion.length < VISITAS_POR_DIA) && <div className="space-y-2 border-t pt-3">
+            <EnfoqueRegalos checked={regalos} disabled={buscando || asignando} onChange={value => {
+              if (seleccionRef.current.some(p => p.tipo === "prospecto") && !window.confirm("Cambiar el enfoque descarta los prospectos seleccionados para buscar otros. ¿Continuar?")) return;
+              limpiarProspectos(); cambiarSeleccion(seleccionRef.current.filter(p => p.tipo === "cliente"));
+              setRegalos(value); setRubrosProspectos([]);
+            }} />
             <Label className="text-xs">{soloProspectos ? "Categorías de los prospectos" : "Rubros para completar con prospectos"}</Label>
-            <fieldset disabled={buscando || asignando}><MultiSelect ariaLabel="Rubros de los prospectos" options={rubrosBusqueda} selected={rubrosProspectos} onChange={values => {
+            <fieldset disabled={buscando || asignando}><MultiSelect ariaLabel="Rubros de los prospectos" options={regalos ? rubrosBusqueda.filter(r => candidatoRegalos({ rubro: r.value })) : rubrosBusqueda} selected={rubrosProspectos} onChange={values => {
               if (soloProspectos && seleccionRef.current.length) {
                 if (!window.confirm("Cambiar las categorías descarta los prospectos de esta ruta para buscar otros. ¿Continuar?")) return;
                 limpiarRuta();
               }
               setRubrosProspectos(values);
-            }} placeholder="Todos, incluidos hoteles" /></fieldset>
+            }} placeholder="Todos los rubros" /></fieldset>
             <Button className="w-full gap-2" onClick={completar} disabled={cargando || Boolean(errorCarga) || buscando || asignando || Boolean(errorSeleccion) || seleccion.length >= VISITAS_POR_DIA || soloProspectos && !zonaElegida}>{buscando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}{soloProspectos && !seleccion.length ? "Buscar 8 prospectos" : "Completar con prospectos"}</Button>
             {soloProspectos && !zonaElegida && <p className="text-xs text-muted-foreground">Elegí primero el barrio o localidad.</p>}
             <p className="text-xs text-muted-foreground">Busca primero a 150 m del centro y amplía sólo si hace falta, hasta 1,5 km. Los más cercanos completan las 8 visitas; podés cambiarlos desde el mapa.</p>

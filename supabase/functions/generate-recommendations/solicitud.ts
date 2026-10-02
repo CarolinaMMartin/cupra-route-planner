@@ -25,7 +25,11 @@ export function validarSolicitud(raw: unknown) {
   if (estados.some((s) => !/^(activos?|inactivos?|perdidos?|potenciales?|potencial|prospectos?)$/i.test(s))) {
     throw new SolicitudInvalida("El estado comercial es inválido.");
   }
+  if (body.regalos_empresariales != null && typeof body.regalos_empresariales !== "boolean") {
+    throw new SolicitudInvalida("El enfoque comercial es inválido.");
+  }
   return {
+    regalos_empresariales: body.regalos_empresariales === true,
     vendedores: lista("vendedores", 30, true), barrio: lista("barrio", 100), comuna: lista("comuna", 30),
     estados, rubros: lista("rubros", 30), area_id,
     provincia: texto("provincia", 160), instrucciones_adicionales: texto("instrucciones_adicionales", 4000),

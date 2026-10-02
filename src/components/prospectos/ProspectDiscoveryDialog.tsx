@@ -1,3 +1,6 @@
+import { CATEGORIAS_PROSPECTOS, etiquetaTipo } from "../../../supabase/functions/_shared/prospect-categories";
+import { promoteInBatches, type PromotionResult } from "../../../supabase/functions/_shared/prospect-promotion";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, Loader2, MapPin, Search, Star, Store, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,11 +43,10 @@ interface ProspectDiscoveryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConverted?: () => void;
+  enfoqueRegalos?: boolean;
 }
 
-const formatType = (type: string | null) => type
-  ? type.replace(/_/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
-  : "Comercio";
+const formatType = etiquetaTipo;
 
 const priceLabel = (level: string | null) => {
   const labels: Record<string, string> = {
@@ -60,8 +62,11 @@ const queueMapsUrl = (placeId: string) => (
   `https://www.google.com/maps/search/?api=1&query=place&query_place_id=${encodeURIComponent(placeId)}`
 );
 
-export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: ProspectDiscoveryDialogProps) {
+export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted, enfoqueRegalos = false }: ProspectDiscoveryDialogProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [regalos, setRegalos] = useState(false);
+  const [searchContext, setSearchContext] = useState({ query: "", zone: "", regalos: false });
   const [query, setQuery] = useState("vinoteca premium");
   const [zone, setZone] = useState("");
   const [includedType, setIncludedType] = useState("liquor_store");
@@ -77,6 +82,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
   const [searchSummary, setSearchSummary] = useState<{ total: number; nuevos: number; yaCargados: number } | null>(null);
 
 
+  const busy = isSearching || isPromoting || isBulkQueueing || queueingId !== null;
   const selectableResults = results.filter(
     (result) => !result.queued && !result.existing_prospect && !result.existing_client,
   );
@@ -113,16 +119,25 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
   }, [toast]);
 
   useEffect(() => {
-    if (open) loadQueue();
-  }, [open, loadQueue]);
+    if (open) {
+      void loadQueue();
+      setRegalos(enfoqueRegalos);
+      setIncludedType(enfoqueRegalos ? "corporate_office" : "liquor_store");
+      setQuery(enfoqueRegalos ? "empresas y oficinas corporativas" : "vinotecas");
+      setResults([]); setSearchSummary(null); setSelectedIds([]);
+    }
+  }, [open, loadQueue, enfoqueRegalos]);
 
   const handleSearch = async () => {
+    if (busy) return;
     if (query.trim().length < 3) {
       toast({ title: "Escribí qué negocio querés buscar", variant: "destructive" });
       return;
     }
 
     setIsSearching(true);
+    setSearchSummary(null);
+    setSearchContext({ query: query.trim(), zone: zone.trim(), regalos });
     setResults([]);
     setSelectedIds([]);
     try {
@@ -133,6 +148,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
           zone: zone.trim() || undefined,
           includedType: includedType === "all" ? null : includedType,
           excludeExisting: onlyNew,
+          regalos_empresariales: regalos,
         },
       });
       if (error) throw new Error(error.message);
@@ -163,16 +179,26 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
   };
 
 
+  const promoteSelected = (placeIds: string[]) => promoteInBatches(placeIds, async (batch) => {
+    const { data, error } = await supabase.functions.invoke("prospect-discovery", {
+      body: { action: "promote", placeIds: batch },
+    });
+    if (error || !data?.success) throw new Error(error?.message || data?.error || "No se pudo completar la carga. Los lotes ya guardados se conservaron; reintentá los pendientes.");
+    return data as PromotionResult;
+  }, (batch) => {
+    const promoted = new Set(batch.promoted_place_ids);
+    setQueue(current => current.filter(item => !promoted.has(item.place_id)));
+    setResults(current => current.map(item => promoted.has(item.place_id) ? { ...item, queued: true, existing_prospect: true } : item));
+    setSelectedIds(current => current.filter(id => !promoted.has(id)));
+    void queryClient.invalidateQueries({ queryKey: ["rubros-disponibles"] });
+    onConverted?.();
+  });
+
   const promoteQueue = async (placeIds: string[]) => {
-    if (placeIds.length === 0) return;
+    if (busy || placeIds.length === 0) return;
     setIsPromoting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("prospect-discovery", {
-        body: { action: "promote", placeIds },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || "No se pudo convertir");
-      setQueue((current) => current.filter((item) => !placeIds.includes(item.place_id)));
+      const data = await promoteSelected(placeIds);
       toast({
         title: `${data.created} agregados a Prospectos`,
         description: data.skipped?.length
@@ -188,6 +214,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
       });
     } finally {
       setIsPromoting(false);
+      await loadQueue();
     }
   };
 
@@ -205,24 +232,19 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
         action: "queue",
         placeIds,
         names,
-        query: query.trim(),
-        zone: zone.trim() || undefined,
+        query: searchContext.query,
+        zone: searchContext.zone || undefined,
       },
     });
     if (error) throw new Error(error.message);
     if (!data?.success) throw new Error(data?.error || "No se pudo guardar el prospecto");
 
-    const { data: promoted, error: promoteError } = await supabase.functions.invoke("prospect-discovery", {
-      body: { action: "promote", placeIds },
-    });
-    if (promoteError) throw new Error(promoteError.message);
-    if (!promoted?.success) throw new Error(promoted?.error || "No se pudo convertir a prospecto");
-
-    setResults((current) => current.map((item) => (
-      placeIds.includes(item.place_id) ? { ...item, queued: true, existing_prospect: true } : item
-    )));
-    await loadQueue();
-    onConverted?.();
+    let promoted: PromotionResult;
+    try {
+      promoted = await promoteSelected(placeIds);
+    } finally {
+      await loadQueue();
+    }
 
     const created = promoted.created ?? placeIds.length;
     toast({
@@ -230,13 +252,14 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
         ? "Prospecto agregado"
         : `${created} prospectos agregados`,
       description: promoted.skipped?.length
-        ? `${promoted.skipped.length} no se pudieron agregar (datos incompletos en Google).`
+        ? `${promoted.skipped.length} quedaron pendientes. Podés reintentarlos desde la lista de pendientes.`
         : "Ya aparecen en la tabla de Prospectos.",
     });
     return true;
   };
 
   const handleAddOne = async (result: ProspectSearchResult) => {
+    if (busy) return;
     setQueueingId(result.place_id);
     try {
       await addAsProspects([{ place_id: result.place_id, nombre: result.nombre }]);
@@ -252,14 +275,13 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
   };
 
   const handleBulkAdd = async () => {
-    if (selectedIds.length === 0) return;
+    if (busy || selectedIds.length === 0) return;
     setIsBulkQueueing(true);
     try {
       const items = results
         .filter((result) => selectedIds.includes(result.place_id))
         .map((result) => ({ place_id: result.place_id, nombre: result.nombre }));
       await addAsProspects(items);
-      setSelectedIds([]);
     } catch (error) {
       toast({
         title: "No se pudieron agregar",
@@ -298,16 +320,30 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
         <DialogHeader>
           <DialogTitle>Buscar nuevos prospectos</DialogTitle>
           <DialogDescription>
-            Buscá comercios de CABA y agregalos a Prospectos en un solo paso. Se descartan automáticamente los que ya son clientes o prospectos.
+            Buscá comercios, empresas y hoteles de CABA y agregalos a Prospectos en un solo paso. Se descartan automáticamente los que ya son clientes o prospectos.
           </DialogDescription>
 
         </DialogHeader>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={regalos} disabled={busy} onCheckedChange={value => {
+              const active = value === true;
+              setRegalos(active); setIncludedType(active ? "corporate_office" : "liquor_store");
+              setQuery(active ? "empresas y oficinas corporativas" : "vinotecas");
+              setResults([]); setSearchSummary(null); setSelectedIds([]);
+            }} />
+            Regalos empresariales
+          </label>
+          <p className="text-xs text-muted-foreground">Buscá posibles compradores por rubro: empresas, hoteles o estudios profesionales. El interés se confirma al contactar.</p>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[1.5fr_1fr_1fr_auto] gap-3 items-end">
           <div className="space-y-1.5">
             <Label htmlFor="prospect-query">Qué buscar</Label>
             <Input
               id="prospect-query"
+              disabled={busy}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Ej. vinoteca premium"
@@ -318,6 +354,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
             <Label htmlFor="prospect-zone">Barrio o zona</Label>
             <Input
               id="prospect-zone"
+              disabled={busy}
               value={zone}
               onChange={(event) => setZone(event.target.value)}
               placeholder="Ej. Palermo"
@@ -326,18 +363,19 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
           </div>
           <div className="space-y-1.5">
             <Label>Tipo</Label>
-            <Select value={includedType} onValueChange={setIncludedType}>
+            <Select value={includedType} disabled={busy} onValueChange={value => {
+              setIncludedType(value);
+              const category = CATEGORIAS_PROSPECTOS.find(c => c.tipo === value);
+              if (category) setQuery(category.consulta);
+            }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="liquor_store">Vinotecas</SelectItem>
-                <SelectItem value="wine_bar">Wine bars</SelectItem>
-                <SelectItem value="restaurant">Restaurantes</SelectItem>
-                <SelectItem value="bar">Bares</SelectItem>
+                {CATEGORIAS_PROSPECTOS.filter(c => !regalos || c.regalos).map(c => <SelectItem key={c.tipo} value={c.tipo}>{c.label}</SelectItem>)}
                 <SelectItem value="all">Sin filtro estricto</SelectItem>
               </SelectContent>
             </Select>
           </div>
-          <Button onClick={handleSearch} disabled={isSearching} className="gap-2">
+          <Button onClick={handleSearch} disabled={busy} className="gap-2">
             {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             Buscar
           </Button>
@@ -345,8 +383,8 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
 
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
           <label className="flex items-center gap-2 cursor-pointer">
-            <Checkbox checked={onlyNew} onCheckedChange={(value) => setOnlyNew(value === true)} />
-            Mostrar solo comercios nuevos (ocultar los ya cargados)
+            <Checkbox disabled={busy} checked={onlyNew} onCheckedChange={(value) => setOnlyNew(value === true)} />
+            Mostrar solo prospectos nuevos (ocultar los ya cargados)
           </label>
           {searchSummary && (
             <span>
@@ -370,7 +408,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                 )}
               </div>
               <div className="flex items-center gap-3">
-                <Button size="sm" disabled={selectedIds.length === 0 || isBulkQueueing} onClick={handleBulkAdd} className="gap-2">
+                <Button size="sm" disabled={selectedIds.length === 0 || busy} onClick={handleBulkAdd} className="gap-2">
                   {isBulkQueueing && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   Agregar {selectedIds.length > 0 ? `${selectedIds.length} ` : ""}a Prospectos
                 </Button>
@@ -397,7 +435,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                         <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{result.direccion || "Sin dirección informada"}</p>
                         </div>
                       </div>
-                      <Badge variant="secondary" className="shrink-0">Score {result.premium_score}</Badge>
+                      {!searchContext.regalos && <Badge variant="secondary" className="shrink-0">Score {result.premium_score}</Badge>}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -436,7 +474,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                       <Button
                         size="sm"
                         className="flex-1"
-                        disabled={blocked || queueingId === result.place_id}
+                        disabled={blocked || busy}
                         onClick={() => handleAddOne(result)}
                       >
                         {queueingId === result.place_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Agregar a Prospectos"}
@@ -465,7 +503,7 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                   size="sm"
                   variant="secondary"
                   className="gap-2"
-                  disabled={isPromoting}
+                  disabled={busy}
                   onClick={() => promoteQueue(queue.map((item) => item.place_id))}
                 >
                   {isPromoting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -494,13 +532,13 @@ export function ProspectDiscoveryDialog({ open, onOpenChange, onConverted }: Pro
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled={isPromoting}
+                      disabled={busy}
                       onClick={() => promoteQueue([item.place_id])}
                       title="Cargarlo en la pantalla de Prospectos"
                     >
                       Agregar a Prospectos
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => discardQueueItem(item)} title="Descartar">
+                    <Button variant="ghost" size="icon" disabled={busy} onClick={() => discardQueueItem(item)} title="Descartar">
                       <Trash2 className="h-4 w-4 text-muted-foreground" />
                     </Button>
                   </div>
