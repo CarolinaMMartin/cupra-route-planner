@@ -40,7 +40,7 @@ const zonasParaProspectos = ZONAS_PROSPECCION.map(z => ({ value: z.key, label: z
 /** Cartera → zona → clientes → prospectos cercanos → confirmar ocho visitas. */
 export default function MapaZonaAsignacion({ vendedores, onIrAManual }: { vendedores: VendedorOpcion[]; onIrAManual?: (vendedorId: string) => void }) {
   const { toast } = useToast();
-  const { mapRef, map, error: errorMapa } = useGoogleMap();
+  const { mapRef, map, error: errorMapa, retry: reintentarMapa } = useGoogleMap();
   const { rubros } = useRubros();
   const markersRef = useRef(new Map<string, google.maps.Marker>());
   const infoRef = useRef<google.maps.InfoWindow | null>(null);
@@ -373,7 +373,7 @@ export default function MapaZonaAsignacion({ vendedores, onIrAManual }: { vended
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-4">
         <div className="relative rounded-lg border overflow-hidden h-[420px] sm:h-[560px] min-w-0">
           <div ref={mapRef} className="w-full h-full" />
-          {errorMapa && <div role="alert" className="absolute inset-0 p-6 bg-background text-sm text-destructive">{errorMapa}</div>}
+          {errorMapa && <div role="alert" className="absolute inset-0 p-6 bg-background text-sm space-y-3"><p className="text-destructive">{errorMapa}</p><p className="text-muted-foreground">Podés seguir eligiendo destinos desde la lista de la derecha.</p><Button variant="outline" size="sm" onClick={reintentarMapa}>Reintentar mapa</Button></div>}
           <div className="absolute bottom-3 left-3 bg-background/95 p-3 rounded-md shadow border text-xs space-y-1">
             {ESTADOS.map(e => <div key={e.value} className="flex items-center gap-2"><span className="w-3 h-3 rounded-full" style={{ backgroundColor: e.color }} /><span>{e.plural}</span><span className="text-muted-foreground ml-auto pl-3">{conteo.get(e.value) || 0}</span></div>)}
           </div>
