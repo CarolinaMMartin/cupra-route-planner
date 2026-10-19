@@ -170,5 +170,8 @@ export function installMapFallback(): void {
   const w = window as unknown as Record<string, unknown>;
   if (isMapFallbackActive()) return;
   realGoogle = w.google as typeof realGoogle;
-  w.google = { maps: fallbackMaps };
+  // Protegido para que un script de Google que llegue tarde no lo pise.
+  Object.defineProperty(window, "google", {
+    value: Object.freeze({ maps: fallbackMaps }), writable: false, configurable: true,
+  });
 }
