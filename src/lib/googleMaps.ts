@@ -48,8 +48,8 @@ export function resetGoogleMaps(): void {
   loaderPromise = null;
   lastGoogleReason = null;
   document.querySelector<HTMLScriptElement>(SCRIPT_SELECTOR)?.remove();
-  const w = window as unknown as Record<string, unknown>;
-  if (!isGoogleMapsReady()) delete w.google;
+  const w = window as unknown as { google?: { maps?: { __fallback?: boolean } } };
+  if (!isGoogleMapsReady() || w.google?.maps?.__fallback) delete w.google;
 }
 
 /**
