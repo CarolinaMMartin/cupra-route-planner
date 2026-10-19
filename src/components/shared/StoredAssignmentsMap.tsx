@@ -20,7 +20,7 @@ export interface MapAssignment {
 }
 
 export default function StoredAssignmentsMap({ items, filters }: { items: MapAssignment[]; filters?: ReactNode }) {
-  const { mapRef, map, error, loading } = useGoogleMap();
+  const { mapRef, map, error, loading, retry } = useGoogleMap();
   const [dataError, setDataError] = useState<string | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
   const [loadingLocations, setLoadingLocations] = useState(false);
@@ -80,7 +80,7 @@ export default function StoredAssignmentsMap({ items, filters }: { items: MapAss
   }, [map, items]);
 
   return <div className="space-y-3">
-    {(error || dataError) && <Alert variant="destructive"><AlertDescription>{error || dataError}</AlertDescription></Alert>}
+    {(error || dataError) && <Alert variant="destructive"><AlertDescription className="flex items-center justify-between gap-3">{error || dataError}{error && <button type="button" className="underline" onClick={retry}>Reintentar mapa</button>}</AlertDescription></Alert>}
     {missing.length > 0 && <Alert><AlertDescription>
       {missing.length} asignaciones sin coordenadas válidas: {missing.slice(0, 5).join(", ")}{missing.length > 5 ? "…" : ""}. Revisá sus direcciones en Carga de datos.
     </AlertDescription></Alert>}

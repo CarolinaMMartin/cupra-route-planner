@@ -384,6 +384,12 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
       {/* Map */}
       <div className="flex-1 relative">
         <div ref={mapRef} className="w-full h-full" />
+        {error && <div role="alert" className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-card p-6 text-center text-sm">
+          <MapPin className="h-10 w-10 opacity-50 text-destructive" />
+          <p className="text-destructive">{error}</p>
+          <p className="text-muted-foreground">La selección y asignación siguen disponibles desde la lista.</p>
+          <Button variant="outline" size="sm" onClick={retry}>Reintentar mapa</Button>
+        </div>}
 
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80">
