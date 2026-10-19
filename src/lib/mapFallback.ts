@@ -39,9 +39,9 @@ class FMap extends Evented {
     el.innerHTML = "";
     this.__lf = L.map(el, { zoomControl: true, attributionControl: true })
       .setView(toLL(opts.center ?? { lat: -34.6037, lng: -58.3816 }), opts.zoom ?? 12);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      maxZoom: 19, subdomains: "abcd",
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(this.__lf);
     const notice = new L.Control({ position: "topright" });
     notice.onAdd = () => {
