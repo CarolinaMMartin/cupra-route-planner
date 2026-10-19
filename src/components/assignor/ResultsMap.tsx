@@ -57,7 +57,7 @@ const escHtml = (v: unknown) =>
   String(v ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]!));
 
 const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue }: ResultsMapProps) => {
-  const { mapRef, map, error } = useGoogleMap();
+  const { mapRef, map, error, retry } = useGoogleMap();
   const corrections = useRef(new Map<string, { lat: number; lng: number; direccion: string }>());
   const [locationRevision, setLocationRevision] = useState(0);
   const [markers, setMarkers] = useState<Map<string, google.maps.Marker>>(new Map());
@@ -244,16 +244,6 @@ const ResultsMap = ({ sucursales, selectedIds, onToggle, onToggleAll, onContinue
     onToggle(id);
   };
 
-  if (error) {
-    return (
-      <Card className="h-[600px] w-full flex items-center justify-center bg-card">
-        <div className="text-center text-destructive p-4">
-          <MapPin className="h-12 w-12 mx-auto mb-2 opacity-50" />
-          <p>{error}</p>
-        </div>
-      </Card>
-    );
-  }
 
   return (
     <div className="space-y-4">
