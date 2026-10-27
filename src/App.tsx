@@ -15,6 +15,7 @@ import SupervisionVendedores from "./pages/SupervisionVendedores";
 import NotFound from "./pages/NotFound";
 import CargaDatos from "./pages/CargaDatos";
 import Legal from "./pages/Legal";
+import { AppUpdateWatcher } from "./components/AppUpdateWatcher";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +24,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <AppUpdateWatcher />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
